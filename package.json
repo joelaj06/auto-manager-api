@@ -1,0 +1,21 @@
+{
+  "dependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.5.5",
+    "express": "^4.21.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2"
+  },
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
+  },
+  "name": "auto-manager-api",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "repository": "https://github.com/joelaj06/auto-manager-api.git",
+  "author": "Joel Acquah <jacquah@appsolinfosystems.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0"
+  }
+}
