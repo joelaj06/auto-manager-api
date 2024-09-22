@@ -1,6 +1,5 @@
 import { IUser } from "../../entities/User";
 
-export interface IAuthInteractor {
-  test(): void;
+export interface IAuthRepository {
   registerUser(data: IUser): Promise<IUser>;
 }
