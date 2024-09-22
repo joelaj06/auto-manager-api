@@ -8,6 +8,7 @@ const config: IConfig = {
   mongo: {
     uri: process.env.MONGO_DB_URI || "mongodb://localhost:27017/auto-manager",
   },
+  jwtSecret: process.env.JWT_SECRET || "secret",
 };
 
 export default config;

@@ -3,4 +3,5 @@ export interface IConfig {
   mongo: {
     uri: string;
   };
+  jwtSecret: string;
 }
