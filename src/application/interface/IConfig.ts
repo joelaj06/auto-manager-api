@@ -4,4 +4,9 @@ export interface IConfig {
     uri: string;
   };
   jwtSecret: string;
+  mailerAppPassword: string;
+  mailerEmail: string;
+  mailerPort: number;
+  mailerService: string;
+  mailerHost: string;
 }

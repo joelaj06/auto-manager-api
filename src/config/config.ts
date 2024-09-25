@@ -9,6 +9,11 @@ const config: IConfig = {
     uri: process.env.MONGO_DB_URI || "mongodb://localhost:27017/auto-manager",
   },
   jwtSecret: process.env.JWT_SECRET || "secret",
+  mailerAppPassword: process.env.GMAIL_APP_PASSWORD || "",
+  mailerEmail: process.env.GMAIL_EMAIL || "",
+  mailerService: process.env.MAIL_HOST || "smtp.gmail.com",
+  mailerHost: process.env.MAIL_HOST || "smtp.gmail.com",
+  mailerPort: Number(process.env.MAIL_PORT),
 };
 
 export default config;

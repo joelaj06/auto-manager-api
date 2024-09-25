@@ -8,6 +8,8 @@ import { IAuthInteractor } from "../../../application/interface/IAuthInteractor"
 import { IAuthRepository } from "../../../application/interface/IAuthRepository";
 import { IAuthService } from "../../../application/interface/IAuthService";
 import { INTERFACE_TYPE } from "../../../utils/constants";
+import { IMailer } from "../../../application/interface/IMailer";
+import { Mailer } from "../../services/mailer";
 
 const container = new Container();
 container
@@ -22,6 +24,8 @@ container
 container
   .bind<AuthController>(INTERFACE_TYPE.AuthController)
   .to(AuthController);
+
+container.bind<IMailer>(INTERFACE_TYPE.Mailer).to(Mailer);
 const controller = container.get<AuthController>(INTERFACE_TYPE.AuthController);
 
 const router = express.Router();
