@@ -1,9 +1,11 @@
+import { injectable } from "inversify";
 import { IAuthService } from "../../application/interface/IAuthService";
 import config from "../../config/config";
 import { IUser } from "../../entities/User";
 import bcrypt from "bcrypt";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
+@injectable()
 export class AuthServiceImpl implements IAuthService {
   async encriptPassword(password: string): Promise<string> {
     const salt = bcrypt.genSaltSync(10);

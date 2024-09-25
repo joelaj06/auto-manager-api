@@ -1,10 +1,15 @@
 import { NextFunction, Response, Request } from "express";
 import { IAuthInteractor } from "../../application/interface/IAuthInteractor";
+import { inject, injectable } from "inversify";
+import { INTERFACE_TYPE } from "../../utils";
 
+@injectable()
 export class AuthController {
   private interactor: IAuthInteractor;
 
-  constructor(interactor: IAuthInteractor) {
+  constructor(
+    @inject(INTERFACE_TYPE.AuthInteractorImpl) interactor: IAuthInteractor
+  ) {
     this.interactor = interactor;
   }
 

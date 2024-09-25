@@ -1,4 +1,5 @@
 // main entry
+import "reflect-metadata";
 import express from "express";
 import expressConfig from "./frameworks/webserver/express";
 

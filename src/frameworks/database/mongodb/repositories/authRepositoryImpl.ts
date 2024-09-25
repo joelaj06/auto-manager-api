@@ -1,7 +1,9 @@
+import { injectable } from "inversify";
 import { IAuthRepository } from "../../../../application/interface/IAuthRepository";
 import { IUser } from "../../../../entities/User";
 import User from "../models/user";
 
+@injectable()
 export class AuthRepositoryImpl implements IAuthRepository {
   async registerUser(data: IUser): Promise<IUser> {
     const user = await User.findOne({ email: data.email });

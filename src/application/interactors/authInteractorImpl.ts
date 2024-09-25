@@ -3,12 +3,18 @@ import { IAuthInteractor } from "../interface/IAuthInteractor";
 import { IAuthRepository } from "../interface/IAuthRepository";
 import bcrypt from "bcrypt";
 import { IAuthService } from "../interface/IAuthService";
+import { inject, injectable } from "inversify";
+import { INTERFACE_TYPE } from "../../utils";
 
+@injectable()
 export class AuthInteractorImpl implements IAuthInteractor {
   private repository: IAuthRepository;
   private authService: IAuthService;
 
-  constructor(repository: IAuthRepository, authService: IAuthService) {
+  constructor(
+    @inject(INTERFACE_TYPE.AuthRepositoryImpl) repository: IAuthRepository,
+    @inject(INTERFACE_TYPE.AuthServiceImpl) authService: IAuthService
+  ) {
     this.repository = repository;
     this.authService = authService;
   }
