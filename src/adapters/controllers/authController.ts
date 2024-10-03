@@ -13,6 +13,16 @@ export class AuthController {
     this.interactor = interactor;
   }
 
+  async verifyOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId, otp } = req.body;
+      //TODO add validation
+      const response = await this.interactor.verifyOTP(userId, otp);
+      return res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
   async registerUser(req: Request, res: Response, next: NextFunction) {
     try {
       const response = await this.interactor.registerUser(req.body);

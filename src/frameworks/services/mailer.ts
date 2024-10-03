@@ -7,8 +7,6 @@ import { injectable } from "inversify";
 export class Mailer implements IMailer {
   async sendEmail(email: string, subject: string, text: string): Promise<void> {
     // create reusable transporter object using the default SMTP transport
-
-    console.log(config.mailerHost);
     const transporter = nodemailer.createTransport({
       host: config.mailerHost,
       port: config.mailerPort,

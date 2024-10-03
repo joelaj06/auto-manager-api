@@ -6,7 +6,10 @@ dotenv.config();
 const config: IConfig = {
   port: Number(process.env.PORT) || 3000, // Convert the env variable to a number
   mongo: {
-    uri: process.env.MONGO_DB_URI || "mongodb://localhost:27017/auto-manager",
+    uri:
+      process.env.NODE_ENV === "production"
+        ? process.env.MONGO_DB_URI || "" // Use production database URI
+        : process.env.MONGO_DB_LOCAL_URI || "",
   },
   jwtSecret: process.env.JWT_SECRET || "secret",
   mailerAppPassword: process.env.GMAIL_APP_PASSWORD || "",
