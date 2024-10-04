@@ -7,16 +7,19 @@
     "@types/mongoose": "^5.11.97",
     "@types/node": "^22.5.5",
     "@types/nodemailer": "^6.4.16",
+    "@types/winston": "^2.4.4",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "inversify": "^6.0.2",
+    "inversify-express-utils": "^6.4.6",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.9.15",
     "reflect-metadata": "^0.2.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "winston": "^3.14.2"
   },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts"

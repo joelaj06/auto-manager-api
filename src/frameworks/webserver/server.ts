@@ -2,7 +2,7 @@
 
 import { Express } from "express";
 import { IConfig } from "../../application/interface/IConfig";
-const serverConfig = (app: Express, config: IConfig) => {
+const serverConfig = (app: Express | any, config: IConfig) => {
   const startServer = () => {
     app.listen(config.port, () => {
       console.log(`Server listening on Port ${config.port}`);

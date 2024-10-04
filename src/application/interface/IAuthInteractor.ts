@@ -5,6 +5,7 @@ import {
 } from "../../entities/UserOTPResponse";
 
 export interface IAuthInteractor {
+  login(email: string, password: string, deviceToken?: string): Promise<IUser>;
   test(): void;
   registerUser(data: IUser): Promise<UserRegistrationResponse>;
   verifyOTP(userId: string, otp: string): Promise<UserOTPVerificationResponse>;

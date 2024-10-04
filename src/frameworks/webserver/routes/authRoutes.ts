@@ -44,6 +44,7 @@ const controller = container.get<AuthController>(INTERFACE_TYPE.AuthController);
 
 const router = express.Router();
 
+router.post("/api/auth/login", controller.login.bind(controller));
 router.post("/api/auth/verifyOtp", controller.verifyOtp.bind(controller));
 router.post("/api/auth/register", controller.registerUser.bind(controller));
 router.get("/api/test", controller.test.bind(controller));

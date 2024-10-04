@@ -11,6 +11,8 @@ import {
   UserRegistrationResponse,
 } from "../../entities/UserOTPResponse";
 import { IUserRepository } from "../interface/IUserRepository";
+import { NotFoundError } from "../../error_handler";
+import { UnauthorizedError } from "../../error_handler/UnauthorizedError";
 
 @injectable()
 export class AuthInteractorImpl implements IAuthInteractor {
@@ -30,13 +32,55 @@ export class AuthInteractorImpl implements IAuthInteractor {
     this.mailer = mailer;
     this.userRepository = userRepository;
   }
+  async login(
+    email: string,
+    password: string,
+    deviceToken?: string
+  ): Promise<IUser> {
+    if (!email || !password) {
+      throw new UnauthorizedError("Email and password are required");
+    }
+
+    const user = await this.userRepository.findUserByEmail(email);
+    if (!user) throw new NotFoundError("Sorry User not found");
+    //compare password to hash
+    const isMatch = await this.authService.comparePassword(
+      password,
+      user.password!
+    );
+    if (!isMatch) {
+      throw new UnauthorizedError("Invalid credentials");
+    }
+    if (!user.isVerified) {
+      throw new UnauthorizedError(
+        "Account not verified. Please verify your email"
+      );
+    }
+
+    const userObj = {
+      ...user,
+    };
+
+    const { password: pass, ...rest } = userObj;
+    const token = await this.authService.generateToken({ ...rest });
+
+    await this.userRepository.updateUser({
+      _id: user._id,
+      deviceToken: deviceToken,
+    });
+    const userData: IUser = {
+      ...user,
+      token,
+    };
+    const { password: userPass, ...resData } = userData;
+    return { ...resData };
+  }
   async verifyOTP(
     userId: string,
     otp: string
   ): Promise<UserOTPVerificationResponse> {
     const userOtpRecords = await this.repository.findOtps({ user: userId });
 
-    console.log(userOtpRecords);
     if (userOtpRecords.length === 0) {
       throw new Error(
         "Account record does not exist or has already been verified. Please sign up or login"
@@ -96,7 +140,6 @@ export class AuthInteractorImpl implements IAuthInteractor {
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
 
-    console.log("New user ", userOTP.user);
     // send verification email
     await this.mailer.sendEmail(
       userData.email!,

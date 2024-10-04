@@ -4,7 +4,6 @@ import { IUser } from "../../../../entities/User";
 import User, { UserMapper } from "../models/user";
 import { IUserOTP } from "../../../../entities/UserOTP";
 import UserOTP, { OTPMapper } from "../models/userOTP";
-import mongoose from "mongoose";
 
 @injectable()
 export class AuthRepositoryImpl implements IAuthRepository {
