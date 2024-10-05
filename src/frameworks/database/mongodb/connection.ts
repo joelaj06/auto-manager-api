@@ -1,6 +1,6 @@
 //data base connection
 import { ConnectOptions, Mongoose } from "mongoose";
-import { IConfig } from "../../../application/interface/IConfig";
+import { IConfig } from "../../../config/IConfig";
 export default function connection(mongoose: Mongoose, config: IConfig) {
   function connectToMongo() {
     mongoose

@@ -1,28 +1,16 @@
 import { NextFunction, Request, Response } from "express";
 
 import { inject, injectable } from "inversify";
-import { LOGGER_TYPE, ILogger } from "../../logging";
-import {
-  ERROR_HANDLER_TYPE,
-  IErrorHandler,
-} from "../../../error_handler/IErrorHandler";
+import { ILogger } from "../../logging";
 import { BaseError } from "../../../error_handler/BaseError";
-import { HttpStatusCode } from "../../../utils/constants";
-import dotev from "dotenv";
-
-dotev.config();
+import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
 
 @injectable()
 class ErrorMiddleware {
   // private errorHandler: IErrorHandler;
   private logger: ILogger;
 
-  constructor(
-    @inject(LOGGER_TYPE.Logger) logger: ILogger
-    //  @inject(ERROR_HANDLER_TYPE.ErrorHandler)
-    //  errorHandler: IErrorHandler
-  ) {
-    // this.errorHandler = errorHandler;
+  constructor(@inject(INTERFACE_TYPE.Logger) logger: ILogger) {
     this.logger = logger;
   }
 
@@ -54,9 +42,9 @@ class ErrorMiddleware {
         // Handle other types of errors
         this.logger.error("Internal Server Error", err);
         res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-          error: true,
-          message: "INTERNAL_SERVER_ERROR",
-          code: HttpStatusCode.INTERNAL_SERVER_ERROR,
+          stack: err.stack,
+          message: "Internal Server Error",
+          statusCode: HttpStatusCode.INTERNAL_SERVER_ERROR,
         });
       }
     };

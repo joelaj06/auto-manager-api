@@ -1,5 +1,5 @@
-import { IUser } from "../../entities/User";
-import { IUserOTP } from "../../entities/UserOTP";
+import { IUser } from "../../../../../entities/User";
+import { IUserOTP } from "../../../../../entities/UserOTP";
 
 export interface IAuthRepository {
   deleteManyOtps(id: string): Promise<IUserOTP>;

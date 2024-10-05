@@ -1,3 +1,3 @@
 //export middlewares here
-export * from "./errorMiddleware";
-export * from "./loggingMiddleware";
+export * from "./ErrorMiddleware";
+export * from "./LoggingMiddleware";

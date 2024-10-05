@@ -1,7 +1,8 @@
 import { NextFunction, Response, Request } from "express";
-import { IAuthInteractor } from "../../application/interface/IAuthInteractor";
+import { IAuthInteractor } from "../../application/interactors/auth/IAuthInteractor";
 import { inject, injectable } from "inversify";
-import { INTERFACE_TYPE } from "../../utils";
+import { HttpStatusCode, INTERFACE_TYPE } from "../../utils";
+import { ControllerUserRequest } from "./IController";
 
 @injectable()
 export class AuthController {
@@ -13,6 +14,23 @@ export class AuthController {
     this.interactor = interactor;
   }
 
+  async changePassword(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      //TODO add validation
+      req.body.userId = req.user?._id;
+      const response = await this.interactor.changePassword(req.body);
+      if (response) {
+        return res.status(HttpStatusCode.NO_CONTENT).send();
+      }
+      throw new Error();
+    } catch (error) {
+      next(error);
+    }
+  }
   async login(req: Request, res: Response, next: NextFunction) {
     try {
       //TODO add validation
@@ -24,7 +42,7 @@ export class AuthController {
       );
       //send token as header
       res.set("accessToken", response.token);
-      return res.status(200).json(response);
+      return res.status(HttpStatusCode.OK).json(response);
     } catch (error) {
       next(error);
     }
@@ -34,7 +52,7 @@ export class AuthController {
       const { userId, otp } = req.body;
       //TODO add validation
       const response = await this.interactor.verifyOTP(userId, otp);
-      return res.status(200).json(response);
+      return res.status(HttpStatusCode.OK).json(response);
     } catch (error) {
       next(error);
     }
@@ -42,7 +60,7 @@ export class AuthController {
   async registerUser(req: Request, res: Response, next: NextFunction) {
     try {
       const response = await this.interactor.registerUser(req.body);
-      return res.status(200).json(response);
+      return res.status(HttpStatusCode.CREATED).json(response);
     } catch (error) {
       next(error);
     }
@@ -50,7 +68,7 @@ export class AuthController {
   test(req: Request, res: Response, next: NextFunction) {
     try {
       const response = this.interactor.test();
-      return res.status(200).json(response);
+      return res.status(HttpStatusCode.OK).json(response);
     } catch (error) {
       next(error);
     }

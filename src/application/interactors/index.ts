@@ -1,1 +1,1 @@
-export * from "./authInteractorImpl";
+export * from "./auth/AuthInteractorImpl";

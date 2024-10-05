@@ -1,6 +1,6 @@
 // configure ports and urls here with secrete keys
 import dotenv from "dotenv";
-import { IConfig } from "../application/interface/IConfig";
+import { IConfig } from "./IConfig";
 
 dotenv.config();
 const config: IConfig = {

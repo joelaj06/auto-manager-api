@@ -1,8 +1,8 @@
 import { injectable } from "inversify";
-import { IUserRepository } from "../../../../application/interface/IUserRepository";
-import { IUser } from "../../../../entities/User";
-import User, { UserMapper } from "../models/user";
-import { NotFoundError } from "../../../../error_handler";
+import { IUser } from "../../../../../entities/User";
+import { NotFoundError } from "../../../../../error_handler";
+import User, { UserMapper } from "../../models/user";
+import { IUserRepository } from "./IUserRepository";
 
 @injectable()
 export class UserRepositoryImpl implements IUserRepository {
@@ -15,16 +15,15 @@ export class UserRepositoryImpl implements IUserRepository {
         throw new NotFoundError("User not found");
       }
     } catch (error) {
-      //throw new Error(`${error}`);
       throw error;
     }
   }
   async findUserById(id: string): Promise<IUser> {
-    const user = await User.findById(id).select("-password");
+    const user = await User.findById(id);
     if (user) {
       return UserMapper.toEntity(user);
     } else {
-      throw new Error("User not found");
+      throw new NotFoundError("User not found");
     }
   }
   async updateUser(data: IUser): Promise<IUser> {
@@ -35,7 +34,7 @@ export class UserRepositoryImpl implements IUserRepository {
     if (updatedUser) {
       return UserMapper.toEntity(updatedUser);
     } else {
-      throw new Error("User not found");
+      throw new NotFoundError("User not found");
     }
   }
 }

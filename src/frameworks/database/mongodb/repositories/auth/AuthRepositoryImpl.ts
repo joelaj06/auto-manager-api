@@ -1,9 +1,9 @@
 import { injectable } from "inversify";
-import { IAuthRepository } from "../../../../application/interface/IAuthRepository";
-import { IUser } from "../../../../entities/User";
-import User, { UserMapper } from "../models/user";
-import { IUserOTP } from "../../../../entities/UserOTP";
-import UserOTP, { OTPMapper } from "../models/userOTP";
+import { IAuthRepository } from "./IAuthRepository";
+import { IUser } from "../../../../../entities/User";
+import User, { UserMapper } from "../../models/user";
+import { IUserOTP } from "../../../../../entities/UserOTP";
+import UserOTP, { OTPMapper } from "../../models/userOTP";
 
 @injectable()
 export class AuthRepositoryImpl implements IAuthRepository {

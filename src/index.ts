@@ -10,29 +10,25 @@ import mongoose from "mongoose";
 import { authRoutes } from "./frameworks/webserver/routes";
 import cors from "cors";
 import { Container } from "inversify";
-import {
-  ERROR_HANDLER_TYPE,
-  ErrorHandlerImpl,
-  IErrorHandler,
-} from "./error_handler";
-import { ILogger, LOGGER_TYPE, LoggerImpl } from "./frameworks/logging";
+import { ErrorHandlerImpl, IErrorHandler } from "./error_handler";
+import { ILogger, LoggerImpl } from "./frameworks/logging";
 import { ErrorMiddleware } from "./frameworks/webserver/middleware";
+import { INTERFACE_TYPE } from "./utils";
 
 const app = express();
 const container = new Container();
 
-container
-  .bind<IErrorHandler>(ERROR_HANDLER_TYPE.ErrorHandler)
-  .to(ErrorHandlerImpl);
+//TODO Bind dependecies in a single inversify container
+container.bind<IErrorHandler>(INTERFACE_TYPE.ErrorHandler).to(ErrorHandlerImpl);
 
 container
-  .bind<ErrorMiddleware>(ERROR_HANDLER_TYPE.ErrorMiddleWare)
+  .bind<ErrorMiddleware>(INTERFACE_TYPE.ErrorMiddleWare)
   .to(ErrorMiddleware);
 //logger
-container.bind<ILogger>(LOGGER_TYPE.Logger).to(LoggerImpl);
+container.bind<ILogger>(INTERFACE_TYPE.Logger).to(LoggerImpl);
 
 const errorMiddleware = container.get<ErrorMiddleware>(
-  ERROR_HANDLER_TYPE.ErrorMiddleWare
+  INTERFACE_TYPE.ErrorMiddleWare
 );
 
 // express.js configuration (middlewares etc.)

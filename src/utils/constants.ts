@@ -5,6 +5,11 @@ export const INTERFACE_TYPE = {
   AuthController: Symbol.for("AuthController"),
   Mailer: Symbol.for("Mailer"),
   UserRepositoryImpl: Symbol.for("UserRepositoryImpl"),
+  MailerImpl: Symbol.for("MailerImpl"),
+  Logger: Symbol.for("Logger"),
+  ErrorHandler: Symbol.for("ErrorHandler"),
+  ErrorMiddleWare: Symbol.for("ErrorMiddleWare"),
+  AuthMiddleware: Symbol.for("AuthMiddleware"),
 };
 
 export enum HttpStatusCode {
@@ -18,4 +23,5 @@ export enum HttpStatusCode {
   BAD_REQUEST = 400,
   NOT_FOUND = 404,
   INTERNAL_SERVER_ERROR = 500,
+  UNPROCESSABLE_ENTITY = 422,
 }

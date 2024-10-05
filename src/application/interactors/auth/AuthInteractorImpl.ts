@@ -1,18 +1,19 @@
-import { IUser } from "../../entities/User";
-import { IAuthInteractor } from "../interface/IAuthInteractor";
-import { IAuthRepository } from "../interface/IAuthRepository";
+import { IUser, UserPasswordChangeRequest } from "../../../entities/User";
+import { IAuthInteractor } from "./IAuthInteractor";
+import { IAuthRepository } from "../../../frameworks/database/mongodb/repositories/auth/IAuthRepository";
 import bcrypt from "bcrypt";
-import { IAuthService } from "../interface/IAuthService";
+import { IAuthService } from "../../../frameworks/services/auth/IAuthService";
 import { inject, injectable } from "inversify";
-import { INTERFACE_TYPE } from "../../utils";
-import { IMailer } from "../interface/IMailer";
+import { INTERFACE_TYPE } from "../../../utils";
+import { IMailer } from "../../../frameworks/services/mailer/IMailer";
 import {
   UserOTPVerificationResponse,
   UserRegistrationResponse,
-} from "../../entities/UserOTPResponse";
-import { IUserRepository } from "../interface/IUserRepository";
-import { NotFoundError } from "../../error_handler";
-import { UnauthorizedError } from "../../error_handler/UnauthorizedError";
+} from "../../../entities/UserResponse";
+import { IUserRepository } from "../../../frameworks/database/mongodb/repositories/user/IUserRepository";
+import { NotFoundError } from "../../../error_handler";
+import { UnauthorizedError } from "../../../error_handler/UnauthorizedError";
+import { UnprocessableEntityError } from "../../../error_handler/UnprocessableEntityError";
 
 @injectable()
 export class AuthInteractorImpl implements IAuthInteractor {
@@ -31,6 +32,33 @@ export class AuthInteractorImpl implements IAuthInteractor {
     this.authService = authService;
     this.mailer = mailer;
     this.userRepository = userRepository;
+  }
+  async changePassword(data: UserPasswordChangeRequest): Promise<IUser> {
+    const { currentPassword, newPassword } = data;
+    if (!currentPassword || !newPassword) {
+      throw new UnprocessableEntityError(
+        "Password and confirm password are required"
+      );
+    }
+    //fetch user and compare current password
+    const user = await this.userRepository.findUserById(data.userId);
+    if (!user) throw new NotFoundError("User not found");
+    const isMatch = await this.authService.comparePassword(
+      currentPassword,
+      user.password!
+    );
+    if (!isMatch) {
+      throw new UnauthorizedError("Invalid credentials");
+    }
+    const hashedPassword = await this.authService.encriptPassword(newPassword); // hash password before saving it
+    const userData: IUser = {
+      ...user,
+      password: hashedPassword,
+    };
+    const updatedUser = await this.userRepository.updateUser(userData);
+    if (!updatedUser) throw new Error("Error while updating user");
+    const { password: pass, ...rest } = userData;
+    return { ...rest };
   }
   async login(
     email: string,

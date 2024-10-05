@@ -1,12 +1,15 @@
 // Module import
 import { NextFunction, Request, Response } from "express";
 import { inject, injectable } from "inversify";
-import { ILogger, LOGGER_TYPE } from "../../logging";
+import { ILogger } from "../../logging";
+import { INTERFACE_TYPE } from "../../../utils";
 // Interface import
 
 @injectable()
 export class LoggingMiddleware {
-  constructor(@inject(LOGGER_TYPE.Logger) private readonly _logger: ILogger) {}
+  constructor(
+    @inject(INTERFACE_TYPE.Logger) private readonly _logger: ILogger
+  ) {}
 
   // This middleware will each incoming request executed
   public logRequest() {

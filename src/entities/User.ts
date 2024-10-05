@@ -18,3 +18,15 @@ export class IUser {
     public readonly deviceToken?: string
   ) {}
 }
+
+export class UserPasswordChangeRequest {
+  constructor(
+    public readonly currentPassword: string,
+    public readonly newPassword: string,
+    public readonly userId: string
+  ) {}
+}
+
+export interface UserRequest extends Request {
+  user?: IUser; // You can replace `any` with the actual user type if known
+}

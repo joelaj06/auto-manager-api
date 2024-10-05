@@ -1,7 +1,7 @@
 //handle server configs here
 
 import { Express } from "express";
-import { IConfig } from "../../application/interface/IConfig";
+import { IConfig } from "../../config/IConfig";
 const serverConfig = (app: Express | any, config: IConfig) => {
   const startServer = () => {
     app.listen(config.port, () => {

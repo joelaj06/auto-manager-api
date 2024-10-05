@@ -1,10 +1,10 @@
-import { IMailer } from "../../application/interface/IMailer";
+import { IMailer } from "./IMailer";
 import nodemailer from "nodemailer";
-import config from "../../config/config";
+import config from "../../../config/config";
 import { injectable } from "inversify";
 
 @injectable()
-export class Mailer implements IMailer {
+export class MailerImpl implements IMailer {
   async sendEmail(email: string, subject: string, text: string): Promise<void> {
     // create reusable transporter object using the default SMTP transport
     const transporter = nodemailer.createTransport({

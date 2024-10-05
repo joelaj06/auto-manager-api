@@ -1,4 +1,4 @@
-import { IUser } from "../../entities/User";
+import { IUser } from "../../../../../entities/User";
 
 export interface IUserRepository {
   updateUser(data: IUser): Promise<IUser>;

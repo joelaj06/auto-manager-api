@@ -4,7 +4,3 @@ export interface ILogger {
   warn(message: string, meta?: unknown): void;
   error(message: string, meta?: unknown): void;
 }
-
-export const LOGGER_TYPE = {
-  Logger: Symbol.for("Logger"),
-};
