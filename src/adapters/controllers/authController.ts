@@ -14,6 +14,33 @@ export class AuthController {
     this.interactor = interactor;
   }
 
+  async verifyPasswordReset(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId, otp, newPassword } = req.body;
+      const response = await this.interactor.verifyPasswordReset(
+        userId,
+        otp,
+        newPassword
+      );
+      if (response) {
+        return res.status(HttpStatusCode.OK).json(response);
+      }
+      throw new Error();
+    } catch (error) {
+      next(error);
+    }
+  }
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const response = await this.interactor.resetPassword(req.body.email);
+      if (response) {
+        return res.status(HttpStatusCode.OK).json(response);
+      }
+      throw new Error();
+    } catch (error) {
+      next(error);
+    }
+  }
   async changePassword(
     req: ControllerUserRequest,
     res: Response,

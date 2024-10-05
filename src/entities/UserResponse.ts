@@ -12,10 +12,10 @@ class UserRegistrationResponseData {
   constructor(userId: string, email: string) {}
 }
 
-export class UserOTPVerificationResponse {
+export class UserOTPResponse {
   constructor(
     public readonly status: string,
     public readonly message: string,
-    public readonly data?: IUser
+    public readonly data?: IUser | UserRegistrationResponseData
   ) {}
 }

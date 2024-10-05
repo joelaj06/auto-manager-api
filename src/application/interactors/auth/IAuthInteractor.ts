@@ -1,6 +1,6 @@
 import { IUser, UserPasswordChangeRequest } from "../../../entities/User";
 import {
-  UserOTPVerificationResponse,
+  UserOTPResponse,
   UserRegistrationResponse,
 } from "../../../entities/UserResponse";
 
@@ -8,6 +8,12 @@ export interface IAuthInteractor {
   login(email: string, password: string, deviceToken?: string): Promise<IUser>;
   test(): void;
   registerUser(data: IUser): Promise<UserRegistrationResponse>;
-  verifyOTP(userId: string, otp: string): Promise<UserOTPVerificationResponse>;
+  verifyOTP(userId: string, otp: string): Promise<UserOTPResponse>;
   changePassword(data: UserPasswordChangeRequest): Promise<IUser>;
+  resetPassword(email: string): Promise<UserOTPResponse>;
+  verifyPasswordReset(
+    userId: string,
+    otp: string,
+    newPassword: string
+  ): Promise<UserOTPResponse>;
 }

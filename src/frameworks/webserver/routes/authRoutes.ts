@@ -51,6 +51,18 @@ const authMiddleware = container.get<AuthMiddleware>(
 const router = express.Router();
 
 router.put(
+  "/api/auth/verifyPasswordReset",
+  authMiddleware.authenticateToken.bind(authMiddleware),
+  controller.verifyPasswordReset.bind(controller)
+);
+
+router.post(
+  "/api/auth/resetPassword",
+  authMiddleware.authenticateToken.bind(authMiddleware),
+  controller.resetPassword.bind(controller)
+);
+
+router.put(
   "/api/auth/changePassword",
   authMiddleware.authenticateToken.bind(authMiddleware),
   controller.changePassword.bind(controller)
