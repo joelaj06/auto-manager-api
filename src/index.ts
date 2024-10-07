@@ -11,6 +11,7 @@ import { ErrorHandlerImpl, IErrorHandler } from "./error_handler";
 import { INTERFACE_TYPE } from "./utils";
 import {
   authRoutes,
+  companyRoutes,
   ErrorMiddleware,
   ILogger,
   LoggerImpl,
@@ -45,6 +46,7 @@ app.use(cors());
 //routes
 app.use(authRoutes);
 app.use(userRoutes);
+app.use(companyRoutes);
 
 //error middleware
 app.use(errorMiddleware.execute());

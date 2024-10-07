@@ -1,4 +1,7 @@
 export const INTERFACE_TYPE = {
+  CompanyRepositoryImpl: Symbol.for("CompanyRepositoryImpl"),
+  CompanyInteractorImpl: Symbol.for("CompanyInteractorImpl"),
+  CompanyController: Symbol.for("CompanyController"),
   UserController: Symbol.for("UserController"),
   UserInteractor: Symbol.for("UserInteractor"),
   AuthRepositoryImpl: Symbol.for("AuthRepositoryImpl"),
