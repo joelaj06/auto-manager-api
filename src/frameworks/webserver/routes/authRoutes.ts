@@ -1,5 +1,5 @@
 import express from "express";
-import { AuthController } from "../../../adapters/controllers/authController";
+import { AuthController } from "../../../adapters/controllers/auth_controller/AuthController";
 import { AuthInteractorImpl } from "../../../application/interactors/index";
 
 import { Container } from "inversify";

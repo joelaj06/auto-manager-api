@@ -1,4 +1,6 @@
 export const INTERFACE_TYPE = {
+  UserController: Symbol.for("UserController"),
+  UserInteractor: Symbol.for("UserInteractor"),
   AuthRepositoryImpl: Symbol.for("AuthRepositoryImpl"),
   AuthServiceImpl: Symbol.for("AuthServiceImpl"),
   AuthInteractorImpl: Symbol.for("AuthInteractorImpl"),

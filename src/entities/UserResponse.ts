@@ -19,3 +19,12 @@ export class UserOTPResponse {
     public readonly data?: IUser | UserRegistrationResponseData
   ) {}
 }
+
+export class PaginatedResponse<T> {
+  constructor(
+    public readonly data: T[],
+    public readonly pageCount: number,
+    public readonly totalCount: number,
+    public readonly totalPages: number
+  ) {}
+}

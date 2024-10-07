@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     deviceToken: String,
+    createdBy: {
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: "User",
+    },
   },
   {
     timestamps: true,
@@ -59,7 +63,9 @@ export const UserMapper = {
       status: payload.status,
       isVerified: payload.isVerified,
       token: payload.token,
-      deviceToken: payload.deviceToken, // Optional field
+      deviceToken: payload.deviceToken,
+      createdBy: payload.createdBy,
+      // Optional field
     };
   },
 
@@ -84,6 +90,9 @@ export const UserMapper = {
       ...(query.updatedAt && { updatedAt: query.updatedAt }),
       ...(query._id && { _id: new mongoose.SchemaTypes.ObjectId(query._id) }),
       ...(query.deviceToken && { deviceToken: query.deviceToken }),
+      ...(query.createdBy && {
+        createdBy: new mongoose.SchemaTypes.ObjectId(query.createdBy),
+      }),
     };
   },
 
@@ -108,7 +117,8 @@ export const UserMapper = {
       model.updatedAt,
       model.password, // Optional field
       model.token, // Optional field
-      model.deviceToken
+      model.deviceToken,
+      model.createdBy?.toString() // Convert ObjectId to string
     );
   },
 };

@@ -1,19 +1,24 @@
 // main entry
 import "reflect-metadata";
 import express from "express";
-import expressConfig from "./frameworks/webserver/express";
 
-import connection from "./frameworks/database/mongodb/connection";
-import serverConfig from "./frameworks/webserver/server";
 import config from "./config/config";
 import mongoose from "mongoose";
-import { authRoutes } from "./frameworks/webserver/routes";
+
 import cors from "cors";
 import { Container } from "inversify";
 import { ErrorHandlerImpl, IErrorHandler } from "./error_handler";
-import { ILogger, LoggerImpl } from "./frameworks/logging";
-import { ErrorMiddleware } from "./frameworks/webserver/middleware";
 import { INTERFACE_TYPE } from "./utils";
+import {
+  authRoutes,
+  ErrorMiddleware,
+  ILogger,
+  LoggerImpl,
+  userRoutes,
+} from "./frameworks";
+import expressConfig from "./frameworks/webserver/express";
+import connection from "./frameworks/database/mongodb/connection";
+import serverConfig from "./frameworks/webserver/server";
 
 const app = express();
 const container = new Container();
@@ -39,6 +44,7 @@ app.use(cors());
 
 //routes
 app.use(authRoutes);
+app.use(userRoutes);
 
 //error middleware
 app.use(errorMiddleware.execute());

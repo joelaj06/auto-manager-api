@@ -33,6 +33,9 @@ export class AuthInteractorImpl implements IAuthInteractor {
     this.mailer = mailer;
     this.userRepository = userRepository;
   }
+  logout(): void {
+    throw new Error("Method not implemented.");
+  }
   async verifyPasswordReset(
     userId: string,
     otp: string,
@@ -51,7 +54,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
         if (Number(otp) !== userOtpRecords[0].otp) {
           throw new BadRequestError("Invalid OTP");
         } else {
-          await this.userRepository.updateUser({
+          await this.userRepository.updateUser(userId,{
             _id: userId,
             isVerified: true,
           });
@@ -68,7 +71,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
             ...user,
             password: hashedPassword,
           };
-          const updatedUser = await this.userRepository.updateUser(userData);
+          const updatedUser = await this.userRepository.updateUser(user._id!,userData);
           if (!updatedUser) throw new Error("Error while updating user");
           const { password: pass, ...rest } = userData;
 
@@ -125,7 +128,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
       ...user,
       password: hashedPassword,
     };
-    const updatedUser = await this.userRepository.updateUser(userData);
+    const updatedUser = await this.userRepository.updateUser(user._id!,userData);
     if (!updatedUser) throw new Error("Error while updating user");
     const { password: pass, ...rest } = userData;
     return { ...rest };
@@ -162,7 +165,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
     const { password: pass, ...rest } = userObj;
     const token = await this.authService.generateToken({ ...rest });
 
-    await this.userRepository.updateUser({
+    await this.userRepository.updateUser(user._id!,{
       _id: user._id,
       deviceToken: deviceToken,
     });
@@ -189,7 +192,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
         if (Number(otp) !== userOtpRecords[0].otp) {
           throw new Error("Invalid OTP");
         } else {
-          await this.userRepository.updateUser({
+          await this.userRepository.updateUser(userId,{
             _id: userId,
             isVerified: true,
           });

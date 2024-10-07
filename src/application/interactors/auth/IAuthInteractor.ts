@@ -5,6 +5,7 @@ import {
 } from "../../../entities/UserResponse";
 
 export interface IAuthInteractor {
+  logout(): void;
   login(email: string, password: string, deviceToken?: string): Promise<IUser>;
   test(): void;
   registerUser(data: IUser): Promise<UserRegistrationResponse>;

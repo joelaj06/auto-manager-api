@@ -1,7 +1,7 @@
 import { NextFunction, Response, Request } from "express";
-import { IAuthInteractor } from "../../application/interactors/auth/IAuthInteractor";
+import { IAuthInteractor } from "../../../application/interactors/auth/IAuthInteractor";
 import { inject, injectable } from "inversify";
-import { HttpStatusCode, INTERFACE_TYPE } from "../../utils";
+import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
 import { ControllerUserRequest } from "./IController";
 
 @injectable()

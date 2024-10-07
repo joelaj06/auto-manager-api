@@ -15,7 +15,8 @@ export class IUser {
     public readonly updatedAt?: Date,
     public readonly password?: string,
     public readonly token?: string,
-    public readonly deviceToken?: string
+    public readonly deviceToken?: string,
+    public readonly createdBy?: string
   ) {}
 }
 
@@ -28,5 +29,11 @@ export class UserPasswordChangeRequest {
 }
 
 export interface UserRequest extends Request {
-  user?: IUser; // You can replace `any` with the actual user type if known
+  user?: IUser;
+}
+
+export interface UserRequestQuery {
+  search?: string;
+  pageSize?: number;
+  pageIndex?: number;
 }
