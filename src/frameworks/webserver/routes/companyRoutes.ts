@@ -34,8 +34,23 @@ const router = express.Router();
 
 router
   .route("/api/companies")
+  .get(
+    authMiddleware.authenticateToken.bind(authMiddleware),
+    controller.getAllCompanies.bind(controller)
+  )
   .post(
     authMiddleware.authenticateToken.bind(authMiddleware),
     controller.addCompany.bind(controller)
+  );
+
+router
+  .route("/api/companies/:id")
+  .get(
+    authMiddleware.authenticateToken.bind(authMiddleware),
+    controller.getACompany.bind(controller)
+  )
+  .put(
+    authMiddleware.authenticateToken.bind(authMiddleware),
+    controller.updateCompany.bind(controller)
   );
 export default router;

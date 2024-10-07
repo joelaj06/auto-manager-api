@@ -32,7 +32,7 @@ export interface UserRequest extends Request {
   user?: IUser;
 }
 
-export interface UserRequestQuery {
+export interface RequestQuery {
   search?: string;
   pageSize?: number;
   pageIndex?: number;

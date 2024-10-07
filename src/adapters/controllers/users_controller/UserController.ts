@@ -2,7 +2,7 @@ import { inject, injectable } from "inversify";
 import { IUserInteractor } from "../../../application/interactors/users/IUserInteractor";
 import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
 import { NextFunction, Request, Response } from "express";
-import { IUser, UserRequestQuery } from "../../../entities/User";
+import { IUser, RequestQuery } from "../../../entities/User";
 import { ControllerUserRequest } from "../auth_controller/IController";
 import { BadRequestError } from "../../../error_handler";
 
@@ -50,7 +50,7 @@ export class UserController {
   }
   async getAllUsers(req: Request, res: Response, next: NextFunction) {
     try {
-      const query: UserRequestQuery = {
+      const query: RequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
         pageIndex: req.query.pageIndex
           ? Number(req.query.pageIndex)

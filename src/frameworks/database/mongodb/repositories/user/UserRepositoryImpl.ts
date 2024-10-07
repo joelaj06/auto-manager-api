@@ -1,5 +1,5 @@
 import { injectable } from "inversify";
-import { IUser, UserRequestQuery } from "../../../../../entities/User";
+import { IUser, RequestQuery } from "../../../../../entities/User";
 import { NotFoundError } from "../../../../../error_handler";
 import User, { UserMapper } from "../../models/user";
 import { IUserRepository } from "./IUserRepository";
@@ -29,9 +29,7 @@ export class UserRepositoryImpl implements IUserRepository {
       throw error;
     }
   }
-  async findAllUsers(
-    query: UserRequestQuery
-  ): Promise<PaginatedResponse<IUser>> {
+  async findAllUsers(query: RequestQuery): Promise<PaginatedResponse<IUser>> {
     try {
       const searchQuery = query.search || "";
       const limit = query.pageSize || 10;

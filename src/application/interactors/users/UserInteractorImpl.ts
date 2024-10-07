@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { IUser, UserRequestQuery } from "../../../entities/User";
+import { IUser, RequestQuery } from "../../../entities/User";
 import { UnprocessableEntityError } from "../../../error_handler/UnprocessableEntityError";
 import { IUserInteractor } from "./IUserInteractor";
 import { IUserRepository } from "../../../frameworks/database/mongodb/repositories";
@@ -51,7 +51,7 @@ export class UserInteractorImpl implements IUserInteractor {
     const { password: pass, ...rest } = newUser;
     return { ...rest };
   }
-  getAllUsers(query: UserRequestQuery): Promise<PaginatedResponse<IUser>> {
+  getAllUsers(query: RequestQuery): Promise<PaginatedResponse<IUser>> {
     return this.userRepository.findAllUsers(query);
   }
   async updateUser(id: string, data: IUser): Promise<IUser> {
