@@ -34,8 +34,10 @@ export class CompanyInteractorImpl implements ICompanyInteractor {
     if (!company) throw new NotFoundError("Company not found");
     return company;
   }
-  getAllCompanies(query: RequestQuery): Promise<PaginatedResponse<ICompany>> {
-    return this.repository.findAllCompanies(query);
+  async getAllCompanies(
+    query: RequestQuery
+  ): Promise<PaginatedResponse<ICompany>> {
+    return await this.repository.findAllCompanies(query);
   }
   async addCompany(data: ICompany): Promise<ICompany> {
     if (!data) throw new UnprocessableEntityError("Company data is required");

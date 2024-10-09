@@ -26,9 +26,14 @@ container.bind<CompanyController>(CompanyController).to(CompanyController);
 container
   .bind<IAuthService>(INTERFACE_TYPE.AuthServiceImpl)
   .to(AuthServiceImpl);
-container.bind<AuthMiddleware>(AuthMiddleware).to(AuthMiddleware);
+container
+  .bind<AuthMiddleware>(INTERFACE_TYPE.AuthMiddleware)
+  .to(AuthMiddleware);
 const controller = container.get<CompanyController>(CompanyController);
-const authMiddleware = container.get<AuthMiddleware>(AuthMiddleware);
+
+const authMiddleware = container.get<AuthMiddleware>(
+  INTERFACE_TYPE.AuthMiddleware
+);
 
 const router = express.Router();
 

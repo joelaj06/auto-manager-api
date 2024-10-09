@@ -1,4 +1,5 @@
 export const INTERFACE_TYPE = {
+  AuthMiddleware: Symbol.for("AuthMiddleware"),
   CompanyRepositoryImpl: Symbol.for("CompanyRepositoryImpl"),
   CompanyInteractorImpl: Symbol.for("CompanyInteractorImpl"),
   CompanyController: Symbol.for("CompanyController"),
@@ -14,7 +15,9 @@ export const INTERFACE_TYPE = {
   Logger: Symbol.for("Logger"),
   ErrorHandler: Symbol.for("ErrorHandler"),
   ErrorMiddleWare: Symbol.for("ErrorMiddleWare"),
-  AuthMiddleware: Symbol.for("AuthMiddleware"),
+  VehicleRepositoryImpl: Symbol.for("VehicleRepositoryImpl"),
+  VehicleInteractorImpl: Symbol.for("VehicleInteractorImpl"),
+  VehicleController: Symbol.for("VehicleController"),
 };
 
 export enum HttpStatusCode {

@@ -25,12 +25,16 @@ export class AuthMiddleware {
 
     if (authHeader && authHeader.startsWith("Bearer")) {
       const token = authHeader.split(" ")[1];
-      const user = await this.authService.verifyToken<IUser>(token);
-      if (user) {
-        req.user = user;
-        next();
-      } else {
-        return next(new UnauthorizedError("Invalid token"));
+      try {
+        const user = await this.authService.verifyToken<IUser>(token);
+        if (user) {
+          req.user = user;
+          next();
+        } else {
+          return next(new UnauthorizedError("Invalid token"));
+        }
+      } catch (error) {
+        return next(new UnauthorizedError(error as unknown as string));
       }
     } else {
       return next(new UnauthorizedError("Access denied. No token provided"));

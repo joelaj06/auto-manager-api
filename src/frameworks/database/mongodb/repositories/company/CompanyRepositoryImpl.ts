@@ -3,6 +3,7 @@ import { ICompany } from "../../../../../entities/Company";
 import { ICompanyRepository } from "./ICompanyRepository";
 import {
   BadRequestError,
+  NotFoundError,
   UnprocessableEntityError,
 } from "../../../../../error_handler";
 import Company, { CompanyMapper } from "../../models/company";
@@ -13,7 +14,7 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
   async updateCompany(id: string, data: ICompany): Promise<ICompany> {
     try {
       const company = await Company.findById(id);
-      if (!company) throw new UnprocessableEntityError("Company not found");
+      if (!company) throw new NotFoundError("Company not found");
       const updatedCompany = await Company.findByIdAndUpdate(id, data, {
         new: true,
       });
