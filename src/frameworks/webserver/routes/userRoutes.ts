@@ -10,6 +10,8 @@ import {
 } from "../../../application/interactors";
 import { AuthServiceImpl } from "../../services";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
+import { IDriverRepository } from "../../database/mongodb/repositories/driver/IDriverRepository";
+import { DriverRepositoryImpl } from "../../database/mongodb/repositories/driver/DriverRepositoryImpl";
 
 const container = new Container();
 
@@ -20,6 +22,10 @@ container
 container
   .bind<IUserInteractor>(INTERFACE_TYPE.UserInteractor)
   .to(UserInteractorImpl);
+
+container
+  .bind<IDriverRepository>(INTERFACE_TYPE.DriverRepositoryImpl)
+  .to(DriverRepositoryImpl);
 
 container
   .bind<IAuthService>(INTERFACE_TYPE.AuthServiceImpl)

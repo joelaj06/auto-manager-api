@@ -38,7 +38,6 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
         ],
       };
       const vehicles = await Vehicle.find(searchCriteria)
-
         .limit(limit)
         .skip(startIndex);
 

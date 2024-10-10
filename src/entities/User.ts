@@ -16,7 +16,11 @@ export class IUser {
     public readonly password?: string,
     public readonly token?: string,
     public readonly deviceToken?: string,
-    public readonly createdBy?: string
+    public readonly createdBy?: string,
+    public readonly licenseNumber?: string,
+    public readonly lisenceExpiryDate?: Date,
+    public readonly vehicleId?: string,
+    public readonly companyId?: string
   ) {}
 }
 

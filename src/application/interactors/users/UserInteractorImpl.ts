@@ -7,17 +7,23 @@ import { INTERFACE_TYPE } from "../../../utils";
 import { BadRequestError, NotFoundError } from "../../../error_handler";
 import { PaginatedResponse } from "../../../entities/UserResponse";
 import { IAuthService } from "../../../frameworks/services/auth/IAuthService";
+import { IDriverRepository } from "../../../frameworks/database/mongodb/repositories/driver/IDriverRepository";
+import { IDriver } from "../../../entities";
 
 @injectable()
 export class UserInteractorImpl implements IUserInteractor {
   private userRepository: IUserRepository;
   private authService: IAuthService;
+  private driverRepository: IDriverRepository;
   constructor(
     @inject(INTERFACE_TYPE.UserRepositoryImpl) userRepository: IUserRepository,
-    @inject(INTERFACE_TYPE.AuthServiceImpl) authService: IAuthService
+    @inject(INTERFACE_TYPE.AuthServiceImpl) authService: IAuthService,
+    @inject(INTERFACE_TYPE.DriverRepositoryImpl)
+    driverRepository: IDriverRepository
   ) {
     this.userRepository = userRepository;
     this.authService = authService;
+    this.driverRepository = driverRepository;
   }
   async getAUser(id: string): Promise<IUser> {
     if (!id) throw new UnprocessableEntityError("User id is required");
@@ -46,9 +52,26 @@ export class UserInteractorImpl implements IUserInteractor {
       ...data,
       password: hashedPassword,
     };
+
     const newUser = await this.userRepository.addUser(userData);
     if (!newUser) throw new BadRequestError("Error while adding user");
     const { password: pass, ...rest } = newUser;
+
+    //check if user is a driver by role
+    if (newUser.role && newUser.role.toLowerCase() === "driver") {
+      const driverData: IDriver = {
+        userId: newUser._id,
+        vehicleId: data.vehicleId,
+        user: newUser._id,
+        companyId: data.company,
+        lisenceExpiryDate: data.lisenceExpiryDate,
+        licenseNumber: data.licenseNumber,
+      };
+
+      const dirver = await this.driverRepository.addDriver(driverData);
+      if (!dirver) throw new Error("Error while adding driver");
+    }
+
     return { ...rest };
   }
   getAllUsers(query: RequestQuery): Promise<PaginatedResponse<IUser>> {

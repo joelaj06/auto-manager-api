@@ -18,6 +18,9 @@ export const INTERFACE_TYPE = {
   VehicleRepositoryImpl: Symbol.for("VehicleRepositoryImpl"),
   VehicleInteractorImpl: Symbol.for("VehicleInteractorImpl"),
   VehicleController: Symbol.for("VehicleController"),
+  DriverRepositoryImpl: Symbol.for("DriverRepositoryImpl"),
+  DriverInteractorImpl: Symbol.for("DriverInteractorImpl"),
+  DriverController: Symbol.for("DriverController"),
 };
 
 export enum HttpStatusCode {

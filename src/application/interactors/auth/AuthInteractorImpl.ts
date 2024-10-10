@@ -54,7 +54,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
         if (Number(otp) !== userOtpRecords[0].otp) {
           throw new BadRequestError("Invalid OTP");
         } else {
-          await this.userRepository.updateUser(userId,{
+          await this.userRepository.updateUser(userId, {
             _id: userId,
             isVerified: true,
           });
@@ -71,7 +71,12 @@ export class AuthInteractorImpl implements IAuthInteractor {
             ...user,
             password: hashedPassword,
           };
-          const updatedUser = await this.userRepository.updateUser(user._id!,userData);
+
+          const updatedUser = await this.userRepository.updateUser(
+            user._id!,
+            userData
+          );
+
           if (!updatedUser) throw new Error("Error while updating user");
           const { password: pass, ...rest } = userData;
 
@@ -128,7 +133,10 @@ export class AuthInteractorImpl implements IAuthInteractor {
       ...user,
       password: hashedPassword,
     };
-    const updatedUser = await this.userRepository.updateUser(user._id!,userData);
+    const updatedUser = await this.userRepository.updateUser(
+      user._id!,
+      userData
+    );
     if (!updatedUser) throw new Error("Error while updating user");
     const { password: pass, ...rest } = userData;
     return { ...rest };
@@ -165,7 +173,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
     const { password: pass, ...rest } = userObj;
     const token = await this.authService.generateToken({ ...rest });
 
-    await this.userRepository.updateUser(user._id!,{
+    await this.userRepository.updateUser(user._id!, {
       _id: user._id,
       deviceToken: deviceToken,
     });
@@ -176,6 +184,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
     const { password: userPass, ...resData } = userData;
     return { ...resData };
   }
+
   async verifyOTP(userId: string, otp: string): Promise<UserOTPResponse> {
     const userOtpRecords = await this.repository.findOtps({ user: userId });
 
@@ -192,7 +201,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
         if (Number(otp) !== userOtpRecords[0].otp) {
           throw new Error("Invalid OTP");
         } else {
-          await this.userRepository.updateUser(userId,{
+          await this.userRepository.updateUser(userId, {
             _id: userId,
             isVerified: true,
           });
@@ -226,7 +235,11 @@ export class AuthInteractorImpl implements IAuthInteractor {
       data.password!
     ); // hash password before saving it
 
-    const userData: IUser = { ...data, password: hashedPassword };
+    const userData: IUser = {
+      ...data,
+      password: hashedPassword,
+      role: "admin",
+    };
     const result = await this.repository.registerUser(userData);
 
     await this.sendEmailOTP(userData.email!);
