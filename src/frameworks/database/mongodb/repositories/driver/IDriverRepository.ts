@@ -10,4 +10,5 @@ export interface IDriverRepository {
   addDriver(data: IDriver): Promise<IDriver>;
   updateDriver(id: string, data: IDriver): Promise<IDriver>;
   deleteDriver(id: string): Promise<IDriver>;
+  findDriverByUserId(id: string): Promise<IDriver | null | undefined>;
 }

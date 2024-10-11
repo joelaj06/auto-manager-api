@@ -41,9 +41,12 @@ export class DriverInteractorImpl implements IDriverInteractor {
     if (!id) throw new UnprocessableEntityError("Driver id is required");
     const driver = await this.driverRepository.findById(id);
     if (!driver) throw new NotFoundError("Driver not found");
+
     const updatedDriver = await this.driverRepository.updateDriver(id, data);
+
     if (!updatedDriver)
       throw new BadRequestError("Error while updating Driver");
+
     return updatedDriver;
   }
   async deleteDriver(id: string): Promise<IDriver> {

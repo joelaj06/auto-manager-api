@@ -9,6 +9,16 @@ import { IDriverRepository } from "./IDriverRepository";
 
 @injectable()
 export class DriverRepositoryImpl implements IDriverRepository {
+  async findDriverByUserId(id: string): Promise<IDriver | null | undefined> {
+    try {
+      if (!id) throw new Error("User id is required");
+      const driver = await Driver.findOne({ userId: id });
+      if (!driver) return null;
+      return DriverMapper.toEntity(driver);
+    } catch (error) {
+      throw error;
+    }
+  }
   async findAll(query: RequestQuery): Promise<PaginatedResponse<IDriver>> {
     try {
       const { search, pageSize } = query;
@@ -19,9 +29,13 @@ export class DriverRepositoryImpl implements IDriverRepository {
       const searchCriteria = {
         $or: [
           { licenseNumber: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
-          { "user.name": { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
+          {
+            "user.firstName": { $regex: new RegExp(`^${searchQuery}.*`, "i") },
+          },
         ],
       };
+
+      // Populate user data to include the driver's full name
       const drivers = await Driver.find(searchCriteria)
         .populate("user", "-password")
         .limit(limit)
@@ -30,14 +44,18 @@ export class DriverRepositoryImpl implements IDriverRepository {
       const data: IDriver[] = drivers.map((driver) =>
         DriverMapper.toEntity(driver)
       );
+
       const totalCount = await Driver.countDocuments(searchCriteria);
+
       const totalPages = Math.ceil(totalCount / limit);
+
       const response: PaginatedResponse<IDriver> = {
         data,
         totalPages,
         totalCount,
         pageCount: pageIndex,
       };
+
       return response;
     } catch (error) {
       throw error;
@@ -47,7 +65,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
   async findById(id: string): Promise<IDriver | null | undefined> {
     try {
       if (!id) throw new Error("Driver id is required");
-      const vehicle = await Driver.findById(id);
+      const vehicle = await Driver.findById(id).populate("user", "-password");
       if (!vehicle) return null;
       return DriverMapper.toEntity(vehicle);
     } catch (error) {

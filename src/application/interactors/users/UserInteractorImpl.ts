@@ -85,6 +85,31 @@ export class UserInteractorImpl implements IUserInteractor {
     if (!user) throw new NotFoundError("User not found");
 
     const updatedUser = await this.userRepository.updateUser(id, data);
+
+    //check if user is a driver by role
+    if (updatedUser.role && updatedUser.role.toLowerCase() === "driver") {
+      const driverData: IDriver = {
+        userId: updatedUser._id,
+        vehicleId: data.vehicleId,
+        user: updatedUser._id,
+        companyId: data.company,
+        lisenceExpiryDate: data.lisenceExpiryDate,
+        licenseNumber: data.licenseNumber,
+      };
+
+      const driver = await this.driverRepository.findDriverByUserId(
+        updatedUser._id!
+      );
+
+      if (!driver) throw new NotFoundError("Driver not found");
+
+      const dirver = await this.driverRepository.updateDriver(
+        driver._id!,
+        driverData
+      );
+      if (!dirver) throw new BadRequestError("Error while adding driver");
+    }
+
     if (!updatedUser) throw new Error("Error while updating user");
     return updatedUser;
   }
