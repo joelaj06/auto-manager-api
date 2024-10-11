@@ -17,6 +17,7 @@ import {
   ErrorMiddleware,
   ILogger,
   LoggerImpl,
+  saleRoutes,
   userRoutes,
   vehicleRoutes,
 } from "./frameworks";
@@ -57,6 +58,7 @@ app.use(userRoutes);
 app.use(companyRoutes);
 app.use(vehicleRoutes);
 app.use(driverRoutes);
+app.use(saleRoutes);
 
 //error middleware
 app.use(errorMiddleware.execute().bind(errorMiddleware));

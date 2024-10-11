@@ -4,3 +4,4 @@ export * from "./UserOTP";
 export * from "./UserResponse";
 export * from "./Vehicle";
 export * from "./Driver";
+export * from "./Sale";
