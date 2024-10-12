@@ -4,6 +4,7 @@ import { IVehicle } from "./Vehicle";
 export class ISale {
   constructor(
     public readonly _id?: string,
+    public saleId?: string,
     public readonly driverId?: string,
     public readonly vehicleId?: string,
     public readonly amount?: number,

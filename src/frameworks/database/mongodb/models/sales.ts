@@ -5,7 +5,7 @@ const salesSchema: Schema = new Schema(
   {
     saleId: {
       type: String,
-      required: true,
+      // required: true,
       unique: true,
     },
     driverId: {
@@ -54,6 +54,29 @@ const salesSchema: Schema = new Schema(
   },
   { timestamps: true }
 );
+// Add pre-save middleware to set the saleId
+// If the saleId is not provided, generate a unique ID based on the last sale ID in the database.
+// If no previous sales exist, use a default start value.
+
+salesSchema.pre("save", async function (next) {
+  const sale = this as ISale;
+
+  if (!sale.saleId) {
+    const lastSale = await mongoose
+      .model("Sale")
+      .findOne({}, {}, { sort: { createdAt: -1 } });
+
+    if (lastSale && lastSale.saleId) {
+      const lastSaleNumber = parseInt(lastSale.saleId.split("-")[1]);
+      const newSaleNumber = (lastSaleNumber + 1).toString().padStart(7, "0");
+      sale.saleId = `SL-${newSaleNumber}`;
+    } else {
+      sale.saleId = "SL-0000001"; // Default start value if no previous sales exist
+    }
+  }
+
+  next();
+});
 
 const Sale = mongoose.model("Sale", salesSchema);
 export default Sale;
@@ -103,6 +126,7 @@ export const SalesMapper = {
   toEntity: (model: any): ISale => {
     return new ISale(
       model._id?.toString(), // Convert ObjectId to string
+      model.saleId,
       model.driverId?.toString(),
       model.vehicleId?.toString(),
       model.amount,
