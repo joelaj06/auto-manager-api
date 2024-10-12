@@ -42,6 +42,10 @@ const salesSchema: Schema = new Schema(
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
+    approvedOrRejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User", // Can be either admin or driver
@@ -138,7 +142,8 @@ export const SalesMapper = {
       model.createdAt,
       model.updatedAt,
       model.driver, // Convert ObjectId to string
-      model.vehicle
+      model.vehicle,
+      model.approvedOrRejectedBy
     );
   },
 };

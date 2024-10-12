@@ -71,10 +71,18 @@ export class SalesController {
     }
   }
 
-  async updateSale(req: Request, res: Response, next: NextFunction) {
+  async updateSale(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const { id } = req.params;
-      const sale = await this.salesInteractor.updateSale(id, req.body);
+      const data = {
+        ...req.body,
+        approvedOrRejectedBy: req.user?._id,
+      };
+      const sale = await this.salesInteractor.updateSale(id, data);
       if (!sale) throw new BadRequestError("Error while updating sale");
       return res.status(HttpStatusCode.OK).json(sale);
     } catch (error) {

@@ -52,6 +52,10 @@ export class SalesInteractorImpl implements ISalesInteractor {
     const sale = await this.salesRepository.findById(id);
     if (!sale) throw new NotFoundError("Sale not found");
 
+    if (data.status !== "approved" && data.status !== "rejected") {
+      data.approvedOrRejectedBy = undefined;
+    }
+
     const updatedSale = await this.salesRepository.updateSale(id, data);
 
     if (!updatedSale) throw new BadRequestError("Error while updating Sale");

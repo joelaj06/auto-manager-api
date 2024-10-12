@@ -17,7 +17,8 @@ export class ISale {
     public readonly createdAt?: Date,
     public readonly updatedAt?: Date,
     public readonly driver?: IDriver | string, // Optional populated driver entity
-    public readonly vehicle?: IVehicle | string // Optional populated vehicle entity
+    public readonly vehicle?: IVehicle | string,
+    public approvedOrRejectedBy?: string
   ) {}
 }
 

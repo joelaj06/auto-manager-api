@@ -101,6 +101,10 @@ export class SalesRepositoryImpl implements ISalesRepository {
             select: "-password", // Populate the user inside the driver
           },
         })
+        .populate({
+          path: "approvedOrRejectedBy", // Populate the driver
+          select: "-password", // Populate the user inside the driver
+        })
         .limit(limit)
         .skip(startIndex);
 
@@ -133,6 +137,10 @@ export class SalesRepositoryImpl implements ISalesRepository {
             path: "user",
             select: "-password", // Populate the user inside the driver
           },
+        })
+        .populate({
+          path: "approvedOrRejectedBy", // Populate the driver
+          select: "-password", // Populate the user inside the driver
         });
       if (!sale) return null;
       return SalesMapper.toEntity(sale);
