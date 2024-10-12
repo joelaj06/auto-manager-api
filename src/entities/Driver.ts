@@ -4,6 +4,7 @@ import { IVehicle } from "./Vehicle";
 export class IDriver {
   constructor(
     public readonly _id?: string,
+    public driverCode?: string,
     public readonly licenseNumber?: string,
     public readonly lisenceExpiryDate?: Date,
     public readonly status?: string,

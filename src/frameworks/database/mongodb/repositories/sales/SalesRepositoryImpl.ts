@@ -3,6 +3,7 @@ import {
   ISale,
   RequestQuery,
   PaginatedResponse,
+  SalesRequestQuery,
 } from "../../../../../entities";
 import Sale, { SalesMapper } from "../../models/sales";
 import { ISalesRepository } from "./ISalesRepository";
@@ -45,16 +46,50 @@ export class SalesRepositoryImpl implements ISalesRepository {
       throw error;
     }
   }
-  async findAll(query: RequestQuery): Promise<PaginatedResponse<ISale>> {
+  async findAll(query: SalesRequestQuery): Promise<PaginatedResponse<ISale>> {
     try {
-      const { search, pageSize } = query;
+      const { search, pageSize, status, driverId, vehicleId, companyId, date } =
+        query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
       const pageIndex = query.pageIndex || 1;
       const startIndex = (pageIndex - 1) * limit;
-      const searchCriteria = {
-        $or: [{ saleId: { $regex: new RegExp(`^${searchQuery}.*`, "i") } }],
-      };
+      let searchCriteria = {};
+
+      // Add the $or condition for saleId
+      if (searchQuery) {
+        searchCriteria = {
+          $or: [{ saleId: { $regex: new RegExp(`^${searchQuery}.*`, "i") } }],
+        };
+      }
+
+      if (status) {
+        searchCriteria = { ...searchCriteria, status };
+      }
+      if (driverId) {
+        searchCriteria = {
+          ...searchCriteria,
+          driverId: driverId,
+        };
+      }
+      if (vehicleId) {
+        searchCriteria = {
+          ...searchCriteria,
+          vehicleId: vehicleId,
+        };
+      }
+      if (companyId) {
+        searchCriteria = {
+          ...searchCriteria,
+          companyId: companyId,
+        };
+      }
+      if (date) {
+        searchCriteria = {
+          ...searchCriteria,
+          date: date,
+        };
+      }
 
       // Populate user data to include the driver's full name
       const sales = await Sale.find(searchCriteria)

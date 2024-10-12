@@ -1,6 +1,7 @@
 export class ICompany {
   constructor(
     public readonly _id?: string,
+    public companyCode?: string,
     public readonly name?: string,
     public readonly industry?: string,
     public readonly phone?: string,

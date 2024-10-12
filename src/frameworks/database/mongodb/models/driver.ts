@@ -4,6 +4,10 @@ import { IDriver } from "../../../../entities";
 // Define the Driver Schema
 const driverSchema: Schema = new Schema(
   {
+    driverCode: {
+      type: String,
+      unique: true,
+    },
     licenseNumber: {
       type: String,
     },
@@ -52,6 +56,28 @@ const driverSchema: Schema = new Schema(
   },
   { timestamps: true }
 );
+
+driverSchema.pre("save", async function (next) {
+  const driver = this as IDriver;
+
+  if (!driver.driverCode) {
+    const lastDriver = await mongoose
+      .model("Driver")
+      .findOne({}, {}, { sort: { createdAt: -1 } });
+
+    if (lastDriver && lastDriver.driverCode) {
+      const lastDriverNumber = parseInt(lastDriver.driverCode.split("-")[1]);
+      const newDriverNumber = (lastDriverNumber + 1)
+        .toString()
+        .padStart(7, "0");
+      driver.driverCode = `DR-${newDriverNumber}`;
+    } else {
+      driver.driverCode = "DR-0000001"; // Default start value if no previous drivers exist
+    }
+  }
+
+  next();
+});
 
 // Create the Driver model
 const Driver = mongoose.model("Driver", driverSchema);
@@ -111,7 +137,9 @@ export const DriverMapper = {
    */
   toEntity: (model: any): IDriver => {
     return new IDriver(
-      model._id?.toString(), // Convert ObjectId to string
+      model._id?.toString(),
+      // Convert ObjectId to string
+      model.driverCode,
       model.licenseNumber,
       model.lisenceExpiryDate,
       model.status,

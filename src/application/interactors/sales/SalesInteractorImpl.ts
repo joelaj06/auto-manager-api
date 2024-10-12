@@ -1,6 +1,11 @@
 import { inject, injectable } from "inversify";
 import { ISalesInteractor } from "./ISalesInteractor";
-import { RequestQuery, PaginatedResponse, ISale } from "../../../entities";
+import {
+  RequestQuery,
+  PaginatedResponse,
+  ISale,
+  SalesRequestQuery,
+} from "../../../entities";
 import { ISalesRepository } from "../../../frameworks/database/mongodb/repositories/sales";
 import { INTERFACE_TYPE } from "../../../utils/constants";
 import {
@@ -18,7 +23,9 @@ export class SalesInteractorImpl implements ISalesInteractor {
   ) {
     this.salesRepository = salesRepository;
   }
-  async getAllSales(query: RequestQuery): Promise<PaginatedResponse<ISale>> {
+  async getAllSales(
+    query: SalesRequestQuery
+  ): Promise<PaginatedResponse<ISale>> {
     return await this.salesRepository.findAll(query);
   }
   async getASale(id: string): Promise<ISale> {

@@ -1,4 +1,5 @@
 import { IDriver } from "./Driver";
+import { RequestQuery } from "./User";
 import { IVehicle } from "./Vehicle";
 
 export class ISale {
@@ -18,4 +19,12 @@ export class ISale {
     public readonly driver?: IDriver | string, // Optional populated driver entity
     public readonly vehicle?: IVehicle | string // Optional populated vehicle entity
   ) {}
+}
+
+export interface SalesRequestQuery extends RequestQuery {
+  status?: "pending" | "approved" | "rejected";
+  driverId?: string;
+  vehicleId?: string;
+  companyId?: string;
+  date?: string;
 }

@@ -11,9 +11,10 @@ const AddressSchema: Schema = new Schema({
 });
 
 // Company Schema
-const CompanySchema: Schema = new Schema(
+const companySchema: Schema = new Schema(
   {
     name: { type: String, required: true },
+    companyCode: { type: String, unique: true },
     industry: { type: String, required: false },
     phone: { type: String, required: true },
     email: { type: String, required: true },
@@ -48,8 +49,29 @@ const CompanySchema: Schema = new Schema(
   }
 );
 
+// Pre-save hook to generate companyCode
+companySchema.pre("save", async function (next) {
+  const company = this as ICompany;
+
+  if (!company.companyCode) {
+    const lastCompany = await mongoose
+      .model("Company")
+      .findOne({}, {}, { sort: { createdAt: -1 } });
+
+    if (lastCompany && lastCompany.companyCode) {
+      const lastCompanyCode = parseInt(lastCompany.companyCode.split("-")[1]);
+      const newCompanyCode = (lastCompanyCode + 1).toString().padStart(7, "0");
+      company.companyCode = `CO-${newCompanyCode}`;
+    } else {
+      company.companyCode = "CO-0000001"; // Default start value if no previous companies exist
+    }
+  }
+
+  next();
+});
+
 // Export Company Model
-const Company = mongoose.model("Company", CompanySchema);
+const Company = mongoose.model("Company", companySchema);
 export default Company;
 
 export const CompanyMapper = {
@@ -111,6 +133,7 @@ export const CompanyMapper = {
     return new ICompany(
       model._id?.toString(), // Convert ObjectId to string
       model.name,
+      model.companyCode,
       model.industry,
       model.phone,
       model.email,
