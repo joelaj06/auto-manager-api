@@ -4,3 +4,4 @@ export * from "./company/index";
 export * from "./vehicle/index";
 export * from "./drivers/index";
 export * from "./sales/index";
+export * from "./expense/index";

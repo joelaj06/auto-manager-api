@@ -15,6 +15,7 @@ import {
   companyRoutes,
   driverRoutes,
   ErrorMiddleware,
+  expenseRoutes,
   ILogger,
   LoggerImpl,
   saleRoutes,
@@ -59,6 +60,7 @@ app.use(companyRoutes);
 app.use(vehicleRoutes);
 app.use(driverRoutes);
 app.use(saleRoutes);
+app.use(expenseRoutes);
 
 //error middleware
 app.use(errorMiddleware.execute().bind(errorMiddleware));

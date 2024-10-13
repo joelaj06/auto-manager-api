@@ -4,6 +4,7 @@ import companyRoutes from "./companyRoutes";
 import vehicleRoutes from "./vehicleRoutes";
 import driverRoutes from "./driverRoutes";
 import saleRoutes from "./saleRoutes";
+import expenseRoutes from "./expenseRoutes";
 export {
   authRoutes,
   userRoutes,
@@ -11,4 +12,5 @@ export {
   vehicleRoutes,
   driverRoutes,
   saleRoutes,
+  expenseRoutes,
 };

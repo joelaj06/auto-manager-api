@@ -24,6 +24,9 @@ export const INTERFACE_TYPE = {
   SalesRepositoryImpl: Symbol.for("SalesRepositoryImpl"),
   SalesInteractorImpl: Symbol.for("SalesInteractorImpl"),
   SalesController: Symbol.for("SalesController"),
+  ExpenseCategoryRepositoryImpl: Symbol.for("ExpenseCategoryRepositoryImpl"),
+  ExpenseCategoryInteractorImpl: Symbol.for("ExpenseCategoryInteractorImpl"),
+  ExpenseCategoryController: Symbol.for("ExpenseCategoryController"),
 };
 
 export enum HttpStatusCode {
