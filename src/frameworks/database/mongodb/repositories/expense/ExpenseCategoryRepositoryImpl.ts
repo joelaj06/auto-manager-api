@@ -53,7 +53,6 @@ export class ExpenseCategoryRepositoryImpl
   async findAll(query: RequestQuery): Promise<IExpenseCategory[]> {
     try {
       const searchQuery = query.search || "";
-      console.log(searchQuery);
       const searchCriteria = {
         $or: [
           { name: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },

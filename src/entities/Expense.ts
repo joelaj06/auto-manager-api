@@ -1,11 +1,12 @@
 import { ICompany } from "./Company";
-import { IUser } from "./User";
+import { IUser, RequestQuery } from "./User";
 import { IVehicle } from "./Vehicle";
 
 export class IExpense {
   constructor(
     public readonly _id?: string,
     public readonly category?: IExpenseCategory | string,
+    public readonly status?: string,
     public readonly categoryId?: string,
     public readonly company?: ICompany | string,
     public readonly amount?: number,
@@ -27,4 +28,9 @@ export class IExpenseCategory {
     public readonly createdAt?: string,
     public readonly updatedAt?: string
   ) {}
+}
+
+export interface ExpenseRequestQuery extends RequestQuery {
+  categoryId?: string;
+  status?: string;
 }

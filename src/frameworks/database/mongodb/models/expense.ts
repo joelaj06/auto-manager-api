@@ -45,7 +45,7 @@ const expenseSchema: Schema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-    vehicleId: {
+    vehicle: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vehicle",
     },
@@ -116,6 +116,7 @@ export const ExpenseMapper = {
     return new IExpense(
       model._id?.toString(), // Convert ObjectId to string
       model.category, // Convert ObjectId to string
+      model.status,
       model.categoryId?.toString(), // Convert ObjectId to string
       model.company, // Convert ObjectId to string
       model.amount,
