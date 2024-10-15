@@ -40,4 +40,7 @@ export interface RequestQuery {
   search?: string;
   pageSize?: number;
   pageIndex?: number;
+  startDate?: Date;
+  endDate?: Date;
+  status?: string;
 }

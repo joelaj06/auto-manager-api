@@ -18,6 +18,7 @@ import {
   expenseRoutes,
   ILogger,
   LoggerImpl,
+  rentalRoutes,
   saleRoutes,
   userRoutes,
   vehicleRoutes,
@@ -61,6 +62,7 @@ app.use(vehicleRoutes);
 app.use(driverRoutes);
 app.use(saleRoutes);
 app.use(expenseRoutes);
+app.use(rentalRoutes);
 
 //error middleware
 app.use(errorMiddleware.execute().bind(errorMiddleware));
