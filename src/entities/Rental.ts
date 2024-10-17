@@ -1,11 +1,12 @@
-import { RequestQuery, IUser } from "./User";
+import { ICustomer } from "./Customer";
+import { RequestQuery } from "./User";
 import { IVehicle } from "./Vehicle";
 
 export class IRental {
   constructor(
     public readonly _id?: string,
     public rentalCode?: string,
-    public readonly renter?: IUser | string,
+    public readonly renter?: ICustomer | string,
     public readonly vehicle?: IVehicle | string,
     public readonly startDate?: Date,
     public readonly endDate?: Date,

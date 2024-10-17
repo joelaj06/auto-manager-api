@@ -6,6 +6,8 @@ import driverRoutes from "./driverRoutes";
 import saleRoutes from "./saleRoutes";
 import expenseRoutes from "./expenseRoutes";
 import rentalRoutes from "./rentalRoutes";
+import customerRoutes from "./customerRoutes";
+
 export {
   authRoutes,
   userRoutes,
@@ -15,4 +17,5 @@ export {
   saleRoutes,
   expenseRoutes,
   rentalRoutes,
+  customerRoutes,
 };

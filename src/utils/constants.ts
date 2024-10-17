@@ -33,6 +33,9 @@ export const INTERFACE_TYPE = {
   RentalRepositoryImpl: Symbol.for("RentalRepositoryImpl"),
   RentalInteractorImpl: Symbol.for("RentalInteractorImpl"),
   RentalController: Symbol.for("RentalController"),
+  CustomerRepositoryImpl: Symbol.for("CustomerRepositoryImpl"),
+  CustomerInteractorImpl: Symbol.for("CustomerInteractorImpl"),
+  CustomerController: Symbol.for("CustomerController"),
 };
 
 export enum HttpStatusCode {

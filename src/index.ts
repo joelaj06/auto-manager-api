@@ -13,6 +13,7 @@ import {
   authRoutes,
   AuthServiceImpl,
   companyRoutes,
+  customerRoutes,
   driverRoutes,
   ErrorMiddleware,
   expenseRoutes,
@@ -63,6 +64,7 @@ app.use(driverRoutes);
 app.use(saleRoutes);
 app.use(expenseRoutes);
 app.use(rentalRoutes);
+app.use(customerRoutes);
 
 //error middleware
 app.use(errorMiddleware.execute().bind(errorMiddleware));

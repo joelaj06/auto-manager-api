@@ -6,3 +6,4 @@ export * from "./driver/index";
 export * from "./sales/index";
 export * from "./expense/index";
 export * from "./rental/index";
+export * from "./customer/index";
