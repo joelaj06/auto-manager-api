@@ -4,7 +4,6 @@ import { IVehicle } from "../../../../entities/Vehicle";
 const vehicleSchema: Schema = new Schema({
   vehicleId: {
     type: String,
-    required: true,
     unique: true,
   },
   licensePlate: {
@@ -42,6 +41,7 @@ const vehicleSchema: Schema = new Schema({
     enum: ["available", "in-use", "under-maintenance"],
     default: "available",
   },
+  image: String,
   currentDriverId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Driver",
@@ -94,6 +94,48 @@ const vehicleSchema: Schema = new Schema({
   },
 });
 
+vehicleSchema.pre("save", async function (next) {
+  const vehicle = this as IVehicle;
+  if (!vehicle.vehicleId) {
+    const lastVehicle = await mongoose
+      .model("Vehicle")
+      .findOne({}, {}, { sort: { createdAt: -1 } });
+    if (lastVehicle && lastVehicle.vehicleId) {
+      const lastVehicleNumber = parseInt(lastVehicle.vehicleId.split("-")[1]);
+      const newVehicleNumber = (lastVehicleNumber + 1)
+        .toString()
+        .padStart(7, "0");
+      vehicle.vehicleId = `VE-${newVehicleNumber}`;
+    } else {
+      vehicle.vehicleId = "VE-0000001"; // Default start value if no previous vehicles exist
+    }
+  }
+  next();
+});
+
+/**
+ * driverSchema.pre("save", async function (next) {
+  const driver = this as IDriver;
+
+  if (!driver.driverCode) {
+    const lastDriver = await mongoose
+      .model("Driver")
+      .findOne({}, {}, { sort: { createdAt: -1 } });
+
+    if (lastDriver && lastDriver.driverCode) {
+      const lastDriverNumber = parseInt(lastDriver.driverCode.split("-")[1]);
+      const newDriverNumber = (lastDriverNumber + 1)
+        .toString()
+        .padStart(7, "0");
+      driver.driverCode = `DR-${newDriverNumber}`;
+    } else {
+      driver.driverCode = "DR-0000001"; // Default start value if no previous drivers exist
+    }
+  }
+
+  next();
+});
+ */
 export const Vehicle = mongoose.model("Vehicle", vehicleSchema);
 
 // Mapper for Vehicle
@@ -180,7 +222,8 @@ export const VehicleMapper = {
       model.insuranceDetails,
       model.createdBy,
       model.createdAt,
-      model.updatedAt
+      model.updatedAt,
+      model.image
     );
   },
 };

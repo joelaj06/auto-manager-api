@@ -17,6 +17,9 @@ const config: IConfig = {
   mailerService: process.env.MAIL_HOST || "smtp.gmail.com",
   mailerHost: process.env.MAIL_HOST || "smtp.gmail.com",
   mailerPort: Number(process.env.MAIL_PORT),
+  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME?.toString() || "",
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
+  cloudinaryApiSecrete: process.env.CLOUDINARY_API_SECRETE || "",
 };
 
 export default config;

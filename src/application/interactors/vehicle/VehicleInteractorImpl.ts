@@ -8,29 +8,57 @@ import {
 import { IVehicleInteractor } from "./IVehicleInteractor";
 import { IVehicleRepository } from "../../../frameworks/database/mongodb/repositories/vehicle/IVehicleRepository";
 import { INTERFACE_TYPE } from "../../../utils";
+import { IStorageBucket } from "../../../frameworks/services/bucket/IStorageBucket";
 
 @injectable()
 export class VehicleInteractorImpl implements IVehicleInteractor {
   private repository: IVehicleRepository;
+  private bucket: IStorageBucket;
 
   constructor(
     @inject(INTERFACE_TYPE.VehicleRepositoryImpl)
-    vehicleRepository: IVehicleRepository
+    vehicleRepository: IVehicleRepository,
+    @inject(INTERFACE_TYPE.StorageBucketImpl) bucket: IStorageBucket
   ) {
     this.repository = vehicleRepository;
+    this.bucket = bucket;
   }
   async addVehicle(data: IVehicle): Promise<IVehicle> {
     if (!data) throw new UnprocessableEntityError("Vehicle data is required");
     //TODO validate data
-    const vehicle = await this.repository.addVehicle(data);
+    let body = { ...data };
+
+    let image: string = data.image || "";
+
+    if (!image.startsWith("http") && image != "") {
+      // Image is in base64 format, so upload it
+      const imageUrl = await this.bucket.uploadImage(image);
+      body = { ...body, image: imageUrl };
+    } else {
+      body = { ...body, image: "" };
+    }
+
+    const vehicle = await this.repository.addVehicle(body);
     if (!vehicle) throw new BadRequestError("Error while adding vehicle");
     return vehicle;
   }
   async updateVehicle(id: string, data: IVehicle): Promise<IVehicle> {
     if (!id) throw new UnprocessableEntityError("Vehicle id is required");
+
     const vehicle = await this.repository.findById(id);
     if (!vehicle) throw new NotFoundError("Vehicle not found");
-    const updatedVehicle = await this.repository.updateVehicle(id, data);
+    let body = { ...data };
+
+    let image: string = data.image || "";
+
+    if (!image.startsWith("http") && image != "") {
+      // Image is in base64 format, so upload it
+      const imageUrl = await this.bucket.uploadImage(image);
+      body = { ...body, image: imageUrl };
+    } else {
+      body = { ...body, image: "" };
+    }
+    const updatedVehicle = await this.repository.updateVehicle(id, body);
     if (!updatedVehicle)
       throw new BadRequestError("Error while updating Vehicle");
     return updatedVehicle;

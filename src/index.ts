@@ -28,6 +28,8 @@ import expressConfig from "./frameworks/webserver/express";
 import connection from "./frameworks/database/mongodb/connection";
 import serverConfig from "./frameworks/webserver/server";
 import { IAuthService } from "./frameworks/services/auth/IAuthService";
+import { IStorageBucket } from "./frameworks/services/bucket/IStorageBucket";
+import { CloudinaryImpl } from "./frameworks/services/bucket/CloudinaryImpl";
 
 const app = express();
 const container = new Container();
@@ -44,7 +46,12 @@ container
   .to(ErrorMiddleware);
 //logger
 container.bind<ILogger>(INTERFACE_TYPE.Logger).to(LoggerImpl);
+//storagebucket
+container
+  .bind<IStorageBucket>(INTERFACE_TYPE.StorageBucketImpl)
+  .to(CloudinaryImpl);
 
+const bucket = container.get<IStorageBucket>(INTERFACE_TYPE.StorageBucketImpl);
 const errorMiddleware = container.get<ErrorMiddleware>(
   INTERFACE_TYPE.ErrorMiddleWare
 );
@@ -70,5 +77,5 @@ app.use(customerRoutes);
 app.use(errorMiddleware.execute().bind(errorMiddleware));
 
 connection(mongoose, config).connectToMongo();
-
 serverConfig(app, config).startServer();
+bucket.configureStorageBucket();

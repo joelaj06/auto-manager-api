@@ -36,6 +36,7 @@ export const INTERFACE_TYPE = {
   CustomerRepositoryImpl: Symbol.for("CustomerRepositoryImpl"),
   CustomerInteractorImpl: Symbol.for("CustomerInteractorImpl"),
   CustomerController: Symbol.for("CustomerController"),
+  StorageBucketImpl: Symbol.for("StorageBucketImpl"),
 };
 
 export enum HttpStatusCode {

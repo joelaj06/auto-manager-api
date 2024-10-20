@@ -9,4 +9,7 @@ export interface IConfig {
   mailerPort: number;
   mailerService: string;
   mailerHost: string;
+  cloudinaryCloudName: string;
+  cloudinaryApiKey: string;
+  cloudinaryApiSecrete: string;
 }

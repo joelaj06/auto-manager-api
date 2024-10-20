@@ -1,7 +1,7 @@
 export class IVehicle {
   constructor(
     public readonly _id?: string,
-    public readonly vehicleId?: string,
+    public vehicleId?: string,
     public readonly licensePlate?: string,
     public readonly make?: string,
     public readonly model?: string,
@@ -19,7 +19,7 @@ export class IVehicle {
     public readonly createdBy?: string,
     public readonly createdAt?: string,
     public readonly updatedAt?: string,
-    public readonly imageUrl?: string
+    public readonly image?: string
   ) {}
 }
 
