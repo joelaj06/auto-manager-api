@@ -4,13 +4,15 @@ import { IUser } from "../../../../../entities/User";
 import User, { UserMapper } from "../../models/user";
 import { IUserOTP } from "../../../../../entities/UserOTP";
 import UserOTP, { OTPMapper } from "../../models/userOTP";
+import { NotFoundError } from "../../../../../error_handler";
+import { ConflictError } from "../../../../../error_handler/ConflictError";
 
 @injectable()
 export class AuthRepositoryImpl implements IAuthRepository {
   async deleteManyOtps(id: string): Promise<IUserOTP> {
-    const otp = await UserOTP.findById(id);
+    const otp = await UserOTP.findOne({ user: id });
     if (!otp) {
-      throw new Error("OTP not found");
+      throw new NotFoundError("OTP not found");
     } else {
       await UserOTP.deleteMany({ user: id });
       return OTPMapper.toEntity(otp);
@@ -19,7 +21,7 @@ export class AuthRepositoryImpl implements IAuthRepository {
   async deleteOtp(id: string): Promise<IUserOTP> {
     const otp = await UserOTP.findById(id);
     if (!otp) {
-      throw new Error("OTP not found");
+      throw new NotFoundError("OTP not found");
     } else {
       await UserOTP.findByIdAndDelete(id);
       return OTPMapper.toEntity(otp);
@@ -39,7 +41,7 @@ export class AuthRepositoryImpl implements IAuthRepository {
   async registerUser(data: IUser): Promise<IUser> {
     const user = await User.findOne({ email: data.email });
     if (user) {
-      throw new Error("The email already exists");
+      throw new ConflictError("The email already exists");
     }
     const newUser = new User(data);
     await newUser.save();

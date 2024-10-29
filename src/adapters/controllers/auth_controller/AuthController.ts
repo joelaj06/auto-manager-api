@@ -3,6 +3,7 @@ import { IAuthInteractor } from "../../../application/interactors/auth/IAuthInte
 import { inject, injectable } from "inversify";
 import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
 import { ControllerUserRequest } from "./IController";
+import { UnprocessableEntityError } from "../../../error_handler";
 
 @injectable()
 export class AuthController {
@@ -85,6 +86,8 @@ export class AuthController {
     }
   }
   async registerUser(req: Request, res: Response, next: NextFunction) {
+    if (!req.body)
+      throw new UnprocessableEntityError("Request body is required");
     try {
       const response = await this.interactor.registerUser(req.body);
       return res.status(HttpStatusCode.CREATED).json(response);
