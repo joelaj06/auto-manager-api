@@ -9,6 +9,8 @@ import { INTERFACE_TYPE } from "../../../utils";
 import {
   CompanyRepositoryImpl,
   ICompanyRepository,
+  IUserRepository,
+  UserRepositoryImpl,
 } from "../../database/mongodb";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
 import { IAuthService } from "../../services/auth/IAuthService";
@@ -17,18 +19,27 @@ import { AuthServiceImpl } from "../../services";
 const container = new Container();
 
 container
+  .bind<IUserRepository>(INTERFACE_TYPE.UserRepositoryImpl)
+  .to(UserRepositoryImpl);
+
+container
   .bind<ICompanyRepository>(INTERFACE_TYPE.CompanyRepositoryImpl)
   .to(CompanyRepositoryImpl);
+
 container
   .bind<ICompanyInteractor>(INTERFACE_TYPE.CompanyInteractorImpl)
   .to(CompanyInteractorImpl);
+
 container.bind<CompanyController>(CompanyController).to(CompanyController);
+
 container
   .bind<IAuthService>(INTERFACE_TYPE.AuthServiceImpl)
   .to(AuthServiceImpl);
+
 container
   .bind<AuthMiddleware>(INTERFACE_TYPE.AuthMiddleware)
   .to(AuthMiddleware);
+
 const controller = container.get<CompanyController>(CompanyController);
 
 const authMiddleware = container.get<AuthMiddleware>(
@@ -44,7 +55,7 @@ router
     controller.getAllCompanies.bind(controller)
   )
   .post(
-    authMiddleware.authenticateToken.bind(authMiddleware),
+    // authMiddleware.authenticateToken.bind(authMiddleware),
     controller.addCompany.bind(controller)
   );
 
@@ -58,4 +69,5 @@ router
     authMiddleware.authenticateToken.bind(authMiddleware),
     controller.updateCompany.bind(controller)
   );
+
 export default router;

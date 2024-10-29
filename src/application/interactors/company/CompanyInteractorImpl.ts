@@ -1,6 +1,11 @@
 import { inject, injectable } from "inversify";
-import { ICompany, PaginatedResponse, RequestQuery } from "../../../entities";
-import { ICompanyRepository } from "../../../frameworks";
+import {
+  ICompany,
+  IUser,
+  PaginatedResponse,
+  RequestQuery,
+} from "../../../entities";
+import { ICompanyRepository, IUserRepository } from "../../../frameworks";
 import { INTERFACE_TYPE } from "../../../utils";
 import { ICompanyInteractor } from "./ICompanyInteractor";
 import {
@@ -12,11 +17,15 @@ import {
 @injectable()
 export class CompanyInteractorImpl implements ICompanyInteractor {
   private repository: ICompanyRepository;
+  private userRepository: IUserRepository;
 
   constructor(
-    @inject(INTERFACE_TYPE.CompanyRepositoryImpl) repository: ICompanyRepository
+    @inject(INTERFACE_TYPE.CompanyRepositoryImpl)
+    repository: ICompanyRepository,
+    @inject(INTERFACE_TYPE.UserRepositoryImpl) userRepository: IUserRepository
   ) {
     this.repository = repository;
+    this.userRepository = userRepository;
   }
   async updateCompany(id: string, data: ICompany): Promise<ICompany> {
     if (!id) throw new UnprocessableEntityError("Company id is required");
@@ -43,6 +52,11 @@ export class CompanyInteractorImpl implements ICompanyInteractor {
     if (!data) throw new UnprocessableEntityError("Company data is required");
     const company = await this.repository.addCompay(data);
     if (!company) throw new BadRequestError("Error while adding company");
+    const userData: IUser = {
+      company: company._id,
+      companyId: company._id,
+    };
+    await this.userRepository.updateUser(data.ownerId!, userData);
     return company;
   }
 }

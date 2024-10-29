@@ -17,7 +17,7 @@ const companySchema: Schema = new Schema(
     companyCode: { type: String, unique: true },
     industry: { type: String, required: false },
     phone: { type: String, required: true },
-    email: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
     website: { type: String, required: false },
     registrationNumber: { type: String, required: false },
     taxIdentificationNumber: { type: String, required: false },
@@ -40,7 +40,7 @@ const companySchema: Schema = new Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      // required: true,
     },
     address: { type: AddressSchema, required: false },
   },

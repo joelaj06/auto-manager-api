@@ -99,7 +99,11 @@ export class AuthInteractorImpl implements IAuthInteractor {
     if (!user) throw new NotFoundError("User not found");
 
     //send user otp via email notification
-    await this.sendEmailOTP(email);
+    await this.sendEmailOTP(
+      email,
+      "Password Reset",
+      "Please enter this code to reset your password"
+    );
 
     const response: UserOTPResponse = {
       status: "Pending",
@@ -196,10 +200,18 @@ export class AuthInteractorImpl implements IAuthInteractor {
       const { expiresAt } = userOtpRecords[0];
       if (expiresAt! < new Date()) {
         await this.repository.deleteManyOtps(userOtpRecords[0].user!);
-        throw new Error("OTP has expired. Please request a new one.");
+        const user = await this.userRepository.findUserById(userId);
+        await this.sendEmailOTP(
+          user?.email!,
+          "Account Verification New OTP",
+          "Please enter this code to verify your email"
+        );
+        throw new BadRequestError(
+          "OTP has expired. A new OTP has been sent to your email."
+        );
       } else {
         if (Number(otp) !== userOtpRecords[0].otp) {
-          throw new Error("Invalid OTP");
+          throw new BadRequestError("Invalid OTP");
         } else {
           await this.userRepository.updateUser(userId, {
             _id: userId,
@@ -208,7 +220,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
           await this.repository.deleteOtp(userOtpRecords[0]._id!);
           const user = await this.userRepository.findUserById(userId);
           if (!user) {
-            throw new Error("User not found");
+            throw new NotFoundError("User not found");
           }
 
           const userObj = {
@@ -231,6 +243,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
   }
 
   async registerUser(data: IUser): Promise<UserRegistrationResponse> {
+    if (!data) throw new UnprocessableEntityError("User data is required");
     const hashedPassword = await this.authService.encriptPassword(
       data.password!
     ); // hash password before saving it
@@ -242,7 +255,11 @@ export class AuthInteractorImpl implements IAuthInteractor {
     };
     const result = await this.repository.registerUser(userData);
 
-    await this.sendEmailOTP(userData.email!);
+    await this.sendEmailOTP(
+      userData.email!,
+      "Account Verification",
+      "Please enter this code to verify your email"
+    );
 
     const response: UserRegistrationResponse = {
       status: "Pending",
@@ -259,7 +276,11 @@ export class AuthInteractorImpl implements IAuthInteractor {
     return "I'm alive 😁";
   }
 
-  async sendEmailOTP(email: string): Promise<void> {
+  async sendEmailOTP(
+    email: string,
+    subject: string,
+    text: string
+  ): Promise<void> {
     try {
       if (!email) throw new UnprocessableEntityError("Email is required");
       const user = await this.userRepository.findUserByEmail(email);
@@ -276,12 +297,12 @@ export class AuthInteractorImpl implements IAuthInteractor {
       // send verification email
       await this.mailer.sendEmail(
         user.email!,
-        "Password Reset",
+        subject,
         `
         <div>
           <p>Hello,</p>
           <p>Your verification code is <b>${userOTP.otp}</b></p>
-          <p>Please enter this code to reset your password.</p>
+          <p>${text}.</p>
           <p>This OTP expires in 1 hour.</p>
         </div>
         <div>
