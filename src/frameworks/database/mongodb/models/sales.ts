@@ -8,6 +8,11 @@ const salesSchema: Schema = new Schema(
       // required: true,
       unique: true,
     },
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Driver",

@@ -1,4 +1,6 @@
 import {
+  DashboardRequestQery,
+  IMonthlySales,
   ISale,
   PaginatedResponse,
   RequestQuery,
@@ -10,4 +12,5 @@ export interface ISalesRepository {
   deleteSale(id: string): Promise<ISale>;
   findAll(query: RequestQuery): Promise<PaginatedResponse<ISale>>;
   findById(id: string): Promise<ISale | null | undefined>;
+  getMonthlySales(query: DashboardRequestQery): Promise<IMonthlySales>;
 }

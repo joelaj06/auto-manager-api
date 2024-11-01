@@ -33,7 +33,7 @@ export class AuthServiceImpl implements IAuthService {
   }
   async generateToken(user: IUser): Promise<string> {
     return jwt.sign(user, config.jwtSecret, {
-      expiresIn: "2 days",
+      expiresIn: "30 days",
     });
   }
 }

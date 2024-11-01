@@ -4,12 +4,78 @@ import {
   RequestQuery,
   PaginatedResponse,
   SalesRequestQuery,
+  DashboardRequestQery,
+  IMonthlySales,
 } from "../../../../../entities";
 import Sale, { SalesMapper } from "../../models/sales";
 import { ISalesRepository } from "./ISalesRepository";
+import mongoose from "mongoose";
 
 @injectable()
 export class SalesRepositoryImpl implements ISalesRepository {
+  async getMonthlySales(query: DashboardRequestQery): Promise<IMonthlySales> {
+    try {
+      const { month, year, company } = query;
+      if (!query) throw new Error("Query is required");
+
+      const salesData = await Sale.aggregate([
+        // Match documents within the specified month, year, and company
+        {
+          $match: {
+            company: new mongoose.Types.ObjectId(company),
+            date: {
+              $gte: new Date(year, month - 1, 1),
+              $lt: new Date(year, month, 1),
+            },
+          },
+        },
+        // Add a `week` field based on the week number within the month
+        {
+          $addFields: {
+            week: { $ceil: { $divide: [{ $dayOfMonth: "$date" }, 7] } }, // Convert day of the month to week number
+          },
+        },
+        // Group by `week` and sum the `amount` for each week
+        {
+          $group: {
+            _id: "$week",
+            totalSales: { $sum: "$amount" },
+          },
+        },
+        // Sort by week number
+        { $sort: { _id: 1 } },
+        // Format the output as required
+        {
+          $project: {
+            week: "$_id",
+            totalSales: "$totalSales",
+          },
+        },
+        // Group into the final format
+        {
+          $group: {
+            _id: null,
+            dates: { $push: "$week" },
+            sales: { $push: "$totalSales" },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            dates: 1,
+            sales: 1,
+          },
+        },
+      ]);
+      const res: IMonthlySales = {
+        weeks: salesData[0].dates,
+        sales: salesData[0].sales,
+      };
+      return salesData.length ? res : { weeks: [], sales: [] };
+    } catch (error) {
+      throw error;
+    }
+  }
   async addSale(data: ISale): Promise<ISale> {
     try {
       if (!data) throw new Error("Sales data is required");

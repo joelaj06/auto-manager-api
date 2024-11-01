@@ -1,0 +1,54 @@
+import express from "express";
+import { Container } from "inversify";
+import { INTERFACE_TYPE } from "../../../utils";
+import { AuthServiceImpl } from "../../services";
+import { IAuthService } from "../../services/auth/IAuthService";
+import { AuthMiddleware } from "../middleware/AuthMiddleware";
+import {
+  DashboardInteractorImpl,
+  IDashboardInteractor,
+} from "../../../application/interactors";
+import { DashboardController } from "../../../adapters/controllers/dashboard_controller/DashboardController";
+import { ISalesRepository } from "../../database/mongodb/repositories/sales/ISalesRepository";
+import { SalesRepositoryImpl } from "../../database/mongodb/repositories";
+
+const app = express();
+const container = new Container();
+
+container
+  .bind<IAuthService>(INTERFACE_TYPE.AuthServiceImpl)
+  .to(AuthServiceImpl);
+
+container
+  .bind<AuthMiddleware>(INTERFACE_TYPE.AuthMiddleware)
+  .to(AuthMiddleware);
+
+container
+  .bind<ISalesRepository>(INTERFACE_TYPE.SalesRepositoryImpl)
+  .to(SalesRepositoryImpl);
+
+container
+  .bind<IDashboardInteractor>(INTERFACE_TYPE.DashboardInteractorImpl)
+  .to(DashboardInteractorImpl);
+
+container
+  .bind<DashboardController>(INTERFACE_TYPE.DashboardController)
+  .to(DashboardController);
+
+const authMiddleware = container.get<AuthMiddleware>(
+  INTERFACE_TYPE.AuthMiddleware
+);
+
+const controller = container.get<DashboardController>(
+  INTERFACE_TYPE.DashboardController
+);
+
+const router = express.Router();
+
+router.get(
+  "/api/dashboard/monthlySales",
+  authMiddleware.authenticateToken.bind(authMiddleware),
+  controller.getMonthlySalesData.bind(controller)
+);
+
+export default router;
