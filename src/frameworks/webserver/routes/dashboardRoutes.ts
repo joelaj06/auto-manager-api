@@ -10,7 +10,11 @@ import {
 } from "../../../application/interactors";
 import { DashboardController } from "../../../adapters/controllers/dashboard_controller/DashboardController";
 import { ISalesRepository } from "../../database/mongodb/repositories/sales/ISalesRepository";
-import { SalesRepositoryImpl } from "../../database/mongodb/repositories";
+import {
+  DashboardRepositoryImpl,
+  IDashboardRepository,
+  SalesRepositoryImpl,
+} from "../../database/mongodb/repositories";
 
 const app = express();
 const container = new Container();
@@ -26,6 +30,10 @@ container
 container
   .bind<ISalesRepository>(INTERFACE_TYPE.SalesRepositoryImpl)
   .to(SalesRepositoryImpl);
+
+container
+  .bind<IDashboardRepository>(INTERFACE_TYPE.DashboardRepositoryImpl)
+  .to(DashboardRepositoryImpl);
 
 container
   .bind<IDashboardInteractor>(INTERFACE_TYPE.DashboardInteractorImpl)
@@ -49,6 +57,12 @@ router.get(
   "/api/dashboard/monthlySales",
   authMiddleware.authenticateToken.bind(authMiddleware),
   controller.getMonthlySalesData.bind(controller)
+);
+
+router.get(
+  "/api/dashboard/dashboardSummary",
+  authMiddleware.authenticateToken.bind(authMiddleware),
+  controller.getDashboardSummary.bind(controller)
 );
 
 export default router;

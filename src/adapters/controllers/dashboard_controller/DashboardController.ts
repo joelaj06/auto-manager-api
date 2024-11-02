@@ -31,4 +31,31 @@ export class DashboardController {
       next(error);
     }
   }
+
+  async getDashboardSummary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { companyId, startDate, endDate } = req.query;
+
+      // Ensure valid dates are parsed
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      if (!companyId || isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res
+          .status(400)
+          .json({ error: "Invalid companyId or date range" });
+      }
+
+      const summaryData =
+        await this.dashboardInteractor.getDashboardSummaryData({
+          companyId: companyId.toString(),
+          startDate: start,
+          endDate: end,
+        });
+
+      res.json(summaryData);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

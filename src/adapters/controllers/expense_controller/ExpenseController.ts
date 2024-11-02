@@ -26,8 +26,11 @@ export class ExpenseController {
       const data = {
         ...req.body,
         createdBy: req.user,
-        companyId: req.user?.company,
+        company: req.user?.company || req.body.companyId,
       };
+
+      if (!data.company) throw new BadRequestError("CompanyId is required");
+
       const expense = await this.expenseInteractor.addExpense(data);
       res.status(HttpStatusCode.CREATED).json(expense);
     } catch (error) {

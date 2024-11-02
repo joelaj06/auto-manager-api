@@ -43,4 +43,5 @@ export interface RequestQuery {
   startDate?: Date;
   endDate?: Date;
   status?: string;
+  companyId?: string;
 }

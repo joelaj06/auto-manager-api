@@ -7,22 +7,36 @@ import {
   IMonthlySales,
 } from "../../../entities";
 import { INTERFACE_TYPE } from "../../../utils";
-import { ISalesRepository } from "../../../frameworks";
+import { IDashboardRepository, ISalesRepository } from "../../../frameworks";
 import { BadRequestError } from "../../../error_handler";
 
 @injectable()
 export class DashboardInteractorImpl implements IDashboardInteractor {
-  private salesRepository;
+  private salesRepository: ISalesRepository;
+  private dashboardRepository: IDashboardRepository;
   constructor(
     @inject(INTERFACE_TYPE.SalesRepositoryImpl)
-    salesRepository: ISalesRepository
+    salesRepository: ISalesRepository,
+    @inject(INTERFACE_TYPE.DashboardRepositoryImpl)
+    dashboardRepository: IDashboardRepository
   ) {
     this.salesRepository = salesRepository;
+    this.dashboardRepository = dashboardRepository;
   }
   async getDashboardSummaryData(
     query: RequestQuery
   ): Promise<IDashboardSummaryData> {
-    throw new Error("Method not implemented.");
+    if (!query.companyId) throw new BadRequestError("Company is required");
+    const summaryData = await this.dashboardRepository.getDashboardSummaryData(
+      query
+    );
+    if (!summaryData) throw new BadRequestError("Error while fetching data.");
+
+    // Calculate revenue
+    const revenue =
+      summaryData.sales + summaryData.rentalSales - summaryData.expenses;
+    const resData = { ...summaryData, revenue };
+    return resData;
   }
   async getMonthlySalesData(
     query: DashboardRequestQery

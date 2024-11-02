@@ -51,7 +51,9 @@ export class SalesController {
         ...req.body,
         createdBy: req.user,
         companyId: req.user?.company,
+        company: req.user?.company,
       };
+      if (!data.company) throw new BadRequestError("CompanyId is required");
       const sale = await this.salesInteractor.addSale(data);
       if (!sale) throw new BadRequestError("Error while adding sale");
       return res.status(HttpStatusCode.CREATED).json(sale);

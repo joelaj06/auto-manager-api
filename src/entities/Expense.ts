@@ -15,7 +15,8 @@ export class IExpense {
     public readonly vehicle?: IVehicle | string, // Optional: The vehicle associated with the expense, if applicable
     public readonly date?: Date, // Date the expense was incurred
     public readonly createdAt?: Date, // Timestamp for when the expense was created
-    public readonly updatedAt?: Date // Timestamp for the last update to the expense
+    public readonly updatedAt?: Date, // Timestamp for the last update to the expense
+    public expenseId?: string // Unique identifier for the expense
   ) {}
 }
 

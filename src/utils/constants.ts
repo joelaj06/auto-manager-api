@@ -39,6 +39,7 @@ export const INTERFACE_TYPE = {
   StorageBucketImpl: Symbol.for("StorageBucketImpl"),
   DashboardInteractorImpl: Symbol.for("DashboardInteractorImpl"),
   DashboardController: Symbol.for("DashboardController"),
+  DashboardRepositoryImpl: Symbol.for("DashboardRepositoryImpl"),
 };
 
 export enum HttpStatusCode {

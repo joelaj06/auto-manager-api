@@ -77,8 +77,11 @@ export class RentalController {
       const data = {
         ...req.body,
         createdBy: req.user,
-        company: req.user?.company,
+        company: req.user?.company || req.body.companyId,
       };
+
+      if (!data.company) throw new BadRequestError("CompanyId is required");
+
       const response = await this.rentalInteractor.addRental(data);
       if (!response) throw new BadRequestError("Error while adding vehicle");
       return res.status(HttpStatusCode.OK).json(response);

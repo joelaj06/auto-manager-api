@@ -79,6 +79,11 @@ const vehicleSchema: Schema = new Schema({
     policyNumber: { type: String, required: true },
     expiryDate: { type: Date, required: true },
   },
+  company: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    required: true,
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

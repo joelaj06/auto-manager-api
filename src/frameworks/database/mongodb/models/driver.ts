@@ -19,6 +19,11 @@ const driverSchema: Schema = new Schema(
       enum: ["available", "inactive", "suspended"], // You can define different statuses
       default: "available",
     },
+    company: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
 
     vehicleId: {
       type: mongoose.Schema.Types.ObjectId,

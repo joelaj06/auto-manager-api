@@ -26,8 +26,9 @@ export class CustomerController {
       const data = {
         ...req.body,
         createdBy: req.user,
-        company: req.user?.company,
+        company: req.user?.company || req.body.companyId,
       };
+      if (!data.company) throw new BadRequestError("CompanyId is required");
       const result = await this.customerInteractor.saveCustomer(data);
       if (!result) throw new BadRequestError("Error while saving customer");
       res.status(HttpStatusCode.OK).json(result);

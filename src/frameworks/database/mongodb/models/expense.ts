@@ -49,7 +49,7 @@ const expenseSchema: Schema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vehicle",
     },
-    companyId: {
+    company: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
       required: true,
@@ -57,7 +57,25 @@ const expenseSchema: Schema = new Schema(
   },
   { timestamps: true }
 );
+expenseSchema.pre("save", async function (next) {
+  const expense = this as IExpense;
 
+  if (!expense.expenseId) {
+    const lastExpense = await mongoose
+      .model("Expense")
+      .findOne({}, {}, { sort: { createdAt: -1 } });
+
+    if (lastExpense && lastExpense.driverCode) {
+      const lastExpenseNumber = parseInt(lastExpense.driverCode.split("-")[1]);
+      const newExpense = (lastExpenseNumber + 1).toString().padStart(7, "0");
+      expense.expenseId = `EXP-${newExpense}`;
+    } else {
+      expense.expenseId = "EXP-0000001"; // Default start value if no previous expense exist
+    }
+  }
+
+  next();
+});
 const Expense = mongoose.model("Expense", expenseSchema);
 
 //expense category schema

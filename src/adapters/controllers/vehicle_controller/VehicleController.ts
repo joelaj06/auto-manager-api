@@ -54,7 +54,11 @@ export class VehicleController {
         createdBy: req.user,
         ownerId: req.user?.company,
         companyId: req.user?.company,
+        company: req.user?.company,
       };
+
+      if (!data.company) throw new BadRequestError("CompanyId is required");
+
       const vehicle = await this.vehicleInteractor.addVehicle(data);
       if (!vehicle) throw new BadRequestError("Error while adding vehicle");
       return res.status(HttpStatusCode.CREATED).json(vehicle);
