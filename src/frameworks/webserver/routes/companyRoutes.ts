@@ -14,7 +14,11 @@ import {
 } from "../../database/mongodb";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
 import { IAuthService } from "../../services/auth/IAuthService";
-import { AuthServiceImpl } from "../../services";
+import {
+  AuthServiceImpl,
+  CloudinaryImpl,
+  IStorageBucket,
+} from "../../services";
 
 const container = new Container();
 
@@ -25,6 +29,10 @@ container
 container
   .bind<ICompanyRepository>(INTERFACE_TYPE.CompanyRepositoryImpl)
   .to(CompanyRepositoryImpl);
+
+container
+  .bind<IStorageBucket>(INTERFACE_TYPE.StorageBucketImpl)
+  .to(CloudinaryImpl);
 
 container
   .bind<ICompanyInteractor>(INTERFACE_TYPE.CompanyInteractorImpl)

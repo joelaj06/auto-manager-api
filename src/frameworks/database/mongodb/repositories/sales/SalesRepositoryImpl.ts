@@ -67,11 +67,14 @@ export class SalesRepositoryImpl implements ISalesRepository {
           },
         },
       ]);
-      const res: IMonthlySales = {
-        weeks: salesData[0].dates,
-        sales: salesData[0].sales,
-      };
-      return salesData.length ? res : { weeks: [], sales: [] };
+
+      const res: IMonthlySales = salesData.length
+        ? {
+            weeks: salesData[0].dates,
+            sales: salesData[0].sales,
+          }
+        : { weeks: [], sales: [] };
+      return res;
     } catch (error) {
       throw error;
     }
