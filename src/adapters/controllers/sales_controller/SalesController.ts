@@ -3,7 +3,11 @@ import { ISalesInteractor } from "../../../application/interactors/sales/ISalesI
 import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
 
 import { NextFunction, Request, Response } from "express";
-import { RequestQuery, SalesRequestQuery } from "../../../entities";
+import {
+  RequestQuery,
+  SalesRequestQuery,
+  UserRequest,
+} from "../../../entities";
 import { BadRequestError } from "../../../error_handler";
 import { ControllerUserRequest } from "../auth_controller/IController";
 
@@ -18,7 +22,11 @@ export class SalesController {
     this.salesInteractor = salesInteractor;
   }
 
-  async getAllSales(req: Request, res: Response, next: NextFunction) {
+  async getAllSales(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       //TODO query data by company id
       const query: SalesRequestQuery = {
@@ -27,6 +35,7 @@ export class SalesController {
           ? Number(req.query.pageIndex)
           : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+        companyId: req.user?.company,
         ...req.query,
       };
       const response = await this.salesInteractor.getAllSales(query);

@@ -150,7 +150,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
       if (companyId) {
         searchCriteria = {
           ...searchCriteria,
-          companyId: companyId,
+          company: companyId,
         };
       }
       if (date) {
