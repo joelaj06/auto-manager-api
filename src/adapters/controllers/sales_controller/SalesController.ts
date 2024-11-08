@@ -39,14 +39,14 @@ export class SalesController {
         ...req.query,
       };
       const response = await this.salesInteractor.getAllSales(query);
-      res.set(
-        "x-pagination",
-        JSON.stringify({
+      res.set({
+        "x-pagination": JSON.stringify({
           totalPages: response.totalPages,
           pageCount: response.pageCount,
           totalCount: response.totalCount,
-        })
-      );
+        }),
+        _meta_total_sales: response.totalSum,
+      });
       return res.status(HttpStatusCode.OK).json(response.data);
     } catch (error) {
       next(error);

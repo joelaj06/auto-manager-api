@@ -117,8 +117,17 @@ export class SalesRepositoryImpl implements ISalesRepository {
   }
   async findAll(query: SalesRequestQuery): Promise<PaginatedResponse<ISale>> {
     try {
-      const { search, pageSize, status, driverId, vehicleId, companyId, date } =
-        query;
+      const {
+        search,
+        pageSize,
+        status,
+        driverId,
+        vehicleId,
+        companyId,
+        date,
+        startDate,
+        endDate,
+      } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
       const pageIndex = query.pageIndex || 1;
@@ -157,6 +166,13 @@ export class SalesRepositoryImpl implements ISalesRepository {
         searchCriteria = {
           ...searchCriteria,
           date: date,
+        };
+      }
+
+      if (startDate) {
+        searchCriteria = {
+          ...searchCriteria,
+          createdAt: { $gte: startDate, $lte: endDate },
         };
       }
 

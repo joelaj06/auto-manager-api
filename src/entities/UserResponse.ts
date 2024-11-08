@@ -25,6 +25,7 @@ export class PaginatedResponse<T> {
     public readonly data: T[],
     public readonly pageCount: number,
     public readonly totalCount: number,
-    public readonly totalPages: number
+    public readonly totalPages: number,
+    public readonly totalSum: number
   ) {}
 }

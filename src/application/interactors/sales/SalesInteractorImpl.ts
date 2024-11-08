@@ -1,13 +1,9 @@
 import { inject, injectable } from "inversify";
 import { ISalesInteractor } from "./ISalesInteractor";
-import {
-  RequestQuery,
-  PaginatedResponse,
-  ISale,
-  SalesRequestQuery,
-} from "../../../entities";
+import { PaginatedResponse, ISale, SalesRequestQuery } from "../../../entities";
 import { ISalesRepository } from "../../../frameworks/database/mongodb/repositories/sales";
 import { INTERFACE_TYPE } from "../../../utils/constants";
+
 import {
   BadRequestError,
   NotFoundError,
@@ -26,7 +22,15 @@ export class SalesInteractorImpl implements ISalesInteractor {
   async getAllSales(
     query: SalesRequestQuery
   ): Promise<PaginatedResponse<ISale>> {
-    return await this.salesRepository.findAll(query);
+    const paginatedSales = await this.salesRepository.findAll(query);
+    //calculate total sales
+    const sales: ISale[] = paginatedSales.data;
+    const totalSales = sales.reduce((sum, sale) => sum + (sale.amount ?? 0), 0);
+    const response: PaginatedResponse<ISale> = {
+      ...paginatedSales,
+      totalSum: totalSales,
+    };
+    return response;
   }
   async getASale(id: string): Promise<ISale> {
     if (!id) throw new UnprocessableEntityError("Sale id is required");
