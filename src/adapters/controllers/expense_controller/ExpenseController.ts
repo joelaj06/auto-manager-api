@@ -48,7 +48,11 @@ export class ExpenseController {
     }
   }
 
-  async getAllExpenses(req: Request, res: Response, next: NextFunction) {
+  async getAllExpenses(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const query: ExpenseRequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
@@ -60,17 +64,18 @@ export class ExpenseController {
           ? Number(req.query.pageIndex)
           : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+        companyId: req.user?.company,
         ...req.query,
       };
       const response = await this.expenseInteractor.getAllExpenses(query);
-      res.set(
-        "x-pagination",
-        JSON.stringify({
+      res.set({
+        "x-pagination": JSON.stringify({
           totalPages: response.totalPages,
           pageCount: response.pageCount,
           totalCount: response.totalCount,
-        })
-      );
+        }),
+        _meta_total_expenses: response.totalSum,
+      });
       return res.status(HttpStatusCode.OK).json(response.data);
     } catch (error) {
       next(error);

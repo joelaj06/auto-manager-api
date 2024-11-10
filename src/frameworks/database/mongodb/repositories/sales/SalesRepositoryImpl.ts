@@ -1,7 +1,6 @@
 import { injectable } from "inversify";
 import {
   ISale,
-  RequestQuery,
   PaginatedResponse,
   SalesRequestQuery,
   DashboardRequestQery,
@@ -142,8 +141,16 @@ export class SalesRepositoryImpl implements ISalesRepository {
       }
 
       if (status) searchCriteria = { ...searchCriteria, status };
-      if (driverId) searchCriteria = { ...searchCriteria, driverId };
-      if (vehicleId) searchCriteria = { ...searchCriteria, vehicleId };
+      if (driverId)
+        searchCriteria = {
+          ...searchCriteria,
+          driverId: new mongoose.Types.ObjectId(driverId),
+        };
+      if (vehicleId)
+        searchCriteria = {
+          ...searchCriteria,
+          vehicleId: new mongoose.Types.ObjectId(vehicleId),
+        };
       if (companyId)
         searchCriteria = {
           ...searchCriteria,
@@ -154,7 +161,10 @@ export class SalesRepositoryImpl implements ISalesRepository {
       if (startDate) {
         searchCriteria = {
           ...searchCriteria,
-          createdAt: { $gte: startDate, $lte: endDate },
+          createdAt: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate ?? new Date()),
+          },
         };
       }
 

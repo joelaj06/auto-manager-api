@@ -3,6 +3,7 @@ import { IExpenseRepository } from "./IExpenseRespository";
 import { RequestQuery, PaginatedResponse } from "../../../../../entities";
 import { ExpenseRequestQuery, IExpense } from "../../../../../entities/Expense";
 import { Expense, ExpenseCategory, ExpenseMapper } from "../../models";
+import mongoose from "mongoose";
 
 @injectable()
 export class ExpenseRepositoryImpl implements IExpenseRepository {
@@ -46,12 +47,27 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
     query: ExpenseRequestQuery
   ): Promise<PaginatedResponse<IExpense>> {
     try {
-      const { search, pageSize, status, categoryId } = query;
+      const {
+        search,
+        pageSize,
+        status,
+        categoryId,
+        companyId,
+        startDate,
+        endDate,
+      } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
       const pageIndex = query.pageIndex || 1;
       const startIndex = (pageIndex - 1) * limit;
       let searchCriteria = {};
+
+      if (companyId) {
+        searchCriteria = {
+          ...searchCriteria,
+          company: new mongoose.Types.ObjectId(companyId),
+        };
+      }
 
       if (searchQuery) {
         searchCriteria = {
@@ -72,7 +88,17 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
       if (categoryId) {
         searchCriteria = {
           ...searchCriteria,
-          categoryId,
+          categoryId: new mongoose.Types.ObjectId(categoryId),
+        };
+      }
+
+      if (startDate) {
+        searchCriteria = {
+          ...searchCriteria,
+          createdAt: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate ?? new Date()),
+          },
         };
       }
 
@@ -91,7 +117,24 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
 
       const totalPages = Math.ceil(totalCount / limit);
 
+      const aggregationPipeline = [];
+      if (Object.keys(searchCriteria).length > 0) {
+        aggregationPipeline.push({ $match: searchCriteria });
+      }
+      aggregationPipeline.push({
+        $group: { _id: null, totalExpense: { $sum: "$amount" } },
+      });
+
+      console.log(aggregationPipeline);
+
+      const totalExpenseAggregation = await Expense.aggregate(
+        aggregationPipeline
+      );
+
+      const totalExpense = totalExpenseAggregation[0]?.totalExpense || 0;
+
       const paginatedRes: PaginatedResponse<IExpense> = {
+        totalSum: totalExpense,
         data,
         totalPages,
         totalCount,
