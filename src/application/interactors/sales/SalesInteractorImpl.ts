@@ -23,14 +23,8 @@ export class SalesInteractorImpl implements ISalesInteractor {
     query: SalesRequestQuery
   ): Promise<PaginatedResponse<ISale>> {
     const paginatedSales = await this.salesRepository.findAll(query);
-    //calculate total sales
-    const sales: ISale[] = paginatedSales.data;
-    const totalSales = sales.reduce((sum, sale) => sum + (sale.amount ?? 0), 0);
-    const response: PaginatedResponse<ISale> = {
-      ...paginatedSales,
-      totalSum: totalSales,
-    };
-    return response;
+
+    return paginatedSales;
   }
   async getASale(id: string): Promise<ISale> {
     if (!id) throw new UnprocessableEntityError("Sale id is required");
@@ -44,12 +38,14 @@ export class SalesInteractorImpl implements ISalesInteractor {
     //TODO add sale id (code)
     const salesData: ISale = {
       ...data,
+      date: data.date || new Date(),
       vehicle: data.vehicleId,
       driver: data.driverId,
     };
     const sale = await this.salesRepository.addSale(salesData);
     if (!sale) throw new BadRequestError("Error while adding sale");
-    return sale;
+    const { vehicle, driver, ...rest } = sale;
+    return rest;
   }
   async updateSale(id: string, data: ISale): Promise<ISale> {
     if (!id) throw new UnprocessableEntityError("Sale id is required");

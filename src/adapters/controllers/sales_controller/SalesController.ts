@@ -39,6 +39,7 @@ export class SalesController {
         ...req.query,
       };
       const response = await this.salesInteractor.getAllSales(query);
+
       res.set({
         "x-pagination": JSON.stringify({
           totalPages: response.totalPages,

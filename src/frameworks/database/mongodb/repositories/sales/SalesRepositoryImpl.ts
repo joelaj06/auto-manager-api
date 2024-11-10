@@ -134,40 +134,22 @@ export class SalesRepositoryImpl implements ISalesRepository {
       const startIndex = (pageIndex - 1) * limit;
       let searchCriteria = {};
 
-      // Add the $or condition for saleId
+      // Build the search criteria
       if (searchQuery) {
         searchCriteria = {
           $or: [{ saleId: { $regex: new RegExp(`^${searchQuery}.*`, "i") } }],
         };
       }
 
-      if (status) {
-        searchCriteria = { ...searchCriteria, status };
-      }
-      if (driverId) {
+      if (status) searchCriteria = { ...searchCriteria, status };
+      if (driverId) searchCriteria = { ...searchCriteria, driverId };
+      if (vehicleId) searchCriteria = { ...searchCriteria, vehicleId };
+      if (companyId)
         searchCriteria = {
           ...searchCriteria,
-          driverId: driverId,
+          company: new mongoose.Types.ObjectId(companyId),
         };
-      }
-      if (vehicleId) {
-        searchCriteria = {
-          ...searchCriteria,
-          vehicleId: vehicleId,
-        };
-      }
-      if (companyId) {
-        searchCriteria = {
-          ...searchCriteria,
-          company: companyId,
-        };
-      }
-      if (date) {
-        searchCriteria = {
-          ...searchCriteria,
-          date: date,
-        };
-      }
+      if (date) searchCriteria = { ...searchCriteria, date };
 
       if (startDate) {
         searchCriteria = {
@@ -176,30 +158,43 @@ export class SalesRepositoryImpl implements ISalesRepository {
         };
       }
 
-      // Populate user data to include the driver's full name
+      // Fetch paginated sales data with populated fields
       const sales = await Sale.find(searchCriteria)
         .populate("vehicle")
         .populate({
-          path: "driver", // Populate the driver
-          populate: {
-            path: "user",
-            select: "-password", // Populate the user inside the driver
-          },
+          path: "driver",
+          populate: { path: "user", select: "-password" },
         })
         .populate({
-          path: "approvedOrRejectedBy", // Populate the driver
-          select: "-password", // Populate the user inside the driver
+          path: "approvedOrRejectedBy",
+          select: "-password",
         })
         .limit(limit)
         .skip(startIndex);
 
-      const data: ISale[] = sales.map((driver) => SalesMapper.toEntity(driver));
+      const data: ISale[] = sales.map((sale) => SalesMapper.toEntity(sale));
 
+      // Count total documents and total sales sum
       const totalCount = await Sale.countDocuments(searchCriteria);
+
+      // Aggregate to calculate total sales sum
+      // Perform aggregation conditionally
+      const aggregationPipeline = [];
+      if (Object.keys(searchCriteria).length > 0) {
+        aggregationPipeline.push({ $match: searchCriteria });
+      }
+      aggregationPipeline.push({
+        $group: { _id: null, totalSales: { $sum: "$amount" } },
+      });
+
+      const totalSalesAggregation = await Sale.aggregate(aggregationPipeline);
+
+      const totalSales = totalSalesAggregation[0]?.totalSales || 0;
 
       const totalPages = Math.ceil(totalCount / limit);
 
       const response: PaginatedResponse<ISale> = {
+        totalSum: totalSales, // Include total sales sum
         data,
         totalPages,
         totalCount,
@@ -211,6 +206,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
       throw error;
     }
   }
+
   async findById(id: string): Promise<ISale | null | undefined> {
     try {
       if (!id) throw new Error("Sale id is required");
