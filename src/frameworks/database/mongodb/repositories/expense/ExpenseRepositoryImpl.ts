@@ -4,6 +4,7 @@ import { RequestQuery, PaginatedResponse } from "../../../../../entities";
 import { ExpenseRequestQuery, IExpense } from "../../../../../entities/Expense";
 import { Expense, ExpenseCategory, ExpenseMapper } from "../../models";
 import mongoose from "mongoose";
+import { BadRequestError } from "../../../../../error_handler";
 
 @injectable()
 export class ExpenseRepositoryImpl implements IExpenseRepository {
@@ -12,7 +13,12 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
       if (!data) throw new Error("Expensedata is required");
       const newExpense = new Expense(data);
       await newExpense.save();
-      return ExpenseMapper.toEntity(newExpense);
+      if (!newExpense) throw new BadRequestError("Failed to create Expense");
+      const expense = await Expense.findById(newExpense._id)
+        .populate("category")
+        .populate("vehicle")
+        .populate("incurredBy", "-password");
+      return ExpenseMapper.toEntity(expense);
     } catch (error) {
       throw error;
     }
@@ -24,7 +30,10 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
 
       const updatedExpense = await Expense.findByIdAndUpdate(id, data, {
         new: true,
-      });
+      })
+        .populate("category")
+        .populate("vehicle")
+        .populate("incurredBy", "-password");
 
       if (!updatedExpense) throw new Error("Expense not found");
 
@@ -95,7 +104,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
       if (startDate) {
         searchCriteria = {
           ...searchCriteria,
-          createdAt: {
+          date: {
             $gte: new Date(startDate),
             $lte: new Date(endDate ?? new Date()),
           },
@@ -124,8 +133,6 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
       aggregationPipeline.push({
         $group: { _id: null, totalExpense: { $sum: "$amount" } },
       });
-
-      console.log(aggregationPipeline);
 
       const totalExpenseAggregation = await Expense.aggregate(
         aggregationPipeline

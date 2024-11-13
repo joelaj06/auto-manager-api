@@ -27,6 +27,7 @@ export class ExpenseController {
         ...req.body,
         createdBy: req.user,
         company: req.user?.company || req.body.companyId,
+        vehicle: req.body.vehicleId,
       };
 
       if (!data.company) throw new BadRequestError("CompanyId is required");

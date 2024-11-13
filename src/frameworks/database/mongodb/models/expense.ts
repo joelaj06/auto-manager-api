@@ -24,7 +24,7 @@ const expenseSchema: Schema = new Schema(
     },
     description: {
       type: String,
-      required: true,
+      required: false,
     },
     status: {
       type: String,
@@ -34,7 +34,7 @@ const expenseSchema: Schema = new Schema(
     incurredBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -65,8 +65,8 @@ expenseSchema.pre("save", async function (next) {
       .model("Expense")
       .findOne({}, {}, { sort: { createdAt: -1 } });
 
-    if (lastExpense && lastExpense.driverCode) {
-      const lastExpenseNumber = parseInt(lastExpense.driverCode.split("-")[1]);
+    if (lastExpense && lastExpense.expenseId) {
+      const lastExpenseNumber = parseInt(lastExpense.expenseId.split("-")[1]);
       const newExpense = (lastExpenseNumber + 1).toString().padStart(7, "0");
       expense.expenseId = `EXP-${newExpense}`;
     } else {
