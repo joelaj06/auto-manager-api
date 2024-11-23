@@ -20,11 +20,12 @@ export class IRental {
     public readonly updatedAt?: Date,
     public readonly purpose?: string,
     public readonly amountPaid?: number,
-    public readonly balance?: number,
+    public balance?: number,
     public readonly totalAmount?: number,
     public readonly receiptNumber?: string,
     public readonly dateReturned?: Date,
-    public readonly extensions?: IRentalExtension[]
+    public readonly extensions?: IRentalExtension[],
+    public readonly date?: Date
   ) {}
 }
 

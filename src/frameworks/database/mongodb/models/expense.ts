@@ -133,6 +133,7 @@ export const ExpenseMapper = {
   toEntity: (model: any): IExpense => {
     return new IExpense(
       model._id?.toString(), // Convert ObjectId to string
+      model.expenseId,
       model.category, // Convert ObjectId to string
       model.status,
       model.categoryId?.toString(), // Convert ObjectId to string

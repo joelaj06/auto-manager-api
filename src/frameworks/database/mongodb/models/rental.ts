@@ -42,6 +42,10 @@ const rentalSchema: Schema = new Schema(
       type: Date,
       required: true,
     },
+    date: {
+      type: Date,
+      default: new Date(),
+    },
     cost: {
       type: Number,
       required: true,
@@ -154,6 +158,7 @@ export const RentalMapper = {
         extendedDate: extension.extendedDate,
         extendedNote: extension.extendedNote,
       })),
+      date: payload.date || new Date(),
     };
   },
 
@@ -188,7 +193,8 @@ export const RentalMapper = {
         extendedDate: extension.extendedDate,
         extendedNote: extension.extendedNote,
         extendedBy: extension.extendedBy,
-      }))
+      })),
+      model.date
     );
   },
 };

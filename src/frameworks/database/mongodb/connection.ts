@@ -17,11 +17,11 @@ export default function connection(mongoose: Mongoose, config: IConfig) {
   }
 
   mongoose.connection.on("connected", () => {
-    console.info("Connected to MongoDB!🛢️ 🗄️ ✅");
+    console.info("Connected to MongoDB! 🗄️ ✅");
   });
 
   mongoose.connection.on("reconnected", () => {
-    console.info("MongoDB reconnected!🗄️❌");
+    console.info("MongoDB reconnected!🗄️ ✅");
   });
 
   mongoose.connection.on("error", (error) => {

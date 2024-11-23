@@ -57,6 +57,9 @@ export class RentalInteractorImpl implements IRentalInteractor {
   async addRental(data: IRental): Promise<IRental> {
     if (!data) throw new UnprocessableEntityError("Rental data is required");
     //TODO validate data
+
+    const balance = Number(data.amountPaid) - Number(data.totalAmount);
+    data.balance = balance;
     const rental = await this.rentalRepository.save(data);
     if (!rental) throw new BadRequestError("Error while adding rental");
     return rental;

@@ -7,6 +7,7 @@ import {
   RentalRequestQuery,
 } from "../../../../../entities";
 import Rental, { RentalMapper } from "../../models/rental";
+import mongoose from "mongoose";
 
 @injectable()
 export class RentalRepositoryImpl implements IRentalRepository {
@@ -14,7 +15,16 @@ export class RentalRepositoryImpl implements IRentalRepository {
     query: RentalRequestQuery
   ): Promise<PaginatedResponse<IRental>> {
     try {
-      const { search, pageSize, status, startDate, endDate, vehicleId } = query;
+      const {
+        search,
+        pageSize,
+        status,
+        startDate,
+        endDate,
+        vehicleId,
+        companyId,
+        renter,
+      } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
       const pageIndex = query.pageIndex || 1;
@@ -29,6 +39,19 @@ export class RentalRepositoryImpl implements IRentalRepository {
         };
       }
 
+      if (renter) {
+        searchCriteria = {
+          ...searchCriteria,
+          renter: new mongoose.Types.ObjectId(renter),
+        };
+      }
+
+      if (companyId)
+        searchCriteria = {
+          ...searchCriteria,
+          company: new mongoose.Types.ObjectId(companyId),
+        };
+
       if (status) {
         searchCriteria = {
           ...searchCriteria,
@@ -39,8 +62,10 @@ export class RentalRepositoryImpl implements IRentalRepository {
       if (startDate && endDate) {
         searchCriteria = {
           ...searchCriteria,
-          startDate,
-          endDate,
+          date: {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate ?? new Date()),
+          },
         };
       }
 
@@ -66,11 +91,28 @@ export class RentalRepositoryImpl implements IRentalRepository {
         RentalMapper.toEntity(category)
       );
 
+      // Aggregate to calculate total rentals sum
+      // Perform aggregation conditionally
+      const aggregationPipeline = [];
+      if (Object.keys(searchCriteria).length > 0) {
+        aggregationPipeline.push({ $match: searchCriteria });
+      }
+      aggregationPipeline.push({
+        $group: { _id: null, totalRentals: { $sum: "$cost" } },
+      });
+
+      const totalRentalsAggregation = await Rental.aggregate(
+        aggregationPipeline
+      );
+
+      const totalRentals = totalRentalsAggregation[0]?.totalRentals || 0;
+
       const totalCount = await Rental.countDocuments(searchCriteria);
 
       const totalPages = Math.ceil(totalCount / limit);
 
       const paginatedRes: PaginatedResponse<IRental> = {
+        totalSum: totalRentals,
         data,
         totalPages,
         totalCount,
@@ -100,7 +142,18 @@ export class RentalRepositoryImpl implements IRentalRepository {
       if (!data) throw new Error("Rental data is required");
       const newRental = new Rental(data);
       await newRental.save();
-      return RentalMapper.toEntity(newRental);
+      if (!newRental) {
+        throw new Error("Error while adding rental");
+      }
+      const rental = await Rental.findById(newRental._id)
+        .populate("renter", "-password")
+        .populate(
+          "vehicle",
+          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
+        )
+        .populate("updatedBy", "-password")
+        .populate("createdBy", "-password");
+      return RentalMapper.toEntity(rental);
     } catch (error) {
       throw error;
     }
