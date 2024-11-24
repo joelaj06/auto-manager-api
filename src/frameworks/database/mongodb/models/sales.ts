@@ -45,7 +45,7 @@ const salesSchema: Schema = new Schema(
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      default: "approved",
     },
     approvedOrRejectedBy: {
       type: mongoose.Schema.Types.ObjectId,

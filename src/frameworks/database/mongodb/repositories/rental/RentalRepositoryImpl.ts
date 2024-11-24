@@ -165,7 +165,14 @@ export class RentalRepositoryImpl implements IRentalRepository {
 
       const updatedRental = await Rental.findByIdAndUpdate(id, data, {
         new: true,
-      });
+      })
+        .populate("renter", "-password")
+        .populate(
+          "vehicle",
+          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
+        )
+        .populate("updatedBy", "-password")
+        .populate("createdBy", "-password");
 
       if (!updatedRental) throw new Error("Rental not found");
 

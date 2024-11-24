@@ -68,6 +68,9 @@ export class RentalInteractorImpl implements IRentalInteractor {
     if (!id) throw new UnprocessableEntityError("Rental id is required");
     const rental = await this.rentalRepository.findById(id);
     if (!rental) throw new NotFoundError("Rental not found");
+
+    const balance = Number(data.amountPaid) - Number(data.totalAmount);
+    data.balance = balance;
     const updatedRental = await this.rentalRepository.update(id, data);
     if (!updatedRental)
       throw new BadRequestError("Error while updating Rental");
