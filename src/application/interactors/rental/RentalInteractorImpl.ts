@@ -35,7 +35,7 @@ export class RentalInteractorImpl implements IRentalInteractor {
     const rentalData: IRental = {
       ...rental,
       totalAmount: totalAmount + (data.extendedAmount ?? 0),
-      balance: balance + (data.extendedAmount ?? 0),
+      balance: balance - (data.extendedAmount ?? 0),
       extensions,
     };
     const updatedRental = this.rentalRepository.update(id, rentalData);

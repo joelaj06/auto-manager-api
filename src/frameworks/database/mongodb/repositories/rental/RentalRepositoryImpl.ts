@@ -98,7 +98,7 @@ export class RentalRepositoryImpl implements IRentalRepository {
         aggregationPipeline.push({ $match: searchCriteria });
       }
       aggregationPipeline.push({
-        $group: { _id: null, totalRentals: { $sum: "$cost" } },
+        $group: { _id: null, totalRentals: { $sum: "$totalAmount" } },
       });
 
       const totalRentalsAggregation = await Rental.aggregate(
