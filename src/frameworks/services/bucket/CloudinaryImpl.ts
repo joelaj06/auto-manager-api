@@ -7,10 +7,19 @@ import config from "../../../config/config";
 export class CloudinaryImpl implements IStorageBucket {
   async uploadImage(base64String: string): Promise<string> {
     try {
-      const uploadStr = "data:image/jpeg;base64," + base64String;
+      let uploadStr = "";
+      if (base64String.includes("data:image/jpeg;base64,")) {
+        uploadStr = base64String;
+      } else {
+        uploadStr = "data:image/jpeg;base64," + base64String;
+      }
+      // Upload image to Cloudinary
+      console.log("uploading image to cloudinary");
+
       const imageRes = await cloudinary.uploader.upload(uploadStr, {
         upload_preset: "bookme",
       });
+      console.log("image uploaded successfully");
       return imageRes.secure_url;
     } catch (error) {
       throw error;

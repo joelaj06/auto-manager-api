@@ -9,21 +9,25 @@ import { PaginatedResponse } from "../../../entities/UserResponse";
 import { IAuthService } from "../../../frameworks/services/auth/IAuthService";
 import { IDriverRepository } from "../../../frameworks/database/mongodb/repositories/driver/IDriverRepository";
 import { IDriver } from "../../../entities";
+import { IStorageBucket } from "../../../frameworks";
 
 @injectable()
 export class UserInteractorImpl implements IUserInteractor {
   private userRepository: IUserRepository;
   private authService: IAuthService;
   private driverRepository: IDriverRepository;
+  private bucket: IStorageBucket;
   constructor(
     @inject(INTERFACE_TYPE.UserRepositoryImpl) userRepository: IUserRepository,
     @inject(INTERFACE_TYPE.AuthServiceImpl) authService: IAuthService,
     @inject(INTERFACE_TYPE.DriverRepositoryImpl)
-    driverRepository: IDriverRepository
+    driverRepository: IDriverRepository,
+    @inject(INTERFACE_TYPE.StorageBucketImpl) bucket: IStorageBucket
   ) {
     this.userRepository = userRepository;
     this.authService = authService;
     this.driverRepository = driverRepository;
+    this.bucket = bucket;
   }
   async getAUser(id: string): Promise<IUser> {
     if (!id) throw new UnprocessableEntityError("User id is required");
@@ -81,10 +85,21 @@ export class UserInteractorImpl implements IUserInteractor {
     if (!id) throw new UnprocessableEntityError("User id is required");
     if (!data) throw new UnprocessableEntityError("User data is required");
 
+    let body = { ...data };
     const user = await this.userRepository.findUserById(id);
     if (!user) throw new NotFoundError("User not found");
 
-    const updatedUser = await this.userRepository.updateUser(id, data);
+    let image: string = data.imageUrl || "";
+
+    if (!image.startsWith("http") && image != "") {
+      // Image is in base64 format, so upload it
+      const imageUrl = await this.bucket.uploadImage(image);
+      body = { ...body, imageUrl: imageUrl };
+    } else {
+      body = { ...body, imageUrl: "" };
+    }
+
+    const updatedUser = await this.userRepository.updateUser(id, body);
 
     //check if user is a driver by role
     if (updatedUser.role && updatedUser.role.toLowerCase() === "driver") {

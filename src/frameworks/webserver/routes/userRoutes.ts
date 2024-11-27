@@ -8,7 +8,11 @@ import {
   IUserInteractor,
   UserInteractorImpl,
 } from "../../../application/interactors";
-import { AuthServiceImpl } from "../../services";
+import {
+  AuthServiceImpl,
+  CloudinaryImpl,
+  IStorageBucket,
+} from "../../services";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
 import { IDriverRepository } from "../../database/mongodb/repositories/driver/IDriverRepository";
 import { DriverRepositoryImpl } from "../../database/mongodb/repositories/driver/DriverRepositoryImpl";
@@ -22,6 +26,10 @@ container
 container
   .bind<IUserInteractor>(INTERFACE_TYPE.UserInteractor)
   .to(UserInteractorImpl);
+
+container
+  .bind<IStorageBucket>(INTERFACE_TYPE.StorageBucketImpl)
+  .to(CloudinaryImpl);
 
 container
   .bind<IDriverRepository>(INTERFACE_TYPE.DriverRepositoryImpl)
