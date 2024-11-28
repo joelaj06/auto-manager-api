@@ -49,7 +49,7 @@ export class CompanyInteractorImpl implements ICompanyInteractor {
       const imageUrl = await this.bucket.uploadImage(image);
       body = { ...body, logoUrl: imageUrl };
     } else {
-      body = { ...body, logoUrl: "" };
+      body = { ...body, logoUrl: image };
     }
 
     const updatedCompany = await this.repository.updateCompany(id, body);
