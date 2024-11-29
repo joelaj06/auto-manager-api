@@ -112,6 +112,7 @@ export class UserInteractorImpl implements IUserInteractor {
       const driverData: IDriver = {
         userId: updatedUser._id,
         vehicleId: data.vehicleId,
+        vehicle: data.vehicleId,
         user: updatedUser._id,
         companyId: data.company,
         lisenceExpiryDate: data.lisenceExpiryDate,
