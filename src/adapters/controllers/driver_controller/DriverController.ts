@@ -4,6 +4,7 @@ import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
 import { NextFunction, Request, Response } from "express";
 import { RequestQuery } from "../../../entities";
 import { BadRequestError } from "../../../error_handler";
+import { ControllerUserRequest } from "../auth_controller/IController";
 
 @injectable()
 export class DriverController {
@@ -16,7 +17,11 @@ export class DriverController {
     this.driverInteractor = driverInteractor;
   }
 
-  async getAllDrivers(req: Request, res: Response, next: NextFunction) {
+  async getAllDrivers(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const query: RequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
@@ -24,6 +29,7 @@ export class DriverController {
           ? Number(req.query.pageIndex)
           : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+        companyId: req.user?.company,
       };
       const response = await this.driverInteractor.getAllDrivers(query);
       res.set(

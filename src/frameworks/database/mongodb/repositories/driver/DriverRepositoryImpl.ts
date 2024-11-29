@@ -6,6 +6,7 @@ import {
 } from "../../../../../entities";
 import Driver, { DriverMapper } from "../../models/driver";
 import { IDriverRepository } from "./IDriverRepository";
+import mongoose from "mongoose";
 
 @injectable()
 export class DriverRepositoryImpl implements IDriverRepository {
@@ -21,12 +22,18 @@ export class DriverRepositoryImpl implements IDriverRepository {
   }
   async findAll(query: RequestQuery): Promise<PaginatedResponse<IDriver>> {
     try {
-      const { search, pageSize } = query;
+      const { search, pageSize, companyId } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
       const pageIndex = query.pageIndex || 1;
       const startIndex = (pageIndex - 1) * limit;
-      const searchCriteria = {
+      let searchCriteria = {};
+      if (companyId)
+        searchCriteria = {
+          ...searchCriteria,
+          company: new mongoose.Types.ObjectId(companyId),
+        };
+      searchCriteria = {
         $or: [
           { licenseNumber: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
           {

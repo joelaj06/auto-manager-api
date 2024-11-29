@@ -28,7 +28,6 @@ export class SalesController {
     next: NextFunction
   ) {
     try {
-      //TODO query data by company id
       const query: SalesRequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
         pageIndex: req.query.pageIndex
