@@ -41,6 +41,7 @@ export class UserController {
       const createdBy = req.user?._id;
       const response = await this.userInteractor.addUser({
         ...req.body,
+        company: req.user?.company,
         createdBy,
       });
       return res.status(200).json(response);

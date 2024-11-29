@@ -19,6 +19,7 @@ export class IDriver {
       date: Date;
     }[],
     public readonly createdAt?: Date,
-    public readonly updatedAt?: Date
+    public readonly updatedAt?: Date,
+    public readonly company?: string
   ) {}
 }

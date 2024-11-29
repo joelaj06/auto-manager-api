@@ -44,7 +44,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
 
       // Populate user data to include the driver's full name
       const drivers = await Driver.find(searchCriteria)
-        .populate("user", "-password")
+        .populate("user vehicle", "-password")
         .limit(limit)
         .skip(startIndex);
 
@@ -72,7 +72,10 @@ export class DriverRepositoryImpl implements IDriverRepository {
   async findById(id: string): Promise<IDriver | null | undefined> {
     try {
       if (!id) throw new Error("Driver id is required");
-      const vehicle = await Driver.findById(id).populate("user", "-password");
+      const vehicle = await Driver.findById(id).populate(
+        "user vehicle",
+        "-password"
+      );
       if (!vehicle) return null;
       return DriverMapper.toEntity(vehicle);
     } catch (error) {

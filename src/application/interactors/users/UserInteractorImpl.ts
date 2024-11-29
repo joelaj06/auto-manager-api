@@ -48,14 +48,18 @@ export class UserInteractorImpl implements IUserInteractor {
     //TODO validate data
     const existingUser = await this.userRepository.findUserByEmail(data.email!);
     if (existingUser) throw new BadRequestError("The email already exists");
-
-    const hashedPassword = await this.authService.encriptPassword(
-      data.password!
-    );
-    const userData = {
-      ...data,
-      password: hashedPassword,
-    };
+    let userData = { ...data };
+    if (data.role && data.role.toLowerCase() === "driver") {
+      userData = data;
+    } else {
+      const hashedPassword = await this.authService.encriptPassword(
+        data.password!
+      );
+      userData = {
+        ...data,
+        password: hashedPassword,
+      };
+    }
 
     const newUser = await this.userRepository.addUser(userData);
     if (!newUser) throw new BadRequestError("Error while adding user");
@@ -65,11 +69,13 @@ export class UserInteractorImpl implements IUserInteractor {
     if (newUser.role && newUser.role.toLowerCase() === "driver") {
       const driverData: IDriver = {
         userId: newUser._id,
-        vehicleId: data.vehicleId,
+        vehicleId: data.vehicleId || undefined,
+        vehicle: data.vehicleId || undefined,
         user: newUser._id,
         companyId: data.company,
         lisenceExpiryDate: data.lisenceExpiryDate,
         licenseNumber: data.licenseNumber,
+        company: data.company,
       };
 
       const dirver = await this.driverRepository.addDriver(driverData);
