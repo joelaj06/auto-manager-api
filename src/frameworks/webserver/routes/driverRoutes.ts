@@ -64,4 +64,10 @@ router.put(
   controller.updateDriver.bind(controller)
 );
 
+router.delete(
+  "/api/drivers/:id",
+  authMiddleware.authenticateToken.bind(authMiddleware),
+  controller.deleteDriver.bind(controller)
+);
+
 export default router;

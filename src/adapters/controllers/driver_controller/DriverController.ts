@@ -68,7 +68,7 @@ export class DriverController {
     }
   }
 
-  async deleteVehicle(req: Request, res: Response, next: NextFunction) {
+  async deleteDriver(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
       if (!id) throw new BadRequestError("Driver id is required");

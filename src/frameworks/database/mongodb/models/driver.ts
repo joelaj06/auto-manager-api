@@ -58,10 +58,13 @@ const driverSchema: Schema = new Schema(
       type: Date,
       default: Date.now,
     },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );
 
+// Generate a unique driver code before saving the driver
 driverSchema.pre("save", async function (next) {
   const driver = this as IDriver;
 
@@ -82,6 +85,14 @@ driverSchema.pre("save", async function (next) {
   }
 
   next();
+});
+
+// Apply the isDeleted filter
+driverSchema.pre("find", function () {
+  this.where({ isDeleted: { $ne: true } });
+});
+driverSchema.pre("countDocuments", function () {
+  this.where({ isDeleted: { $ne: true } });
 });
 
 // Create the Driver model

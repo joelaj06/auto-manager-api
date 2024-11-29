@@ -111,7 +111,14 @@ export class DriverRepositoryImpl implements IDriverRepository {
   async deleteDriver(id: string): Promise<IDriver> {
     try {
       if (!id) throw new Error("Driver id is required");
-      const deletedDriver = await Driver.findByIdAndDelete(id);
+      const deletedDriver = await Driver.findByIdAndUpdate(
+        id,
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        { new: true }
+      );
       if (!deletedDriver) throw new Error("Driver not found");
       return DriverMapper.toEntity(deletedDriver);
     } catch (error) {
