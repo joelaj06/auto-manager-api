@@ -97,6 +97,8 @@ const vehicleSchema: Schema = new Schema({
     type: Date,
     default: Date.now,
   },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date },
 });
 
 vehicleSchema.pre("save", async function (next) {
@@ -116,6 +118,27 @@ vehicleSchema.pre("save", async function (next) {
       // Default start value if no previous vehicles exist
     }
   }
+  next();
+});
+
+// Apply the isDeleted filter
+vehicleSchema.pre("find", function () {
+  this.where({ isDeleted: { $ne: true } });
+});
+vehicleSchema.pre("countDocuments", function () {
+  this.where({ isDeleted: { $ne: true } });
+});
+vehicleSchema.pre("aggregate", function (next) {
+  // Ensure that the current aggregation pipeline exists
+  if (!this.pipeline) {
+    return next();
+  }
+
+  // Add a $match stage at the beginning of the pipeline
+  this.pipeline().unshift({
+    $match: { isDeleted: { $ne: true } },
+  });
+
   next();
 });
 

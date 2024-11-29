@@ -107,7 +107,16 @@ export class SalesRepositoryImpl implements ISalesRepository {
   async deleteSale(id: string): Promise<ISale> {
     try {
       if (!id) throw new Error("Sale id is required");
-      const deletedSale = await Sale.findByIdAndDelete(id);
+      const deletedSale = await Sale.findByIdAndUpdate(
+        id,
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        {
+          new: true,
+        }
+      );
       if (!deletedSale) throw new Error("Sale not found");
       return SalesMapper.toEntity(deletedSale);
     } catch (error) {

@@ -94,6 +94,19 @@ driverSchema.pre("find", function () {
 driverSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
+driverSchema.pre("aggregate", function (next) {
+  // Ensure that the current aggregation pipeline exists
+  if (!this.pipeline) {
+    return next();
+  }
+
+  // Add a $match stage at the beginning of the pipeline
+  this.pipeline().unshift({
+    $match: { isDeleted: { $ne: true } },
+  });
+
+  next();
+});
 
 // Create the Driver model
 const Driver = mongoose.model("Driver", driverSchema);

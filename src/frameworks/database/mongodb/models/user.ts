@@ -35,11 +35,34 @@ const userSchema = new mongoose.Schema(
       type: mongoose.SchemaTypes.ObjectId,
       ref: "User",
     },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   {
     timestamps: true,
   }
 );
+
+// Apply the isDeleted filter
+userSchema.pre("find", function () {
+  this.where({ isDeleted: { $ne: true } });
+});
+userSchema.pre("countDocuments", function () {
+  this.where({ isDeleted: { $ne: true } });
+});
+userSchema.pre("aggregate", function (next) {
+  // Ensure that the current aggregation pipeline exists
+  if (!this.pipeline) {
+    return next();
+  }
+
+  // Add a $match stage at the beginning of the pipeline
+  this.pipeline().unshift({
+    $match: { isDeleted: { $ne: true } },
+  });
+
+  next();
+});
 
 const User = mongoose.model("User", userSchema);
 export default User;

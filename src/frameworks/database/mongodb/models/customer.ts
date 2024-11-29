@@ -46,6 +46,8 @@ const customerSchema: Schema = new Schema(
         ref: "Rental",
       },
     ],
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -75,6 +77,27 @@ customerSchema.pre("save", async function (next) {
       customer.customerCode = "CU-0000001"; // Default start value if no previous customers exist
     }
   }
+
+  next();
+});
+
+// Apply the isDeleted filter
+customerSchema.pre("find", function () {
+  this.where({ isDeleted: { $ne: true } });
+});
+customerSchema.pre("countDocuments", function () {
+  this.where({ isDeleted: { $ne: true } });
+});
+customerSchema.pre("aggregate", function (next) {
+  // Ensure that the current aggregation pipeline exists
+  if (!this.pipeline) {
+    return next();
+  }
+
+  // Add a $match stage at the beginning of the pipeline
+  this.pipeline().unshift({
+    $match: { isDeleted: { $ne: true } },
+  });
 
   next();
 });

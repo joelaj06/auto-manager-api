@@ -184,7 +184,16 @@ export class RentalRepositoryImpl implements IRentalRepository {
   async delete(id: string): Promise<IRental> {
     try {
       if (!id) throw new Error("Expense id is required");
-      const deletedRental = await Rental.findByIdAndDelete(id);
+      const deletedRental = await Rental.findByIdAndUpdate(
+        id,
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        {
+          new: true,
+        }
+      );
       if (!deletedRental) throw new Error("Rental not found");
       return RentalMapper.toEntity(deletedRental);
     } catch (error) {

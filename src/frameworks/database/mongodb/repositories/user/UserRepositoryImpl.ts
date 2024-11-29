@@ -13,7 +13,16 @@ export class UserRepositoryImpl implements IUserRepository {
       if (!id) throw new UnprocessableEntityError("User id is required");
       const user = await User.findById(id);
       if (!user) throw new NotFoundError("User not found");
-      await User.findByIdAndDelete(id);
+      await User.findByIdAndUpdate(
+        id,
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        {
+          new: true,
+        }
+      );
       return UserMapper.toEntity(user);
     } catch (error) {
       throw error;

@@ -45,7 +45,16 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
   async delete(id: string): Promise<IExpense> {
     try {
       if (!id) throw new Error("Expense id is required");
-      const deletedExpense = await Expense.findByIdAndDelete(id);
+      const deletedExpense = await Expense.findByIdAndUpdate(
+        id,
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        {
+          new: true,
+        }
+      );
       if (!deletedExpense) throw new Error("Expense not found");
       return ExpenseMapper.toEntity(deletedExpense);
     } catch (error) {

@@ -86,7 +86,16 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
   async deleteVehicle(id: string): Promise<IVehicle> {
     try {
       if (!id) throw new Error("Vehicle id is required");
-      const deletedVehicle = await Vehicle.findByIdAndDelete(id);
+      const deletedVehicle = await Vehicle.findByIdAndUpdate(
+        id,
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        {
+          new: true,
+        }
+      );
       if (!deletedVehicle) throw new Error("Vehicle not found");
       return VehicleMapper.toEntity(deletedVehicle);
     } catch (error) {

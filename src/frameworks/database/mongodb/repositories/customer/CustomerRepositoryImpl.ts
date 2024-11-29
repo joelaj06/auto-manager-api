@@ -38,7 +38,16 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
   async delete(id: string): Promise<ICustomer> {
     try {
       if (!id) throw new Error("Customer id is required");
-      const deletedCustomer = await Customer.findByIdAndDelete(id);
+      const deletedCustomer = await Customer.findByIdAndUpdate(
+        id,
+        {
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+        {
+          new: true,
+        }
+      );
       if (!deletedCustomer) throw new Error("Customer not found");
       return CustomerMapper.toEntity(deletedCustomer);
     } catch (error) {
