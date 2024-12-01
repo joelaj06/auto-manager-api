@@ -13,7 +13,6 @@ const customerSchema: Schema = new Schema(
     },
     email: {
       type: String,
-      required: true,
       unique: true,
     },
     phone: {
@@ -25,7 +24,6 @@ const customerSchema: Schema = new Schema(
     },
     identificationNumber: {
       type: String,
-      required: true,
     },
     occupation: {
       type: String,
