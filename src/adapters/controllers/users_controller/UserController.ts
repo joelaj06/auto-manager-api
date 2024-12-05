@@ -49,9 +49,14 @@ export class UserController {
       next(error);
     }
   }
-  async getAllUsers(req: Request, res: Response, next: NextFunction) {
+  async getAllUsers(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const query: RequestQuery = {
+        companyId: req.user?.company,
         search: req.query.search ? req.query.search.toString() : undefined,
         pageIndex: req.query.pageIndex
           ? Number(req.query.pageIndex)

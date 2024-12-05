@@ -5,6 +5,7 @@ import User, { UserMapper } from "../../models/user";
 import { IUserRepository } from "./IUserRepository";
 import { PaginatedResponse } from "../../../../../entities/UserResponse";
 import { UnprocessableEntityError } from "../../../../../error_handler/UnprocessableEntityError";
+import mongoose from "mongoose";
 
 @injectable()
 export class UserRepositoryImpl implements IUserRepository {
@@ -44,13 +45,25 @@ export class UserRepositoryImpl implements IUserRepository {
       const limit = query.pageSize || 10;
       const pageIndex = query.pageIndex || 1;
       const startIndex = (pageIndex - 1) * limit;
-      const searchCriteria = {
+      const companyId = query.companyId;
+
+      let searchCriteria = {};
+
+      if (companyId)
+        searchCriteria = {
+          ...searchCriteria,
+          company: new mongoose.Types.ObjectId(companyId),
+        };
+
+      searchCriteria = {
+        ...searchCriteria,
         $or: [
           { firstName: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
           { lastName: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
           { email: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
         ],
       };
+
       const users = await User.find(searchCriteria)
         .select("-password")
         .limit(limit)

@@ -29,7 +29,7 @@ const vehicleSchema: Schema = new Schema({
   },
   vin: {
     type: String,
-    required: true,
+    required: false,
   },
   ownerId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -48,17 +48,17 @@ const vehicleSchema: Schema = new Schema({
   },
   salesHistory: [
     {
-      saleId: { type: String, required: true },
-      amount: { type: Number, required: true },
-      date: { type: Date, required: true },
+      saleId: { type: String, required: false },
+      amount: { type: Number, required: false },
+      date: { type: Date, required: false },
     },
   ],
   maintenanceRecords: [
     {
-      maintenanceId: { type: String, required: true },
-      serviceType: { type: String, required: true },
-      cost: { type: Number, required: true },
-      date: { type: Date, required: true },
+      maintenanceId: { type: String, required: false },
+      serviceType: { type: String, required: false },
+      cost: { type: Number, required: false },
+      date: { type: Date, required: false },
     },
   ],
   rentalStatus: {
@@ -67,17 +67,17 @@ const vehicleSchema: Schema = new Schema({
   },
   rentalHistory: [
     {
-      rentalId: { type: String, required: true },
-      renterName: { type: String, required: true },
-      startDate: { type: Date, required: true },
-      endDate: { type: Date, required: true },
-      cost: { type: Number, required: true },
+      rentalId: { type: String, required: false },
+      renterName: { type: String, required: false },
+      startDate: { type: Date, required: false },
+      endDate: { type: Date, required: false },
+      cost: { type: Number, required: false },
     },
   ],
   insuranceDetails: {
-    provider: { type: String, required: true },
-    policyNumber: { type: String, required: true },
-    expiryDate: { type: Date, required: true },
+    provider: { type: String, required: false },
+    policyNumber: { type: String, required: false },
+    expiryDate: { type: Date, required: false },
   },
   company: {
     type: mongoose.Schema.Types.ObjectId,
