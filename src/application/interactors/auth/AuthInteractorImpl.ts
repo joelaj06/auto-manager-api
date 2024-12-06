@@ -42,7 +42,6 @@ export class AuthInteractorImpl implements IAuthInteractor {
     newPassword: string
   ): Promise<UserOTPResponse> {
     const userOtpRecords = await this.repository.findOtps({ user: userId });
-
     if (userOtpRecords.length === 0) {
       throw new BadRequestError("OTP not found. Please request a new one.");
     } else {
@@ -52,7 +51,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
         throw new BadRequestError("OTP has expired. Please request a new one.");
       } else {
         if (Number(otp) !== userOtpRecords[0].otp) {
-          throw new BadRequestError("Invalid OTP");
+          throw new BadRequestError("Invalid or Wrong OTP ");
         } else {
           await this.userRepository.updateUser(userId, {
             _id: userId,

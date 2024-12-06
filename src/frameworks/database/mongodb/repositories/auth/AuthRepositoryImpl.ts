@@ -28,7 +28,7 @@ export class AuthRepositoryImpl implements IAuthRepository {
     }
   }
   async findOtps(query: IUserOTP): Promise<IUserOTP[]> {
-    const otps = await UserOTP.find(query);
+    const otps = await UserOTP.find(query).sort({ createdAt: -1 });
     return otps.map((otp) => OTPMapper.toEntity(otp));
   }
   async addUserOTP(data: IUserOTP): Promise<IUserOTP> {
