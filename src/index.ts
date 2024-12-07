@@ -81,3 +81,5 @@ app.use(errorMiddleware.execute().bind(errorMiddleware));
 connection(mongoose, config).connectToMongo();
 serverConfig(app, config).startServer();
 bucket.configureStorageBucket();
+
+export default app;
