@@ -6,7 +6,7 @@ import { BaseError } from "../../../error_handler/BaseError";
 import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
 
 @injectable()
-class ErrorMiddleware {
+export class ErrorMiddleware {
   // private errorHandler: IErrorHandler;
   private logger: ILogger;
 
@@ -50,5 +50,3 @@ class ErrorMiddleware {
     };
   }
 }
-
-export { ErrorMiddleware };
