@@ -117,9 +117,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
   async changePassword(data: UserPasswordChangeRequest): Promise<IUser> {
     const { currentPassword, newPassword } = data;
     if (!currentPassword || !newPassword) {
-      throw new UnprocessableEntityError(
-        "Password and confirm password are required"
-      );
+      throw new UnprocessableEntityError("All Fields are required");
     }
     //fetch user and compare current password
     const user = await this.userRepository.findUserById(data.userId);
@@ -129,7 +127,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
       user.password!
     );
     if (!isMatch) {
-      throw new UnauthorizedError("Invalid credentials");
+      throw new BadRequestError("Invalid credentials");
     }
     const hashedPassword = await this.authService.encriptPassword(newPassword); // hash password before saving it
     const userData: IUser = {
