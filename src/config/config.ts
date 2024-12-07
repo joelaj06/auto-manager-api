@@ -4,7 +4,7 @@ import { IConfig } from "./IConfig";
 
 dotenv.config();
 const config: IConfig = {
-  port: Number(process.env.PORT) || 3000, // Convert the env variable to a number
+  port: Number(process.env.PORT) || 3001, // Convert the env variable to a number
   mongo: {
     uri:
       process.env.NODE_ENV === "production"
