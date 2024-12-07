@@ -2,9 +2,6 @@
     "version": 2,
     "builds": [
         {
-            "env": {
-                "NODE_ENV": "development"
-            },
             "src": "src/index.ts",
             "use": "@vercel/node",
             "config": {
