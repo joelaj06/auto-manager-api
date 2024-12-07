@@ -1,4 +1,4 @@
 //export middlewares here
-export * from "./ErrorMiddleware";
+export { ErrorMiddleware } from "./ErrorMiddleware";
 export * from "./LoggingMiddleware";
 export * from "./AuthMiddleware";
