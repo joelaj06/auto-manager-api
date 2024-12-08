@@ -24,8 +24,17 @@
     "ts-node-dev": "^2.0.0"
   },
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "rimraf dist && tsc",
+    "ts.check": "tsc --project tsconfig.json",
+    "add-build": "git add dist",
+    "start": "node dist/index.js"
   },
+  "pre-commit": [
+    "ts.check",
+    "build",
+    "add-build"
+  ],
   "name": "auto-manager-api",
   "version": "1.0.0",
   "main": "index.ts",
