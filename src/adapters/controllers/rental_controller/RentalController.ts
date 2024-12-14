@@ -21,6 +21,23 @@ export class RentalController {
     this.rentalInteractor = rentalInteractor;
   }
 
+  async removeExtension(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { id } = req.params;
+      if (!id) throw new BadRequestError("Rental id is required");
+      const response = await this.rentalInteractor.removeExtension(
+        id,
+        req.body.indexes
+      );
+      return res.status(HttpStatusCode.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
   async extendRental(
     req: ControllerUserRequest,
     res: Response,

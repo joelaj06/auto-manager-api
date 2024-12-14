@@ -10,7 +10,9 @@ import {
 } from "../../../application/interactors";
 import {
   IRentalRepository,
+  IVehicleRepository,
   RentalRepositoryImpl,
+  VehicleRepositoryImpl,
 } from "../../database/mongodb";
 import express from "express";
 
@@ -28,6 +30,10 @@ container
 container
   .bind<IRentalRepository>(INTERFACE_TYPE.RentalRepositoryImpl)
   .to(RentalRepositoryImpl);
+
+container
+  .bind<IVehicleRepository>(INTERFACE_TYPE.VehicleRepositoryImpl)
+  .to(VehicleRepositoryImpl);
 
 container
   .bind<IRentalInteractor>(INTERFACE_TYPE.RentalInteractorImpl)
@@ -76,6 +82,11 @@ router.put(
   "/api/rentals/:id/extend",
   authMiddleware.authenticateToken.bind(authMiddleware),
   controller.extendRental.bind(controller)
+);
+router.patch(
+  "/api/rentals/:id/removeExtension",
+  authMiddleware.authenticateToken.bind(authMiddleware),
+  controller.removeExtension.bind(controller)
 );
 
 export default router;
