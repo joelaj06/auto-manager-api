@@ -141,7 +141,7 @@ export class RentalInteractorImpl implements IRentalInteractor {
     const rental = await this.rentalRepository.findById(id);
     if (!rental) throw new NotFoundError("Rental not found");
 
-    const balance = Number(data.amountPaid) - Number(data.totalAmount);
+    const balance = Number(data.amountPaid) - Number(rental.totalAmount);
     data.balance = balance;
     const updatedRental = await this.rentalRepository.update(id, data);
     if (!updatedRental)
