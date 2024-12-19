@@ -31,6 +31,7 @@ export class DriverController {
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
         companyId: req.user?.company,
       };
+
       const response = await this.driverInteractor.getAllDrivers(query);
       res.set(
         "x-pagination",

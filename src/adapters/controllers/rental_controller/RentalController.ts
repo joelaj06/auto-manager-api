@@ -59,7 +59,11 @@ export class RentalController {
     }
   }
 
-  async getAllRentals(req: Request, res: Response, next: NextFunction) {
+  async getAllRentals(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const query: RentalRequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
@@ -67,7 +71,7 @@ export class RentalController {
           ? Number(req.query.pageIndex)
           : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
-        ...req.query,
+        companyId: req.user?.company,
       };
       const response = await this.rentalInteractor.getAllRentals(query);
       res.set({

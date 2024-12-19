@@ -18,7 +18,11 @@ export class VehicleController {
     this.vehicleInteractor = vehicleInteractor;
   }
 
-  async getAllVehicles(req: Request, res: Response, next: NextFunction) {
+  async getAllVehicles(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const query: RequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
@@ -26,6 +30,7 @@ export class VehicleController {
           ? Number(req.query.pageIndex)
           : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+        companyId: req.user?.company,
       };
       const response = await this.vehicleInteractor.getAllVehicles(query);
       res.set(

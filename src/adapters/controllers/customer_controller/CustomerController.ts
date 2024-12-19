@@ -37,7 +37,11 @@ export class CustomerController {
     }
   }
 
-  async getAllCustomers(req: Request, res: Response, next: NextFunction) {
+  async getAllCustomers(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const query: RequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
@@ -45,6 +49,7 @@ export class CustomerController {
           ? Number(req.query.pageIndex)
           : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+        companyId: req.user?.company,
       };
       const response = await this.customerInteractor.getAllCustomers(query);
       res.set(
