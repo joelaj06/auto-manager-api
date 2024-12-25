@@ -70,6 +70,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
         pageSize,
         status,
         categoryId,
+        vehicleId,
         companyId,
         startDate,
         endDate,
@@ -107,6 +108,13 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
         searchCriteria = {
           ...searchCriteria,
           categoryId: new mongoose.Types.ObjectId(categoryId),
+        };
+      }
+
+      if (vehicleId) {
+        searchCriteria = {
+          ...searchCriteria,
+          vehicle: new mongoose.Types.ObjectId(vehicleId),
         };
       }
 
