@@ -107,7 +107,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
       if (categoryId) {
         searchCriteria = {
           ...searchCriteria,
-          categoryId: new mongoose.Types.ObjectId(categoryId),
+          category: new mongoose.Types.ObjectId(categoryId),
         };
       }
 
