@@ -182,7 +182,10 @@ export class SalesRepositoryImpl implements ISalesRepository {
         .populate("vehicle")
         .populate({
           path: "driver",
-          populate: { path: "user", select: "-password" },
+          populate: [
+            { path: "user", select: "-password" },
+            { path: "vehicle" },
+          ],
         })
         .populate({
           path: "approvedOrRejectedBy",

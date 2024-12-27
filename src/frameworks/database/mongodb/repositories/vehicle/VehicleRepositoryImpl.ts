@@ -6,6 +6,7 @@ import {
 } from "../../../../../entities";
 import { Vehicle, VehicleMapper } from "../../models/vehicle";
 import { IVehicleRepository } from "./IVehicleRepository";
+import mongoose from "mongoose";
 
 @injectable()
 export class VehicleRepositoryImpl implements IVehicleRepository {
@@ -23,12 +24,23 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
     query: RequestQuery
   ): Promise<PaginatedResponse<IVehicle>> {
     try {
-      const { search, pageSize } = query;
+      const { search, pageSize, companyId } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
       const pageIndex = query.pageIndex || 1;
       const startIndex = (pageIndex - 1) * limit;
-      const searchCriteria = {
+
+      let searchCriteria = {};
+
+      if (companyId) {
+        searchCriteria = {
+          ...searchCriteria,
+          company: new mongoose.Types.ObjectId(companyId),
+        };
+      }
+
+      searchCriteria = {
+        ...searchCriteria,
         $or: [
           { licensePlate: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
           { make: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },

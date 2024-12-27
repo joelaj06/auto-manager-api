@@ -21,6 +21,23 @@ export class RentalController {
     this.rentalInteractor = rentalInteractor;
   }
 
+  async removeExtension(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      const { id } = req.params;
+      if (!id) throw new BadRequestError("Rental id is required");
+      const response = await this.rentalInteractor.removeExtension(
+        id,
+        req.body.indexes
+      );
+      return res.status(HttpStatusCode.OK).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
   async extendRental(
     req: ControllerUserRequest,
     res: Response,
@@ -42,7 +59,11 @@ export class RentalController {
     }
   }
 
-  async getAllRentals(req: Request, res: Response, next: NextFunction) {
+  async getAllRentals(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
     try {
       const query: RentalRequestQuery = {
         search: req.query.search ? req.query.search.toString() : undefined,
@@ -50,7 +71,7 @@ export class RentalController {
           ? Number(req.query.pageIndex)
           : undefined,
         pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
-        ...req.query,
+        companyId: req.user?.company,
       };
       const response = await this.rentalInteractor.getAllRentals(query);
       res.set({

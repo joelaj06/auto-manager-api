@@ -12,4 +12,5 @@ export interface IRentalInteractor {
   updateRental(id: string, data: IRental): Promise<IRental>;
   deleteRental(id: string): Promise<IRental>;
   extendRental(id: string, data: IRentalExtension): Promise<IRental>;
+  removeExtension(rentalId: string, indexes: number[]): Promise<IRental>;
 }

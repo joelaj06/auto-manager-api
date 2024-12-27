@@ -6,6 +6,7 @@ import {
   PaginatedResponse,
 } from "../../../../../entities";
 import { Customer, CustomerMapper } from "../../models";
+import mongoose from "mongoose";
 
 @injectable()
 export class CustomerRepositoryImpl implements ICustomerRepository {
@@ -56,15 +57,24 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
   }
   async findAll(query: RequestQuery): Promise<PaginatedResponse<ICustomer>> {
     try {
-      const { search, pageSize, status } = query;
+      const { search, pageSize, status, companyId } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
       const pageIndex = query.pageIndex || 1;
       const startIndex = (pageIndex - 1) * limit;
+
       let searchCriteria = {};
+
+      if (companyId) {
+        searchCriteria = {
+          ...searchCriteria,
+          company: new mongoose.Types.ObjectId(companyId),
+        };
+      }
 
       if (searchQuery) {
         searchCriteria = {
+          ...searchCriteria,
           $or: [
             { name: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
             { customerCode: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },

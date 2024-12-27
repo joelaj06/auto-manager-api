@@ -28,12 +28,15 @@ export class DriverRepositoryImpl implements IDriverRepository {
       const pageIndex = query.pageIndex || 1;
       const startIndex = (pageIndex - 1) * limit;
       let searchCriteria = {};
+
       if (companyId)
         searchCriteria = {
           ...searchCriteria,
           company: new mongoose.Types.ObjectId(companyId),
         };
+
       searchCriteria = {
+        ...searchCriteria,
         $or: [
           { licenseNumber: { $regex: new RegExp(`^${searchQuery}.*`, "i") } },
           {

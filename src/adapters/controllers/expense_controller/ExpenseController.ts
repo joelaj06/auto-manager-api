@@ -68,6 +68,7 @@ export class ExpenseController {
         companyId: req.user?.company,
         ...req.query,
       };
+
       const response = await this.expenseInteractor.getAllExpenses(query);
       res.set({
         "x-pagination": JSON.stringify({

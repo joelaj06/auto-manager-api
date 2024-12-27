@@ -34,4 +34,5 @@ export class IExpenseCategory {
 export interface ExpenseRequestQuery extends RequestQuery {
   categoryId?: string;
   status?: string;
+  vehicleId?: string;
 }
