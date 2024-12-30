@@ -1,5 +1,5 @@
 import { Container } from "inversify";
-import { INTERFACE_TYPE } from "../../../utils/constants";
+import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
 import { IAuthService } from "../../services/auth/IAuthService";
 import { AuthServiceImpl } from "../../services";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
@@ -55,37 +55,54 @@ const router = express.Router();
 router.get(
   "/api/rentals",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_RENTALS).bind(authMiddleware),
   controller.getAllRentals.bind(controller)
 );
 router.post(
   "/api/rentals",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.CREATE_RENTAL)
+    .bind(authMiddleware),
   controller.addRental.bind(controller)
 );
 router.get(
   "/api/rentals/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_RENTAL).bind(authMiddleware),
   controller.getARental.bind(controller)
 );
 router.put(
   "/api/rentals/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.UPDATE_RENTAL)
+    .bind(authMiddleware),
   controller.updateRental.bind(controller)
 );
 router.delete(
   "/api/rentals/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.DELETE_RENTAL)
+    .bind(authMiddleware),
   controller.deleteRental.bind(controller)
 );
 
 router.put(
   "/api/rentals/:id/extend",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.CREATE_RENTAL_EXTENSION)
+    .bind(authMiddleware),
   controller.extendRental.bind(controller)
 );
 router.patch(
   "/api/rentals/:id/removeExtension",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.DELETE_RENTAL_EXTENSION)
+    .bind(authMiddleware),
   controller.removeExtension.bind(controller)
 );
 

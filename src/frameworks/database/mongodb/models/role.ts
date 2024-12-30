@@ -10,7 +10,11 @@ const roleSchema = new mongoose.Schema(
     description: {
       type: String,
     },
-    companyId: { type: String, required: true, unique: true },
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      unique: true,
+    },
     permissions: {
       type: Array,
       default: [],
@@ -28,11 +32,10 @@ export default Role;
 export const RoleMapper = {
   toEntity: (model: any): IRole => {
     return new IRole(
+      model._id?.toString(),
       model.name,
       model.description,
       model.companyId.toString(), // Convert ObjectId to string
-      model.createdAt,
-      model._id?.toString(),
       model.permissions
     );
   },

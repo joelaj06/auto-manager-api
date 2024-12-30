@@ -1,5 +1,5 @@
 import { Container } from "inversify";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils";
 import { AuthServiceImpl } from "../../services";
 import { IAuthService } from "../../services/auth/IAuthService";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
@@ -49,26 +49,41 @@ const router = express.Router();
 router.get(
   "/api/customers",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_CUSTOMERS)
+    .bind(authMiddleware),
   customerController.getAllCustomers.bind(customerController)
 );
 router.post(
   "/api/customers",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.CREATE_CUSTOMER)
+    .bind(authMiddleware),
   customerController.saveCustomer.bind(customerController)
 );
 router.get(
   "/api/customers/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_CUSTOMER)
+    .bind(authMiddleware),
   customerController.getACustomer.bind(customerController)
 );
 router.put(
   "/api/customers/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.UPDATE_CUSTOMER)
+    .bind(authMiddleware),
   customerController.updateCustomer.bind(customerController)
 );
 router.delete(
   "/api/customers/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.DELETE_CUSTOMER)
+    .bind(authMiddleware),
   customerController.deleteCustomer.bind(customerController)
 );
 

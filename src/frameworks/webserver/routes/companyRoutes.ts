@@ -5,7 +5,7 @@ import {
   CompanyInteractorImpl,
   ICompanyInteractor,
 } from "../../../application/interactors";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions, UserPermissions } from "../../../utils";
 import {
   CompanyRepositoryImpl,
   ICompanyRepository,
@@ -75,6 +75,9 @@ router
   )
   .put(
     authMiddleware.authenticateToken.bind(authMiddleware),
+    authMiddleware
+      .checkPermission(Permissions.UPDATE_COMPANY)
+      .bind(authMiddleware),
     controller.updateCompany.bind(controller)
   );
 

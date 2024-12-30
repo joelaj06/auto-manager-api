@@ -1,6 +1,6 @@
 import express from "express";
 import { Container } from "inversify";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
 import { AuthServiceImpl } from "../../services";
 import { IAuthService } from "../../services/auth/IAuthService";
@@ -48,6 +48,9 @@ const router = express.Router();
 router.get(
   "/api/permissions",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_PERMISSIONS)
+    .bind(authMiddleware),
   controller.getAllPermissions.bind(controller)
 );
 

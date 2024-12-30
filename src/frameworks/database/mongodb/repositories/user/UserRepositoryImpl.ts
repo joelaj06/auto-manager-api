@@ -66,6 +66,7 @@ export class UserRepositoryImpl implements IUserRepository {
 
       const users = await User.find(searchCriteria)
         .select("-password")
+        .populate("role")
         .limit(limit)
         .skip(startIndex);
 
@@ -90,7 +91,7 @@ export class UserRepositoryImpl implements IUserRepository {
   }
   async findUserByEmail(email: string): Promise<IUser | null | undefined> {
     try {
-      const user = await User.findOne({ email: email });
+      const user = await User.findOne({ email: email }).populate("role");
       if (user) {
         return UserMapper.toEntity(user);
       } else {

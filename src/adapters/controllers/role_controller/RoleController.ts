@@ -22,9 +22,9 @@ export class RoleController {
         ...req.body,
         companyId: req.user?.company,
       };
-      if (!data.company) throw new BadRequestError("CompanyId is required");
+      if (!data.companyId) throw new BadRequestError("CompanyId is required");
 
-      const role = await this.roleInteractor.addRole(req.body);
+      const role = await this.roleInteractor.addRole(data);
       if (!role) throw new BadRequestError("Error while adding role");
       return res.status(HttpStatusCode.CREATED).json(role);
     } catch (error) {

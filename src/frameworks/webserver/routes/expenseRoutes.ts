@@ -5,7 +5,7 @@ import {
   IExpenseCategoryRepository,
   IExpenseRepository,
 } from "../../database/mongodb";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils";
 import {
   ExpenseCategoryInteractorImpl,
   ExpenseInteractorImpl,
@@ -80,29 +80,42 @@ const router = express.Router();
 router.get(
   "/api/expenses",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_EXPENSES)
+    .bind(authMiddleware),
   expenseController.getAllExpenses.bind(expenseController)
 );
 
 router.get(
   "/api/expenses/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_EXPENSE).bind(authMiddleware),
   expenseController.getAnExpense.bind(expenseController)
 );
 router.post(
   "/api/expenses",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.CREATE_EXPENSE)
+    .bind(authMiddleware),
   expenseController.addExpense.bind(expenseController)
 );
 
 router.put(
   "/api/expenses/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.UPDATE_EXPENSE)
+    .bind(authMiddleware),
   expenseController.updateExpense.bind(expenseController)
 );
 
 router.delete(
   "/api/expenses/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.DELETE_EXPENSE)
+    .bind(authMiddleware),
   expenseController.deleteExpense.bind(expenseController)
 );
 
@@ -110,6 +123,9 @@ router.delete(
 router.get(
   "/api/expense/expenseCategories",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_EXPENSE_CATEGORIES)
+    .bind(authMiddleware),
   expenseCategoryController.getAllExpenseCategory.bind(
     expenseCategoryController
   )
@@ -118,18 +134,27 @@ router.get(
 router.post(
   "/api/expense/expenseCategories",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.CREATE_EXPENSE_CATEGORY)
+    .bind(authMiddleware),
   expenseCategoryController.addExpenseCategory.bind(expenseCategoryController)
 );
 
 router.get(
   "/api/expense/expenseCategories/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_EXPENSE_CATEGORY)
+    .bind(authMiddleware),
   expenseCategoryController.getAnExpenseCategory.bind(expenseCategoryController)
 );
 
 router.put(
   "/api/expense/expenseCategories/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.UPDATE_EXPENSE_CATEGORY)
+    .bind(authMiddleware),
   expenseCategoryController.updateExpenseCategory.bind(
     expenseCategoryController
   )
@@ -138,6 +163,9 @@ router.put(
 router.delete(
   "/api/expense/expenseCategories/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.DELETE_EXPENSE_CATEGORY)
+    .bind(authMiddleware),
   expenseCategoryController.deleteExpenseCategory.bind(
     expenseCategoryController
   )

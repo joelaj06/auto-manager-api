@@ -10,8 +10,8 @@ const userSchema = new mongoose.Schema(
     phone: String,
     imageUrl: String,
     role: {
-      type: String,
-      enum: ["admin", "driver"],
+      type: mongoose.SchemaTypes.ObjectId,
+      ref: "Role",
     },
     company: {
       type: mongoose.SchemaTypes.ObjectId,

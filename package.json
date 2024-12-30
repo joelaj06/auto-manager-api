@@ -29,8 +29,7 @@
     "ts.check": "tsc --project tsconfig.json",
     "add-build": "git add dist",
     "start": "node dist/index.js",
-    "test": "yarn jest",
-    "run-perm": "ts-node run-permissions.ts"
+    "test": "yarn jest"
   },
   "pre-commit": [
     "ts.check",
