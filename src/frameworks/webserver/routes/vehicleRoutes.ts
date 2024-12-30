@@ -4,7 +4,7 @@ import {
   IVehicleRepository,
   VehicleRepositoryImpl,
 } from "../../database/mongodb";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils";
 import {
   IVehicleInteractor,
   VehicleInteractorImpl,
@@ -57,26 +57,39 @@ const router = express.Router();
 router.get(
   "/api/vehicles",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_VEHICLES)
+    .bind(authMiddleware),
   controller.getAllVehicles.bind(controller)
 );
 router.post(
   "/api/vehicles",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.CREATE_VEHICLE)
+    .bind(authMiddleware),
   controller.addVehicle.bind(controller)
 );
 router.get(
   "/api/vehicles/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_VEHICLE).bind(authMiddleware),
   controller.getAVehicle.bind(controller)
 );
 router.put(
   "/api/vehicles/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.UPDATE_VEHICLE)
+    .bind(authMiddleware),
   controller.updateVehicle.bind(controller)
 );
 router.delete(
   "/api/vehicles/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.DELETE_VEHICLE)
+    .bind(authMiddleware),
   controller.deleteVehicle.bind(controller)
 );
 

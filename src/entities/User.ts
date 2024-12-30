@@ -29,11 +29,8 @@ export class IRole {
     public readonly _id?: string,
     public readonly name?: string,
     public readonly description?: string,
-    public readonly createdBy?: string,
-    public readonly createdAt?: Date,
-    public readonly updatedAt?: Date,
-    public readonly permissions?: string[], // Permissions granted to this role
-    public readonly companyId?: string
+    public readonly companyId?: string,
+    public readonly permissions?: string[] // Permissions granted to this role
   ) {}
 }
 

@@ -69,7 +69,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
       if (companyId)
         searchCriteria = {
           ...searchCriteria,
-          company: new mongoose.Types.ObjectId(companyId),
+          companyId: new mongoose.Types.ObjectId(companyId),
         };
 
       searchCriteria = {

@@ -4,7 +4,7 @@ import {
   ISalesRepository,
   SalesRepositoryImpl,
 } from "../../database/mongodb/repositories/sales";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils";
 import {
   IAuthInteractor,
   ISalesInteractor,
@@ -50,30 +50,35 @@ const router = express.Router();
 router.get(
   "/api/sales",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_SALES).bind(authMiddleware),
   controller.getAllSales.bind(controller)
 );
 
 router.get(
   "/api/sales/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_SALE).bind(authMiddleware),
   controller.getASale.bind(controller)
 );
 
 router.post(
   "/api/sales",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.CREATE_SALE).bind(authMiddleware),
   controller.addSale.bind(controller)
 );
 
 router.put(
   "/api/sales/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.UPDATE_SALE).bind(authMiddleware),
   controller.updateSale.bind(controller)
 );
 
 router.delete(
   "/api/sales/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.DELETE_SALE).bind(authMiddleware),
   controller.deleteSale.bind(controller)
 );
 

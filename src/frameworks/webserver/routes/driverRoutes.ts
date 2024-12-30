@@ -1,6 +1,6 @@
 import { Container } from "inversify";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils";
 import { DriverController } from "../../../adapters/controllers/driver_controller/DriverController";
 import { IAuthService } from "../../services/auth/IAuthService";
 import { AuthServiceImpl } from "../../services";
@@ -50,23 +50,31 @@ const router = express.Router();
 router.get(
   "/api/drivers",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_DRIVERS).bind(authMiddleware),
   controller.getAllDrivers.bind(controller)
 );
 
 router.get(
   "/api/drivers/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware.checkPermission(Permissions.VIEW_DRIVER).bind(authMiddleware),
   controller.getADriver.bind(controller)
 );
 router.put(
   "/api/drivers/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.UPDATE_DRIVER)
+    .bind(authMiddleware),
   controller.updateDriver.bind(controller)
 );
 
 router.delete(
   "/api/drivers/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.DELETE_DRIVER)
+    .bind(authMiddleware),
   controller.deleteDriver.bind(controller)
 );
 

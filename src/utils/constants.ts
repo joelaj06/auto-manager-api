@@ -71,6 +71,7 @@ const Permissions = Object.freeze({
   VIEW_ROLES: "view:roles",
   CREATE_PERMISSION: "create:permission",
   VIEW_PERMISSION: "view:permission",
+  VIEW_PERMISSIONS: "view:permissions",
   UPDATE_PERMISSION: "update:permission",
   DELETE_PERMISSION: "delete:permission",
   CREATE_USER: "create:user",
@@ -93,10 +94,10 @@ const Permissions = Object.freeze({
   UPDATE_DRIVER: "update:driver",
   DELETE_DRIVER: "delete:driver",
   VIEW_DRIVERS: "view:drivers",
-  CREATE_SALES: "create:sales",
+  CREATE_SALE: "create:sales",
   VIEW_SALE: "view:sale",
-  UPDATE_SALES: "update:sales",
-  DELETE_SALES: "delete:sales",
+  UPDATE_SALE: "update:sale",
+  DELETE_SALE: "delete:sale",
   VIEW_SALES: "view:sales",
   VIEW_OTHERS_SALES: "view:others-sales",
   VIEW_SALES_FILTER_BY_DRIVER: "view:sales-filter-by-driver",
@@ -139,6 +140,7 @@ const Permissions = Object.freeze({
   VIEW_DASHBOARD_RENTALS: "view:dashboard-rentals",
   VIEW_DASHBOARD_REVENUE: "view:dashboard-revenue",
   VIEW_DASHBOARD_WEEKLY_SALES: "view:dashboard-weekly-sales",
+  VIEW_DASHBOARD_SUMMARY: "view:dashboard-summary",
 } as const);
 
 const UserPermissions = Object.values(Permissions);

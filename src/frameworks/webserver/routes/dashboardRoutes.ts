@@ -1,6 +1,6 @@
 import express from "express";
 import { Container } from "inversify";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils";
 import { AuthServiceImpl } from "../../services";
 import { IAuthService } from "../../services/auth/IAuthService";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
@@ -56,12 +56,18 @@ const router = express.Router();
 router.get(
   "/api/dashboard/monthlySales",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_DASHBOARD_WEEKLY_SALES)
+    .bind(authMiddleware),
   controller.getMonthlySalesData.bind(controller)
 );
 
 router.get(
   "/api/dashboard/dashboardSummary",
   authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.VIEW_DASHBOARD_SUMMARY)
+    .bind(authMiddleware),
   controller.getDashboardSummary.bind(controller)
 );
 
