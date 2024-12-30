@@ -5,7 +5,7 @@ export class IUser {
     public readonly lastName?: string,
     public readonly email?: string,
     public readonly phone?: string,
-    public readonly role?: string,
+    public readonly role?: IRole,
     public readonly isActive?: boolean,
     public readonly isVerified?: boolean,
     public readonly imageUrl?: string,
@@ -20,6 +20,19 @@ export class IUser {
     public readonly licenseNumber?: string,
     public readonly lisenceExpiryDate?: Date,
     public readonly vehicleId?: string,
+    public readonly companyId?: string
+  ) {}
+}
+
+export class IRole {
+  constructor(
+    public readonly _id?: string,
+    public readonly name?: string,
+    public readonly description?: string,
+    public readonly createdBy?: string,
+    public readonly createdAt?: Date,
+    public readonly updatedAt?: Date,
+    public readonly permissions?: string[], // Permissions granted to this role
     public readonly companyId?: string
   ) {}
 }

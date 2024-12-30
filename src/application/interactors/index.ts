@@ -8,3 +8,5 @@ export * from "./expense/index";
 export * from "./rental/index";
 export * from "./customer/index";
 export * from "./dashboard/index";
+export * from "./role/index";
+export * from "./permission/index";

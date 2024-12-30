@@ -49,7 +49,7 @@ export class UserInteractorImpl implements IUserInteractor {
     const existingUser = await this.userRepository.findUserByEmail(data.email!);
     if (existingUser) throw new BadRequestError("The email already exists");
     let userData = { ...data };
-    if (data.role && data.role.toLowerCase() === "driver") {
+    if (data.role && data.role.name?.toLowerCase() === "driver") {
       userData = data;
     } else {
       const hashedPassword = await this.authService.encriptPassword(
@@ -66,7 +66,7 @@ export class UserInteractorImpl implements IUserInteractor {
     const { password: pass, ...rest } = newUser;
 
     //check if user is a driver by role
-    if (newUser.role && newUser.role.toLowerCase() === "driver") {
+    if (newUser.role && newUser.role.name?.toLowerCase() === "driver") {
       const driverData: IDriver = {
         userId: newUser._id,
         vehicleId: data.vehicleId || undefined,
@@ -108,7 +108,7 @@ export class UserInteractorImpl implements IUserInteractor {
     const updatedUser = await this.userRepository.updateUser(id, body);
 
     //check if user is a driver by role
-    if (updatedUser.role && updatedUser.role.toLowerCase() === "driver") {
+    if (updatedUser.role && updatedUser.role.name?.toLowerCase() === "driver") {
       const driverData: IDriver = {
         userId: updatedUser._id,
         vehicleId: data.vehicleId,

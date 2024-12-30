@@ -7,3 +7,5 @@ export * from "./sales";
 export * from "./expense";
 export * from "./rental";
 export * from "./customer";
+export * from "./role";
+export * from "./permission";

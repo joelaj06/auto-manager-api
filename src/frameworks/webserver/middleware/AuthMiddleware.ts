@@ -40,4 +40,18 @@ export class AuthMiddleware {
       return next(new UnauthorizedError("Access denied. No token provided"));
     }
   }
+
+  checkPermission =
+    (permission: string) =>
+    async (req: UserRequest, res: Response, next: NextFunction) => {
+      if (!req.user?.role) {
+        return next(new UnauthorizedError("User does not have permission"));
+      }
+      if (!req.user.role.permissions?.includes(permission)) {
+        return next(
+          new UnauthorizedError("User does not have required permission")
+        );
+      }
+      next();
+    };
 }
