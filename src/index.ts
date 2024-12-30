@@ -24,6 +24,8 @@ import {
   saleRoutes,
   userRoutes,
   vehicleRoutes,
+  roleRoutes,
+  permissionRoutes,
 } from "./frameworks";
 import expressConfig from "./frameworks/webserver/express";
 import connection from "./frameworks/database/mongodb/connection";
@@ -74,6 +76,8 @@ app.use(expenseRoutes);
 app.use(rentalRoutes);
 app.use(customerRoutes);
 app.use(dashboardRoutes);
+app.use(roleRoutes);
+app.use(permissionRoutes);
 
 //error middleware
 app.use(errorMiddleware.execute().bind(errorMiddleware));

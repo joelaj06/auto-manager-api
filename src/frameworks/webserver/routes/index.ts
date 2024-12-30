@@ -8,6 +8,8 @@ import expenseRoutes from "./expenseRoutes";
 import rentalRoutes from "./rentalRoutes";
 import customerRoutes from "./customerRoutes";
 import dashboardRoutes from "./dashboardRoutes";
+import roleRoutes from "./roleRoutes";
+import permissionRoutes from "./permissionRoutes";
 
 export {
   authRoutes,
@@ -20,4 +22,6 @@ export {
   rentalRoutes,
   customerRoutes,
   dashboardRoutes,
+  roleRoutes,
+  permissionRoutes,
 };
