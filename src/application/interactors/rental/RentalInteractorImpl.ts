@@ -124,11 +124,12 @@ export class RentalInteractorImpl implements IRentalInteractor {
     //check if vehicle is available
     const vehicle = await this.vehicleRepository.findById(vehicleId);
     if (!vehicle) throw new UnprocessableEntityError("Vehicle not found");
-    if (vehicle.status == "rented")
+    if (vehicle.status == "rented" || vehicle.rentalStatus == true)
       throw new UnprocessableEntityError("Vehicle is already rented");
 
     const rentedVehicle: IVehicle = {
       status: "rented",
+      rentalStatus: true,
     };
 
     await this.vehicleRepository.updateVehicle(vehicleId, rentedVehicle);

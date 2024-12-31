@@ -101,6 +101,7 @@ const rentalSchema: Schema = new Schema(
     extensions: [rentalExtensionSchema],
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
+    
   },
   { timestamps: true }
 );

@@ -85,7 +85,7 @@ const Permissions = Object.freeze({
   DELETE_COMPANY: "delete:company",
   VIEW_COMPANIES: "view:companies",
   CREATE_VEHICLE: "create:vehicle",
-  VIEW_VEHICLE: "view:vehicle",
+  VIEW_VEHICLE: "view:vehi-cle",
   UPDATE_VEHICLE: "update:vehicle",
   DELETE_VEHICLE: "delete:vehicle",
   VIEW_VEHICLES: "view:vehicles",
