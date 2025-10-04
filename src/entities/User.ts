@@ -5,7 +5,7 @@ export class IUser {
     public readonly lastName?: string,
     public readonly email?: string,
     public readonly phone?: string,
-    public readonly role?: IRole,
+    public readonly role?: IRole | string,
     public readonly isActive?: boolean,
     public readonly isVerified?: boolean,
     public readonly imageUrl?: string,

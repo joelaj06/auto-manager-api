@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { IUser, RequestQuery } from "../../../entities/User";
+import { IRole, IUser, RequestQuery } from "../../../entities/User";
 import { UnprocessableEntityError } from "../../../error_handler/UnprocessableEntityError";
 import { IUserInteractor } from "./IUserInteractor";
 import { IUserRepository } from "../../../frameworks/database/mongodb/repositories";
@@ -49,8 +49,11 @@ export class UserInteractorImpl implements IUserInteractor {
     const existingUser = await this.userRepository.findUserByEmail(data.email!);
     if (existingUser) throw new BadRequestError("The email already exists");
     let userData = { ...data };
-    if (data.role && data.role.name?.toLowerCase() === "driver") {
-      userData = data;
+    if (data.role && (data.role as IRole).name?.toLowerCase() === "driver") {
+      userData = {
+        ...data,
+        role: "677d838c2efaa80981ccd985",
+      };
     } else {
       const hashedPassword = await this.authService.encriptPassword(
         data.password!
@@ -66,7 +69,10 @@ export class UserInteractorImpl implements IUserInteractor {
     const { password: pass, ...rest } = newUser;
 
     //check if user is a driver by role
-    if (newUser.role && newUser.role.name?.toLowerCase() === "driver") {
+    if (
+      newUser.role &&
+      (newUser.role as IRole).name?.toLowerCase() === "driver"
+    ) {
       const driverData: IDriver = {
         userId: newUser._id,
         vehicleId: data.vehicleId || undefined,
@@ -108,7 +114,10 @@ export class UserInteractorImpl implements IUserInteractor {
     const updatedUser = await this.userRepository.updateUser(id, body);
 
     //check if user is a driver by role
-    if (updatedUser.role && updatedUser.role.name?.toLowerCase() === "driver") {
+    if (
+      updatedUser.role &&
+      (updatedUser.role as IRole).name?.toLowerCase() === "driver"
+    ) {
       const driverData: IDriver = {
         userId: updatedUser._id,
         vehicleId: data.vehicleId,

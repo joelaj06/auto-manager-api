@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 
-import { IUser } from "../../../entities/User";
+import { IRole, IUser } from "../../../entities/User";
 import { UnauthorizedError } from "../../../error_handler/UnauthorizedError";
 import { inject, injectable } from "inversify";
 import { IAuthService } from "../../services/auth/IAuthService";
@@ -47,7 +47,7 @@ export class AuthMiddleware {
       if (!req.user?.role) {
         return next(new UnauthorizedError("User does not have permission"));
       }
-      if (!req.user.role.permissions?.includes(permission)) {
+      if (!(req.user.role as IRole).permissions?.includes(permission)) {
         return next(
           new UnauthorizedError("User does not have required permission")
         );

@@ -53,7 +53,7 @@ export class LoggerImpl implements ILogger {
       level: process.env.NODE_ENV === "development" ? "trace" : "error",
       levels: customLevels.levels,
       transports: [
-        process.env.NODE_ENV === "development" ? transport : prodTransport,
+        process.env.NODE_ENV === "development" ? prodTransport : transport, //for serveless function - vercel
       ],
     });
     winston.addColors(customLevels.colors);
