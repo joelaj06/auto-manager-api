@@ -42,10 +42,10 @@ export class LoggerImpl implements ILogger {
   private logger: winston.Logger;
 
   constructor() {
-    const prodTransport = new winston.transports.File({
-      filename: "logs/error.log",
-      level: "error",
-    });
+    // const prodTransport = new winston.transports.File({
+    //   filename: "logs/error.log",
+    //   level: "error",
+    // });
     const transport = new winston.transports.Console({
       format: formatter,
     });
