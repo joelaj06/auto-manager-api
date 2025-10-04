@@ -8,6 +8,8 @@
     "@types/node": "^22.10.2",
     "@types/nodemailer": "^6.4.16",
     "@types/winston": "^2.4.4",
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^30.0.0",
     "bcrypt": "^5.1.1",
     "cloudinary": "^2.5.1",
     "cors": "^2.8.5",
