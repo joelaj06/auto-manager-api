@@ -6,4 +6,5 @@ export interface IRoleRepository {
   addRole(data: IRole): Promise<IRole | null | undefined>;
   updateRole(id: string, data: IRole): Promise<IRole | null | undefined>;
   deleteRole(id: string): Promise<IRole | null | undefined>;
+  findRoleByName(name: string): Promise<IRole | null | undefined>;
 }

@@ -92,6 +92,7 @@ export class UserRepositoryImpl implements IUserRepository {
   async findUserByEmail(email: string): Promise<IUser | null | undefined> {
     try {
       const user = await User.findOne({ email: email }).populate("role");
+      console.log(user);
       if (user) {
         return UserMapper.toEntity(user);
       } else {
@@ -102,7 +103,7 @@ export class UserRepositoryImpl implements IUserRepository {
     }
   }
   async findUserById(id: string): Promise<IUser | null | undefined> {
-    const user = await User.findById(id);
+    const user = await User.findById(id).populate("role");
     if (user) {
       return UserMapper.toEntity(user);
     } else {

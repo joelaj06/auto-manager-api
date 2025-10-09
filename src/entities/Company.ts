@@ -20,7 +20,8 @@ export class ICompany {
     public readonly createdAt?: Date,
     public readonly updatedAt?: Date,
     public readonly createdBy?: string,
-    public readonly address?: IAddress
+    public readonly address?: IAddress,
+    public readonly motto?: string
   ) {}
 }
 

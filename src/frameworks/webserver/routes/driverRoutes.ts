@@ -54,6 +54,15 @@ router.get(
   controller.getAllDrivers.bind(controller)
 );
 
+router.post(
+  "/api/drivers",
+  authMiddleware.authenticateToken.bind(authMiddleware),
+  authMiddleware
+    .checkPermission(Permissions.CREATE_DRIVER)
+    .bind(authMiddleware),
+  controller.addDriver.bind(controller)
+);
+
 router.get(
   "/api/drivers/:id",
   authMiddleware.authenticateToken.bind(authMiddleware),

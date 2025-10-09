@@ -14,6 +14,7 @@ import { IUserRepository } from "../../../frameworks/database/mongodb/repositori
 import { BadRequestError, NotFoundError } from "../../../error_handler";
 import { UnauthorizedError } from "../../../error_handler/UnauthorizedError";
 import { UnprocessableEntityError } from "../../../error_handler/UnprocessableEntityError";
+import { IRoleRepository } from "../../../frameworks";
 
 @injectable()
 export class AuthInteractorImpl implements IAuthInteractor {
@@ -21,17 +22,20 @@ export class AuthInteractorImpl implements IAuthInteractor {
   private authService: IAuthService;
   private mailer: IMailer;
   private userRepository: IUserRepository;
+  private roleRepository: IRoleRepository;
 
   constructor(
     @inject(INTERFACE_TYPE.AuthRepositoryImpl) repository: IAuthRepository,
     @inject(INTERFACE_TYPE.AuthServiceImpl) authService: IAuthService,
     @inject(INTERFACE_TYPE.Mailer) mailer: IMailer,
-    @inject(INTERFACE_TYPE.UserRepositoryImpl) userRepository: IUserRepository
+    @inject(INTERFACE_TYPE.UserRepositoryImpl) userRepository: IUserRepository,
+    @inject(INTERFACE_TYPE.RoleRepositoryImpl) roleRepository: IRoleRepository
   ) {
     this.repository = repository;
     this.authService = authService;
     this.mailer = mailer;
     this.userRepository = userRepository;
+    this.roleRepository = roleRepository;
   }
   logout(): void {
     throw new Error("Method not implemented.");
@@ -152,6 +156,7 @@ export class AuthInteractorImpl implements IAuthInteractor {
     }
 
     const user = await this.userRepository.findUserByEmail(email);
+
     if (!user) throw new NotFoundError("Sorry User not found");
     //compare password to hash
     const isMatch = await this.authService.comparePassword(
@@ -245,10 +250,14 @@ export class AuthInteractorImpl implements IAuthInteractor {
       data.password!
     ); // hash password before saving it
 
+    //find and assign admin role to the user
+    const role = await this.roleRepository.findRoleByName("admin");
+    if (!role) throw new NotFoundError("Role not found");
+
     const userData: IUser = {
       ...data,
       password: hashedPassword,
-      //TODO implement role//role: "admin",
+      role: role._id,
     };
     const result = await this.repository.registerUser(userData);
 

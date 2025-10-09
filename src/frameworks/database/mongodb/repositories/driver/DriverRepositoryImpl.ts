@@ -76,7 +76,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
     try {
       if (!id) throw new Error("Driver id is required");
       const vehicle = await Driver.findById(id).populate(
-        "user vehicle",
+        "vehicle",
         "-password"
       );
       if (!vehicle) return null;

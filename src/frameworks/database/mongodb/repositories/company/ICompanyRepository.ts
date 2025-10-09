@@ -6,4 +6,5 @@ export interface ICompanyRepository {
   findAllCompanies(query: RequestQuery): Promise<PaginatedResponse<ICompany>>;
   findCompanyById(id: string): Promise<ICompany | null | undefined>;
   updateCompany(id: string, data: ICompany): Promise<ICompany>;
+  findCompanyByEmail(email: string): Promise<ICompany | null | undefined>;
 }

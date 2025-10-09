@@ -9,7 +9,7 @@ const config: IConfig = {
     uri:
       process.env.NODE_ENV === "production"
         ? process.env.MONGO_DB_URI || "" // Use production database URI
-        : process.env.MONGO_DB_LOCAL_URI || "",
+        : process.env.MONGO_DB_URI || "",
   },
   jwtSecret: process.env.JWT_SECRET || "secret",
   mailerAppPassword: process.env.GMAIL_APP_PASSWORD || "",

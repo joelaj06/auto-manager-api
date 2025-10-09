@@ -19,6 +19,7 @@ const companySchema: Schema = new Schema(
     phone: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     website: { type: String, required: false },
+    motto: { type: String, required: false },
     registrationNumber: { type: String, required: false },
     taxIdentificationNumber: { type: String, required: false },
     companyType: { type: String, required: false },
@@ -98,6 +99,7 @@ export const CompanyMapper = {
       subscriptionPlan: payload.subscriptionPlan,
       createdBy: new mongoose.SchemaTypes.ObjectId(payload.createdBy ?? ""), // Ensure createdBy is converted to ObjectId
       address: CompanyMapper.toAddressDto(payload.address ?? {}),
+      motto: payload.motto,
     };
   },
 
@@ -151,7 +153,8 @@ export const CompanyMapper = {
       model.createdAt,
       model.updatedAt,
       model.createdBy?.toString(), // Convert ObjectId to string
-      CompanyMapper.toAddressEntity(model.address)
+      CompanyMapper.toAddressEntity(model.address),
+      model.motto
     );
   },
 

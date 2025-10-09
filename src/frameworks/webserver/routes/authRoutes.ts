@@ -1,6 +1,10 @@
 import express from "express";
 import { AuthController } from "../../../adapters/controllers/auth_controller/AuthController";
-import { AuthInteractorImpl } from "../../../application/interactors/index";
+import {
+  AuthInteractorImpl,
+  IRoleInteractor,
+  RoleInteractorImpl,
+} from "../../../application/interactors/index";
 
 import { Container } from "inversify";
 import { IAuthRepository } from "../../database/mongodb/repositories/auth/IAuthRepository";
@@ -11,6 +15,8 @@ import { AuthServiceImpl, MailerImpl } from "../../services/index";
 import {
   UserRepositoryImpl,
   AuthRepositoryImpl,
+  IRoleRepository,
+  RoleRepositoryImpl,
 } from "../../database/mongodb/repositories/index";
 import { IAuthInteractor } from "../../../application/interactors/auth/IAuthInteractor";
 import { IUserRepository } from "../../database/mongodb/repositories/user/IUserRepository";
@@ -32,6 +38,9 @@ container
   .bind<AuthController>(INTERFACE_TYPE.AuthController)
   .to(AuthController);
 
+container
+  .bind<IRoleRepository>(INTERFACE_TYPE.RoleRepositoryImpl)
+  .to(RoleRepositoryImpl);
 container
   .bind<IUserRepository>(INTERFACE_TYPE.UserRepositoryImpl)
   .to(UserRepositoryImpl);

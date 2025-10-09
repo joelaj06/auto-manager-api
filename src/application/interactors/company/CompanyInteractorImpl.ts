@@ -17,6 +17,7 @@ import {
   NotFoundError,
   UnprocessableEntityError,
 } from "../../../error_handler";
+import { ConflictError } from "../../../error_handler/ConflictError";
 
 @injectable()
 export class CompanyInteractorImpl implements ICompanyInteractor {
@@ -35,6 +36,7 @@ export class CompanyInteractorImpl implements ICompanyInteractor {
     this.bucket = bucket;
   }
   async updateCompany(id: string, data: ICompany): Promise<ICompany> {
+    console.log(data);
     if (!id) throw new UnprocessableEntityError("Company id is required");
     const company = await this.repository.findCompanyById(id);
     if (!company) throw new NotFoundError("Company not found");
@@ -83,6 +85,13 @@ export class CompanyInteractorImpl implements ICompanyInteractor {
     } else {
       body = { ...body, logoUrl: "" };
     }
+
+    //check if company email already exists
+    const existingCompany = await this.repository.findCompanyByEmail(
+      data.email!
+    );
+    if (existingCompany)
+      throw new ConflictError("Company email already exists");
 
     const company = await this.repository.addCompay(body);
     if (!company) throw new BadRequestError("Error while adding company");

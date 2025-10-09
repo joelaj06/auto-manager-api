@@ -7,6 +7,23 @@ import { BadRequestError, NotFoundError } from "../../../../../error_handler";
 
 @injectable()
 export class RoleRepositoryImpl implements IRoleRepository {
+  async findRoleByName(name: string): Promise<IRole | null | undefined> {
+    //make it case insensitive
+
+    try {
+      return Role.findOne({
+        name: { $regex: new RegExp(`^${name}.*`, "i") },
+      }).then((role) => {
+        if (role) {
+          return RoleMapper.toEntity(role);
+        } else {
+          return null;
+        }
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
   async getARole(id: string): Promise<IRole | null | undefined> {
     try {
       const role = await Role.findById(id);

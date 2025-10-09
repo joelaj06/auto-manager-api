@@ -11,6 +11,17 @@ import { PaginatedResponse, RequestQuery } from "../../../../../entities";
 
 @injectable()
 export class CompanyRepositoryImpl implements ICompanyRepository {
+  async findCompanyByEmail(
+    email: string
+  ): Promise<ICompany | null | undefined> {
+    try {
+      const company = await Company.findOne({ email });
+      return company ? CompanyMapper.toEntity(company) : null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   async updateCompany(id: string, data: ICompany): Promise<ICompany> {
     try {
       const company = await Company.findById(id);
@@ -25,14 +36,16 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
       throw error;
     }
   }
+
   async findCompanyById(id: string): Promise<ICompany | null | undefined> {
-    const company = await Company.findById(id);
-    if (company) {
-      return CompanyMapper.toEntity(company);
-    } else {
-      return null;
+    try {
+      const company = await Company.findById(id);
+      return company ? CompanyMapper.toEntity(company) : null;
+    } catch (error) {
+      throw error;
     }
   }
+
   async findAllCompanies(
     query: RequestQuery
   ): Promise<PaginatedResponse<ICompany>> {
@@ -83,6 +96,7 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
       throw error;
     }
   }
+
   async addCompay(data: ICompany): Promise<ICompany> {
     try {
       if (!data) throw new UnprocessableEntityError("Company data is required");

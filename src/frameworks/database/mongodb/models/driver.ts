@@ -4,6 +4,10 @@ import { IDriver } from "../../../../entities";
 // Define the Driver Schema
 const driverSchema: Schema = new Schema(
   {
+    firstName: { type: String, required: true },
+    lastName: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    phone: { type: String, required: true },
     driverCode: {
       type: String,
       unique: true,
@@ -32,7 +36,7 @@ const driverSchema: Schema = new Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
     },
     vehicle: {
       type: mongoose.Schema.Types.ObjectId,
@@ -41,7 +45,7 @@ const driverSchema: Schema = new Schema(
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
     },
     salesHistory: [
       {
@@ -118,6 +122,11 @@ export const DriverMapper = {
    */
   toDtoCreation: (payload: IDriver) => {
     return {
+      driverCode: payload.driverCode,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      email: payload.email,
+      phone: payload.phone,
       licenseNumber: payload.licenseNumber,
       lisenceExpiryDate: payload.lisenceExpiryDate,
       status: payload.status,
@@ -169,6 +178,10 @@ export const DriverMapper = {
       model._id?.toString(),
       // Convert ObjectId to string
       model.driverCode,
+      model.firstName,
+      model.lastName,
+      model.email,
+      model.phone,
       model.licenseNumber,
       model.lisenceExpiryDate,
       model.status,

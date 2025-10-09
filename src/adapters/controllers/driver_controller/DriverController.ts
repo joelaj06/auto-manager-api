@@ -2,7 +2,7 @@ import { inject, injectable } from "inversify";
 import { IDriverInteractor } from "../../../application/interactors";
 import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
 import { NextFunction, Request, Response } from "express";
-import { RequestQuery } from "../../../entities";
+import { RequestQuery, UserRequest } from "../../../entities";
 import { BadRequestError } from "../../../error_handler";
 import { ControllerUserRequest } from "../auth_controller/IController";
 
@@ -76,6 +76,29 @@ export class DriverController {
       const driver = await this.driverInteractor.deleteDriver(id);
       if (!driver) throw new BadRequestError("Error while deleting driver");
       return res.status(HttpStatusCode.NO_CONTENT).json();
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async addDriver(
+    req: ControllerUserRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      //retrive company id from logged in user
+      if (req.user && req.user.company) {
+        req.body.company = req.user.company;
+        req.body.vehicle = req.body.vehicleId;
+      }
+      const driver = await this.driverInteractor.addDriver(req.body);
+      if (!driver) throw new BadRequestError("Error while adding driver");
+      // find driver by id and populate vehicle
+      const populatedDriver = await this.driverInteractor.getADriver(
+        driver._id!
+      );
+      return res.status(HttpStatusCode.CREATED).json(populatedDriver);
     } catch (error) {
       next(error);
     }

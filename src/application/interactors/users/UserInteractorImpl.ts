@@ -49,20 +49,14 @@ export class UserInteractorImpl implements IUserInteractor {
     const existingUser = await this.userRepository.findUserByEmail(data.email!);
     if (existingUser) throw new BadRequestError("The email already exists");
     let userData = { ...data };
-    if (data.role && (data.role as IRole).name?.toLowerCase() === "driver") {
-      userData = {
-        ...data,
-        role: "677d838c2efaa80981ccd985",
-      };
-    } else {
-      const hashedPassword = await this.authService.encriptPassword(
-        data.password!
-      );
-      userData = {
-        ...data,
-        password: hashedPassword,
-      };
-    }
+
+    const hashedPassword = await this.authService.encriptPassword(
+      data.password!
+    );
+    userData = {
+      ...data,
+      password: hashedPassword,
+    };
 
     const newUser = await this.userRepository.addUser(userData);
     if (!newUser) throw new BadRequestError("Error while adding user");
