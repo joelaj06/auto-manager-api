@@ -79,13 +79,13 @@ export class RentalRepositoryImpl implements IRentalRepository {
       const rentals = await Rental.find(searchCriteria)
         .limit(limit)
         .skip(startIndex)
-        .populate("renter", "-password")
+        .populate("renter", "-password -role")
         .populate(
           "vehicle",
           "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
         )
-        .populate("updatedBy", "-password")
-        .populate("createdBy", "-password");
+        .populate("updatedBy", "-password -role")
+        .populate("createdBy", "-password -role");
 
       const data: IRental[] = rentals.map((category) =>
         RentalMapper.toEntity(category)
@@ -127,13 +127,13 @@ export class RentalRepositoryImpl implements IRentalRepository {
   async findById(id: string): Promise<IRental | null | undefined> {
     if (!id) throw new Error("Rental id is required");
     const rental = await Rental.findById(id)
-      .populate("renter", "-password")
+      .populate("renter", "-password -role")
       .populate(
         "vehicle",
         "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
       )
-      .populate("updatedBy", "-password")
-      .populate("createdBy", "-password");
+      .populate("updatedBy", "-password -role")
+      .populate("createdBy", "-password -role");
     if (!rental) return null;
     return RentalMapper.toEntity(rental);
   }
@@ -151,8 +151,8 @@ export class RentalRepositoryImpl implements IRentalRepository {
           "vehicle",
           "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
         )
-        .populate("updatedBy", "-password")
-        .populate("createdBy", "-password");
+        .populate("updatedBy", "-password -role")
+        .populate("createdBy", "-password -role");
       return RentalMapper.toEntity(rental);
     } catch (error) {
       throw error;
@@ -166,13 +166,13 @@ export class RentalRepositoryImpl implements IRentalRepository {
       const updatedRental = await Rental.findByIdAndUpdate(id, data, {
         new: true,
       })
-        .populate("renter", "-password")
+        .populate("renter", "-password -role")
         .populate(
           "vehicle",
           "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
         )
-        .populate("updatedBy", "-password")
-        .populate("createdBy", "-password");
+        .populate("updatedBy", "-password -role")
+        .populate("createdBy", "-password -role");
 
       if (!updatedRental) throw new Error("Rental not found");
 
