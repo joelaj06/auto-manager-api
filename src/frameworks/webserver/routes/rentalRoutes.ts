@@ -1,5 +1,6 @@
 import { Container } from "inversify";
-import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
+import { Permissions } from "../../../utils/constants";
+import { INTERFACE_TYPE } from "../../../utils/constants/bindings";
 import { IAuthService } from "../../services/auth/IAuthService";
 import { AuthServiceImpl } from "../../services";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";

@@ -5,7 +5,11 @@ import {
   CompanyInteractorImpl,
   ICompanyInteractor,
 } from "../../../application/interactors";
-import { INTERFACE_TYPE, Permissions, UserPermissions } from "../../../utils";
+import {
+  INTERFACE_TYPE,
+  Permissions,
+  UserPermissions,
+} from "../../../utils/constants";
 import {
   CompanyRepositoryImpl,
   ICompanyRepository,

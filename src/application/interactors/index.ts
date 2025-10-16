@@ -10,3 +10,4 @@ export * from "./customer/index";
 export * from "./dashboard/index";
 export * from "./role/index";
 export * from "./permission/index";
+export * from "./workandpay/index";

@@ -1,5 +1,5 @@
 import { BaseError } from "./BaseError";
-import { HttpStatusCode } from "../utils";
+import { HttpStatusCode } from "../utils/constants";
 
 export class APIError extends BaseError {
   constructor(

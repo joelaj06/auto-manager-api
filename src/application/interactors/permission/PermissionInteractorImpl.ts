@@ -5,7 +5,7 @@ import {
   Permissions,
   PermissionType,
   UserPermissions,
-} from "../../../utils";
+} from "../../../utils/constants";
 import { IPermissionInteractor } from "./IPermissionInteractor";
 import { IPermissionRepository } from "../../../frameworks/database/mongodb/repositories/permission";
 import { ILogger, PermissionMapper } from "../../../frameworks";

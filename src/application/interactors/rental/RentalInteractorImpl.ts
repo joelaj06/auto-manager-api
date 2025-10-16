@@ -6,7 +6,7 @@ import {
   IRental,
   IRentalExtension,
 } from "../../../entities";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { IRentalRepository, IVehicleRepository } from "../../../frameworks";
 import Rental from "../../../frameworks/database/mongodb/models/rental";
 import { IVehicle } from "../../../entities/Vehicle";
@@ -124,11 +124,15 @@ export class RentalInteractorImpl implements IRentalInteractor {
     //check if vehicle is available
     const vehicle = await this.vehicleRepository.findById(vehicleId);
     if (!vehicle) throw new UnprocessableEntityError("Vehicle not found");
-    if (vehicle.status == "rented" || vehicle.rentalStatus == true)
-      throw new UnprocessableEntityError("Vehicle is already rented");
+    if (
+      vehicle.status == "Rented" ||
+      vehicle.status == "Sold" ||
+      vehicle.rentalStatus == true
+    )
+      throw new UnprocessableEntityError(`Vehicle has been ${vehicle.status}`);
 
     const rentedVehicle: IVehicle = {
-      status: "rented",
+      status: "Rented",
       rentalStatus: true,
     };
 

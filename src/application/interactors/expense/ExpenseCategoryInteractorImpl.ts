@@ -3,7 +3,7 @@ import { RequestQuery } from "../../../entities";
 import { IExpenseCategory } from "../../../entities/Expense";
 import { IExpenseCategoryRepository } from "../../../frameworks/database/mongodb/repositories/expense/IExpenseCategoryRepository";
 import { IExpenseCategoryInteractor } from "./IExpenseCategoryInteractor";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import {
   BadRequestError,
   NotFoundError,

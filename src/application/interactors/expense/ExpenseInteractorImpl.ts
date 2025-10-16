@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { IExpenseInteractor } from "./IExpenseInteractor";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { IExpenseRepository } from "../../../frameworks";
 import {
   IExpense,

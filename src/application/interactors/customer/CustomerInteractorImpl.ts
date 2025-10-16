@@ -2,7 +2,7 @@ import { inject, injectable } from "inversify";
 import { ICustomer, RequestQuery, PaginatedResponse } from "../../../entities";
 import { ICustomerRepository } from "../../../frameworks";
 import { ICustomerInteractor } from "./ICustomerInteractor";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import {
   BadRequestError,
   UnprocessableEntityError,

@@ -3,7 +3,7 @@ import { IRole, IUser, RequestQuery } from "../../../entities/User";
 import { UnprocessableEntityError } from "../../../error_handler/UnprocessableEntityError";
 import { IUserInteractor } from "./IUserInteractor";
 import { IUserRepository } from "../../../frameworks/database/mongodb/repositories";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { BadRequestError, NotFoundError } from "../../../error_handler";
 import { PaginatedResponse } from "../../../entities/UserResponse";
 import { IAuthService } from "../../../frameworks/services/auth/IAuthService";

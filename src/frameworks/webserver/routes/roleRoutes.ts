@@ -1,6 +1,6 @@
 import express from "express";
 import { Container } from "inversify";
-import { INTERFACE_TYPE, Permissions } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
 import { IRoleRepository, RoleRepositoryImpl } from "../../database/mongodb";
 import { IAuthService } from "../../services/auth/IAuthService";

@@ -10,18 +10,23 @@ import customerRoutes from "./customerRoutes";
 import dashboardRoutes from "./dashboardRoutes";
 import roleRoutes from "./roleRoutes";
 import permissionRoutes from "./permissionRoutes";
+import workAndPayRoutes from "./workandpayRoutes";
+import express from "express";
 
-export {
-  authRoutes,
-  userRoutes,
-  companyRoutes,
-  vehicleRoutes,
-  driverRoutes,
-  saleRoutes,
-  expenseRoutes,
-  rentalRoutes,
-  customerRoutes,
-  dashboardRoutes,
-  roleRoutes,
-  permissionRoutes,
-};
+const router = express.Router();
+
+router.use(authRoutes);
+router.use(userRoutes);
+router.use(companyRoutes);
+router.use(vehicleRoutes);
+router.use(driverRoutes);
+router.use(saleRoutes);
+router.use(expenseRoutes);
+router.use(rentalRoutes);
+router.use(customerRoutes);
+router.use(dashboardRoutes);
+router.use(roleRoutes);
+router.use(permissionRoutes);
+router.use(workAndPayRoutes);
+
+export default router;

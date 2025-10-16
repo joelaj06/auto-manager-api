@@ -5,7 +5,7 @@ import {
   IExpenseCategoryRepository,
   IExpenseRepository,
 } from "../../database/mongodb";
-import { INTERFACE_TYPE, Permissions } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
 import {
   ExpenseCategoryInteractorImpl,
   ExpenseInteractorImpl,

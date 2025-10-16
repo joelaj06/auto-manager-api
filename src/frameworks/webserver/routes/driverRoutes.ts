@@ -1,6 +1,6 @@
 import { Container } from "inversify";
 import { AuthMiddleware } from "../middleware/AuthMiddleware";
-import { INTERFACE_TYPE, Permissions } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
 import { DriverController } from "../../../adapters/controllers/driver_controller/DriverController";
 import { IAuthService } from "../../services/auth/IAuthService";
 import { AuthServiceImpl } from "../../services";

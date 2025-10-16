@@ -1,7 +1,7 @@
 import { inject, injectable } from "inversify";
 import { ICustomerInteractor } from "../../../application/interactors";
 import { NextFunction, Request, Response } from "express";
-import { INTERFACE_TYPE, HttpStatusCode } from "../../../utils";
+import { INTERFACE_TYPE, HttpStatusCode } from "../../../utils/constants";
 import { ControllerUserRequest } from "../auth_controller/IController";
 import { BadRequestError } from "../../../error_handler";
 import { RequestQuery } from "../../../entities";

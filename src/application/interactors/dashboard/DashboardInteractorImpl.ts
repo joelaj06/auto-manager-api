@@ -6,7 +6,7 @@ import {
   DashboardRequestQery,
   IMonthlySales,
 } from "../../../entities";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { IDashboardRepository, ISalesRepository } from "../../../frameworks";
 import { BadRequestError } from "../../../error_handler";
 

@@ -1,5 +1,5 @@
 import { injectable, inject } from "inversify";
-import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
+import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
 import { PermissionRepositoryImpl } from "../../../frameworks/database/mongodb/repositories/permission/PermissionRepositoryImpl";
 import { IPermissionInteractor } from "../../../application/interactors";
 import { PermissionInteractorImpl } from "../../../application/interactors/permission/PermissionInteractorImpl";

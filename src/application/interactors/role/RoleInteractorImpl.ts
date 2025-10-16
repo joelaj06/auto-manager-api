@@ -3,7 +3,7 @@ import { RequestQuery, IRole } from "../../../entities";
 import { IRoleInteractor } from "./IRoleInteractor";
 import { IRoleRepository } from "../../../frameworks";
 import { RoleRepositoryImpl } from "../../../frameworks/database/mongodb/repositories/role/RoleRepositoryImpl";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { BadRequestError, NotFoundError } from "../../../error_handler";
 
 @injectable()

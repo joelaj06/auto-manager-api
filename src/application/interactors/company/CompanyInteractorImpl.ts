@@ -10,7 +10,7 @@ import {
   IStorageBucket,
   IUserRepository,
 } from "../../../frameworks";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { ICompanyInteractor } from "./ICompanyInteractor";
 import {
   BadRequestError,

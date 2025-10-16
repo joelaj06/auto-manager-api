@@ -4,7 +4,7 @@ import { IRole, IUser } from "../../../entities/User";
 import { UnauthorizedError } from "../../../error_handler/UnauthorizedError";
 import { inject, injectable } from "inversify";
 import { IAuthService } from "../../services/auth/IAuthService";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 
 interface UserRequest extends Request {
   user?: IUser; // You can replace `any` with the actual user type if known

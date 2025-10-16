@@ -8,7 +8,7 @@ import {
 
 import { Container } from "inversify";
 import { IAuthRepository } from "../../database/mongodb/repositories/auth/IAuthRepository";
-import { INTERFACE_TYPE } from "../../../utils/constants";
+import { INTERFACE_TYPE } from "../../../utils/constants/bindings";
 
 import { AuthServiceImpl, MailerImpl } from "../../services/index";
 

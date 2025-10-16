@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
+import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
 import { IRentalInteractor } from "../../../application/interactors";
 import { ControllerUserRequest } from "../auth_controller/IController";
 import { NextFunction, Request, Response } from "express";

@@ -1,5 +1,5 @@
 import { inject, injectable } from "inversify";
-import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
+import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
 import { IVehicleInteractor } from "../../../application/interactors";
 import { IVehicleRepository } from "../../../frameworks";
 import { RequestQuery } from "../../../entities";

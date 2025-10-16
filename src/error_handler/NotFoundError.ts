@@ -1,4 +1,4 @@
-import { HttpStatusCode } from "../utils";
+import { HttpStatusCode } from "../utils/constants";
 import { BaseError } from "./BaseError";
 
 export class NotFoundError extends BaseError {

@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { IDashboardInteractor } from "../../../application/interactors";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { NextFunction, Request, Response } from "express";
 import { BadRequestError } from "../../../error_handler";
 

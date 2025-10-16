@@ -4,7 +4,7 @@ import {
   IVehicleRepository,
   VehicleRepositoryImpl,
 } from "../../database/mongodb";
-import { INTERFACE_TYPE, Permissions } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
 import {
   IVehicleInteractor,
   VehicleInteractorImpl,

@@ -4,7 +4,7 @@ import {
   ISalesRepository,
   SalesRepositoryImpl,
 } from "../../database/mongodb/repositories/sales";
-import { INTERFACE_TYPE, Permissions } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
 import {
   IAuthInteractor,
   ISalesInteractor,

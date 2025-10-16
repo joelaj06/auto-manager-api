@@ -3,7 +3,8 @@ import { NextFunction, Request, Response } from "express";
 import { inject, injectable } from "inversify";
 import { ILogger } from "../../logging";
 import { BaseError } from "../../../error_handler/BaseError";
-import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
+import { INTERFACE_TYPE } from "../../../utils/constants/bindings";
+import { HttpStatusCode } from "../../../utils/constants/enums";
 
 @injectable()
 export class ErrorMiddleware {

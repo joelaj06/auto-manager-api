@@ -1,6 +1,6 @@
 import { Container } from "inversify";
 import { IUserRepository, UserRepositoryImpl } from "../../database/mongodb";
-import { INTERFACE_TYPE, Permissions } from "../../../utils";
+import { INTERFACE_TYPE, Permissions } from "../../../utils/constants";
 import { UserController } from "../../../adapters/controllers/users_controller/UserController";
 import express from "express";
 import { IAuthService } from "../../services/auth/IAuthService";

@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { IDriverRepository } from "../../../frameworks/database/mongodb/repositories/driver/IDriverRepository";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { IDriverInteractor } from "./IDriverInteractor";
 import { RequestQuery, PaginatedResponse, IDriver } from "../../../entities";
 import {

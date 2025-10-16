@@ -2,7 +2,7 @@ import { inject, injectable } from "inversify";
 import { ISalesInteractor } from "./ISalesInteractor";
 import { PaginatedResponse, ISale, SalesRequestQuery } from "../../../entities";
 import { ISalesRepository } from "../../../frameworks/database/mongodb/repositories/sales";
-import { INTERFACE_TYPE } from "../../../utils/constants";
+import { INTERFACE_TYPE } from "../../../utils/constants/bindings";
 
 import {
   BadRequestError,

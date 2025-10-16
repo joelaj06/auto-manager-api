@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { IUserInteractor } from "../../../application/interactors/users/IUserInteractor";
-import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
+import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
 import { NextFunction, Request, Response } from "express";
 import { IUser, RequestQuery } from "../../../entities/User";
 import { ControllerUserRequest } from "../auth_controller/IController";

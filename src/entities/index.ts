@@ -10,3 +10,5 @@ export * from "./Rental";
 export * from "./Customer";
 export * from "./Dashboard";
 export * from "./Permission";
+export * from "./WorkAndPay";
+export * from "./PaymentRecord";

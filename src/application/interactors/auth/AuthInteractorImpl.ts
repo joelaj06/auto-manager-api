@@ -4,7 +4,7 @@ import { IAuthRepository } from "../../../frameworks/database/mongodb/repositori
 import bcrypt from "bcrypt";
 import { IAuthService } from "../../../frameworks/services/auth/IAuthService";
 import { inject, injectable } from "inversify";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { IMailer } from "../../../frameworks/services/mailer/IMailer";
 import {
   UserOTPResponse,

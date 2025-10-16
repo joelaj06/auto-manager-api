@@ -7,7 +7,7 @@ import {
 } from "../../../error_handler";
 import { IVehicleInteractor } from "./IVehicleInteractor";
 import { IVehicleRepository } from "../../../frameworks/database/mongodb/repositories/vehicle/IVehicleRepository";
-import { INTERFACE_TYPE } from "../../../utils";
+import { INTERFACE_TYPE } from "../../../utils/constants";
 import { IStorageBucket } from "../../../frameworks/services/bucket/IStorageBucket";
 
 @injectable()

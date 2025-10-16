@@ -1,6 +1,6 @@
 import { inject, injectable } from "inversify";
 import { IExpenseInteractor } from "../../../application/interactors/expense/IExpenseInteractor";
-import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils";
+import { HttpStatusCode, INTERFACE_TYPE } from "../../../utils/constants";
 import { NextFunction, Request, Response } from "express";
 import { ControllerUserRequest } from "../auth_controller/IController";
 import { ExpenseRequestQuery } from "../../../entities";

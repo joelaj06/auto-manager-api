@@ -9,7 +9,7 @@ export class IVehicle {
     public readonly color?: string,
     public readonly vin?: string,
     public readonly ownerId?: string,
-    public readonly status?: string,
+    public readonly status?: TVehicleStatus,
     public readonly currentDriverId?: string,
     public readonly salesHistory?: SalesHistory[],
     public readonly maintenanceRecords?: MaintenanceRecord[],
@@ -22,6 +22,15 @@ export class IVehicle {
     public readonly image?: string
   ) {}
 }
+
+export type TVehicleStatus =
+  | "Available"
+  | "In Use"
+  | "Under Maintenance"
+  | "Retired"
+  | "Sold"
+  | "Active"
+  | "Rented";
 
 export class SalesHistory {
   constructor(
