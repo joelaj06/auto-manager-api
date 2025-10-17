@@ -9,6 +9,8 @@ import { createApp, container } from "./frameworks";
 
 const app = createApp();
 
+export default app; // Export app for testing purposes and vercel deployment
+
 // Initialize external storage services
 const bucket = container.get<IStorageBucket>(INTERFACE_TYPE.StorageBucketImpl);
 bucket.configureStorageBucket();
