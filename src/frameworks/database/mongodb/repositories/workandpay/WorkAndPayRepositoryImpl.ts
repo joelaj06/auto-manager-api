@@ -67,7 +67,7 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
 
       // Create payment record
       const newPayment = new PaymentRecord({
-        agreementId,
+        workAndPayAgreementId: agreementId,
         amount: payment.amount,
         paymentDate: payment.paymentDate ?? new Date(),
         method: payment.method,
@@ -114,7 +114,9 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
   ): Promise<IPaymentRecord[]> {
     try {
       if (!agreementId) throw new Error("Agreement id is required");
-      const payments = await PaymentRecord.find({ agreementId }).sort({
+      const payments = await PaymentRecord.find({
+        workAndPayAgreementId: agreementId,
+      }).sort({
         paymentDate: -1,
       });
       return payments.map((p) => PaymentRecordMapper.toEntity(p));

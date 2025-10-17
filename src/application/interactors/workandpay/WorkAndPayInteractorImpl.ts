@@ -10,6 +10,7 @@ import {
   IWorkAndPayRepository,
 } from "../../../frameworks/database/mongodb/repositories";
 import { INTERFACE_TYPE } from "../../../utils/constants/bindings";
+import { BadRequestError, NotFoundError } from "../../../error_handler";
 
 @injectable()
 export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
@@ -22,13 +23,23 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
     this.workAndPayRepo = workAndPayRepo;
     this.vehicleRepo = vehicleRepo;
   }
+  async getPaymentsByAgreementId(
+    agreementId: string
+  ): Promise<IPaymentRecord[]> {
+    const agreement = this.workAndPayRepo.getAgreementById(agreementId);
+    if (!agreement) {
+      throw new NotFoundError("Agreement not found.");
+    }
+    return await this.workAndPayRepo.getPaymentsByAgreementId(agreementId);
+  }
   calculateInstallment(
     originalPrice: number,
     multiplier: number,
     durationYears: number,
+    finalPrice: number,
     frequency: TWorkAndPayFrequency
   ): { totalSalePrice: number; installmentAmount: number } {
-    const totalSalePrice = originalPrice * multiplier;
+    const totalSalePrice = finalPrice || originalPrice * multiplier;
     const totalPeriods =
       frequency === "weekly" ? durationYears * 52 : durationYears * 12;
 
@@ -47,6 +58,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
     multiplier: number;
     durationYears: number;
     frequency: TWorkAndPayFrequency;
+    finalPrice: number;
   }): Promise<IWorkAndPayAgreement> {
     if (!data.ownerId || !data.driverId || !data.vehicleId) {
       throw new Error("Missing essential IDs for agreement initiation.");
@@ -56,11 +68,12 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
       data.originalPrice,
       data.multiplier,
       data.durationYears,
+      data.finalPrice,
       data.frequency
     );
 
     // Prepare the initial agreement entity
-    const newAgreement: Omit<IWorkAndPayAgreement, "id"> = {
+    const newAgreement: Omit<IWorkAndPayAgreement, "id" | "agreementId"> = {
       ownerId: data.ownerId,
       driverId: data.driverId,
       vehicleId: data.vehicleId,
@@ -69,7 +82,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
       installmentAmount: installmentAmount,
       paymentFrequency: data.frequency,
       durationYears: data.durationYears,
-
+      createdBy: data.ownerId,
       amountPaid: 0,
       balanceDue: totalSalePrice,
       installmentsPaid: 0,
@@ -97,7 +110,26 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
       throw new Error("Payment amount must be positive.");
     }
 
-    const payment: Omit<IPaymentRecord, "id" | "agreementId"> = {
+    const agreement = await this.workAndPayRepo.getAgreementById(agreementId);
+    if (!agreement) {
+      throw new NotFoundError("Agreement not found.");
+    }
+
+    if (agreement.status === "Completed") {
+      throw new BadRequestError("Agreement is already completed.");
+    }
+
+    if (amount > agreement.balanceDue) {
+      throw new BadRequestError("Payment amount exceeds balance due.");
+    }
+
+    if (amount < agreement.installmentAmount) {
+      throw new BadRequestError(
+        `Payment amount should not be less than the installment amount. (${agreement.installmentAmount})`
+      );
+    }
+
+    const payment: Omit<IPaymentRecord, "id" | "agreementId" | "paymentId"> = {
       amount: amount,
       paymentDate: new Date().toISOString(),
       recordedBy: recordedByUserId,

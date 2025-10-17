@@ -5,6 +5,7 @@
 export class IPaymentRecord {
   constructor(
     public readonly id: string,
+    public readonly paymentId: string,
     public readonly workAndPayAgreementId: string,
     public readonly amount: number,
     public readonly paymentDate: string,

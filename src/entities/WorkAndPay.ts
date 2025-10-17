@@ -4,6 +4,7 @@
 export class IWorkAndPayAgreement {
   constructor(
     public readonly id: string,
+    public readonly agreementId: string,
     public readonly ownerId: string,
     public readonly driverId: string,
     public readonly vehicleId: string,
@@ -18,7 +19,8 @@ export class IWorkAndPayAgreement {
     public readonly installmentsRemaining: number,
     public readonly status: TWorkAndPayStatus,
     public readonly startDate: string,
-    public readonly completionDate: string | null
+    public readonly completionDate: string | null,
+    public createdBy: string
   ) {}
 }
 

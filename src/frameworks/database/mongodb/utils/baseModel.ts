@@ -11,7 +11,8 @@ import mongoose, { Schema, Model } from "mongoose";
 export const withBaseSchema = (
   schema: Schema,
   options: {
-    prefix: string; // e.g., "VE" or "WA"
+    prefix: string;
+    idFieldName?: string;
   }
 ) => {
   // Standard fields
@@ -25,7 +26,7 @@ export const withBaseSchema = (
   // Auto-increment ID middleware
   schema.pre("save", async function (next) {
     const doc = this as any;
-    const idField = `${options.prefix.toLowerCase()}Id`;
+    const idField = `${options.idFieldName || "code"}`;
 
     if (!doc[idField]) {
       const Model = this.constructor as Model<any>;

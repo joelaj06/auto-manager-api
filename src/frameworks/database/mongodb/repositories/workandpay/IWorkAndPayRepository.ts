@@ -6,7 +6,7 @@ export interface IWorkAndPayRepository {
    * Create a new Work & Pay agreement
    */
   createAgreement(
-    agreement: Omit<IWorkAndPayAgreement, "id">
+    agreement: Omit<IWorkAndPayAgreement, "id" | "agreementId">
   ): Promise<IWorkAndPayAgreement>;
 
   /**
@@ -19,7 +19,7 @@ export interface IWorkAndPayRepository {
    */
   recordPayment(
     agreementId: string,
-    payment: Omit<IPaymentRecord, "id" | "agreementId">
+    payment: Omit<IPaymentRecord, "id" | "agreementId" | "paymentId">
   ): Promise<{
     updatedAgreement: IWorkAndPayAgreement;
     paymentRecord: IPaymentRecord;

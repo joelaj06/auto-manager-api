@@ -4,8 +4,7 @@ import config from "./config/config";
 import connection from "./frameworks/database/mongodb/connection";
 import serverConfig from "./frameworks/webserver/server";
 import { INTERFACE_TYPE } from "./utils/constants";
-import { IStorageBucket } from "./frameworks/services/bucket/IStorageBucket";
-import { createApp, container } from "./frameworks";
+import { createApp, container, IStorageBucket } from "./frameworks";
 
 const app = createApp();
 

@@ -19,6 +19,15 @@ export class WorkAndPayController {
   /**
    * @route POST /api/work-pay/agreement
    * @description Initiates a new Work and Pay agreement.
+   * @payload ` {
+   *   driverId: string,
+   *   vehicleId: string,
+   *   originalPrice: number,
+   *   multiplier: number, // Should be 2 (or dynamic based on policy)
+   *   durationYears: number,
+   *   finalPrice: number,
+   *   frequency: 'weekly' | 'monthly'
+   * }`
    */
   public async initiateAgreement(
     req: ControllerUserRequest,
@@ -34,6 +43,7 @@ export class WorkAndPayController {
       originalPrice,
       multiplier, // Should be 2 (or dynamic based on policy)
       durationYears,
+      finalPrice,
       frequency, // 'weekly' or 'monthly'
     } = req.body;
 
@@ -43,6 +53,7 @@ export class WorkAndPayController {
         originalPrice,
         multiplier,
         durationYears,
+        finalPrice,
         frequency
       );
 
@@ -55,6 +66,7 @@ export class WorkAndPayController {
         multiplier,
         durationYears,
         frequency,
+        finalPrice,
       });
 
       res.status(HttpStatusCode.CREATED).json({
@@ -70,6 +82,12 @@ export class WorkAndPayController {
   /**
    *@route POST /api/work-pay/payment
    *@description Records an installment payment.
+   *@payload `{
+   *   agreementId: string,
+   *   amount: number,
+   *   method: 'cash' | 'card'
+   * }
+   * `
    */
   public async recordPayment(
     req: ControllerUserRequest,
@@ -101,6 +119,7 @@ export class WorkAndPayController {
   /**
    * @route GET /api/work-pay/agreement/:id
    * @description Retrieves agreement details.
+   * @param id Agreement ID
    */
   public async getAgreement(
     req: Request,
@@ -120,6 +139,28 @@ export class WorkAndPayController {
       }
 
       res.status(HttpStatusCode.OK).json({ data: agreement });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * @route GET /api/work-pay/agreement/:id/payments
+   * @description Retrieves all payment records for a specific agreement.
+   * @param id Agreement ID
+   */
+  public async getPaymentsByAgreement(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    const agreementId = req.params.id;
+
+    try {
+      const payments = await this.interactor.getPaymentsByAgreementId(
+        agreementId
+      );
+      res.status(HttpStatusCode.OK).json(payments);
     } catch (error) {
       next(error);
     }

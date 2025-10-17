@@ -26,7 +26,7 @@ const paymentSchema = new Schema<PaymentRecordDocument>({
   method: { type: String, required: true },
 });
 
-withBaseSchema(paymentSchema, { prefix: "PR" });
+withBaseSchema(paymentSchema, { prefix: "PR", idFieldName: "paymentId" });
 
 export const PaymentRecord = mongoose.model<PaymentRecordDocument>(
   "PaymentRecord",
@@ -35,7 +35,7 @@ export const PaymentRecord = mongoose.model<PaymentRecordDocument>(
 
 export const PaymentRecordMapper = {
   toDtoCreation: (payload: IPaymentRecord) => ({
-    paymentId: payload.id, // optional
+    paymentId: payload.paymentId, // optional
     workAndPayAgreementId: new mongoose.Types.ObjectId(
       payload.workAndPayAgreementId
     ),
@@ -47,6 +47,7 @@ export const PaymentRecordMapper = {
   }),
   toEntity: (doc: any): IPaymentRecord => ({
     id: doc._id?.toString(),
+    paymentId: doc.paymentId,
     workAndPayAgreementId: doc.workAndPayAgreementId?.toString(),
     amount: doc.amount,
     paymentDate: doc.paymentDate?.toISOString?.() ?? String(doc.paymentDate),

@@ -1,3 +1,4 @@
+import { IPaymentRecord } from "../../../entities/PaymentRecord";
 import {
   IWorkAndPayAgreement,
   TWorkAndPayFrequency,
@@ -8,6 +9,7 @@ export interface IWorkAndPayInteractor {
     originalPrice: number,
     multiplier: number,
     durationYears: number,
+    finalPrice: number,
     frequency: TWorkAndPayFrequency
   ): { totalSalePrice: number; installmentAmount: number };
   initiateAgreement(data: {
@@ -17,6 +19,7 @@ export interface IWorkAndPayInteractor {
     originalPrice: number;
     multiplier: number;
     durationYears: number;
+    finalPrice: number;
     frequency: TWorkAndPayFrequency;
   }): Promise<IWorkAndPayAgreement>;
   processPayment(
@@ -28,4 +31,5 @@ export interface IWorkAndPayInteractor {
   getAgreementDetails(
     agreementId: string
   ): Promise<IWorkAndPayAgreement | null>;
+  getPaymentsByAgreementId(agreementId: string): Promise<IPaymentRecord[]>;
 }

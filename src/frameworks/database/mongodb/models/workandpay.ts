@@ -35,7 +35,7 @@ const workAndPayAgreementSchema = withBaseSchema(
     installmentsRemaining: { type: Number, required: true },
     status: {
       type: String,
-      enum: ["Active", "Completed", "Defaulted"],
+      enum: ["Active", "Completed", "Defaulted", "Cancelled", "Ongoing"],
       default: "Active",
     },
     startDate: { type: Date, required: true },
@@ -46,7 +46,7 @@ const workAndPayAgreementSchema = withBaseSchema(
       required: true,
     },
   }),
-  { prefix: "WA" }
+  { prefix: "WA", idFieldName: "agreementId" }
 );
 
 export const WorkAndPayAgreement = mongoose.model(
@@ -98,6 +98,7 @@ export const WorkAndPayAgreementMapper = {
   toEntity: (model: any): IWorkAndPayAgreement =>
     new IWorkAndPayAgreement(
       model._id?.toString(),
+      model.agreementId,
       model.ownerId?.toString(),
       model.driverId?.toString(),
       model.vehicleId?.toString(),
@@ -112,6 +113,7 @@ export const WorkAndPayAgreementMapper = {
       model.installmentsRemaining,
       model.status,
       model.startDate,
-      model.completionDate
+      model.completionDate,
+      model.createdBy?.toString()
     ),
 };
