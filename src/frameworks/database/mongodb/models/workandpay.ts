@@ -10,6 +10,12 @@ const workAndPayAgreementSchema = withBaseSchema(
       ref: "Company",
       required: true,
     },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
+
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Driver",
@@ -18,6 +24,16 @@ const workAndPayAgreementSchema = withBaseSchema(
     vehicleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vehicle",
+      required: true,
+    },
+    vehicle: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vehicle",
+      required: true,
+    },
+    driver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Driver",
       required: true,
     },
     originalVehiclePrice: { type: Number, required: true },
@@ -46,74 +62,35 @@ const workAndPayAgreementSchema = withBaseSchema(
       required: true,
     },
   }),
-  { prefix: "WA", idFieldName: "agreementId" }
+  { prefix: "WA", idFieldName: "agreementId" },
 );
 
 export const WorkAndPayAgreement = mongoose.model(
   "WorkAndPayAgreement",
-  workAndPayAgreementSchema
+  workAndPayAgreementSchema,
 );
 
 // ======================================================
 // 🔹 Mapper Utility
 // ======================================================
 export const WorkAndPayAgreementMapper = {
-  toDtoCreation: (payload: IWorkAndPayAgreement) => ({
-    agreementId: payload.id,
-    ownerId: new mongoose.SchemaTypes.ObjectId(payload.ownerId),
-    driverId: new mongoose.SchemaTypes.ObjectId(payload.driverId),
-    vehicleId: new mongoose.SchemaTypes.ObjectId(payload.vehicleId),
-    originalVehiclePrice: payload.originalVehiclePrice,
-    totalSalePrice: payload.totalSalePrice,
-    installmentAmount: payload.installmentAmount,
-    paymentFrequency: payload.paymentFrequency,
-    durationYears: payload.durationYears,
-    amountPaid: payload.amountPaid,
-    balanceDue: payload.balanceDue,
-    installmentsPaid: payload.installmentsPaid,
-    installmentsRemaining: payload.installmentsRemaining,
-    status: payload.status,
-    startDate: payload.startDate,
-    completionDate: payload.completionDate,
-    createdBy: new mongoose.SchemaTypes.ObjectId(payload.ownerId),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }),
+  toDtoCreation: (payload: any) => {
+    const dto: Record<string, any> = {};
+    Object.keys(workAndPayAgreementSchema.obj).forEach((key) => {
+      dto[key] = payload[key];
+    });
+    return dto;
+  },
+  toEntity: (doc: any) => {
+    const entity: Record<string, any> = {};
+    Object.keys(workAndPayAgreementSchema.obj).forEach((key) => {
+      entity[key] = doc[key];
+    });
+    entity._id = doc._id?.toString();
 
-  toQuery: (query: Partial<IWorkAndPayAgreement>) => ({
-    ...(query.id && { agreementId: query.id }),
-    ...(query.ownerId && {
-      ownerId: new mongoose.SchemaTypes.ObjectId(query.ownerId),
-    }),
-    ...(query.driverId && {
-      driverId: new mongoose.SchemaTypes.ObjectId(query.driverId),
-    }),
-    ...(query.vehicleId && {
-      vehicleId: new mongoose.SchemaTypes.ObjectId(query.vehicleId),
-    }),
-    ...(query.status && { status: query.status }),
-    ...(query.paymentFrequency && { paymentFrequency: query.paymentFrequency }),
-  }),
-
-  toEntity: (model: any): IWorkAndPayAgreement =>
-    new IWorkAndPayAgreement(
-      model._id?.toString(),
-      model.agreementId,
-      model.ownerId?.toString(),
-      model.driverId?.toString(),
-      model.vehicleId?.toString(),
-      model.originalVehiclePrice,
-      model.totalSalePrice,
-      model.installmentAmount,
-      model.paymentFrequency,
-      model.durationYears,
-      model.amountPaid,
-      model.balanceDue,
-      model.installmentsPaid,
-      model.installmentsRemaining,
-      model.status,
-      model.startDate,
-      model.completionDate,
-      model.createdBy?.toString()
-    ),
+    // ✅ explicitly map timestamps
+    if (doc.createdAt) entity.createdAt = doc.createdAt;
+    if (doc.updatedAt) entity.updatedAt = doc.updatedAt;
+    return entity as IWorkAndPayAgreement;
+  },
 };

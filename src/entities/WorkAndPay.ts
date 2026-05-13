@@ -1,3 +1,8 @@
+import { ICompany } from "./Company";
+import { IDriver } from "./Driver";
+import { IUser } from "./User";
+import { IVehicle } from "./Vehicle";
+
 /**
  * Represents a single Work and Pay agreement between the owner and a driver.
  */
@@ -20,7 +25,10 @@ export class IWorkAndPayAgreement {
     public readonly status: TWorkAndPayStatus,
     public readonly startDate: string,
     public readonly completionDate: string | null,
-    public createdBy: string
+    public createdBy: string,
+    public owner?: ICompany | string,
+    public driver?: IDriver | string,
+    public vehicle?: IVehicle | string,
   ) {}
 }
 
