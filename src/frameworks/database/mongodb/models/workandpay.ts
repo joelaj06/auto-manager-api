@@ -25,11 +25,13 @@ const workAndPayAgreementSchema = withBaseSchema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vehicle",
       required: true,
+      unique: true,
     },
     vehicle: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vehicle",
       required: true,
+      unique: true,
     },
     driver: {
       type: mongoose.Schema.Types.ObjectId,

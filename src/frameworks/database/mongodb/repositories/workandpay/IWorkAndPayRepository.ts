@@ -3,10 +3,14 @@ import { IPaymentRecord } from "../../../../../entities/PaymentRecord";
 
 export interface IWorkAndPayRepository {
   /**
+   * Get agreements by driver ID
+   */
+  getAgreementsByDriverId(driverId: string): Promise<IWorkAndPayAgreement>;
+  /**
    * Create a new Work & Pay agreement
    */
   createAgreement(
-    agreement: Omit<IWorkAndPayAgreement, "id" | "agreementId">
+    agreement: Omit<IWorkAndPayAgreement, "id" | "agreementId">,
   ): Promise<IWorkAndPayAgreement>;
 
   /**
@@ -19,7 +23,7 @@ export interface IWorkAndPayRepository {
    */
   recordPayment(
     agreementId: string,
-    payment: Omit<IPaymentRecord, "id" | "agreementId" | "paymentId">
+    payment: Omit<IPaymentRecord, "id" | "agreementId" | "paymentId">,
   ): Promise<{
     updatedAgreement: IWorkAndPayAgreement;
     paymentRecord: IPaymentRecord;
