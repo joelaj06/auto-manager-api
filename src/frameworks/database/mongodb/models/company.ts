@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 import { IAddress, ICompany } from "../../../../entities/Company";
 
 // Address Schema
@@ -47,17 +47,20 @@ const companySchema: Schema = new Schema(
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt fields
-  }
+  },
 );
 
 // Pre-save hook to generate companyCode
-companySchema.pre("save", async function (next) {
+companySchema.pre("save", async function (next: any) {
   const company = this as ICompany;
 
   if (!company.companyCode) {
-    const lastCompany = await mongoose
-      .model("Company")
-      .findOne({}, {}, { sort: { createdAt: -1 } });
+    const CompanyModel = this.constructor as Model<any>;
+    const lastCompany = await CompanyModel.findOne(
+      {},
+      {},
+      { sort: { createdAt: -1 } },
+    );
 
     if (lastCompany && lastCompany.companyCode) {
       const lastCompanyCode = parseInt(lastCompany.companyCode.split("-")[1]);
@@ -72,7 +75,20 @@ companySchema.pre("save", async function (next) {
 });
 
 // Export Company Model
-const Company = mongoose.model("Company", companySchema);
+export const createCompanyModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Company";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, companySchema);
+};
+
+const Company = createCompanyModel();
 export default Company;
 
 export const CompanyMapper = {
@@ -154,7 +170,7 @@ export const CompanyMapper = {
       model.updatedAt,
       model.createdBy?.toString(), // Convert ObjectId to string
       CompanyMapper.toAddressEntity(model.address),
-      model.motto
+      model.motto,
     );
   },
 
@@ -181,7 +197,7 @@ export const CompanyMapper = {
       model.city,
       model.state,
       model.postalCode,
-      model.country
+      model.country,
     );
   },
 };

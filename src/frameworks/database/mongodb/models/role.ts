@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Model } from "mongoose";
 import { IRole } from "../../../../entities/User";
 
 const roleSchema = new mongoose.Schema(
@@ -22,10 +22,23 @@ const roleSchema = new mongoose.Schema(
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-const Role = mongoose.model("Role", roleSchema);
+export const createRoleModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Role";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, roleSchema);
+};
+
+const Role = createRoleModel();
 export default Role;
 
 //create role mapper
@@ -36,7 +49,7 @@ export const RoleMapper = {
       model.name,
       model.description,
       model.companyId.toString(), // Convert ObjectId to string
-      model.permissions
+      model.permissions,
     );
   },
 };

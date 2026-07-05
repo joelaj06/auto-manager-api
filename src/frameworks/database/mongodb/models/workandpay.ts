@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { withBaseSchema } from "../utils/baseModel";
 import { IWorkAndPayAgreement } from "../../../../entities/WorkAndPay";
 
@@ -67,10 +67,20 @@ const workAndPayAgreementSchema = withBaseSchema(
   { prefix: "WA", idFieldName: "agreementId" },
 );
 
-export const WorkAndPayAgreement = mongoose.model(
-  "WorkAndPayAgreement",
-  workAndPayAgreementSchema,
-);
+export const createWorkAndPayAgreementModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "WorkAndPayAgreement";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, workAndPayAgreementSchema);
+};
+
+export const WorkAndPayAgreement = createWorkAndPayAgreementModel();
 
 // ======================================================
 // 🔹 Mapper Utility

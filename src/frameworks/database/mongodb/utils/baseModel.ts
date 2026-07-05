@@ -24,7 +24,7 @@ export const withBaseSchema = (
   });
 
   // Auto-increment ID middleware
-  schema.pre("save", async function (next) {
+  schema.pre("save", async function (next: any) {
     const doc = this as any;
     const idField = `${options.idFieldName || "code"}`;
 
@@ -51,7 +51,7 @@ export const withBaseSchema = (
 
   schema.pre("find", softDeleteFilter);
   schema.pre("countDocuments", softDeleteFilter);
-  schema.pre("aggregate", function (next) {
+  schema.pre("aggregate", function (next: any) {
     if (this.pipeline) {
       this.pipeline().unshift({ $match: { isDeleted: { $ne: true } } });
     }

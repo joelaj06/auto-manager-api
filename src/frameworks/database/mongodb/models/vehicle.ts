@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, ObjectId } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { IVehicle } from "../../../../entities/Vehicle";
 
 const vehicleSchema: Schema = new Schema({
@@ -101,12 +101,15 @@ const vehicleSchema: Schema = new Schema({
   deletedAt: { type: Date },
 });
 
-vehicleSchema.pre("save", async function (next) {
+vehicleSchema.pre("save", async function (next: any) {
   const vehicle = this as unknown as IVehicle;
   if (!vehicle.vehicleId) {
-    const lastVehicle = await mongoose
-      .model("Vehicle")
-      .findOne({}, {}, { sort: { createdAt: -1 } });
+    const VehicleModel = this.constructor as Model<any>;
+    const lastVehicle = await VehicleModel.findOne(
+      {},
+      {},
+      { sort: { createdAt: -1 } },
+    );
     if (lastVehicle && lastVehicle.vehicleId) {
       const lastVehicleNumber = parseInt(lastVehicle.vehicleId.split("-")[1]);
       const newVehicleNumber = (lastVehicleNumber + 1)
@@ -128,7 +131,7 @@ vehicleSchema.pre("find", function () {
 vehicleSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
-vehicleSchema.pre("aggregate", function (next) {
+vehicleSchema.pre("aggregate", function (next: any) {
   // Ensure that the current aggregation pipeline exists
   if (!this.pipeline) {
     return next();
@@ -142,7 +145,20 @@ vehicleSchema.pre("aggregate", function (next) {
   next();
 });
 
-export const Vehicle = mongoose.model("Vehicle", vehicleSchema);
+export const createVehicleModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Vehicle";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, vehicleSchema);
+};
+
+export const Vehicle = createVehicleModel();
 
 // Mapper for Vehicle
 export const VehicleMapper = {
@@ -169,7 +185,7 @@ export const VehicleMapper = {
       rentalHistory: payload.rentalHistory,
       insuranceDetails: payload.insuranceDetails,
       createdBy: new mongoose.SchemaTypes.ObjectId(
-        payload.createdBy!.toString()
+        payload.createdBy!.toString(),
       ),
       createdAt: payload.createdAt,
       updatedAt: payload.updatedAt,
@@ -194,7 +210,7 @@ export const VehicleMapper = {
       ...(query.status && { status: query.status }),
       ...(query.currentDriverId && {
         currentDriverId: new mongoose.SchemaTypes.ObjectId(
-          query.currentDriverId
+          query.currentDriverId,
         ),
       }),
       ...(query.createdBy && {
@@ -229,7 +245,7 @@ export const VehicleMapper = {
       model.createdBy,
       model.createdAt,
       model.updatedAt,
-      model.image
+      model.image,
     );
   },
 };

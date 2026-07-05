@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { ICustomer } from "../../../../entities";
 
 const customerSchema: Schema = new Schema(
@@ -47,25 +47,24 @@ const customerSchema: Schema = new Schema(
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 //customer code
-customerSchema.pre("save", async function (next) {
+customerSchema.pre("save", async function (next: any) {
   const customer = this as ICustomer;
 
   if (!customer.customerCode) {
-    const lastCustomer = await mongoose.model("Customer").findOne(
+    const CustomerModel = this.constructor as Model<any>;
+    const lastCustomer = await CustomerModel.findOne(
       {},
       {},
-      {
-        sort: { createdAt: -1 },
-      }
+      { sort: { createdAt: -1 } },
     );
 
     if (lastCustomer && lastCustomer.customerCode) {
       const lastCustomerNumber = parseInt(
-        lastCustomer.customerCode.split("-")[1]
+        lastCustomer.customerCode.split("-")[1],
       );
       const newCustomerCode = (lastCustomerNumber + 1)
         .toString()
@@ -86,7 +85,7 @@ customerSchema.pre("find", function () {
 customerSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
-customerSchema.pre("aggregate", function (next) {
+customerSchema.pre("aggregate", function (next: any) {
   // Ensure that the current aggregation pipeline exists
   if (!this.pipeline) {
     return next();
@@ -100,7 +99,20 @@ customerSchema.pre("aggregate", function (next) {
   next();
 });
 
-export const Customer = mongoose.model("Customer", customerSchema);
+export const createCustomerModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Customer";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, customerSchema);
+};
+
+export const Customer = createCustomerModel();
 
 export const CustomerMapper = {
   /**
@@ -119,7 +131,7 @@ export const CustomerMapper = {
       company: new mongoose.Types.ObjectId(payload.company as string), // Ensure company ID is an ObjectId
       dateOfBirth: payload.dateOfBirth,
       rentalHistory: payload.rentalHistory?.map(
-        (rentalId) => new mongoose.Types.ObjectId(rentalId as string)
+        (rentalId) => new mongoose.Types.ObjectId(rentalId as string),
       ),
     };
   },
@@ -166,7 +178,7 @@ export const CustomerMapper = {
       model.dateOfBirth,
       model.rentalHistory, // Reference to rental history (could be populated or IDs)
       model.createdAt,
-      model.updatedAt
+      model.updatedAt,
     );
   },
 };
