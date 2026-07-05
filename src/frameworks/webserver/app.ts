@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { INTERFACE_TYPE } from "../../utils/constants";
 import expressConfig from "./express";
-import { ErrorMiddleware } from "./middleware";
+import { ErrorMiddleware, tenantResolutionMiddleware } from "./middleware";
 import routes from "./routes";
 import { container } from "./container";
 
@@ -22,7 +22,7 @@ export const createApp = () => {
       ],
     }),
   );
-
+app.use(tenantResolutionMiddleware());
   // Routes
   app.use(routes);
 

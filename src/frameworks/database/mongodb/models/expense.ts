@@ -1,5 +1,4 @@
-import express, { Request, Response, NextFunction } from "express";
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { IExpense, IExpenseCategory } from "../../../../entities/Expense";
 
 const expenseSchema: Schema = new Schema(
@@ -59,13 +58,16 @@ const expenseSchema: Schema = new Schema(
   },
   { timestamps: true },
 );
-expenseSchema.pre("save", async function (next) {
+expenseSchema.pre("save", async function (next: any) {
   const expense = this as IExpense;
 
   if (!expense.expenseId) {
-    const lastExpense = await mongoose
-      .model("Expense")
-      .findOne({}, {}, { sort: { createdAt: -1 } });
+    const ExpenseModel = this.constructor as Model<any>;
+    const lastExpense = await ExpenseModel.findOne(
+      {},
+      {},
+      { sort: { createdAt: -1 } },
+    );
 
     if (lastExpense && lastExpense.expenseId) {
       const lastExpenseNumber = parseInt(lastExpense.expenseId.split("-")[1]);
@@ -86,7 +88,7 @@ expenseSchema.pre("find", function () {
 expenseSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
-expenseSchema.pre("aggregate", function (next) {
+expenseSchema.pre("aggregate", function (next: any) {
   // Ensure that the current aggregation pipeline exists
   if (!this.pipeline) {
     return next();
@@ -100,7 +102,20 @@ expenseSchema.pre("aggregate", function (next) {
   next();
 });
 
-const Expense = mongoose.model("Expense", expenseSchema);
+export const createExpenseModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Expense";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, expenseSchema);
+};
+
+const Expense = createExpenseModel();
 
 //expense category schema
 
@@ -125,10 +140,20 @@ const expenseCategorySchema: Schema = new Schema(
   },
 );
 
-const ExpenseCategory = mongoose.model(
-  "ExpenseCategory",
-  expenseCategorySchema,
-);
+export const createExpenseCategoryModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "ExpenseCategory";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, expenseCategorySchema);
+};
+
+const ExpenseCategory = createExpenseCategoryModel();
 export { Expense, ExpenseCategory };
 
 // Expense Mapper

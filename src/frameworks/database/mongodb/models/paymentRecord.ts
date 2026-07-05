@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Document, Model, Schema } from "mongoose";
 import { withBaseSchema } from "../utils/baseModel";
 import { IPaymentRecord } from "../../../../entities/PaymentRecord";
 
@@ -28,10 +28,20 @@ const paymentSchema = new Schema<PaymentRecordDocument>({
 
 withBaseSchema(paymentSchema, { prefix: "PR", idFieldName: "paymentId" });
 
-export const PaymentRecord = mongoose.model<PaymentRecordDocument>(
-  "PaymentRecord",
-  paymentSchema
-);
+export const createPaymentRecordModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "PaymentRecord";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, paymentSchema);
+};
+
+export const PaymentRecord = createPaymentRecordModel();
 
 export const PaymentRecordMapper = {
   toDtoCreation: (payload: IPaymentRecord) => ({

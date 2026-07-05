@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { IDriver } from "../../../../entities";
 
 // Define the Driver Schema
@@ -65,17 +65,20 @@ const driverSchema: Schema = new Schema(
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Generate a unique driver code before saving the driver
-driverSchema.pre("save", async function (next) {
+driverSchema.pre("save", async function (next: any) {
   const driver = this as IDriver;
 
   if (!driver.driverCode) {
-    const lastDriver = await mongoose
-      .model("Driver")
-      .findOne({}, {}, { sort: { createdAt: -1 } });
+    const DriverModel = this.constructor as Model<any>;
+    const lastDriver = await DriverModel.findOne(
+      {},
+      {},
+      { sort: { createdAt: -1 } },
+    );
 
     if (lastDriver && lastDriver.driverCode) {
       const lastDriverNumber = parseInt(lastDriver.driverCode.split("-")[1]);
@@ -98,7 +101,7 @@ driverSchema.pre("find", function () {
 driverSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
-driverSchema.pre("aggregate", function (next) {
+driverSchema.pre("aggregate", function (next: any) {
   // Ensure that the current aggregation pipeline exists
   if (!this.pipeline) {
     return next();
@@ -113,7 +116,20 @@ driverSchema.pre("aggregate", function (next) {
 });
 
 // Create the Driver model
-const Driver = mongoose.model("Driver", driverSchema);
+export const createDriverModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Driver";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, driverSchema);
+};
+
+const Driver = createDriverModel();
 export default Driver;
 
 export const DriverMapper = {
@@ -192,7 +208,7 @@ export const DriverMapper = {
       model.user, // Convert ObjectId to string
       model.salesHistory, // Adjust as needed to match your Driver class structure
       model.createdAt,
-      model.updatedAt
+      model.updatedAt,
     );
   },
 };

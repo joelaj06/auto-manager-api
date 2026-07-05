@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Model } from "mongoose";
 import { IUser } from "../../../../entities/User";
 
 const userSchema = new mongoose.Schema(
@@ -40,7 +40,7 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Apply the isDeleted filter
@@ -50,7 +50,7 @@ userSchema.pre("find", function () {
 userSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
-userSchema.pre("aggregate", function (next) {
+userSchema.pre("aggregate", function (next: any) {
   // Ensure that the current aggregation pipeline exists
   if (!this.pipeline) {
     return next();
@@ -64,7 +64,20 @@ userSchema.pre("aggregate", function (next) {
   next();
 });
 
-const User = mongoose.model("User", userSchema);
+export const createUserModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "User";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, userSchema);
+};
+
+const User = createUserModel();
 export default User;
 
 export const UserMapper = {
@@ -141,7 +154,7 @@ export const UserMapper = {
       model.password, // Optional field
       model.token, // Optional field
       model.deviceToken,
-      model.createdBy?.toString() // Convert ObjectId to string
+      model.createdBy?.toString(), // Convert ObjectId to string
     );
   },
 };

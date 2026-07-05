@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Model } from "mongoose";
 import { IUserOTP } from "../../../../entities/UserOTP";
 
 const userOTPSchema = new mongoose.Schema(
@@ -11,10 +11,23 @@ const userOTPSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-const UserOTP = mongoose.model("UserOTP", userOTPSchema);
+export const createUserOTPModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "UserOTP";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, userOTPSchema);
+};
+
+const UserOTP = createUserOTPModel();
 export default UserOTP;
 
 export const OTPMapper = {
@@ -55,7 +68,7 @@ export const OTPMapper = {
       model.expiresAt,
       model.user.toString(), // Convert ObjectId to string
       model.createdAt,
-      model._id?.toString() // Optional _id, converted to string
+      model._id?.toString(), // Optional _id, converted to string
     );
   },
 };

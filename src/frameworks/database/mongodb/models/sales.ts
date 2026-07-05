@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { ISale } from "../../../../entities";
 
 const salesSchema: Schema = new Schema(
@@ -63,19 +63,22 @@ const salesSchema: Schema = new Schema(
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 // Add pre-save middleware to set the saleId
 // If the saleId is not provided, generate a unique ID based on the last sale ID in the database.
 // If no previous sales exist, use a default start value.
 
-salesSchema.pre("save", async function (next) {
+salesSchema.pre("save", async function (next: any) {
   const sale = this as ISale;
 
   if (!sale.saleId) {
-    const lastSale = await mongoose
-      .model("Sale")
-      .findOne({}, {}, { sort: { createdAt: -1 } });
+    const SaleModel = this.constructor as Model<any>;
+    const lastSale = await SaleModel.findOne(
+      {},
+      {},
+      { sort: { createdAt: -1 } },
+    );
 
     if (lastSale && lastSale.saleId) {
       const lastSaleNumber = parseInt(lastSale.saleId.split("-")[1]);
@@ -96,7 +99,7 @@ salesSchema.pre("find", function () {
 salesSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
-salesSchema.pre("aggregate", function (next) {
+salesSchema.pre("aggregate", function (next: any) {
   // Ensure that the current aggregation pipeline exists
   if (!this.pipeline) {
     return next();
@@ -110,7 +113,20 @@ salesSchema.pre("aggregate", function (next) {
   next();
 });
 
-const Sale = mongoose.model("Sale", salesSchema);
+export const createSaleModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Sale";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, salesSchema);
+};
+
+const Sale = createSaleModel();
 export default Sale;
 
 export const SalesMapper = {
@@ -171,7 +187,7 @@ export const SalesMapper = {
       model.updatedAt,
       model.driver, // Convert ObjectId to string
       model.vehicle,
-      model.approvedOrRejectedBy
+      model.approvedOrRejectedBy,
     );
   },
 };

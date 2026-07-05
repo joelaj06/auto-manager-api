@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 import { IRental, IRentalExtension } from "../../../../entities";
 
 const rentalExtensionSchema: Schema = new Schema(
@@ -15,7 +15,7 @@ const rentalExtensionSchema: Schema = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const rentalSchema: Schema = new Schema(
@@ -101,18 +101,20 @@ const rentalSchema: Schema = new Schema(
     extensions: [rentalExtensionSchema],
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
-    
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-rentalSchema.pre("save", async function (next) {
+rentalSchema.pre("save", async function (next: any) {
   const rental = this as IRental;
 
   if (!rental.rentalCode) {
-    const lastRental = await mongoose
-      .model("Rental")
-      .findOne({}, {}, { sort: { createdAt: -1 } });
+    const RentalModel = this.constructor as Model<any>;
+    const lastRental = await RentalModel.findOne(
+      {},
+      {},
+      { sort: { createdAt: -1 } },
+    );
 
     if (lastRental && lastRental.rentalCode) {
       const lastRentalNumber = parseInt(lastRental.rentalCode.split("-")[1]);
@@ -133,7 +135,7 @@ rentalSchema.pre("find", function () {
 rentalSchema.pre("countDocuments", function () {
   this.where({ isDeleted: { $ne: true } });
 });
-rentalSchema.pre("aggregate", function (next) {
+rentalSchema.pre("aggregate", function (next: any) {
   // Ensure that the current aggregation pipeline exists
   if (!this.pipeline) {
     return next();
@@ -147,8 +149,20 @@ rentalSchema.pre("aggregate", function (next) {
   next();
 });
 
-const Rental = mongoose.model("Rental", rentalSchema);
+export const createRentalModel = (
+  connection: mongoose.Connection | mongoose.Mongoose = mongoose,
+): Model<any> => {
+  const modelName = "Rental";
+  const targetConnection =
+    connection instanceof mongoose.Mongoose
+      ? connection
+      : (connection as mongoose.Connection);
+  const existingModel = targetConnection.models[modelName];
+  if (existingModel) return existingModel as Model<any>;
+  return targetConnection.model(modelName, rentalSchema);
+};
 
+const Rental = createRentalModel();
 export default Rental;
 
 export const RentalMapper = {
@@ -218,7 +232,7 @@ export const RentalMapper = {
         extendedNote: extension.extendedNote,
         extendedBy: extension.extendedBy,
       })),
-      model.date
+      model.date,
     );
   },
 };

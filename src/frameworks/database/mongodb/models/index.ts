@@ -10,3 +10,4 @@ export * from "./customer";
 export * from "./role";
 export * from "./permission";
 export * from "./workandpay";
+export * from "./paymentRecord";
