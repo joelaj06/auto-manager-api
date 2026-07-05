@@ -8,6 +8,26 @@ import { WorkAndPayAgreement, WorkAndPayAgreementMapper } from "../../models";
 
 @injectable()
 export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
+  //get agreement by driver id
+  async getAgreementsByDriverId(
+    driverId: string,
+  ): Promise<IWorkAndPayAgreement> {
+    try {
+      if (!driverId) throw new Error("Driver id is required");
+      const agreements = await WorkAndPayAgreement.find({ driver: driverId })
+        .populate("vehicle")
+        .populate("owner")
+        .populate("driver");
+      if (!agreements || agreements.length === 0)
+        throw new Error("No agreements found for this driver");
+      return WorkAndPayAgreementMapper.toEntity(
+        agreements[0],
+      ) as unknown as IWorkAndPayAgreement; // Assuming one agreement per driver for simplicity
+    } catch (error) {
+      throw error;
+    }
+  }
+
   /**
    * Create a new Work & Pay agreement
    */
@@ -17,8 +37,15 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
     try {
       if (!agreement) throw new Error("Agreement data is required");
       const agreementData = this.assignReferences(agreement);
-      console.log("Creating agreement with data:", agreementData);
-     // return agreementData as IWorkAndPayAgreement;
+      //check if agreement already exists for the same driver and vehicle
+      const existingAgreement = await WorkAndPayAgreement.findOne({
+        driver: agreementData.driver,
+        vehicle: agreementData.vehicle,
+      });
+      if (existingAgreement) {
+        throw new Error("Agreement already exists for this driver and vehicle");
+      }
+      // return agreementData as IWorkAndPayAgreement;
       const newAgreement = new WorkAndPayAgreement(agreementData);
       await newAgreement.save();
       if (!newAgreement) {
@@ -28,7 +55,7 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
         .populate("vehicle")
         .populate("owner")
         .populate("driver");
-        console.log ("Created agreement:", record);
+      console.log("Created agreement:", record);
       return WorkAndPayAgreementMapper.toEntity(record);
     } catch (error) {
       throw error;

@@ -5,12 +5,13 @@ import {
 } from "../../../entities/WorkAndPay";
 
 export interface IWorkAndPayInteractor {
+  getAgreementsByDriverId(driverId: string): Promise<IWorkAndPayAgreement>;
   calculateInstallment(
     originalPrice: number,
     multiplier: number,
     durationYears: number,
     finalPrice: number,
-    frequency: TWorkAndPayFrequency
+    frequency: TWorkAndPayFrequency,
   ): { totalSalePrice: number; installmentAmount: number };
   initiateAgreement(data: {
     ownerId: string;
@@ -26,10 +27,10 @@ export interface IWorkAndPayInteractor {
     agreementId: string,
     amount: number,
     method: string,
-    recordedByUserId: string
+    recordedByUserId: string,
   ): Promise<IWorkAndPayAgreement>;
   getAgreementDetails(
-    agreementId: string
+    agreementId: string,
   ): Promise<IWorkAndPayAgreement | null>;
   getPaymentsByAgreementId(agreementId: string): Promise<IPaymentRecord[]>;
 }

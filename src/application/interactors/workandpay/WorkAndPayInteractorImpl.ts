@@ -18,13 +18,19 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
     @inject(INTERFACE_TYPE.WorkAndPayRepositoryImpl)
     private readonly workAndPayRepo: IWorkAndPayRepository,
     @inject(INTERFACE_TYPE.VehicleRepositoryImpl)
-    private readonly vehicleRepo: IVehicleRepository
+    private readonly vehicleRepo: IVehicleRepository,
   ) {
     this.workAndPayRepo = workAndPayRepo;
     this.vehicleRepo = vehicleRepo;
   }
+
+  async getAgreementsByDriverId(
+    driverId: string,
+  ): Promise<IWorkAndPayAgreement> {
+    return this.workAndPayRepo.getAgreementsByDriverId(driverId);
+  }
   async getPaymentsByAgreementId(
-    agreementId: string
+    agreementId: string,
   ): Promise<IPaymentRecord[]> {
     const agreement = this.workAndPayRepo.getAgreementById(agreementId);
     if (!agreement) {
@@ -37,7 +43,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
     multiplier: number,
     durationYears: number,
     finalPrice: number,
-    frequency: TWorkAndPayFrequency
+    frequency: TWorkAndPayFrequency,
   ): { totalSalePrice: number; installmentAmount: number } {
     const totalSalePrice = finalPrice || originalPrice * multiplier;
     const totalPeriods =
@@ -69,7 +75,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
       data.multiplier,
       data.durationYears,
       data.finalPrice,
-      data.frequency
+      data.frequency,
     );
 
     // Prepare the initial agreement entity
@@ -104,7 +110,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
     agreementId: string,
     amount: number,
     method: string,
-    recordedByUserId: string
+    recordedByUserId: string,
   ): Promise<IWorkAndPayAgreement> {
     if (amount <= 0) {
       throw new Error("Payment amount must be positive.");
@@ -125,7 +131,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
 
     if (amount < agreement.installmentAmount) {
       throw new BadRequestError(
-        `Payment amount should not be less than the installment amount. (${agreement.installmentAmount})`
+        `Payment amount should not be less than the installment amount. (${agreement.installmentAmount})`,
       );
     }
 
@@ -139,7 +145,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
 
     const { updatedAgreement } = await this.workAndPayRepo.recordPayment(
       agreementId,
-      payment
+      payment,
     );
 
     // Business Rule: Check for completion
@@ -157,7 +163,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
     return updatedAgreement;
   }
   getAgreementDetails(
-    agreementId: string
+    agreementId: string,
   ): Promise<IWorkAndPayAgreement | null> {
     return this.workAndPayRepo.getAgreementById(agreementId);
   }

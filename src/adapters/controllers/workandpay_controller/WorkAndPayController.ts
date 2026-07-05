@@ -11,9 +11,30 @@ import { next } from "inversify-express-utils";
 export class WorkAndPayController {
   constructor(
     @inject(INTERFACE_TYPE.WorkAndPayInteractorImpl)
-    private readonly interactor: IWorkAndPayInteractor
+    private readonly interactor: IWorkAndPayInteractor,
   ) {
     this.interactor = interactor;
+  }
+
+  /**
+   * @route GET /api/work-pay/agreements/driver/:driverId
+   * @description Retrieves all Work and Pay agreements for a specific driver.
+   * @param driverId Driver ID
+   * @returns Agreement for the driver
+   */
+  public async getAgreementsByDriverId(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    const driverId = req.params.driverId;
+
+    try {
+      const agreement = await this.interactor.getAgreementsByDriverId(driverId);
+      res.status(HttpStatusCode.OK).json(agreement);
+    } catch (error) {
+      next(error);
+    }
   }
 
   /**
@@ -32,7 +53,7 @@ export class WorkAndPayController {
   public async initiateAgreement(
     req: ControllerUserRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> {
     // Get the user ID from the authenticated request (assumed to be the owner)
     const ownerId = req.user?._id;
@@ -54,7 +75,7 @@ export class WorkAndPayController {
         multiplier,
         durationYears,
         finalPrice,
-        frequency
+        frequency,
       );
 
       // 2. Create the agreement
@@ -92,7 +113,7 @@ export class WorkAndPayController {
   public async recordPayment(
     req: ControllerUserRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> {
     // Get the user ID who is recording the payment (could be the owner/admin)
     const recordedByUserId = req.user?._id;
@@ -104,7 +125,7 @@ export class WorkAndPayController {
         agreementId,
         amount,
         method,
-        recordedByUserId!
+        recordedByUserId!,
       );
 
       res.status(HttpStatusCode.CREATED).json({
@@ -124,7 +145,7 @@ export class WorkAndPayController {
   public async getAgreement(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> {
     const agreementId = req.params.id;
 
@@ -152,14 +173,13 @@ export class WorkAndPayController {
   public async getPaymentsByAgreement(
     req: Request,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> {
     const agreementId = req.params.id;
 
     try {
-      const payments = await this.interactor.getPaymentsByAgreementId(
-        agreementId
-      );
+      const payments =
+        await this.interactor.getPaymentsByAgreementId(agreementId);
       res.status(HttpStatusCode.OK).json(payments);
     } catch (error) {
       next(error);

@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import mongoose, { Schema } from "mongoose";
 import { IExpense, IExpenseCategory } from "../../../../entities/Expense";
 
@@ -57,7 +57,7 @@ const expenseSchema: Schema = new Schema(
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 expenseSchema.pre("save", async function (next) {
   const expense = this as IExpense;
@@ -100,7 +100,6 @@ expenseSchema.pre("aggregate", function (next) {
   next();
 });
 
-
 const Expense = mongoose.model("Expense", expenseSchema);
 
 //expense category schema
@@ -123,12 +122,12 @@ const expenseCategorySchema: Schema = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const ExpenseCategory = mongoose.model(
   "ExpenseCategory",
-  expenseCategorySchema
+  expenseCategorySchema,
 );
 export { Expense, ExpenseCategory };
 
@@ -143,7 +142,7 @@ export const ExpenseMapper = {
       amount: payload.amount,
       description: payload.description,
       incurredBy: new mongoose.Schema.Types.ObjectId(
-        payload.incurredBy!.toString()
+        payload.incurredBy!.toString(),
       ), // Ensure user ID is converted to ObjectId
       vehicleId: payload.vehicle
         ? new mongoose.Schema.Types.ObjectId(payload.vehicle.toString())
@@ -169,7 +168,7 @@ export const ExpenseMapper = {
       model.vehicle, // Convert ObjectId to string
       model.date,
       model.createdAt,
-      model.updatedAt
+      model.updatedAt,
     );
   },
 };
@@ -183,7 +182,7 @@ export const ExpenseCategoryMapper = {
       model.description,
       model.createdBy,
       model.createdAt,
-      model.updatedAt
+      model.updatedAt,
     );
   },
 };

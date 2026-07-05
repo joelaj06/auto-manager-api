@@ -11,14 +11,24 @@ export const createApp = () => {
 
   // Configure express (middlewares, body parser, etc.)
   expressConfig(app);
-  app.use(cors());
+  app.use(
+    cors({
+      origin: "*",
+      exposedHeaders: [
+        "x-pagination",
+        "_meta_total_sales",
+        "_meta_total_rentals",
+        "_meta_total_expenses",
+      ],
+    }),
+  );
 
   // Routes
   app.use(routes);
 
   // Error middleware
   const errorMiddleware = container.get<ErrorMiddleware>(
-    INTERFACE_TYPE.ErrorMiddleWare
+    INTERFACE_TYPE.ErrorMiddleWare,
   );
   app.use(errorMiddleware.execute().bind(errorMiddleware));
 
