@@ -13,4 +13,5 @@ export interface IConfig {
   cloudinaryApiKey: string;
   cloudinaryApiSecrete: string;
   permissionKey: string;
+  appBaseDomain: string;
 }

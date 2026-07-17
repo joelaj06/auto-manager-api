@@ -4,14 +4,16 @@ import {
   IDriver,
   PaginatedResponse,
 } from "../../../../../entities";
-import Driver, { DriverMapper } from "../../models/driver";
+import { DriverMapper } from "../../models/driver";
 import { IDriverRepository } from "./IDriverRepository";
 import mongoose from "mongoose";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class DriverRepositoryImpl implements IDriverRepository {
   async findDriverByUserId(id: string): Promise<IDriver | null | undefined> {
     try {
+      const { Driver } = getTenantModels();
       if (!id) throw new Error("User id is required");
       const driver = await Driver.findOne({ userId: id });
       if (!driver) return null;
@@ -22,6 +24,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
   }
   async findAll(query: RequestQuery): Promise<PaginatedResponse<IDriver>> {
     try {
+      const { Driver } = getTenantModels();
       const { search, pageSize, companyId } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
@@ -52,7 +55,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
         .skip(startIndex);
 
       const data: IDriver[] = drivers.map((driver) =>
-        DriverMapper.toEntity(driver)
+        DriverMapper.toEntity(driver),
       );
 
       const totalCount = await Driver.countDocuments(searchCriteria);
@@ -74,10 +77,11 @@ export class DriverRepositoryImpl implements IDriverRepository {
 
   async findById(id: string): Promise<IDriver | null | undefined> {
     try {
+      const { Driver } = getTenantModels();
       if (!id) throw new Error("Driver id is required");
       const vehicle = await Driver.findById(id).populate(
         "vehicle",
-        "-password"
+        "-password",
       );
       if (!vehicle) return null;
       return DriverMapper.toEntity(vehicle);
@@ -87,6 +91,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
   }
   async addDriver(data: IDriver): Promise<IDriver> {
     try {
+      const { Driver } = getTenantModels();
       if (!data) throw new Error("Driver data is required");
       const newDriver = new Driver(data);
       await newDriver.save();
@@ -97,6 +102,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
   }
   async updateDriver(id: string, data: IDriver): Promise<IDriver> {
     try {
+      const { Driver } = getTenantModels();
       if (!id) throw new Error("Driver id is required");
       if (!data) throw new Error("Driver data is required");
 
@@ -113,6 +119,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
   }
   async deleteDriver(id: string): Promise<IDriver> {
     try {
+      const { Driver } = getTenantModels();
       if (!id) throw new Error("Driver id is required");
       const deletedDriver = await Driver.findByIdAndUpdate(
         id,
@@ -120,7 +127,7 @@ export class DriverRepositoryImpl implements IDriverRepository {
           isDeleted: true,
           deletedAt: new Date(),
         },
-        { new: true }
+        { new: true },
       );
       if (!deletedDriver) throw new Error("Driver not found");
       return DriverMapper.toEntity(deletedDriver);

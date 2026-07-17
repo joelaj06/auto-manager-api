@@ -91,7 +91,7 @@ driverSchema.pre("save", async function (next: any) {
     }
   }
 
-  next();
+  //next();
 });
 
 // Apply the isDeleted filter
@@ -112,7 +112,7 @@ driverSchema.pre("aggregate", function (next: any) {
     $match: { isDeleted: { $ne: true } },
   });
 
-  next();
+  //next();
 });
 
 // Create the Driver model

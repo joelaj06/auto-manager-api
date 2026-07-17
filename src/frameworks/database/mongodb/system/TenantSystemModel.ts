@@ -1,5 +1,5 @@
 import mongoose, { Model } from "mongoose";
-import { type ITenant } from "../../../../entities/Tenant";
+import { ITenant } from "../../../../entities/Tenant";
 
 const tenantSchema = new mongoose.Schema(
   {
@@ -45,3 +45,44 @@ export const createTenantSystemModel = (
 
 export const TenantSystemModel = createTenantSystemModel();
 export default TenantSystemModel;
+
+export const TenantMapper = {
+  toDtoCreation: (payload: Partial<ITenant>) => ({
+    name: payload.name,
+    slug: payload.slug,
+    subdomain: payload.subdomain ?? payload.slug,
+    domains: payload.domains ?? [],
+    databaseName: payload.databaseName ?? `tenant_${payload.slug}`,
+    databaseUri: payload.databaseUri,
+    status: payload.status ?? "inactive",
+    subscriptionStatus: payload.subscriptionStatus ?? "pending",
+    subscriptionExpiresAt: payload.subscriptionExpiresAt,
+    isDeleted: false,
+  }),
+
+  toQuery: (query: Partial<ITenant>) => ({
+    ...(query.slug && { slug: query.slug }),
+    ...(query.status && { status: query.status }),
+    ...(query.subscriptionStatus && {
+      subscriptionStatus: query.subscriptionStatus,
+    }),
+    ...(query._id && { _id: query._id }),
+  }),
+
+  toEntity: (model: any): ITenant =>
+    new (ITenant as any)(
+      model._id?.toString(),
+      model.name,
+      model.slug,
+      model.subdomain,
+      model.domains,
+      model.databaseName,
+      model.databaseUri,
+      model.status,
+      model.subscriptionStatus,
+      model.subscriptionExpiresAt,
+      model.isDeleted,
+      model.createdAt,
+      model.updatedAt,
+    ),
+};

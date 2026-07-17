@@ -1,16 +1,18 @@
 import { injectable } from "inversify";
 import { IUser, RequestQuery } from "../../../../../entities/User";
 import { NotFoundError } from "../../../../../error_handler";
-import User, { UserMapper } from "../../models/user";
+import { UserMapper } from "../../models/user";
 import { IUserRepository } from "./IUserRepository";
 import { PaginatedResponse } from "../../../../../entities/UserResponse";
 import { UnprocessableEntityError } from "../../../../../error_handler/UnprocessableEntityError";
 import mongoose from "mongoose";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class UserRepositoryImpl implements IUserRepository {
   async deleteUser(id: string): Promise<IUser> {
     try {
+      const { User } = getTenantModels();
       if (!id) throw new UnprocessableEntityError("User id is required");
       const user = await User.findById(id);
       if (!user) throw new NotFoundError("User not found");
@@ -22,7 +24,7 @@ export class UserRepositoryImpl implements IUserRepository {
         },
         {
           new: true,
-        }
+        },
       );
       return UserMapper.toEntity(user);
     } catch (error) {
@@ -31,6 +33,7 @@ export class UserRepositoryImpl implements IUserRepository {
   }
   async addUser(data: IUser): Promise<IUser> {
     try {
+      const { User } = getTenantModels();
       if (!data) throw new UnprocessableEntityError("User data is required");
       const newUser = new User(data);
       await newUser.save();
@@ -41,6 +44,7 @@ export class UserRepositoryImpl implements IUserRepository {
   }
   async findAllUsers(query: RequestQuery): Promise<PaginatedResponse<IUser>> {
     try {
+      const { User } = getTenantModels();
       const searchQuery = query.search || "";
       const limit = query.pageSize || 10;
       const pageIndex = query.pageIndex || 1;
@@ -91,6 +95,7 @@ export class UserRepositoryImpl implements IUserRepository {
   }
   async findUserByEmail(email: string): Promise<IUser | null | undefined> {
     try {
+      const { User } = getTenantModels();
       const user = await User.findOne({ email: email }).populate("role");
       console.log(user);
       if (user) {
@@ -103,6 +108,7 @@ export class UserRepositoryImpl implements IUserRepository {
     }
   }
   async findUserById(id: string): Promise<IUser | null | undefined> {
+    const { User } = getTenantModels();
     const user = await User.findById(id).populate("role");
     if (user) {
       return UserMapper.toEntity(user);
@@ -112,6 +118,7 @@ export class UserRepositoryImpl implements IUserRepository {
   }
   async updateUser(id: string, data: IUser): Promise<IUser> {
     try {
+      const { User } = getTenantModels();
       const updatedUser = await User.findOneAndUpdate({ _id: id }, data, {
         new: true,
       }).select("-password");

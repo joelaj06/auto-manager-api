@@ -61,7 +61,7 @@ userSchema.pre("aggregate", function (next: any) {
     $match: { isDeleted: { $ne: true } },
   });
 
-  next();
+  //next();
 });
 
 export const createUserModel = (

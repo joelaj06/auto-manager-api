@@ -6,3 +6,4 @@ export * from "./IErrorHandler";
 export * from "./NotFoundError";
 export * from "./UnprocessableEntityError";
 export * from "./UnauthorizedError";
+export * from "./ServiceUnavailableError";

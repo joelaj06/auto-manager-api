@@ -1,18 +1,17 @@
 import { injectable } from "inversify";
 import { IDashboardRepository } from "./IDashboardRepository";
 import { RequestQuery, IDashboardSummaryData } from "../../../../../entities";
-import { Customer, Expense, Vehicle } from "../../models";
-import company from "../../models/company";
-import Driver from "../../models/driver";
-import Sale from "../../models/sales";
-import Rental from "../../models/rental";
+
 import mongoose from "mongoose";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class DashboardRepositoryImpl implements IDashboardRepository {
   async getDashboardSummaryData(
-    query: RequestQuery
+    query: RequestQuery,
   ): Promise<IDashboardSummaryData> {
+    const { Sale, Driver, Customer, Vehicle, Rental, Expense } =
+      getTenantModels();
     const { companyId, startDate, endDate } = query;
     const matchCondition = {
       company: new mongoose.Types.ObjectId(companyId),

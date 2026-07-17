@@ -128,10 +128,7 @@ export class WorkAndPayController {
         recordedByUserId!,
       );
 
-      res.status(HttpStatusCode.CREATED).json({
-        message: "Payment recorded successfully.",
-        data: updatedAgreement,
-      });
+      res.status(HttpStatusCode.CREATED).json(updatedAgreement);
     } catch (error) {
       next(error);
     }

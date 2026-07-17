@@ -5,9 +5,11 @@ import { createTenantModels } from "../../database/mongodb/tenant/TenantModelFac
 import {
   BadRequestError,
   NotFoundError,
+  ServiceUnavailableError,
   UnauthorizedError,
 } from "../../../error_handler";
-import { HttpStatusCode } from "../../../utils/constants";
+import { tenantContextStorage } from "../../database/tenant-context/TenantContextStorage";
+import { createSystemModels } from "../../database/mongodb/system";
 
 export const tenantResolutionMiddleware =
   () => async (req: Request, res: Response, next: NextFunction) => {
@@ -24,12 +26,14 @@ export const tenantResolutionMiddleware =
           models: createTenantModels(systemConnection),
           requestId,
         };
-        return next();
+        return tenantContextStorage.run((req as any).context, () => next());
       }
 
-      const isLocalHost =
-        host.includes("localhost") || host.includes("127.0.0.1");
-      if (isLocalHost) {
+      const hostname = host.split(":")[0]; // strip port first
+
+      const isBareLocalHost =
+        hostname === "localhost" || hostname === "127.0.0.1";
+      if (isBareLocalHost) {
         const systemConnection = await connectionManager.getSystemConnection();
         (req as any).context = {
           tenant: null,
@@ -37,10 +41,9 @@ export const tenantResolutionMiddleware =
           models: createTenantModels(systemConnection),
           requestId,
         };
-        return next();
+        return tenantContextStorage.run((req as any).context, () => next());
       }
 
-      const hostname = host.split(":")[0];
       const subdomain = hostname.split(".")[0];
       if (!subdomain || subdomain === "www") {
         return next(new BadRequestError("Tenant host is required"));
@@ -77,12 +80,12 @@ export const tenantResolutionMiddleware =
       (req as any).context = {
         tenant,
         connection: tenantConnection,
-        models: createTenantModels(tenantConnection),
+        models: createSystemModels(systemConnection),
         requestId,
       };
 
-      next();
+      return tenantContextStorage.run((req as any).context, () => next());
     } catch (error) {
-      next(new BadRequestError((error as Error).message));
+      next(new ServiceUnavailableError((error as Error).message));
     }
   };

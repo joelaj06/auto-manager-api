@@ -71,7 +71,7 @@ companySchema.pre("save", async function (next: any) {
     }
   }
 
-  next();
+  // next();
 });
 
 // Export Company Model
@@ -193,11 +193,11 @@ export const CompanyMapper = {
    */
   toAddressEntity: (model: any): IAddress => {
     return new IAddress(
-      model.street,
-      model.city,
-      model.state,
-      model.postalCode,
-      model.country,
+      model?.street,
+      model?.city,
+      model?.state,
+      model?.postalCode,
+      model?.country,
     );
   },
 };

@@ -78,7 +78,7 @@ expenseSchema.pre("save", async function (next: any) {
     }
   }
 
-  next();
+  //next();
 });
 
 // Apply the isDeleted filter
@@ -99,7 +99,7 @@ expenseSchema.pre("aggregate", function (next: any) {
     $match: { isDeleted: { $ne: true } },
   });
 
-  next();
+  // next();
 });
 
 export const createExpenseModel = (

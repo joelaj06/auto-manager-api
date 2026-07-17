@@ -125,7 +125,7 @@ rentalSchema.pre("save", async function (next: any) {
     }
   }
 
-  next();
+  // next();
 });
 
 // Apply the isDeleted filter
@@ -146,7 +146,7 @@ rentalSchema.pre("aggregate", function (next: any) {
     $match: { isDeleted: { $ne: true } },
   });
 
-  next();
+  //next();
 });
 
 export const createRentalModel = (

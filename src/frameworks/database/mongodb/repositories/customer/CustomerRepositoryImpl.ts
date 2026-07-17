@@ -5,13 +5,15 @@ import {
   RequestQuery,
   PaginatedResponse,
 } from "../../../../../entities";
-import { Customer, CustomerMapper } from "../../models";
+import { CustomerMapper } from "../../models";
 import mongoose from "mongoose";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class CustomerRepositoryImpl implements ICustomerRepository {
   async save(data: ICustomer): Promise<ICustomer> {
     try {
+      const { Customer } = getTenantModels();
       if (!data) throw new Error("Customer data is required");
       const newCustomer = new Customer(data);
       await newCustomer.save();
@@ -22,6 +24,7 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
   }
   async update(id: string, data: ICustomer): Promise<ICustomer> {
     try {
+      const { Customer } = getTenantModels();
       if (!id) throw new Error("Customer id is required");
       if (!data) throw new Error("Customer data is required");
 
@@ -37,6 +40,7 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
     }
   }
   async delete(id: string): Promise<ICustomer> {
+    const { Customer } = getTenantModels();
     try {
       if (!id) throw new Error("Customer id is required");
       const deletedCustomer = await Customer.findByIdAndUpdate(
@@ -47,7 +51,7 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
         },
         {
           new: true,
-        }
+        },
       );
       if (!deletedCustomer) throw new Error("Customer not found");
       return CustomerMapper.toEntity(deletedCustomer);
@@ -57,6 +61,7 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
   }
   async findAll(query: RequestQuery): Promise<PaginatedResponse<ICustomer>> {
     try {
+      const { Customer } = getTenantModels();
       const { search, pageSize, status, companyId } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
@@ -94,7 +99,7 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
         .skip(startIndex);
 
       const data: ICustomer[] = customers.map((customer) =>
-        CustomerMapper.toEntity(customer)
+        CustomerMapper.toEntity(customer),
       );
 
       const totalCount = await Customer.countDocuments(searchCriteria);
@@ -115,6 +120,7 @@ export class CustomerRepositoryImpl implements ICustomerRepository {
   }
   async findById(id: string): Promise<ICustomer | null | undefined> {
     if (!id) throw new Error("Customer id is required");
+    const { Customer } = getTenantModels();
     const customer = await Customer.findById(id).populate("rentalHistory");
     if (!customer) return null;
     return CustomerMapper.toEntity(customer);

@@ -12,6 +12,7 @@ import { createUserOTPModel } from "../models/userOTP";
 import { createVehicleModel } from "../models/vehicle";
 import { createWorkAndPayAgreementModel } from "../models/workandpay";
 import { createPaymentRecordModel } from "../models/paymentRecord";
+import { createTenantSystemModel } from "../system/TenantSystemModel";
 
 export const createTenantModels = (
   connection: mongoose.Connection | mongoose.Mongoose,
@@ -20,6 +21,7 @@ export const createTenantModels = (
   Customer: createCustomerModel(connection),
   Driver: createDriverModel(connection),
   Expense: createExpenseModel(connection),
+  ExpenseCategory: createExpenseModel(connection),
   Permission: createPermissionModel(connection),
   Rental: createRentalModel(connection),
   Role: createRoleModel(connection),
@@ -29,6 +31,9 @@ export const createTenantModels = (
   Vehicle: createVehicleModel(connection),
   WorkAndPayAgreement: createWorkAndPayAgreementModel(connection),
   PaymentRecord: createPaymentRecordModel(connection),
+  Tenant: createTenantSystemModel(),
 });
 
 export default createTenantModels;
+
+export type TenantModel = ReturnType<typeof createTenantModels>;

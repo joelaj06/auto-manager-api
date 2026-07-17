@@ -49,4 +49,8 @@ export const INTERFACE_TYPE = {
   WorkAndPayRepositoryImpl: Symbol.for("WorkAndPayRepositoryImpl"),
   WorkAndPayInteractorImpl: Symbol.for("WorkAndPayInteractorImpl"),
   WorkAndPayController: Symbol.for("WorkAndPayController"),
+  TenantRepositoryImpl: Symbol.for("TenantRepositoryImpl"),
+  TenantInteractorImpl: Symbol.for("TenantInteractorImpl"),
+  TenantController: Symbol.for("TenantController"),
+  TenantProvisioningServiceImpl: Symbol.for("TenantProvisioningServiceImpl"),
 };

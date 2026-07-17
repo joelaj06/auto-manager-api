@@ -23,7 +23,7 @@ export interface IWorkAndPayRepository {
    */
   recordPayment(
     agreementId: string,
-    payment: Omit<IPaymentRecord, "id" | "agreementId" | "paymentId">,
+    payment: Omit<IPaymentRecord, "_id" | "agreementId" | "paymentId">,
   ): Promise<{
     updatedAgreement: IWorkAndPayAgreement;
     paymentRecord: IPaymentRecord;

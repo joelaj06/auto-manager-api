@@ -13,7 +13,7 @@ export const withBaseSchema = (
   options: {
     prefix: string;
     idFieldName?: string;
-  }
+  },
 ) => {
   // Standard fields
   schema.add({
@@ -41,7 +41,7 @@ export const withBaseSchema = (
       }
     }
 
-    next();
+    //next();
   });
 
   // Soft delete filters
@@ -55,7 +55,7 @@ export const withBaseSchema = (
     if (this.pipeline) {
       this.pipeline().unshift({ $match: { isDeleted: { $ne: true } } });
     }
-    next();
+    // next();
   });
 
   return schema;

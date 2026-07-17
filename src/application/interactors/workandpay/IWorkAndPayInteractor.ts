@@ -28,7 +28,7 @@ export interface IWorkAndPayInteractor {
     amount: number,
     method: string,
     recordedByUserId: string,
-  ): Promise<IWorkAndPayAgreement>;
+  ): Promise<IPaymentRecord>;
   getAgreementDetails(
     agreementId: string,
   ): Promise<IWorkAndPayAgreement | null>;

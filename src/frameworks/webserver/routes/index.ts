@@ -12,6 +12,7 @@ import roleRoutes from "./roleRoutes";
 import permissionRoutes from "./permissionRoutes";
 import workAndPayRoutes from "./workandpayRoutes";
 import express from "express";
+import tenantRoutes from "./tenantRoutes";
 
 const router = express.Router();
 
@@ -28,5 +29,6 @@ router.use(dashboardRoutes);
 router.use(roleRoutes);
 router.use(permissionRoutes);
 router.use(workAndPayRoutes);
+router.use(tenantRoutes);
 
 export default router;

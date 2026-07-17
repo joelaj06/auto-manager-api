@@ -21,6 +21,7 @@ const config: IConfig = {
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",
   cloudinaryApiSecrete: process.env.CLOUDINARY_API_SECRETE || "",
   permissionKey: process.env.PERMISSION_KEY || "",
+  appBaseDomain: process.env.APP_BASE_DOMAIN || "localhost:3000", // Default to localhost if not set
 };
 
 export default config;
