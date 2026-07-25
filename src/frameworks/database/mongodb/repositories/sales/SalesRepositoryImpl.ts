@@ -6,14 +6,16 @@ import {
   DashboardRequestQery,
   IMonthlySales,
 } from "../../../../../entities";
-import Sale, { SalesMapper } from "../../models/sales";
+import { SalesMapper } from "../../models/sales";
 import { ISalesRepository } from "./ISalesRepository";
 import mongoose from "mongoose";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class SalesRepositoryImpl implements ISalesRepository {
   async getMonthlySales(query: DashboardRequestQery): Promise<IMonthlySales> {
     try {
+      const { Sale } = getTenantModels();
       const { month, year, company } = query;
       if (!query) throw new Error("Query is required");
 
@@ -80,6 +82,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
   }
   async addSale(data: ISale): Promise<ISale> {
     try {
+      const { Sale } = getTenantModels();
       if (!data) throw new Error("Sales data is required");
       const newSale = new Sale(data);
       await newSale.save();
@@ -90,6 +93,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
   }
   async updateSale(id: string, data: ISale): Promise<ISale> {
     try {
+      const { Sale } = getTenantModels();
       if (!id) throw new Error("Sale id is required");
       if (!data) throw new Error("Sale data is required");
 
@@ -106,6 +110,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
   }
   async deleteSale(id: string): Promise<ISale> {
     try {
+      const { Sale } = getTenantModels();
       if (!id) throw new Error("Sale id is required");
       const deletedSale = await Sale.findByIdAndUpdate(
         id,
@@ -115,7 +120,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
         },
         {
           new: true,
-        }
+        },
       );
       if (!deletedSale) throw new Error("Sale not found");
       return SalesMapper.toEntity(deletedSale);
@@ -125,6 +130,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
   }
   async findAll(query: SalesRequestQuery): Promise<PaginatedResponse<ISale>> {
     try {
+      const { Sale } = getTenantModels();
       const {
         search,
         pageSize,
@@ -231,6 +237,7 @@ export class SalesRepositoryImpl implements ISalesRepository {
 
   async findById(id: string): Promise<ISale | null | undefined> {
     try {
+      const { Sale } = getTenantModels();
       if (!id) throw new Error("Sale id is required");
       const sale = await Sale.findById(id)
         .populate("vehicle")

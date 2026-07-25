@@ -47,7 +47,7 @@ export const PaymentRecordMapper = {
   toDtoCreation: (payload: IPaymentRecord) => ({
     paymentId: payload.paymentId, // optional
     workAndPayAgreementId: new mongoose.Types.ObjectId(
-      payload.workAndPayAgreementId
+      payload.workAndPayAgreementId,
     ),
     amount: payload.amount,
     paymentDate: payload.paymentDate
@@ -56,7 +56,7 @@ export const PaymentRecordMapper = {
     method: payload.method,
   }),
   toEntity: (doc: any): IPaymentRecord => ({
-    id: doc._id?.toString(),
+    _id: doc._id?.toString(),
     paymentId: doc.paymentId,
     workAndPayAgreementId: doc.workAndPayAgreementId?.toString(),
     amount: doc.amount,

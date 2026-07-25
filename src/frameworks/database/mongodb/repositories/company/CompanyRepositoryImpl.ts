@@ -6,15 +6,17 @@ import {
   NotFoundError,
   UnprocessableEntityError,
 } from "../../../../../error_handler";
-import Company, { CompanyMapper } from "../../models/company";
+import { CompanyMapper } from "../../models/company";
 import { PaginatedResponse, RequestQuery } from "../../../../../entities";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class CompanyRepositoryImpl implements ICompanyRepository {
   async findCompanyByEmail(
-    email: string
+    email: string,
   ): Promise<ICompany | null | undefined> {
     try {
+      const { Company } = getTenantModels();
       const company = await Company.findOne({ email });
       return company ? CompanyMapper.toEntity(company) : null;
     } catch (error) {
@@ -24,6 +26,7 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
 
   async updateCompany(id: string, data: ICompany): Promise<ICompany> {
     try {
+      const { Company } = getTenantModels();
       const company = await Company.findById(id);
       if (!company) throw new NotFoundError("Company not found");
       const updatedCompany = await Company.findByIdAndUpdate(id, data, {
@@ -39,6 +42,7 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
 
   async findCompanyById(id: string): Promise<ICompany | null | undefined> {
     try {
+      const { Company } = getTenantModels();
       const company = await Company.findById(id);
       return company ? CompanyMapper.toEntity(company) : null;
     } catch (error) {
@@ -47,9 +51,10 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
   }
 
   async findAllCompanies(
-    query: RequestQuery
+    query: RequestQuery,
   ): Promise<PaginatedResponse<ICompany>> {
     try {
+      const { Company } = getTenantModels();
       const searchQuery = query.search || "";
       const limit = query.pageSize || 10;
       const pageIndex = query.pageIndex || 1;
@@ -77,7 +82,7 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
 
       if (companies) {
         const data: ICompany[] = companies.map((company) =>
-          CompanyMapper.toEntity(company)
+          CompanyMapper.toEntity(company),
         );
         const totalCount: number = await Company.countDocuments(searchCriteria);
         // Calculate total pages
@@ -99,6 +104,7 @@ export class CompanyRepositoryImpl implements ICompanyRepository {
 
   async addCompay(data: ICompany): Promise<ICompany> {
     try {
+      const { Company } = getTenantModels();
       if (!data) throw new UnprocessableEntityError("Company data is required");
       const newCompany = new Company(data);
       await newCompany.save();

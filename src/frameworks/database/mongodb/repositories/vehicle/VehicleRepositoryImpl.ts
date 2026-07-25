@@ -4,14 +4,16 @@ import {
   RequestQuery,
   PaginatedResponse,
 } from "../../../../../entities";
-import { Vehicle, VehicleMapper } from "../../models/vehicle";
+import { VehicleMapper } from "../../models/vehicle";
 import { IVehicleRepository } from "./IVehicleRepository";
 import mongoose from "mongoose";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class VehicleRepositoryImpl implements IVehicleRepository {
   async findById(id: string): Promise<IVehicle | null | undefined> {
     try {
+      const { Vehicle } = getTenantModels();
       if (!id) throw new Error("Vehicle id is required");
       const vehicle = await Vehicle.findById(id);
       if (!vehicle) return null;
@@ -21,9 +23,10 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
     }
   }
   async findAllVehicles(
-    query: RequestQuery
+    query: RequestQuery,
   ): Promise<PaginatedResponse<IVehicle>> {
     try {
+      const { Vehicle } = getTenantModels();
       const { search, pageSize, companyId } = query;
       const searchQuery = search || "";
       const limit = pageSize || 10;
@@ -54,7 +57,7 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
         .skip(startIndex);
 
       const data: IVehicle[] = vehicles.map((vehicle) =>
-        VehicleMapper.toEntity(vehicle)
+        VehicleMapper.toEntity(vehicle),
       );
       const totalCount = await Vehicle.countDocuments(searchCriteria);
       const totalPages = Math.ceil(totalCount / limit);
@@ -71,6 +74,7 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
   }
   async addVehicle(data: IVehicle): Promise<IVehicle> {
     try {
+      const { Vehicle } = getTenantModels();
       if (!data) throw new Error("Vehicle data is required");
       const newVehicle = new Vehicle(data);
       await newVehicle.save();
@@ -81,6 +85,7 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
   }
   async updateVehicle(id: string, data: IVehicle): Promise<IVehicle> {
     try {
+      const { Vehicle } = getTenantModels();
       if (!id) throw new Error("Vehicle id is required");
       if (!data) throw new Error("Vehicle data is required");
 
@@ -97,6 +102,7 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
   }
   async deleteVehicle(id: string): Promise<IVehicle> {
     try {
+      const { Vehicle } = getTenantModels();
       if (!id) throw new Error("Vehicle id is required");
       const deletedVehicle = await Vehicle.findByIdAndUpdate(
         id,
@@ -106,7 +112,7 @@ export class VehicleRepositoryImpl implements IVehicleRepository {
         },
         {
           new: true,
-        }
+        },
       );
       if (!deletedVehicle) throw new Error("Vehicle not found");
       return VehicleMapper.toEntity(deletedVehicle);

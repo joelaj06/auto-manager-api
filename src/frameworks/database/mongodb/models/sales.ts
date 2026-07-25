@@ -89,7 +89,7 @@ salesSchema.pre("save", async function (next: any) {
     }
   }
 
-  next();
+  // next();
 });
 
 // Apply the isDeleted filter
@@ -110,7 +110,7 @@ salesSchema.pre("aggregate", function (next: any) {
     $match: { isDeleted: { $ne: true } },
   });
 
-  next();
+  //next();
 });
 
 export const createSaleModel = (

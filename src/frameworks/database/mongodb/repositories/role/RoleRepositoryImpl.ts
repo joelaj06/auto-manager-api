@@ -2,8 +2,9 @@ import mongoose from "mongoose";
 import { RequestQuery, IRole } from "../../../../../entities";
 import { IRoleRepository } from "./IRoleRepository";
 import { injectable } from "inversify";
-import Role, { RoleMapper } from "../../models/role";
+import { RoleMapper } from "../../models/role";
 import { BadRequestError, NotFoundError } from "../../../../../error_handler";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class RoleRepositoryImpl implements IRoleRepository {
@@ -11,6 +12,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
     //make it case insensitive
 
     try {
+      const { Role } = getTenantModels();
       return Role.findOne({
         name: { $regex: new RegExp(`^${name}.*`, "i") },
       }).then((role) => {
@@ -26,6 +28,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
   }
   async getARole(id: string): Promise<IRole | null | undefined> {
     try {
+      const { Role } = getTenantModels();
       const role = await Role.findById(id);
       if (!role) return null;
       return RoleMapper.toEntity(role);
@@ -35,6 +38,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
   }
   async addRole(data: IRole): Promise<IRole | null | undefined> {
     try {
+      const { Role } = getTenantModels();
       const newRole = new Role(data);
       await newRole.save();
       if (!newRole) return null;
@@ -45,6 +49,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
   }
   async updateRole(id: string, data: IRole): Promise<IRole | null | undefined> {
     try {
+      const { Role } = getTenantModels();
       if (!id) throw new BadRequestError("Role id is required");
       if (!data) throw new BadRequestError("Role data is required");
       const updatedRole = await Role.findOneAndUpdate({ _id: id }, data, {
@@ -58,6 +63,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
   }
   async deleteRole(id: string): Promise<IRole | null | undefined> {
     try {
+      const { Role } = getTenantModels();
       if (!id) throw new BadRequestError("Role id is required");
       const role = await Role.findById(id);
       if (!role) throw new NotFoundError("Role not found");
@@ -69,7 +75,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
         },
         {
           new: true,
-        }
+        },
       );
       return RoleMapper.toEntity(role);
     } catch (error) {
@@ -78,6 +84,7 @@ export class RoleRepositoryImpl implements IRoleRepository {
   }
   async getAllRoles(query: RequestQuery): Promise<IRole[]> {
     try {
+      const { Role } = getTenantModels();
       const searchQuery = query.search || "";
       const companyId = query.companyId;
 

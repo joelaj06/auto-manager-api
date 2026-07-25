@@ -76,9 +76,16 @@ export const Permissions = Object.freeze({
   VIEW_DASHBOARD_REVENUE: "view:dashboard-revenue",
   VIEW_DASHBOARD_WEEKLY_SALES: "view:dashboard-weekly-sales",
   VIEW_DASHBOARD_SUMMARY: "view:dashboard-summary",
+  MANAGE_TENANTS: "manage:tenants",
 } as const);
 
 const UserPermissions = Object.values(Permissions);
 
-export { UserPermissions };
+const PlatformOnlyPermissions: string[] = [Permissions.MANAGE_TENANTS];
+
+const TenantAdminPermissions = UserPermissions.filter(
+  (p) => !PlatformOnlyPermissions.includes(p),
+);
+
+export { UserPermissions, PlatformOnlyPermissions, TenantAdminPermissions };
 export type PermissionType = typeof Permissions;

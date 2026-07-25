@@ -2,14 +2,16 @@ import { injectable } from "inversify";
 import { IExpenseRepository } from "./IExpenseRespository";
 import { RequestQuery, PaginatedResponse } from "../../../../../entities";
 import { ExpenseRequestQuery, IExpense } from "../../../../../entities/Expense";
-import { Expense, ExpenseCategory, ExpenseMapper } from "../../models";
+import { ExpenseMapper } from "../../models";
 import mongoose from "mongoose";
 import { BadRequestError } from "../../../../../error_handler";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class ExpenseRepositoryImpl implements IExpenseRepository {
   async save(data: IExpense): Promise<IExpense> {
     try {
+      const { Expense } = getTenantModels();
       if (!data) throw new Error("Expensedata is required");
       const newExpense = new Expense(data);
       await newExpense.save();
@@ -25,6 +27,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
   }
   async update(id: string, data: IExpense): Promise<IExpense> {
     try {
+      const { Expense } = getTenantModels();
       if (!id) throw new Error("ExpenseCategory id is required");
       if (!data) throw new Error("ExpenseCategory data is required");
 
@@ -44,6 +47,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
   }
   async delete(id: string): Promise<IExpense> {
     try {
+      const { Expense } = getTenantModels();
       if (!id) throw new Error("Expense id is required");
       const deletedExpense = await Expense.findByIdAndUpdate(
         id,
@@ -53,7 +57,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
         },
         {
           new: true,
-        }
+        },
       );
       if (!deletedExpense) throw new Error("Expense not found");
       return ExpenseMapper.toEntity(deletedExpense);
@@ -62,9 +66,10 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
     }
   }
   async findAll(
-    query: ExpenseRequestQuery
+    query: ExpenseRequestQuery,
   ): Promise<PaginatedResponse<IExpense>> {
     try {
+      const { Expense } = getTenantModels();
       const {
         search,
         pageSize,
@@ -136,7 +141,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
         .populate("incurredBy", "-password");
 
       const data: IExpense[] = expenses.map((category) =>
-        ExpenseMapper.toEntity(category)
+        ExpenseMapper.toEntity(category),
       );
 
       const totalCount = await Expense.countDocuments(searchCriteria);
@@ -151,9 +156,8 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
         $group: { _id: null, totalExpense: { $sum: "$amount" } },
       });
 
-      const totalExpenseAggregation = await Expense.aggregate(
-        aggregationPipeline
-      );
+      const totalExpenseAggregation =
+        await Expense.aggregate(aggregationPipeline);
 
       const totalExpense = totalExpenseAggregation[0]?.totalExpense || 0;
 
@@ -171,6 +175,7 @@ export class ExpenseRepositoryImpl implements IExpenseRepository {
     }
   }
   async findById(id: string): Promise<IExpense | null | undefined> {
+    const { Expense } = getTenantModels();
     if (!id) throw new Error("Expense id is required");
     const expense = await Expense.findById(id)
       .populate("category")

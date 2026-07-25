@@ -121,7 +121,7 @@ vehicleSchema.pre("save", async function (next: any) {
       // Default start value if no previous vehicles exist
     }
   }
-  next();
+  // next();
 });
 
 // Apply the isDeleted filter
@@ -142,7 +142,7 @@ vehicleSchema.pre("aggregate", function (next: any) {
     $match: { isDeleted: { $ne: true } },
   });
 
-  next();
+  // next();
 });
 
 export const createVehicleModel = (

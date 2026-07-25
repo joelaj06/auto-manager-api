@@ -11,3 +11,4 @@ export * from "./dashboard/index";
 export * from "./role/index";
 export * from "./permission/index";
 export * from "./workandpay/index";
+export * from "./tenant/index";

@@ -12,3 +12,4 @@ export * from "./Dashboard";
 export * from "./Permission";
 export * from "./WorkAndPay";
 export * from "./PaymentRecord";
+export * from "./Tenant";

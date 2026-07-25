@@ -6,15 +6,17 @@ import {
   IRental,
   RentalRequestQuery,
 } from "../../../../../entities";
-import Rental, { RentalMapper } from "../../models/rental";
+import { RentalMapper } from "../../models/rental";
 import mongoose from "mongoose";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class RentalRepositoryImpl implements IRentalRepository {
   async findAll(
-    query: RentalRequestQuery
+    query: RentalRequestQuery,
   ): Promise<PaginatedResponse<IRental>> {
     try {
+      const { Rental } = getTenantModels();
       const {
         search,
         pageSize,
@@ -82,13 +84,13 @@ export class RentalRepositoryImpl implements IRentalRepository {
         .populate("renter", "-password -role")
         .populate(
           "vehicle",
-          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
+          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails",
         )
         .populate("updatedBy", "-password -role")
         .populate("createdBy", "-password -role");
 
       const data: IRental[] = rentals.map((category) =>
-        RentalMapper.toEntity(category)
+        RentalMapper.toEntity(category),
       );
 
       // Aggregate to calculate total rentals sum
@@ -101,9 +103,8 @@ export class RentalRepositoryImpl implements IRentalRepository {
         $group: { _id: null, totalRentals: { $sum: "$totalAmount" } },
       });
 
-      const totalRentalsAggregation = await Rental.aggregate(
-        aggregationPipeline
-      );
+      const totalRentalsAggregation =
+        await Rental.aggregate(aggregationPipeline);
 
       const totalRentals = totalRentalsAggregation[0]?.totalRentals || 0;
 
@@ -125,12 +126,13 @@ export class RentalRepositoryImpl implements IRentalRepository {
     }
   }
   async findById(id: string): Promise<IRental | null | undefined> {
+    const { Rental } = getTenantModels();
     if (!id) throw new Error("Rental id is required");
     const rental = await Rental.findById(id)
       .populate("renter", "-password -role")
       .populate(
         "vehicle",
-        "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
+        "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails",
       )
       .populate("updatedBy", "-password -role")
       .populate("createdBy", "-password -role");
@@ -139,6 +141,7 @@ export class RentalRepositoryImpl implements IRentalRepository {
   }
   async save(data: IRental): Promise<IRental> {
     try {
+      const { Rental } = getTenantModels();
       if (!data) throw new Error("Rental data is required");
       const newRental = new Rental(data);
       await newRental.save();
@@ -149,7 +152,7 @@ export class RentalRepositoryImpl implements IRentalRepository {
         .populate("renter", "-password")
         .populate(
           "vehicle",
-          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
+          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails",
         )
         .populate("updatedBy", "-password -role")
         .populate("createdBy", "-password -role");
@@ -160,6 +163,7 @@ export class RentalRepositoryImpl implements IRentalRepository {
   }
   async update(id: string, data: IRental): Promise<IRental> {
     try {
+      const { Rental } = getTenantModels();
       if (!id) throw new Error("Rental id is required");
       if (!data) throw new Error("Rental data is required");
 
@@ -169,7 +173,7 @@ export class RentalRepositoryImpl implements IRentalRepository {
         .populate("renter", "-password -role")
         .populate(
           "vehicle",
-          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails"
+          "-rentalHistory -createdAt -updatedAt -__v -maintenanceRecords -salesHistory -insuranceDetails",
         )
         .populate("updatedBy", "-password -role")
         .populate("createdBy", "-password -role");
@@ -183,6 +187,7 @@ export class RentalRepositoryImpl implements IRentalRepository {
   }
   async delete(id: string): Promise<IRental> {
     try {
+      const { Rental } = getTenantModels();
       if (!id) throw new Error("Expense id is required");
       const deletedRental = await Rental.findByIdAndUpdate(
         id,
@@ -192,7 +197,7 @@ export class RentalRepositoryImpl implements IRentalRepository {
         },
         {
           new: true,
-        }
+        },
       );
       if (!deletedRental) throw new Error("Rental not found");
       return RentalMapper.toEntity(deletedRental);

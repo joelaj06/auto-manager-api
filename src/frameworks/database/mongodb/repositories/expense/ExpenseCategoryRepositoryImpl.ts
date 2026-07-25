@@ -1,15 +1,15 @@
 import { injectable } from "inversify";
 import { RequestQuery } from "../../../../../entities";
 import { IExpenseCategory } from "../../../../../entities/Expense";
-import { ExpenseCategory, ExpenseCategoryMapper } from "../../models";
+import { ExpenseCategoryMapper } from "../../models";
 import { IExpenseCategoryRepository } from "./IExpenseCategoryRepository";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
-export class ExpenseCategoryRepositoryImpl
-  implements IExpenseCategoryRepository
-{
+export class ExpenseCategoryRepositoryImpl implements IExpenseCategoryRepository {
   async save(data: IExpenseCategory): Promise<IExpenseCategory> {
     try {
+      const { ExpenseCategory } = getTenantModels();
       if (!data) throw new Error("ExpenseCategory data is required");
       const newExpenseCategory = new ExpenseCategory(data);
       await newExpenseCategory.save();
@@ -20,6 +20,7 @@ export class ExpenseCategoryRepositoryImpl
   }
   async update(id: string, data: IExpenseCategory): Promise<IExpenseCategory> {
     try {
+      const { ExpenseCategory } = getTenantModels();
       if (!id) throw new Error("ExpenseCategory id is required");
       if (!data) throw new Error("ExpenseCategory data is required");
 
@@ -28,7 +29,7 @@ export class ExpenseCategoryRepositoryImpl
         data,
         {
           new: true,
-        }
+        },
       );
 
       if (!updatedExpenseCategory) throw new Error("ExpenseCategory not found");
@@ -40,10 +41,10 @@ export class ExpenseCategoryRepositoryImpl
   }
   async delete(id: string): Promise<IExpenseCategory> {
     try {
+      const { ExpenseCategory } = getTenantModels();
       if (!id) throw new Error("ExpenseCategory id is required");
-      const deletedExpenseCategory = await ExpenseCategory.findByIdAndDelete(
-        id
-      );
+      const deletedExpenseCategory =
+        await ExpenseCategory.findByIdAndDelete(id);
       if (!deletedExpenseCategory) throw new Error("ExpenseCategory not found");
       return ExpenseCategoryMapper.toEntity(deletedExpenseCategory);
     } catch (error) {
@@ -52,6 +53,7 @@ export class ExpenseCategoryRepositoryImpl
   }
   async findAll(query: RequestQuery): Promise<IExpenseCategory[]> {
     try {
+      const { ExpenseCategory } = getTenantModels();
       const searchQuery = query.search || "";
       const searchCriteria = {
         $or: [
@@ -63,7 +65,7 @@ export class ExpenseCategoryRepositoryImpl
       const expenseCategories = await ExpenseCategory.find(searchCriteria);
 
       const data: IExpenseCategory[] = expenseCategories.map((category) =>
-        ExpenseCategoryMapper.toEntity(category)
+        ExpenseCategoryMapper.toEntity(category),
       );
 
       return data;
@@ -72,6 +74,7 @@ export class ExpenseCategoryRepositoryImpl
     }
   }
   async findById(id: string): Promise<IExpenseCategory | null | undefined> {
+    const { ExpenseCategory } = getTenantModels();
     if (!id) throw new Error("ExpenseCategory id is required");
     const category = await ExpenseCategory.findById(id);
     if (!category) return null;

@@ -111,7 +111,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
     amount: number,
     method: string,
     recordedByUserId: string,
-  ): Promise<IWorkAndPayAgreement> {
+  ): Promise<IPaymentRecord> {
     if (amount <= 0) {
       throw new Error("Payment amount must be positive.");
     }
@@ -135,7 +135,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
       );
     }
 
-    const payment: Omit<IPaymentRecord, "id" | "agreementId" | "paymentId"> = {
+    const payment: Omit<IPaymentRecord, "_id" | "agreementId" | "paymentId"> = {
       amount: amount,
       paymentDate: new Date().toISOString(),
       recordedBy: recordedByUserId,
@@ -143,10 +143,8 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
       workAndPayAgreementId: agreementId,
     };
 
-    const { updatedAgreement } = await this.workAndPayRepo.recordPayment(
-      agreementId,
-      payment,
-    );
+    const { updatedAgreement, paymentRecord } =
+      await this.workAndPayRepo.recordPayment(agreementId, payment);
 
     // Business Rule: Check for completion
     if (
@@ -160,7 +158,7 @@ export class WorkAndPayInteractorImpl implements IWorkAndPayInteractor {
       });
     }
 
-    return updatedAgreement;
+    return paymentRecord;
   }
   getAgreementDetails(
     agreementId: string,

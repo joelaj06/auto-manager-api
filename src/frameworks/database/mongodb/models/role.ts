@@ -12,7 +12,7 @@ const roleSchema = new mongoose.Schema(
     },
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: false,
       unique: false,
     },
     permissions: {

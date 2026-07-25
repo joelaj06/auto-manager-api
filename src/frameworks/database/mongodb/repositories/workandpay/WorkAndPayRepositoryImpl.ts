@@ -2,9 +2,10 @@ import { injectable } from "inversify";
 import mongoose from "mongoose";
 import { IWorkAndPayAgreement, IPaymentRecord } from "../../../../../entities";
 
-import { PaymentRecord, PaymentRecordMapper } from "../../models/paymentRecord";
+import { PaymentRecordMapper } from "../../models/paymentRecord";
 import { IWorkAndPayRepository } from "./IWorkAndPayRepository";
-import { WorkAndPayAgreement, WorkAndPayAgreementMapper } from "../../models";
+import { WorkAndPayAgreementMapper } from "../../models";
+import { getTenantModels } from "../../../tenant-context/TenantContextStorage";
 
 @injectable()
 export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
@@ -13,13 +14,18 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
     driverId: string,
   ): Promise<IWorkAndPayAgreement> {
     try {
+      const { WorkAndPayAgreement } = getTenantModels();
       if (!driverId) throw new Error("Driver id is required");
       const agreements = await WorkAndPayAgreement.find({ driver: driverId })
         .populate("vehicle")
         .populate("owner")
-        .populate("driver");
+        .populate({
+          path: "driver",
+          select: "-vehicle",
+        });
       if (!agreements || agreements.length === 0)
         throw new Error("No agreements found for this driver");
+
       return WorkAndPayAgreementMapper.toEntity(
         agreements[0],
       ) as unknown as IWorkAndPayAgreement; // Assuming one agreement per driver for simplicity
@@ -35,6 +41,7 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
     agreement: Omit<IWorkAndPayAgreement, "id">,
   ): Promise<IWorkAndPayAgreement> {
     try {
+      const { WorkAndPayAgreement } = getTenantModels();
       if (!agreement) throw new Error("Agreement data is required");
       const agreementData = this.assignReferences(agreement);
       //check if agreement already exists for the same driver and vehicle
@@ -55,7 +62,6 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
         .populate("vehicle")
         .populate("owner")
         .populate("driver");
-      console.log("Created agreement:", record);
       return WorkAndPayAgreementMapper.toEntity(record);
     } catch (error) {
       throw error;
@@ -67,12 +73,17 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
    */
   async getAgreementById(id: string): Promise<IWorkAndPayAgreement | null> {
     try {
+      const { WorkAndPayAgreement } = getTenantModels();
       if (!id) throw new Error("Agreement id is required");
       const agreement = await WorkAndPayAgreement.findById(id)
         .populate("vehicle")
         .populate("owner")
-        .populate("driver");
+        .populate({
+          path: "driver",
+          select: "-vehicle",
+        });
       if (!agreement) return null;
+
       return WorkAndPayAgreementMapper.toEntity(agreement);
     } catch (error) {
       throw error;
@@ -89,6 +100,7 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
     updatedAgreement: IWorkAndPayAgreement;
     paymentRecord: IPaymentRecord;
   }> {
+    const { WorkAndPayAgreement, PaymentRecord } = getTenantModels();
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -153,6 +165,7 @@ export class WorkAndPayRepositoryImpl implements IWorkAndPayRepository {
     agreementId: string,
   ): Promise<IPaymentRecord[]> {
     try {
+      const { PaymentRecord } = getTenantModels();
       if (!agreementId) throw new Error("Agreement id is required");
       const payments = await PaymentRecord.find({
         workAndPayAgreementId: agreementId,
