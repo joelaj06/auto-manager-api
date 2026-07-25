@@ -23,7 +23,7 @@ export const tenantResolutionMiddleware =
         (req as any).context = {
           tenant: null,
           connection: systemConnection,
-          models: createTenantModels(systemConnection),
+          models: createSystemModels(systemConnection), //createTenantModels(systemConnection),
           requestId,
         };
         return tenantContextStorage.run((req as any).context, () => next());
@@ -38,7 +38,7 @@ export const tenantResolutionMiddleware =
         (req as any).context = {
           tenant: null,
           connection: systemConnection,
-          models: createTenantModels(systemConnection),
+          models: createSystemModels(systemConnection),
           requestId,
         };
         return tenantContextStorage.run((req as any).context, () => next());
@@ -80,7 +80,7 @@ export const tenantResolutionMiddleware =
       (req as any).context = {
         tenant,
         connection: tenantConnection,
-        models: createSystemModels(systemConnection),
+        models: createTenantModels(tenantConnection),//createSystemModels(systemConnection),
         requestId,
       };
 

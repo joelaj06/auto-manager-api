@@ -15,7 +15,7 @@ export class AuthMiddleware {
   private authService: IAuthService;
 
   constructor(
-    @inject(INTERFACE_TYPE.AuthServiceImpl) authService: IAuthService
+    @inject(INTERFACE_TYPE.AuthServiceImpl) authService: IAuthService,
   ) {
     this.authService = authService;
   }
@@ -49,7 +49,7 @@ export class AuthMiddleware {
       }
       if (!(req.user.role as IRole).permissions?.includes(permission)) {
         return next(
-          new UnauthorizedError("User does not have required permission")
+          new UnauthorizedError("User does not have required permission"),
         );
       }
       next();
