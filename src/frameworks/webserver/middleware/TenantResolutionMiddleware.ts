@@ -10,6 +10,7 @@ import {
 } from "../../../error_handler";
 import { tenantContextStorage } from "../../database/tenant-context/TenantContextStorage";
 import { createSystemModels } from "../../database/mongodb/system";
+import config from "../../../config/config";
 
 export const tenantResolutionMiddleware =
   () => async (req: Request, res: Response, next: NextFunction) => {
@@ -33,7 +34,10 @@ export const tenantResolutionMiddleware =
 
       const isBareLocalHost =
         hostname === "localhost" || hostname === "127.0.0.1";
-      if (isBareLocalHost) {
+
+      const knownBaseDomains = ["localhost", "127.0.0.1", config.appBaseDomain];
+      const isKnownBaseDomain = knownBaseDomains.includes(hostname);
+      if (isBareLocalHost || isKnownBaseDomain) {
         const systemConnection = await connectionManager.getSystemConnection();
         (req as any).context = {
           tenant: null,
@@ -42,6 +46,15 @@ export const tenantResolutionMiddleware =
           requestId,
         };
         return tenantContextStorage.run((req as any).context, () => next());
+      }
+
+      // Only treat as a tenant subdomain if hostname is a SUBDOMAIN of your base domain,
+      // not the base domain itself
+      const isSubdomainOfBase =
+        hostname !== config.appBaseDomain &&
+        hostname.endsWith(`.${config.appBaseDomain}`);
+      if (!isSubdomainOfBase) {
+        return next(new BadRequestError(`Unrecognized host: ${hostname}`));
       }
 
       const subdomain = hostname.split(".")[0];
@@ -80,7 +93,7 @@ export const tenantResolutionMiddleware =
       (req as any).context = {
         tenant,
         connection: tenantConnection,
-        models: createTenantModels(tenantConnection),//createSystemModels(systemConnection),
+        models: createTenantModels(tenantConnection), //createSystemModels(systemConnection),
         requestId,
       };
 
