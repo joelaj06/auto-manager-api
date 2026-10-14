@@ -1,0 +1,366 @@
+# 30 — Implementation Plan (Phased)
+
+> Status: **plan only — no code has been written yet.** This is the authoritative build plan and **supersedes the roadmap in [18](18_roadmap_and_phasing.md)**. It turns every design decision (docs 01–29) into ordered phases, work packages, exit criteria and milestones.
+> Product: **Autoforce Manager** · Written 2026-10-14.
+
+## 1. How to read this plan
+
+- **Phases 0–4 get the product to a commercial launch** (platform + fleet + Work & Pay + billing). Phases 5–9 add the remaining modules and maturity.
+- Each phase has: goal, work packages (WP), dependencies, deliverables, **exit criteria** (what must be true to call it done), rough effort, risks and the decisions needed before it starts.
+- Effort is a **rough estimate for one experienced backend developer** (±40%). Two developers can overlap work as shown in §4. Re-estimate after Phase 0, when real velocity is known.
+- WP size: **S** ≈ ≤ 3 days · **M** ≈ 1 week · **L** ≈ 2 weeks · **XL** ≈ 3+ weeks.
+- Frontends (web portal, admin console UI, mobile app) are separate tracks that follow the backend (§5), as decided: backend first.
+
+## 2. Milestones
+
+| Milestone | After | What it means | Rough date from start (1 dev) |
+|---|---|---|---|
+| **M0 Foundation ready** | Phase 0 | Environments, database foundation, backups and auth core work; nothing customer-facing yet | week 6 |
+| **M1 Tenant onboarding works** | Phase 1 | Staff approve a signup, a tenant database is created, owner logs in, invites users, custom roles work, tenants can be deactivated and restored | week 14 |
+| **M2 Private beta** | Phase 3 | Fleet + remittances + Work & Pay + documents with e-signed agreements; trusted tenants, **manual billing**, backups verified | week 30 |
+| **M3 Commercial launch** | Phase 4 | Automated subscription billing, deactivation/restore automation, resellers and commissions, support tooling, legal basics | week 38 |
+| **M4 Full fleet suite** | Phases 5–6 | Rentals v2 + maintenance & compliance | week 50 |
+| **M5 Dealer suite** | Phase 7 | Purchases, import tracking, dealership, multi-currency | week 59 |
+| **M6 Complete platform** | Phases 8–9 | Reports/analytics, platform maturity, integrations | week 70 |
+
+(With two developers working in parallel after Phase 2, M3 lands around week 30–32 and M6 around week 45–50.)
+
+## 3. Ground rules (apply to every phase)
+
+**Definition of done for any work package**
+1. Code reviewed, `tsc --noEmit` and lint pass, boundaries lint passes.
+2. Unit tests for domain logic; integration tests against a real PostgreSQL; **tenant-isolation tests** for any new table/endpoint.
+3. Every endpoint: zod validation, a permission from the manifest, audit logging for state changes, OpenAPI updated.
+4. Money flows: property-based or table-driven tests (schedules, allocations, commissions, proration); ledger stays balanced.
+5. Migrations reviewed (expand → deploy → contract), applied to staging through the real runner.
+6. Docs updated (this folder), changelog entry, new permissions added to the manifest.
+7. Observability: structured logs with request/tenant ids, metrics for new jobs, alerts for new failure modes.
+8. Security checklist: no secrets in logs, input escaping, rate limits on public endpoints, least privilege.
+
+**Engineering conventions**
+- **Same repository, no new repo, no parallel branch strategy** (decision 59). The app is not live and the mobile apps are unpublished, so nothing needs to keep working. The legacy Mongo code is **overridden in place**: it is removed or replaced as the new foundation lands (git history remains the reference). The `dist/` folder, the `vercel.json` serverless config and the pre-commit hook that builds and stages `dist/` are removed in P0-1 (CI builds instead).
+- Target layout is the modular monolith from doc 03, built in the existing `src/`.
+- Feature flags for anything not ready for tenants.
+- Every phase ends with a demo against **staging** with seeded demo tenants, and a short retrospective that updates this plan.
+
+## 4. Phase summary
+
+| Phase | Theme | Effort (1 dev) | Can overlap with | Ends at |
+|---|---|---|---|---|
+| **0** | Foundation: infrastructure, database, backups, core framework | 5–6 wks | – | M0 |
+| **1** | Platform control plane & tenant core | 7–8 wks | – | M1 |
+| **2** | Fleet core & finance recording | 8–10 wks | frontend work can start | – |
+| **3** | Work & Pay + documents & e-signatures | 6–8 wks | – | **M2 private beta** |
+| **4** | Billing, automation, resellers, launch readiness | 6–8 wks | – | **M3 commercial launch** |
+| **5** | Rentals v2 | 5–7 wks | 6, 7 | – |
+| **6** | Maintenance & compliance | 4–6 wks | 5, 7 | **M4** |
+| **7** | Purchases, dealership, multi-currency | 7–9 wks | 5, 6 | **M5** |
+| **8** | Reports & analytics | 4–6 wks | 7 | – |
+| **9** | Platform maturity & integrations | 6–8 wks | ongoing | **M6** |
+
+Critical path: **0 → 1 → 2 → 3 → 4** (everything needed to launch). Phases 5–7 are independent modules once Phase 2 and Phase 4 are done and can run in parallel with a second developer.
+
+---
+
+## Phase 0 — Foundation (5–6 weeks)
+
+**Goal:** a safe, repeatable base: environments, PostgreSQL database-per-tenant machinery, backups, and the core framework every module will use. Nothing here is customer-visible.
+
+| WP | Work package | Key outputs | Size | Docs |
+|---|---|---|---|---|
+| P0-1 | **Repo & tooling** | Remove legacy Mongo code, `dist/`, `vercel.json` and the auto-staging pre-commit hook; folder skeleton (`bootstrap`, `shared`, `platform`, `modules/*`); TypeScript strict; ESLint + Prettier + import-boundary rules; Vitest config; zod-validated config with no insecure defaults; `.env.example`; Dockerfile | M | 03, 17 |
+| P0-2 | **CI/CD** | Pipeline: lint → typecheck → unit → integration (Postgres service) → image build → deploy to staging; migration job; secrets handling | M | 17 |
+| P0-3 | **Infrastructure** | VPS provisioning as code; firewall, SSH hardening, fail2ban; reverse proxy with TLS (wildcard for portal subdomains); PostgreSQL tuned + PgBouncer; Redis; S3-compatible storage buckets; staging and production environments; metrics (Prometheus/Grafana), error tracking (Sentry), log shipping | L | 22 §10 |
+| P0-4 | **Backups & disaster recovery (first cut)** | WAL archiving/PITR to off-site encrypted, write-only storage; nightly per-tenant dump job skeleton; platform DB dumps; backup metadata table + alerts; first written restore runbooks; **automated restore test** | L | 26 |
+| P0-5 | **Database foundation** | `autoforce_platform` schema v0; `tenant_template` build pipeline (migrations on an empty DB in CI); DB roles (`platform_app`, `tenant_app`, `migrator`, `backup`); extensions; **SQL migration runner with tenant fan-out**, version table, version gate; **tenant pool manager** (LRU, PgBouncer-aware, `tenant_info` assertion); tenant-aware transaction helper; base repository (keyset pagination); counters service; audit log + outbox tables; load test with ~500 empty tenant DBs | XL | 22 |
+| P0-6 | **HTTP core** | Request id; logger with redaction; error classes with stable codes + mapper (no stack in prod); zod validation middleware; response envelope/pagination; helmet, CORS, rate limiting; health endpoints; `/api/v1` router; OpenAPI generation | M | 03, 16 |
+| P0-7 | **Auth & access core** | Async password hashing; JWT with `tid`, `sid`, `ver`; refresh-session store; OTP service (hashed, attempts, TTL); tenant resolution (token + host/header agreement); **permission manifest tooling** and `can()` evaluator with scopes/limits and cache; CI check that every route has a manifest permission | L | 16, 28 |
+| P0-8 | **Jobs, events, notifications** | Queue (pg-boss in the platform DB, or BullMQ — decision pending); scheduler with per-tenant fan-out and timezone; outbox dispatcher; notification service abstraction (email adapter + templates); idempotent job pattern | M | 03, 15 |
+| P0-9 | **Test & security harness** | Postgres test containers; tenant fixtures; **generated isolation tests** over every table; regression tests for audit findings C1–C7; k6 load scripts | M | 01, 03 |
+
+**Deliverables:** staging environment running the skeleton API; a script that creates a throw-away tenant database from the template and runs migrations on it; backups running with one successful restore test; CI green.
+
+**Exit criteria**
+- 500 empty tenant DBs created and migrated in a load test within agreed time; pool manager stays under connection limits.
+- A request with tenant A's token on tenant B is rejected (test exists and passes).
+- Backup of the platform DB and a sample tenant DB restored automatically in CI/cron.
+- No endpoint can ship without validation, permission and OpenAPI entry (enforced by CI).
+
+**Decisions needed before starting:** domains, VPS provider/size, backup storage provider and budget, job queue choice, expected tenant counts (consolidated list in [19](19_open_questions.md)).
+
+**Risks:** underestimating database-per-tenant overhead (mitigated by the 500-DB load test early); backup complexity (start with the simplest reliable layer, add layers in order).
+
+---
+
+## Phase 1 — Platform control plane & tenant core (7–8 weeks)
+
+**Goal (M1):** the company can run onboarding. Staff approve new tenants, tenant databases are provisioned with seeded permissions and roles, owners sign in and manage users, branches and roles, and tenants can be deactivated and restored.
+
+| WP | Work package | Key outputs | Size | Docs |
+|---|---|---|---|---|
+| P1-1 | **Platform staff auth & governance** | `platform_users`, MFA (TOTP, passkeys), sessions, invites, seeded platform roles and permissions, step-up auth, **four-eyes approval framework**, immutable platform audit log | L | 27 §2 |
+| P1-2 | **Applications & approval** | Public signup with email/phone verification; applications queue API; approve / reject / needs-info; basic risk signals; assisted-signup hook; applicant notifications | M | 27 §3.2 |
+| P1-3 | **Provisioning saga** | Create DB from template; grants; seed organisation, default branch, **permissions + system roles from the platform catalogue**, expense categories, tax-code placeholders, counters, settings; owner user and first login; platform records (`user_directory`, trial subscription); idempotent and resumable; orphan-DB sweeper; **catalogue sync job** for later releases | XL | 22 §2.6, 28 |
+| P1-4 | **Tenant lifecycle (manual)** | Status machine; deactivate / restore with session revocation and resolution-time gating; reasons and tenant-facing messages; status history; branch deactivate / reactivate with prerequisite checks and branch-aware permission evaluation; `403 TENANT_DEACTIVATED` / `BRANCH_DEACTIVATED`; public `tenant-config` | L | 27 §3.3, 3.5, 23 |
+| P1-5 | **Tenant identity & organisation** | Organisation settings (GHS default, timezone, numbering); branches CRUD; users (invite, accept, disable); **roles and permissions APIs** (system vs custom roles, branch-aware assignments, limits, escalation prevention); `/me/permissions`; login, refresh, logout, password reset and change; sessions list/revoke; user discovery for multi-tenant login | XL | 28, 16 |
+| P1-6 | **Console MVP APIs** | Dashboard basics (tenants by status, pending applications); tenant list and 360 profile; notes and tags; audit viewer; backup and migration status views; system health summary | M | 27 §3.1, 3.4 |
+| P1-7 | **Resellers, part A** | Partner profiles (Super Admin); partner console users and **per-reseller capability grants**; referral code capture; assisted signup; attribution; "My tenants" and application-tracker APIs (no commission yet) | L | 29 |
+| P1-8 | **Files service** | S3-compatible storage + image CDN; pre-signed uploads; `files` table; signed download URLs; used for KYC documents and logos | M | 03 §12 |
+| P1-9 | **Mobile connect** | Signed QR/connect-link generation (server-side signing key); allow-list of backend hosts; deep-link metadata files; in-app scan payload format | S | 23 |
+| P1-10 | **Subscription skeleton & entitlements** | Standard plan (flat per branch), trial subscription, licence-type flag, entitlement resolution and branch-limit enforcement hook; **manual billing** only (no gateway yet) | M | 25 §1–2 |
+
+**Deliverables:** end-to-end onboarding on staging via API (console and tenant); Postman/OpenAPI collection; seeded demo tenants.
+
+**Exit criteria**
+- A signup becomes an application, is approved by staff, and within minutes a tenant DB exists with permissions and system roles seeded; retrying a failed provisioning is safe.
+- Owner creates a custom role, invites a user to one branch only, and the user's access is limited accordingly.
+- Deactivating a tenant blocks every user immediately; restoring brings it back unchanged; deactivating a branch hides that branch's access only.
+- A partner user sees only their own tenants; a field they lack permission for is omitted.
+- Catalogue sync adds a new permission to all tenants without touching custom roles.
+
+**Decisions needed before starting:** approval policy details are set (manual at launch); platform staff names/roles to seed.
+
+**Risks:** provisioning edge cases (partial failures) → covered by saga tests and fault-injection tests.
+
+---
+
+## Phase 2 — Fleet core & finance recording (8–10 weeks)
+
+**Goal:** the daily operations of a fleet business work: vehicles, drivers, customers, expenses, remittances, recording payments with receipts, and correct dashboards.
+
+| WP | Work package | Key outputs | Size | Docs |
+|---|---|---|---|---|
+| P2-1 | **Reference data & settings** | Currency catalogue and `Money` type (minor units, per-currency decimals), tenant base currency (GHS default); numbering formats; **tax codes** (Ghana VAT with effective dates; rates loaded after accountant confirms); vehicle makes/models; default expense categories | M | 20, 13 §6 |
+| P2-2 | **Vehicles v2** | Registry; status machine and history; documents/compliance with expiry; odometer; photos; groups; CSV import/export; vehicle overview API skeleton | XL | 06 |
+| P2-3 | **Parties** | Drivers (licence, guarantors, documents, status), customers (KYC, blacklist, corporate), suppliers | L | 05, 09 |
+| P2-4 | **Assignments** | Vehicle–driver assignment history (one driver per vehicle, enforced by partial unique indexes), handover checklist | M | 06 §6 |
+| P2-5 | **Finance recording core** | Payments (record-only: cash, MoMo, bank, cheque), allocations, receipts (PDF), invoices with VAT lines, cash sessions, **balanced-journal ledger framework**, period lock, wallet/credit | XL | 13 |
+| P2-6 | **Expenses v2** | Category tree; approval rules with role limits; split across vehicles; receipts; recurring expenses; basic budgets; fuel logs | L | 12 |
+| P2-7 | **Remittances & driver ledger** | Modes (`fixed_target` / `variable` / `none`); expected-row job; submit / approve / reject; shortfalls; driver statement; operations board | L | 09 |
+| P2-8 | **Dashboards v1 & stats** | `daily_vehicle_stats`; correct date logic; vehicle P&L v1; remittance and expense dashboards (replaces the old buggy dashboard) | M | 14, 01 H12–H13 |
+| P2-9 | **Notification rules v1** | Tenant SMS provider settings (Hubtel / Arkesel / mNotify adapters, encrypted credentials); document-expiry and remittance-cutoff reminders; in-app notifications and push | M | 15 |
+| P2-10 | **PDF basics & driver endpoints** | HTML→PDF service for receipts and statements; `me` endpoints for drivers (vehicle, ledger, submit remittance, fuel, issue report) | M | 24, 09 |
+
+**Deliverables:** a staging tenant can run a small fleet end to end; OpenAPI is stable enough for the web portal and mobile teams to start (§5).
+
+**Exit criteria**
+- Vehicle, driver, customer, expense, remittance and payment flows covered by integration tests including permission scopes (`own` / `branch` / `all`).
+- Ledger always balances (constraint test); receipts reproduce the same numbers as the ledger.
+- All audited H-bugs relevant to these modules are covered by regression tests (status mismatch, date defaults, dashboard weeks).
+
+**Decisions needed before starting:** VAT rates and registration rules (accountant), remittance mode ownership (owners enable; drivers can choose when enabled).
+
+**Risks:** scope growth in vehicles/finance → time-box with a P2 backlog; money-rounding bugs → property tests.
+
+---
+
+## Phase 3 — Work & Pay, documents & e-signatures (6–8 weeks) → **M2 Private beta**
+
+**Goal:** the hire-purchase product is complete, including legally signed agreements and the transfer letter. After this phase trusted tenants can use the system for real (billing still manual).
+
+| WP | Work package | Key outputs | Size | Docs |
+|---|---|---|---|---|
+| P3-1 | **Document engine** | Versioned templates with locked clauses; data snapshots; PDF rendering worker; verification codes and QR; storage in immutable files | L | 24 §3, §6 |
+| P3-2 | **E-signature** | Signer workflow; drawn signature; OTP confirmation; guest signing links; paper-and-scan; audit page and SHA-256; immutability; reminders | L | 24 §4–6 |
+| P3-3 | **Work & Pay agreements** | Simulator; create and activate; schedule generation (remainder on last instalment); deposit; guarantors; agreement document signed by parties | L | 08 §2–3 |
+| P3-4 | **Payments, allocation & arrears** | Allocation policy (penalties → overdue → current → future); reversals; grace; penalties; daily arrears job; status transitions; advance payments | XL | 08 §3–4 |
+| P3-5 | **Lifecycle cases** | Restructure and payment holidays; early settlement quote; termination; default and repossession; vehicle status integration; driver-chargeable expenses | L | 08 §5 |
+| P3-6 | **Completion & transfer letter** | Auto-generated transfer letter; both parties sign; ownership transfer only when fully signed; DVLA checklist; copies stored | M | 08, 24 §2 |
+| P3-7 | **W&P reporting & notifications** | Statements (PDF), portfolio dashboard (PAR buckets), collections forecast, due/overdue SMS through the tenant's provider | M | 08 §7, 14 |
+| P3-8 | **Beta hardening** | End-to-end money-flow tests; load test; internal penetration test against the OWASP checklist; backup + full restore drill; runbooks; beta tenant onboarding guide | L | 26, 16 |
+
+**Exit criteria (M2)**
+- A full agreement life-cycle (create → pay → arrears → restructure → complete → signed transfer letter → vehicle ownership transferred) runs in an automated end-to-end test.
+- Restore drill completed from backups only, within the recovery targets.
+- At least two trusted tenants onboarded to production with manual subscription invoices.
+
+**Decisions needed before starting:** transfer letter legal wording and signatory rules (lawyer), W&P default rules (grace days, penalty rule).
+
+**Risks:** legal review delays → run in parallel from Phase 2, ship templates with "pending legal review" flag in beta.
+
+---
+
+## Phase 4 — Billing, automation, resellers & launch readiness (6–8 weeks) → **M3 Commercial launch**
+
+**Goal:** turn it into a business: tenants pay for the licence through the app, the lifecycle runs automatically, resellers earn commissions, and the support team has the tools to operate safely.
+
+| WP | Work package | Key outputs | Size | Docs |
+|---|---|---|---|---|
+| P4-1 | **Billing core** | Plans (Standard), subscriptions, invoices with VAT, proration events, billing contacts, **Billing tab APIs** (invoices, full transaction history, receipts, payment methods) | L | 25 §2–3, §6 |
+| P4-2 | **Payment gateway** | Hosted checkout (Paystack candidate), signed idempotent webhooks, server-side verification, saved cards, MoMo prompt flow, refunds, daily settlement reconciliation, webhook inspector | L | 25 §4, 27 §3.6 |
+| P4-3 | **Billing automation** | Dunning policy; reminders by **email, SMS, in-app banner and push**; auto-deactivate and auto-restore; **billing-only sign-in scope**; extensions (max 10 days, approval, limits); manual lock; safeguards: dry-run mode, circuit breaker, gateway-health guard, 48 h review queue | XL | 25 §5 |
+| P4-4 | **Enterprise licence** | Licence flag (locks at first payment); hand-built quote builder with `counts_as_licence` lines; subscription price items; first invoice with one-time items | M | 25 §2.1 |
+| P4-5 | **Branch management & entitlements** | Console add / deactivate / reactivate / reassign wizard with price impact; tenant self-service with confirmation; billing-vs-actual reconcile job; limit enforcement | M | 27 §3.5 |
+| P4-6 | **Reseller commissions** | Commission terms per reseller (Standard / Enterprise percentages); first-purchase commission engine; payable queue; payouts (MoMo / bank / cash / other with proof, cash second-approver and acknowledgement); statements; clawbacks; reseller views and grants | L | 29 |
+| P4-7 | **Console operations readiness** | Support access (impersonation) with full trail; user support actions (reset password / MFA, force logout, owner recovery); announcements and maintenance windows; feature flags and entitlement overrides; four-eyes wired to dangerous actions; alerts centre and on-call integration; `usage_daily` | XL | 27 |
+| P4-8 | **Legal & operations** | Terms and privacy versions and acceptance tracking; tenant data export; minimal data-protection request tracker; status page; quarterly restore drill scheduled; incident and on-call runbooks | M | 26, 27 §3.15 |
+| P4-9 | **Launch readiness** | Production dry-run of billing automation (dry-run mode on for the first weeks), load test at target tenant count, security review, pricing configured, support process, go-live checklist | M | 25 §5.6 |
+
+**Exit criteria (M3)**
+- A tenant goes: trial → invoice → reminders → payment → active, and also: overdue → grace → automatic deactivation → pays in Billing tab → automatic restore, verified in staging with the gateway's test mode.
+- A reseller's first-purchase commission is calculated, appears in the payable queue and is paid out with a recorded method; a refund reverses it.
+- Support access sessions leave a complete trail; dangerous actions require a second approver.
+- Dry-run of the deactivation job produces the expected list on production data for at least two weeks before enforcement is switched on.
+
+**Decisions needed before starting:** gateway choice, actual price per branch, trial length and card requirement, reminder schedule, extension frequency, commission percentages for the first resellers, tax treatment of commission.
+
+**Risks:** wrongly deactivating a paying tenant (hence the safeguards); gateway/MoMo behaviour differences → build against provider sandbox early and keep a manual-payment path.
+
+---
+
+## Phase 5 — Rentals v2 (5–7 weeks)
+
+**Goal:** a complete car-rental product: reservations, availability, pricing, handover, deposits, damages.
+
+| WP | Work package | Size | Docs |
+|---|---|---|---|
+| P5-1 | Vehicle classes, rate plans, extras; **pricing service** (pure, heavily tested; seasons, weekends, mileage, chauffeur, surcharges, VAT) | L | 07 §4 |
+| P5-2 | **Availability engine**: `vehicle_blocks` with database exclusion constraint, buffers, class booking, calendar API | L | 07 §3, 22 §4 |
+| P5-3 | Booking lifecycle: quote → reserve → confirm → check-out → check-in → close; cancellations and no-shows; extensions with re-quote | L | 07 §2 |
+| P5-4 | Inspections and damages: photos, fuel/odometer, diff at check-in, damage records, optional work-order link, charges | M | 07 §6 |
+| P5-5 | Deposits and invoices via finance recording; corporate accounts and credit limits; blacklist checks | M | 07 §5, 8 |
+| P5-6 | Rental agreement document and signature; handover checklist | M | 24 |
+| P5-7 | Rental notifications (pickup, return, overdue), reports (utilisation, ADR, deposits held, pickups/returns board) | M | 07 §10–11 |
+
+**Exit:** double-booking impossible (constraint test with concurrent requests); price quotes match fixtures; full booking life-cycle e2e test.
+
+---
+
+## Phase 6 — Maintenance & compliance (4–6 weeks)
+
+| WP | Work package | Size | Docs |
+|---|---|---|---|
+| P6-1 | Service plans and **due engine** (km / time triggers, recomputed on odometer events) | M | 12 §2 |
+| P6-2 | Work orders, vendors, labour/parts lines, downtime blocks, cost allocation (company / driver / customer / insurer) | L | 12 §3 |
+| P6-3 | Parts inventory (basic): catalogue, stock moves, reorder alerts | M | 12 §4 |
+| P6-4 | Incidents and insurance claims; traffic offences; fuel anomaly detection | M | 06 §7–8 |
+| P6-5 | Maintenance KPIs, compliance dashboard, cost-per-km; notification rules | M | 12 §6, 14 |
+
+**Exit (M4 with Phase 5):** a vehicle off-road automatically blocks rentals and pauses W&P instalments suggestion; service due reminders fire on odometer updates.
+
+---
+
+## Phase 7 — Purchases, dealership & multi-currency (7–9 weeks)
+
+| WP | Work package | Size | Docs |
+|---|---|---|---|
+| P7-1 | **Multi-currency**: enabled currencies per tenant, transaction currency, manual FX rates, base-currency snapshots, FX gain/loss postings | L | 20 |
+| P7-2 | Suppliers, payables and supplier payments (recording) | M | 11 |
+| P7-3 | **Purchases**: cost components in multiple currencies, landed-cost allocation, import status timeline, documents, receiving → creates the vehicle | XL | 11 |
+| P7-4 | Dealer stock: statuses, pricing (cost / min price hidden by permission), ageing, transfers, consignment | L | 10 §2 |
+| P7-5 | Leads / CRM, test drives, quotes | L | 10 §4–6 |
+| P7-6 | Deals: reserve, payments, financing (cash / bank / in-house via Work & Pay engine), trade-ins, delivery, documents (sales agreement, delivery note) | XL | 10 §6–7 |
+| P7-7 | Dealer commissions (tenant staff), depreciation job, COGS and sale postings, gross-profit per unit | M | 10 §8, 13 |
+| P7-8 | Dealer reports | M | 14 |
+
+**Exit (M5):** landed cost per vehicle reconciles with payments in two currencies; profit per unit matches the ledger.
+
+---
+
+## Phase 8 — Reports & analytics (4–6 weeks)
+
+| WP | Work package | Size | Docs |
+|---|---|---|---|
+| P8-1 | **Report engine**: definitions in code, JSON / CSV / XLSX / PDF, async jobs with download links, per-tenant concurrency limits | L | 14 §2 |
+| P8-2 | Report catalogue (executive, fleet, drivers, W&P, rentals, dealer, maintenance, finance, tax) | XL | 14 §3 |
+| P8-3 | Scheduled reports by email; role-based dashboards; vehicle P&L complete | M | 14 §4 |
+| P8-4 | Platform analytics in the console: growth funnel, adoption, health scores, cohorts, cost-to-serve, reseller performance | L | 27 §3.16 |
+| P8-5 | Performance pass: summary tables, indexes review, read replica option | M | 22 §11 |
+
+---
+
+## Phase 9 — Platform maturity & integrations (6–8 weeks, ongoing)
+
+| WP | Work package | Size | Docs |
+|---|---|---|---|
+| P9-1 | Cluster management: capacity view, add cluster, **move tenant between clusters**, orphan sweeper hardening | L | 22 §2.2, 27 §3.14 |
+| P9-2 | **Cold archive** and restore runbook automation; annual archive verification; erasure-by-anonymisation with ledger | L | 26 §8 |
+| P9-3 | Support desk (tickets, canned responses, SLA), demo / sandbox tenants, onboarding concierge checklists | M | 27 §3.13, §5 |
+| P9-4 | Telematics / GPS ingestion (time-series), utilisation from ignition data, geofences | XL | 06 §9 |
+| P9-5 | Accounting export (QuickBooks / Xero / CSV), bank-statement import for reconciliation | M | 13 |
+| P9-6 | WhatsApp channel (tenant's own business account), deferred deep links on iOS, OCR for receipts | L | 15, 23 |
+| P9-7 | Enterprise extras: API keys and webhooks for tenants, custom domains, dedicated clusters or per-tenant DB credentials | L | 04, 22 |
+
+---
+
+## 5. Parallel tracks
+
+| Track | Starts | Notes |
+|---|---|---|
+| **Web portal (tenant)** | After Phase 2's API is stable (≈ week 20) | Billing tab and roles UI after Phases 1 and 4; QR connect page after P1-9 |
+| **Admin console UI** | Alongside Phase 1 (API-first) | MVP screens for applications and tenants by M1; billing and reseller screens by M3 |
+| **Mobile app** | After Phase 3 (≈ week 30) | App is updated to the new `/api/v1`; scan-to-connect and driver screens first (decision 28: app revisited after the backend) |
+| **Legal / content** | From Phase 2 | VAT rates (accountant), transfer-letter and agreement wording (lawyer), terms and privacy, SMS and email templates |
+| **Operations** | From Phase 0 | Support process, on-call rota, runbooks, pricing and reseller agreements |
+
+## 6. Dependencies between phases
+
+```
+P0 ─▶ P1 ─▶ P2 ─▶ P3 ─▶ P4          (critical path to launch)
+              │          │
+              ├────────▶ P5 ─┐
+              ├────────▶ P6 ─┼─▶ P8 ─▶ P9
+              └─ (P4) ──▶ P7 ─┘
+```
+- P3 needs P2's finance recording, vehicles, drivers and documents infrastructure from P1/P2.
+- P4 needs P1 (tenants, lifecycle, entitlements), P2 (notifications) and P3 for a meaningful product to sell.
+- P5, P6, P7 need P2; P7 also needs P3's engine for in-house financing and P4 for multi-currency reporting consistency.
+- P8 reads from everything built so far, so build report definitions as modules land and finish the engine here.
+
+## 7. Risks (project level)
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Database-per-tenant operational overhead higher than expected | Slower provisioning, connection pressure | Phase 0 load test with 500 DBs; PgBouncer; cluster cap ~1,000 tenants; warm pool of spare DBs |
+| Single developer capacity / key-person risk | Delays | Keep docs current; second developer from Phase 2; strong CI |
+| Money-handling bugs (schedules, allocation, commission, proration) | Financial errors, trust loss | Property tests, ledger invariants, dry-run modes, reconciliation jobs |
+| Wrongful automatic deactivation | Angry paying customers | Dry-run, circuit breaker, gateway guard, 48 h review queue, easy restore |
+| Legal uncertainty (hire-purchase, e-signatures, data protection, no-delete vs erasure) | Rework of documents/flows | Early lawyer review; templates versioned and replaceable; flags for beta |
+| Payment-provider constraints (MoMo recurring, sandbox differences) | Billing UX limits | Manual payment path always available; early sandbox integration |
+| App-store policy on in-app payments | Mobile billing blocked | Billing tab on web; app links out |
+| Scope creep from "roll out everything" | Launch slips | Strict phase exit criteria; launch at M3 with only P0–P4; later modules are additive |
+| Backup/restore never tested | Data loss | Automated weekly restore test from Phase 0; quarterly drills |
+
+## 8. Working agreement and what is still needed before Phase 0
+
+### 8.1 Working agreement (decision 60)
+
+- **I never commit.** I do not run `git add`, `git commit`, branch or push. All changes stay in the working tree for you to inspect and commit yourself.
+- After each work package I give you: what changed (files and behaviour), the tests I ran and their results, anything I could not verify, and a **suggested commit message** (conventional-commit style, one message per logical unit so you can commit in small pieces).
+- I work **one work package at a time** and stop at the end of each for your review unless you tell me to continue with the next one.
+- Anything destructive (deleting legacy modules, dropping files, changing the pre-commit hook) is listed first and done as its own reviewable step.
+- You give the go-ahead per phase, and I will tell you when a phase's prerequisites are ready.
+
+### 8.2 Answered
+
+| Item | Answer |
+|---|---|
+| Repository / branching | Same repo; override legacy code in place (decision 59) |
+| Mobile apps | Unpublished; no compatibility needed; updated later with the new features. Package / bundle IDs are only needed at P1-9 (QR deep links) |
+
+### 8.3 Still needed (Phase 0)
+
+| Item | Blocks | Default I will use if you don't say otherwise |
+|---|---|---|
+| Domains (API, web portal, admin console) | P0-3 TLS/proxy, P1-9 deep links | `localhost` / `*.localhost` for local work |
+| VPS provider and size; off-site backup storage provider and budget; recovery targets | P0-3 infrastructure, P0-4 backups | Local Docker Compose only; backup jobs built and tested locally against MinIO until a real provider is chosen |
+| Job queue | P0-8 | **pg-boss** (Postgres-based) |
+| Expected tenant counts (year 1 / year 3) | P0-5 sizing assumptions | Plan for ~1,000 tenants per cluster |
+| Who builds / second developer | scheduling only | Single developer assumed |
+
+**Phase 0 can start before the infrastructure answers.** P0-1, P0-5, P0-6, P0-7, P0-8 and P0-9 run entirely on your machine with Docker Compose. P0-2 (CI) needs only the Git host, and P0-3/P0-4 wait for the VPS and storage decisions.
+
+### 8.4 Start condition
+
+I am **ready to start Phase 0** as soon as you say so. Suggested first step: P0-1 (repo and tooling), delivered as a reviewable set of changes with suggested commit messages.
+
+## 9. Progress
+
+| WP | Status | Notes |
+|---|---|---|
+| P0-1 Repo & tooling | **Done — awaiting your review** (2026-10-14) | Legacy code removed; ESM/TS 6/Vitest/ESLint+boundaries/Prettier; zod config; Dockerfile; compose.yaml. Runtime image switched to distroless `nodejs24-debian13:nonroot` (Scout: 0 critical/high/medium/low vs 4C/18H on `node:24-slim`). Docker image build not verified yet (Docker daemon not running) |
+
+## 10. Change log of this plan
+
+- 2026-10-14: first version, replaces doc 18.
+- 2026-10-14: same repo, legacy code overridden in place; mobile apps unpublished; no automatic commits; working agreement added (§8).
