@@ -66,6 +66,29 @@ database, the template and every tenant database.
 | `yarn test:integration`             | Integration tests (`*.int.test.ts`) against the compose PostgreSQL (uses its own `_test` databases and roles) |
 | `yarn verify`                       | Typecheck, lint, format check and tests — run before every commit                                             |
 
+## HTTP API
+
+| Endpoint                   | Purpose                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET /health/live`         | Liveness: the process is up (never touches dependencies)                                                    |
+| `GET /health/ready`        | Readiness: dependencies answer (`503` when not) — no details are exposed                                    |
+| `GET /api/v1/openapi.json` | OpenAPI 3.1 document generated from the route declarations (off in production unless `EXPOSE_OPENAPI=true`) |
+
+Conventions for every endpoint:
+
+- **Responses:** `{ "data": … }` (plus `"meta"` for pages); errors are
+  `{ "error": { "code", "message", "details"?, "requestId" } }` with a stable `code`.
+- **Request ids:** every response carries `X-Request-Id` (a well-formed incoming one is kept);
+  it appears in every log line written during the request.
+- **Validation:** routes declare zod schemas for params, query and body (`adapters/routes`);
+  all invalid fields are reported at once, values are never echoed.
+- **Security:** helmet headers, CORS allow-list (wildcard subdomains supported), JSON bodies
+  limited in size, `/api` rate-limited per client, no stack traces in responses.
+- **Logging:** JSON lines (`LOG_FORMAT=json`) or readable (`pretty`); passwords, tokens, OTPs,
+  authorization headers and connection-string credentials are redacted automatically.
+- **Shutdown:** on SIGTERM/SIGINT the server stops accepting requests, finishes in-flight ones
+  and closes database pools, within `SHUTDOWN_TIMEOUT_MS`.
+
 ## Continuous integration
 
 GitHub Actions (`.github/workflows/`):
@@ -80,13 +103,31 @@ Dependabot (`.github/dependabot.yml`) opens weekly update PRs for npm packages, 
 
 ## Project layout
 
+Clean Architecture (onion), object-oriented, with dependencies pointing inwards only:
+
 ```
 src/
-  bootstrap/   composition root and process entry point
-  shared/      reusable kernel and infrastructure (config, …)
-  platform/    control plane: tenants, billing, resellers, admin console
-  modules/     tenant business modules (see src/modules/README.md)
+  domain/           entities, value objects, enums, domain services, repository interfaces, errors
+  application/      use cases, ports (I-prefixed interfaces), DTOs, application services, errors
+  adapters/         controllers, routes, middleware, presenters, validators, workers
+  infrastructure/   implementations of ports: database (Postgres*), config, context, …
+  framework/        composition root (Inversify container), bootstrap, lifecycle, CLI commands
+  testing/          test helpers (never imported by production code)
+  index.ts          API entry point
+  worker.ts         background worker entry point (P0-8)
 ```
 
-Architecture rules are enforced by ESLint (`eslint.config.js`); see
+| Layer            | May depend on                      |
+| ---------------- | ---------------------------------- |
+| `domain`         | nothing (no third-party packages)  |
+| `application`    | `domain` (no third-party packages) |
+| `adapters`       | `application`, `domain`            |
+| `infrastructure` | `application`, `domain`            |
+| `framework`      | everything (wires it all together) |
+
+Dependency injection uses an **Inversify** container in `framework/dependency-injection`. Classes
+take their dependencies (interfaces) through the constructor and carry **no decorators**; every
+binding is a factory listing its dependencies by token, so the inner layers stay framework-free.
+
+These rules are enforced by ESLint (`eslint.config.js`); see
 [`docs/03_target_architecture.md`](docs/03_target_architecture.md).

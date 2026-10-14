@@ -1,5 +1,7 @@
 # 03 — Target Architecture
 
+> **Update 2026-10-14 (decisions 67–68):** the code layout is **layer-first Clean Architecture (onion), OOP** — `src/{domain, application, adapters, infrastructure, framework}` — not the module-first layout in §1 below, and DI uses an **Inversify** container with decorator-free factory bindings (§3 superseded). See the README "Project layout" section. The layering rules, events/outbox, validation, error and testing guidance still apply.
+
 > **Update 2026-10-13:** database is now **PostgreSQL** and hosting is a **VPS with containers** — see [22](22_postgresql_architecture.md). Sections 9–10 (caching, deployment) and any MongoDB wording are superseded by 22. The module layout, layering, events/outbox, validation, error and testing guidance still apply. Job queue: pg-boss or BullMQ (22 §6). Tenancy is **database-per-tenant** (22 §2). Backups: [26](26_backup_and_disaster_recovery.md).
 
 ## 1. Style: modular monolith

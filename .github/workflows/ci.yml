@@ -114,18 +114,24 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke test (the app must boot inside the distroless image)
-        # Throw-away values: the app validates its configuration and loads the migrations
-        # without connecting to a database yet.
+      - name: Smoke test (the API must start and answer inside the distroless image)
+        # Throw-away values; no database is attached, so only liveness is checked.
         run: |
-          output="$(docker run --rm \
+          docker run -d --name smoke -p 3000:3000 \
             -e DATABASE_SSL=disable \
             -e PLATFORM_DB_PASSWORD=smoke_test_only_pw \
             -e TENANT_DB_PASSWORD=smoke_test_only_pw \
             -e MIGRATOR_DB_PASSWORD=smoke_test_only_pw \
-            autoforce-api:ci)"
-          echo "$output"
-          echo "$output" | grep -q "autoforce-manager-api bootstrapped (env=production"
+            autoforce-api:ci
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/health/live; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:3000/health/live
+          docker stop --time 20 smoke
+          docker logs smoke
+          docker logs smoke | grep -q '"msg":"API listening"'
+          docker logs smoke | grep -q '"msg":"Shutdown complete"'
 
       - name: Scan image (fail on fixable critical or high vulnerabilities)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

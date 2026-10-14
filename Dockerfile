@@ -29,5 +29,8 @@ COPY --from=build /app/dist ./dist
 COPY db ./db
 COPY package.json ./
 EXPOSE 3000
+# No shell or curl in distroless: probe liveness with Node's built-in fetch.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["/nodejs/bin/node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT ?? 3000}/health/live`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 # The image's entrypoint is the node binary, so CMD holds only node's arguments.
-CMD ["--enable-source-maps", "dist/bootstrap/main.js"]
+CMD ["--enable-source-maps", "dist/index.js"]

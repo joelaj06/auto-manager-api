@@ -112,7 +112,7 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 
 | # | Topic | Decision | Why |
 |---|---|---|---|
-| 62 | Toolchain (P0-1) | **Native ESM project on Node 24, TypeScript 6.0, Vitest, plain composition-root DI (no Inversify), Yarn 1** | Key dependencies (pg-boss, Inversify 8, jose, zod 4) are ESM-only; Jest's ESM support is still experimental. Inversify needs decorator metadata that the fast ESM tools (tsx, Vitest) don't emit, so dev/test could behave differently from production. TypeScript is held at 6.0 because typescript-eslint and ts tooling don't support TS 7 yet. *Proposed by Claude; reversible — say if you prefer otherwise* |
+| 62 | Toolchain (P0-1) | **Native ESM project on Node 24, TypeScript 6.0, Vitest, plain composition-root DI (no Inversify), Yarn 1** — *DI part superseded by decision 67* | Key dependencies (pg-boss, Inversify 8, jose, zod 4) are ESM-only; Jest's ESM support is still experimental. Inversify needs decorator metadata that the fast ESM tools (tsx, Vitest) don't emit, so dev/test could behave differently from production. TypeScript is held at 6.0 because typescript-eslint and ts tooling don't support TS 7 yet. *Proposed by Claude; reversible — say if you prefer otherwise* |
 
 ## Round 11 (2026-10-14)
 
@@ -127,6 +127,13 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 64 | Query layer | **Plain `pg` (node-postgres) with small typed helpers** for the database foundation; the Drizzle-vs-Kysely choice is made in P1-5 when the first module tables arrive | The foundation is mostly DDL, migrations and connection management, where an ORM adds nothing; keeps the choice open with real module code in hand |
 | 65 | Local ports | **PostgreSQL on 54320, Redis on 63790** in `compose.yaml` and `.env.example` | Port 5432 was already used by another project's container on the development machine; the non-default ports let both run side by side |
 | 66 | Database roles | **Login roles are members of group roles `af_platform_rw` / `af_tenant_rw`**; migrations grant to the groups | Migrations stay independent of login names (tests use their own login roles against the same grants) |
+
+## Architecture style (2026-10-14)
+
+| # | Topic | Decision | Impact |
+|---|---|---|---|
+| 67 | Dependency injection | **Inversify container** (product owner's choice). *Implementation:* classes carry no decorators; bindings use `toResolvedValue(factory, [tokens])` in `framework/dependency-injection/container.ts`; singletons by default; resources released through `onDeactivation` + `unbindAllAsync()` | Supersedes the "plain composition root" part of decision 62. Inner layers stay free of the DI framework and behave the same under tsc, tsx and Vitest |
+| 68 | Code organisation | **Clean Architecture (onion), OOP, layer-first folders** following the product owner's reference project: `src/{domain, application, adapters, infrastructure, framework}` with `index.ts` / `worker.ts` entries; `I`-prefixed port interfaces in `application/ports` and repository interfaces in `domain/repositories`; use cases as classes in `application/use-cases/<area>`; `Postgres*` implementations in `infrastructure/database` | Supersedes the module-first layout of doc 03 §1. P0-5 restructured accordingly. ESLint enforces the onion (inner layers never import outer ones; domain/application import no third-party packages; production code never imports framework/ or testing/) |
 
 ## Consequences in one page
 

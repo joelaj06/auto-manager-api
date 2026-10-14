@@ -7,99 +7,68 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 /**
- * Architecture boundaries (docs/03_target_architecture.md §2, docs/04 §2):
- *  - shared/     reusable kernel and infrastructure; depends on nothing else in src
- *  - platform/   control plane (tenants, billing, console); may use shared and a module's public entry
- *  - modules/<m> tenant business modules; may use shared and other modules' public entries,
- *                never the platform (tenant code must not reach the control plane)
- *  - bootstrap/  composition root; may import anything
- * Inside a module: domain ← application ← infrastructure / http (inner layers never import outer ones).
+ * Clean Architecture (onion) boundaries — dependencies point inwards only:
+ *
+ *   domain          entities, value objects, domain services, repository interfaces
+ *   application     use cases, ports (interfaces), DTOs, application services   → domain
+ *   adapters        controllers, routes, middleware, presenters, validators, workers
+ *                                                                         → application, domain
+ *   infrastructure  implementations of ports: database, mail, storage, config  → application, domain
+ *   framework       composition root (Inversify container), bootstrap, CLI     → anything
+ *
+ * domain/ and application/ may not import third-party packages at all, so they stay free of
+ * frameworks. Production code never imports src/testing (test files may).
  */
-const architecture = {
-  plugins: { boundaries },
-  settings: {
-    "import/resolver": { typescript: { alwaysTryTypes: true } },
-    "boundaries/include": ["src/**/*.ts"],
-    "boundaries/elements": [
-      { type: "bootstrap", pattern: "src/bootstrap", partialMatch: false },
-      { type: "shared", pattern: "src/shared", partialMatch: false },
-      { type: "platform", pattern: "src/platform", partialMatch: false },
-      {
-        type: "module-layer",
-        pattern: "src/modules/*/*",
-        partialMatch: false,
-        capture: ["module", "layer"],
-        exclusive: true,
-      },
-      { type: "module-public", pattern: "src/modules/*", partialMatch: false, capture: ["module"] },
-    ],
+const layers = ["domain", "application", "adapters", "infrastructure", "framework", "testing"];
+
+/** Inner layers never depend on outer ones (production code and tests alike). */
+const layerPolicies = [
+  {
+    from: { element: { type: "domain" } },
+    disallow: {
+      to: { element: { types: { anyOf: ["application", "adapters", "infrastructure"] } } },
+    },
   },
-  rules: {
-    "boundaries/dependencies": [
-      "error",
-      {
-        default: "allow",
-        policies: [
-          {
-            from: { element: { type: "shared" } },
-            disallow: {
-              to: {
-                element: {
-                  types: {
-                    anyOf: ["bootstrap", "platform", "module-layer", "module-public"],
-                  },
-                },
-              },
-            },
-          },
-          {
-            from: { element: { types: { anyOf: ["module-layer", "module-public"] } } },
-            disallow: { to: { element: { types: { anyOf: ["platform", "bootstrap"] } } } },
-          },
-          {
-            from: { element: { type: "platform" } },
-            disallow: { to: { element: { types: { anyOf: ["bootstrap", "module-layer"] } } } },
-          },
-          {
-            // A module may only use another module through that module's public entry files.
-            from: { element: { types: { anyOf: ["module-layer", "module-public"] } } },
-            disallow: {
-              to: {
-                element: {
-                  type: "module-layer",
-                  captured: { module: "!{{ from.element.captured.module }}" },
-                },
-              },
-            },
-          },
-          {
-            from: { element: { type: "module-layer", captured: { layer: "domain" } } },
-            disallow: {
-              to: {
-                element: {
-                  type: "module-layer",
-                  captured: { layer: "{application,infrastructure,http}" },
-                },
-              },
-            },
-          },
-          {
-            from: { element: { type: "module-layer", captured: { layer: "application" } } },
-            disallow: {
-              to: {
-                element: { type: "module-layer", captured: { layer: "{infrastructure,http}" } },
-              },
-            },
-          },
-          {
-            from: { element: { type: "module-layer", captured: { layer: "infrastructure" } } },
-            disallow: { to: { element: { type: "module-layer", captured: { layer: "http" } } } },
-          },
-        ],
-      },
-    ],
+  {
+    from: { element: { type: "application" } },
+    disallow: { to: { element: { types: { anyOf: ["adapters", "infrastructure"] } } } },
   },
+  {
+    from: { element: { type: "adapters" } },
+    disallow: { to: { element: { type: "infrastructure" } } },
+  },
+  {
+    from: { element: { type: "infrastructure" } },
+    disallow: { to: { element: { type: "adapters" } } },
+  },
+];
+
+/** Production code only: tests may use the composition root, test helpers and test libraries. */
+const productionOnlyPolicies = [
+  {
+    from: {
+      element: { types: { anyOf: ["domain", "application", "adapters", "infrastructure"] } },
+    },
+    disallow: { to: { element: { types: { anyOf: ["framework", "testing"] } } } },
+  },
+];
+
+const boundarySettings = {
+  "import/resolver": { typescript: { alwaysTryTypes: true } },
+  "boundaries/include": ["src/**/*.ts"],
+  "boundaries/elements": layers.map((type) => ({
+    type,
+    pattern: `src/${type}`,
+    partialMatch: false,
+  })),
 };
+
+/** @param {Record<string, unknown>[]} policies */
+const architecture = (policies) => ({
+  plugins: { boundaries },
+  settings: boundarySettings,
+  rules: { "boundaries/dependencies": ["error", { default: "allow", policies }] },
+});
 
 export default defineConfig(
   { ignores: ["dist/**", "coverage/**", "node_modules/**", "docs/**", ".qodo/**"] },
@@ -124,13 +93,48 @@ export default defineConfig(
     },
   },
   {
-    // The bootstrap may print to the console until the logger lands in P0-6.
-    files: ["src/bootstrap/**/*.ts"],
+    // Tests: Vitest matchers (expect.any …) and supertest response bodies are typed as any,
+    // and spies are asserted unbound. Production code keeps the strict rules.
+    files: ["src/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/unbound-method": "off",
+    },
+  },
+  {
+    // The entry point reports startup failures and CLI commands print results to the console.
+    files: ["src/index.ts", "src/framework/**/*.ts"],
     rules: { "no-console": "off" },
   },
   {
     files: ["src/**/*.ts"],
-    ...architecture,
+    ignores: ["src/**/*.test.ts"],
+    ...architecture([...layerPolicies, ...productionOnlyPolicies]),
+  },
+  {
+    files: ["src/**/*.test.ts"],
+    ...architecture(layerPolicies),
+  },
+  {
+    // domain/ and application/ stay framework-free: only relative and node: imports.
+    files: ["src/domain/**/*.ts", "src/application/**/*.ts"],
+    ignores: ["src/**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^(?!\\.{1,2}/|node:)",
+              message: "domain/ and application/ may not import third-party packages.",
+            },
+          ],
+        },
+      ],
+    },
   },
   prettier,
 );
