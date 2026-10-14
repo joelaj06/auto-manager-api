@@ -34,8 +34,21 @@ yarn dev
 | `yarn typecheck`                    | Type-check everything (`tsc --noEmit`)                            |
 | `yarn lint` / `yarn lint:fix`       | ESLint, including architecture boundary rules                     |
 | `yarn format` / `yarn format:check` | Prettier                                                          |
-| `yarn test` / `yarn test:watch`     | Vitest                                                            |
+| `yarn test` / `yarn test:watch`     | Unit tests (Vitest)                                               |
+| `yarn test:integration`             | Integration tests (`*.int.test.ts`, need `docker compose up -d`)  |
 | `yarn verify`                       | Typecheck, lint, format check and tests — run before every commit |
+
+## Continuous integration
+
+GitHub Actions (`.github/workflows/`):
+
+| Workflow                | When                            | What                                                                                                                                                                                                                                             |
+| ----------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ci.yml`                | push to `master`, pull requests | typecheck, lint, format check, unit tests → integration tests (PostgreSQL + Redis services) → Docker image build, smoke test, vulnerability scan (fails on fixable critical/high), and on `master` publishes `ghcr.io/joelaj06/auto-manager-api` |
+| `codeql.yml`            | push, pull requests, weekly     | Static security analysis                                                                                                                                                                                                                         |
+| `dependency-review.yml` | pull requests                   | Blocks new dependencies with high/critical vulnerabilities                                                                                                                                                                                       |
+
+Dependabot (`.github/dependabot.yml`) opens weekly update PRs for npm packages, the digest-pinned Docker base images and the SHA-pinned actions. No repository secrets are needed yet; deployment to staging is added with the VPS in P0-3.
 
 ## Project layout
 

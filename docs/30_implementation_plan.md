@@ -70,15 +70,15 @@ Critical path: **0 → 1 → 2 → 3 → 4** (everything needed to launch). Phas
 |---|---|---|---|---|
 | P0-1 | **Repo & tooling** | Remove legacy Mongo code, `dist/`, `vercel.json` and the auto-staging pre-commit hook; folder skeleton (`bootstrap`, `shared`, `platform`, `modules/*`); TypeScript strict; ESLint + Prettier + import-boundary rules; Vitest config; zod-validated config with no insecure defaults; `.env.example`; Dockerfile | M | 03, 17 |
 | P0-2 | **CI/CD** | Pipeline: lint → typecheck → unit → integration (Postgres service) → image build → deploy to staging; migration job; secrets handling | M | 17 |
-| P0-3 | **Infrastructure** | VPS provisioning as code; firewall, SSH hardening, fail2ban; reverse proxy with TLS (wildcard for portal subdomains); PostgreSQL tuned + PgBouncer; Redis; S3-compatible storage buckets; staging and production environments; metrics (Prometheus/Grafana), error tracking (Sentry), log shipping | L | 22 §10 |
-| P0-4 | **Backups & disaster recovery (first cut)** | WAL archiving/PITR to off-site encrypted, write-only storage; nightly per-tenant dump job skeleton; platform DB dumps; backup metadata table + alerts; first written restore runbooks; **automated restore test** | L | 26 |
+| P0-3 | **Infrastructure** — *deferred until hosting is available (decision 63)* | VPS provisioning as code; firewall, SSH hardening, fail2ban; reverse proxy with TLS (wildcard for portal subdomains); PostgreSQL tuned + PgBouncer; Redis; S3-compatible storage buckets; staging and production environments; metrics (Prometheus/Grafana), error tracking (Sentry), log shipping | L | 22 §10 |
+| P0-4 | **Backups & disaster recovery (first cut)** — *local part now, production part when hosting is available (decision 63)* | WAL archiving/PITR to off-site encrypted, write-only storage; nightly per-tenant dump job skeleton; platform DB dumps; backup metadata table + alerts; first written restore runbooks; **automated restore test** | L | 26 |
 | P0-5 | **Database foundation** | `autoforce_platform` schema v0; `tenant_template` build pipeline (migrations on an empty DB in CI); DB roles (`platform_app`, `tenant_app`, `migrator`, `backup`); extensions; **SQL migration runner with tenant fan-out**, version table, version gate; **tenant pool manager** (LRU, PgBouncer-aware, `tenant_info` assertion); tenant-aware transaction helper; base repository (keyset pagination); counters service; audit log + outbox tables; load test with ~500 empty tenant DBs | XL | 22 |
 | P0-6 | **HTTP core** | Request id; logger with redaction; error classes with stable codes + mapper (no stack in prod); zod validation middleware; response envelope/pagination; helmet, CORS, rate limiting; health endpoints; `/api/v1` router; OpenAPI generation | M | 03, 16 |
 | P0-7 | **Auth & access core** | Async password hashing; JWT with `tid`, `sid`, `ver`; refresh-session store; OTP service (hashed, attempts, TTL); tenant resolution (token + host/header agreement); **permission manifest tooling** and `can()` evaluator with scopes/limits and cache; CI check that every route has a manifest permission | L | 16, 28 |
 | P0-8 | **Jobs, events, notifications** | Queue (pg-boss in the platform DB, or BullMQ — decision pending); scheduler with per-tenant fan-out and timezone; outbox dispatcher; notification service abstraction (email adapter + templates); idempotent job pattern | M | 03, 15 |
 | P0-9 | **Test & security harness** | Postgres test containers; tenant fixtures; **generated isolation tests** over every table; regression tests for audit findings C1–C7; k6 load scripts | M | 01, 03 |
 
-**Deliverables:** staging environment running the skeleton API; a script that creates a throw-away tenant database from the template and runs migrations on it; backups running with one successful restore test; CI green.
+**Deliverables** *(revised by decision 63: everything runs locally; the staging/production items below move to P0-3 when hosting is available)*: staging environment running the skeleton API; a script that creates a throw-away tenant database from the template and runs migrations on it; backups running with one successful restore test; CI green.
 
 **Exit criteria**
 - 500 empty tenant DBs created and migrated in a load test within agreed time; pool manager stays under connection limits.
@@ -343,7 +343,7 @@ P0 ─▶ P1 ─▶ P2 ─▶ P3 ─▶ P4          (critical path to launch)
 | Item | Blocks | Default I will use if you don't say otherwise |
 |---|---|---|
 | Domains (API, web portal, admin console) | P0-3 TLS/proxy, P1-9 deep links | `localhost` / `*.localhost` for local work |
-| VPS provider and size; off-site backup storage provider and budget; recovery targets | P0-3 infrastructure, P0-4 backups | Local Docker Compose only; backup jobs built and tested locally against MinIO until a real provider is chosen |
+| VPS provider and size; off-site backup storage provider and budget; recovery targets | P0-3 infrastructure, P0-4 backups (production part) | **Deferred by decision 63** — you will say when hosting is available. Until then everything runs locally with Docker Compose |
 | Job queue | P0-8 | **pg-boss** (Postgres-based) |
 | Expected tenant counts (year 1 / year 3) | P0-5 sizing assumptions | Plan for ~1,000 tenants per cluster |
 | Who builds / second developer | scheduling only | Single developer assumed |
@@ -359,6 +359,9 @@ I am **ready to start Phase 0** as soon as you say so. Suggested first step: P0-
 | WP | Status | Notes |
 |---|---|---|
 | P0-1 Repo & tooling | **Done — awaiting your review** (2026-10-14) | Legacy code removed; ESM/TS 6/Vitest/ESLint+boundaries/Prettier; zod config; Dockerfile; compose.yaml. Runtime image switched to distroless `nodejs24-debian13:nonroot` (Scout: 0 critical/high/medium/low vs 4C/18H on `node:24-slim`). Docker image build not verified yet (Docker daemon not running) |
+| P0-2 CI/CD | **Done — awaiting your review** (2026-10-14) | GitHub Actions: quality → integration (Postgres/Redis services) → image build, smoke test, Trivy scan (fails on fixable critical/high), SARIF to Security tab, publish to GHCR on `master`; CodeQL; dependency review; Dependabot (npm, Docker digests, actions). Actions pinned by SHA, base images by digest. **Staging deploy and migration job deferred** to P0-3/P0-5 (needs the VPS and the migration runner). Validated with actionlint and by running every job step locally; first real run happens on your next push |
+| P0-3 Infrastructure | **Deferred** (decision 63) | No VPS yet; everything runs locally with `compose.yaml`. Resumes when you say hosting is available |
+| P0-4 Backups | **Local part next; production part deferred** | Backup and restore tooling, encryption and the automated restore test are built and tested locally; WAL archiving to off-site storage, schedules and alerts wait for hosting |
 
 ## 10. Change log of this plan
 

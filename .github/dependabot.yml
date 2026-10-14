@@ -1,0 +1,49 @@
+version: 2
+
+updates:
+  # Node dependencies (Yarn 1 lockfile).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Held at TypeScript 6.0: typescript-eslint and ts-based tooling don't support TS 7 yet
+      # (docs/21_decisions_log.md, decision 62). Remove once they do.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # Types follow the Node.js major we run (24 LTS).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  # Base images in the Dockerfile are pinned by digest; this proposes patched digests.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(docker)"
+
+  # Pinned GitHub Action SHAs.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns: ["*"]

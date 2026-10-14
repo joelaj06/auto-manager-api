@@ -114,6 +114,12 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 |---|---|---|---|
 | 62 | Toolchain (P0-1) | **Native ESM project on Node 24, TypeScript 6.0, Vitest, plain composition-root DI (no Inversify), Yarn 1** | Key dependencies (pg-boss, Inversify 8, jose, zod 4) are ESM-only; Jest's ESM support is still experimental. Inversify needs decorator metadata that the fast ESM tools (tsx, Vitest) don't emit, so dev/test could behave differently from production. TypeScript is held at 6.0 because typescript-eslint and ts tooling don't support TS 7 yet. *Proposed by Claude; reversible — say if you prefer otherwise* |
 
+## Round 11 (2026-10-14)
+
+| # | Topic | Decision | Impact |
+|---|---|---|---|
+| 63 | Hosting | **Not deploying to a VPS now. Everything runs locally until the product owner says hosting is available** | P0-3 (infrastructure) deferred; P0-4 split into a local part (tooling + restore tests now) and a production part (off-site WAL archiving, schedules, alerts — later). CI still builds, scans and publishes the image to GHCR, which is not a deployment. M0 is reached locally |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.
