@@ -120,6 +120,14 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 |---|---|---|---|
 | 63 | Hosting | **Not deploying to a VPS now. Everything runs locally until the product owner says hosting is available** | P0-3 (infrastructure) deferred; P0-4 split into a local part (tooling + restore tests now) and a production part (off-site WAL archiving, schedules, alerts — later). CI still builds, scans and publishes the image to GHCR, which is not a deployment. M0 is reached locally |
 
+## Engineering decisions during P0-5 (2026-10-14)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 64 | Query layer | **Plain `pg` (node-postgres) with small typed helpers** for the database foundation; the Drizzle-vs-Kysely choice is made in P1-5 when the first module tables arrive | The foundation is mostly DDL, migrations and connection management, where an ORM adds nothing; keeps the choice open with real module code in hand |
+| 65 | Local ports | **PostgreSQL on 54320, Redis on 63790** in `compose.yaml` and `.env.example` | Port 5432 was already used by another project's container on the development machine; the non-default ports let both run side by side |
+| 66 | Database roles | **Login roles are members of group roles `af_platform_rw` / `af_tenant_rw`**; migrations grant to the groups | Migrations stay independent of login names (tests use their own login roles against the same grants) |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

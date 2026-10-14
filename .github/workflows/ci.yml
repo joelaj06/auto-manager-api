@@ -115,8 +115,15 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke test (the app must boot inside the distroless image)
+        # Throw-away values: the app validates its configuration and loads the migrations
+        # without connecting to a database yet.
         run: |
-          output="$(docker run --rm autoforce-api:ci)"
+          output="$(docker run --rm \
+            -e DATABASE_SSL=disable \
+            -e PLATFORM_DB_PASSWORD=smoke_test_only_pw \
+            -e TENANT_DB_PASSWORD=smoke_test_only_pw \
+            -e MIGRATOR_DB_PASSWORD=smoke_test_only_pw \
+            autoforce-api:ci)"
           echo "$output"
           echo "$output" | grep -q "autoforce-manager-api bootstrapped (env=production"
 

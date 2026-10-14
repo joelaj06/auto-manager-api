@@ -49,7 +49,9 @@ Postgres cluster (one or more)
 | Enterprise tenant on dedicated cluster = change a row in `tenants` | **Catalog overhead**: every DB carries its own catalogs/extensions (tens of MB each when empty-with-schema; measure). Autovacuum cycles through all DBs. Practical comfort zone is hundreds to low thousands of DBs per cluster; beyond that, shard tenants across clusters (`tenants.cluster_id`) |
 | Simple schema, simple indexes (nothing leads with `tenant_id`) | **Provisioning creates a database** (cannot run inside a transaction; needs idempotent saga) |
 
-Rule of thumb: plan for **up to ~1,000 tenants per cluster** and add a cluster after that. Validate with a load test of 500 empty tenant DBs early (P0).
+Rule of thumb: plan for **up to ~1,000 tenants per cluster** and add a cluster after that.
+
+**Measured (P0-5 load test, local PostgreSQL 18.6, 2026-10-14):** 500 tenant databases created from the template in 16.2 s (p50 108 ms, p95 269 ms each); **8.4 MB per empty tenant database** (so ≈ 8.4 GB of disk per 1,000 tenants before any business data); first request to each of the 500 tenants through the pool manager took p50 25 ms including opening and verifying the pool, with the pool cap of 50 holding connections at ~54. Re-run with `yarn db:load-test` on the real server when hosting is chosen.
 
 ### 2.3 Connections
 

@@ -8,14 +8,14 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-autoforce}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-autoforce_local_only}
-      POSTGRES_DB: autoforce_platform
+      # Databases and roles are created by `yarn db:setup`, not by the image.
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-54320}:5432"
     volumes:
       # PostgreSQL 18 images keep data under /var/lib/postgresql/<major>/docker
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d autoforce_platform"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -24,7 +24,7 @@ services:
     image: redis:8-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
-      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-63790}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

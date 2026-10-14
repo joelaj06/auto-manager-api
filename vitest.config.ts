@@ -24,6 +24,9 @@ export default defineConfig({
         test: {
           name: "integration",
           include: ["src/**/*.int.test.ts"],
+          globalSetup: ["src/testing/integration-global-setup.ts"],
+          // Files share one PostgreSQL cluster; run them one at a time.
+          fileParallelism: false,
           testTimeout: 30_000,
           hookTimeout: 60_000,
         },

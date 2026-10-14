@@ -1,26 +1,32 @@
 import { ConfigError, loadConfig } from "../shared/config/config.js";
+import { latestVersion, loadMigrationSets } from "../shared/db/migrations/migration-files.js";
 import { createContainer } from "./container.js";
 
 /**
  * Process entry point. Loads configuration and builds the composition root.
- * The HTTP server, database pools and workers are attached in later Phase 0 work packages.
+ * The HTTP server and workers are attached in later Phase 0 work packages.
  */
-function main(): void {
+async function main(): Promise<void> {
   const config = loadConfig();
-  const container = createContainer(config);
+  const migrations = await loadMigrationSets(config.database.migrationsDir);
+  const container = createContainer(config, {
+    requiredTenantSchemaVersion: latestVersion(migrations.tenant),
+  });
 
   console.info(
-    `autoforce-manager-api bootstrapped (env=${container.config.env}, port=${container.config.port})`,
+    `autoforce-manager-api bootstrapped (env=${config.env}, port=${config.port}, ` +
+      `tenant schema=${latestVersion(migrations.tenant) ?? "none"})`,
   );
+
+  // Nothing is served yet (HTTP arrives in P0-6), so release resources and exit cleanly.
+  await container.close();
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error: unknown) => {
   if (error instanceof ConfigError) {
     console.error(error.message);
   } else {
     console.error("Fatal error during startup", error);
   }
   process.exitCode = 1;
-}
+});
