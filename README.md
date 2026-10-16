@@ -121,6 +121,21 @@ The worker is a second process from the same image: `yarn dev:worker` locally,
   (http://localhost:8025).
 - Jobs of deactivated tenants are skipped; failed jobs retry with backoff.
 
+## Platform console API
+
+Staff (console) API under `/api/platform/v1` — separate tokens, sessions and permissions from
+tenant users (docs/27).
+
+```
+yarn platform:invite-admin --email you@example.com --name "Your Name"   # first Super Admin (prints a one-time link)
+```
+
+Sign-in: `POST /auth/invitations/accept` (password) → `POST /auth/mfa/enrol` (authenticator
+secret) → `POST /auth/mfa/enrol/confirm` (first code) → tokens. Afterwards `POST /auth/login`
+→ `POST /auth/mfa`. Sensitive actions need `POST /auth/step-up` (password + code) within the
+last 10 minutes. Staff, roles, approvals (four-eyes) and the audit log are under `/staff`,
+`/roles`, `/approvals` and `/audit-logs`; see the OpenAPI document for every route.
+
 ## Backups
 
 Logical, encrypted backups of every tenant database and the platform database, with an

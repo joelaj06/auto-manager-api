@@ -1,11 +1,19 @@
 import type { Request, Response } from "express";
 import type { AuthorizationPolicy } from "../../application/authorization/AuthorizationPolicy.js";
+import { PLATFORM_PERMISSION_CATALOG } from "../../application/authorization/platformPermissionCatalog.js";
+import type { PlatformPrincipal } from "../../application/authorization/PlatformPrincipal.js";
 import type { Principal } from "../../application/authorization/Principal.js";
-import { AuthenticationRequiredError } from "../../application/errors/AuthErrors.js";
+import {
+  AuthenticationRequiredError,
+  PermissionDeniedError,
+} from "../../application/errors/AuthErrors.js";
+import { StepUpRequiredError } from "../../application/errors/StaffErrors.js";
+import type { IClock } from "../../application/ports/IClock.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { TenantSummary } from "../../application/ports/ITenantDirectory.js";
 import type { AuthenticateTenantRequest } from "../../application/use-cases/auth/AuthenticateTenantRequest.js";
 import type { ResolveTenant } from "../../application/use-cases/auth/ResolveTenant.js";
+import type { StaffSessions } from "../../application/use-cases/platform/StaffSessions.js";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import type { RouteAccess } from "../routes/RouteAccess.js";
 
@@ -13,7 +21,7 @@ export const TENANT_HEADER = "x-tenant";
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
 const MAX_TOKEN_LENGTH = 4_096;
 
-type Locals = { tenant?: TenantSummary; principal?: Principal };
+type Locals = { tenant?: TenantSummary; principal?: Principal; staff?: PlatformPrincipal };
 
 /**
  * Enforces a route's declared access before its handler runs, then runs the handler inside the
@@ -21,6 +29,9 @@ type Locals = { tenant?: TenantSummary; principal?: Principal };
  * - `tenant`: resolve the X-Tenant slug;
  * - `authenticated`: verify the bearer token, check it belongs to the addressed tenant, check
  *   the permission.
+ * - `platform`: verify the console token and session, check the platform permission and, for
+ *   sensitive permissions, a recent step-up. No tenant context: console routes never reach
+ *   tenant data directly.
  */
 export class AccessGuard {
   constructor(
@@ -29,6 +40,8 @@ export class AccessGuard {
       resolveTenant: ResolveTenant;
       authorization: AuthorizationPolicy;
       tenantContext: ITenantContext;
+      staffSessions: StaffSessions;
+      clock: IClock;
     }>,
   ) {}
 
@@ -63,6 +76,22 @@ export class AccessGuard {
         locals.principal = principal;
         return this.deps.tenantContext.runAs(TenantId.from(tenant.id), handler);
       }
+
+      case "platform": {
+        const accessToken = bearerTokenOf(req);
+        if (accessToken === null) throw new AuthenticationRequiredError();
+        const staff = await this.deps.staffSessions.authenticate(accessToken);
+        if (access.permission !== null) {
+          if (!staff.has(access.permission)) throw new PermissionDeniedError(access.permission);
+          const sensitive = PLATFORM_PERMISSION_CATALOG[access.permission].sensitive === true;
+          const window = this.deps.staffSessions.settings.stepUpMs;
+          if (sensitive && !staff.hasRecentStepUp(this.deps.clock.now(), window)) {
+            throw new StepUpRequiredError();
+          }
+        }
+        locals.staff = staff;
+        return handler();
+      }
     }
   }
 }
@@ -72,6 +101,13 @@ export function principalOf(res: Response): Principal {
   const principal = (res.locals as Locals).principal;
   if (principal === undefined) throw new AuthenticationRequiredError();
   return principal;
+}
+
+/** The staff member of a `platform` route. */
+export function staffOf(res: Response): PlatformPrincipal {
+  const staff = (res.locals as Locals).staff;
+  if (staff === undefined) throw new AuthenticationRequiredError();
+  return staff;
 }
 
 /** The tenant of a `tenant` or `authenticated` route. */

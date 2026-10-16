@@ -27,6 +27,7 @@ const defaultHttp: HttpConfig = {
   trustProxyHops: 0,
   corsAllowedOrigins: ["https://*.autoforce.app"],
   rateLimit: { windowMs: 60_000, max: 1_000 },
+  authRateLimitMax: 1_000,
   bodyLimitKb: 1,
   exposeOpenApi: true,
 };

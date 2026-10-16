@@ -13,6 +13,8 @@ export type JwtSettings = Readonly<{
   platformSecret: string;
   issuer: string;
   ttlSeconds: number;
+  /** Console tokens (default: same as tenant tokens). */
+  platformTtlSeconds?: number;
 }>;
 
 const ALGORITHM = "HS256";
@@ -46,7 +48,11 @@ export class JwtAccessTokenService implements IAccessTokenService {
 
   async issue(subject: AccessTokenSubject): Promise<IssuedAccessToken> {
     const nowSeconds = Math.floor(this.clock.now().getTime() / 1000);
-    const expSeconds = nowSeconds + this.settings.ttlSeconds;
+    const ttl =
+      subject.audience === "platform"
+        ? (this.settings.platformTtlSeconds ?? this.settings.ttlSeconds)
+        : this.settings.ttlSeconds;
+    const expSeconds = nowSeconds + ttl;
     const claims: JWTPayload = { sid: subject.sessionId, ver: subject.permissionVersion };
     if (subject.audience === "tenant") claims.tid = subject.tenantId;
 

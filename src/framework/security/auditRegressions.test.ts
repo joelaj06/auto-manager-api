@@ -116,6 +116,7 @@ describe("C5 — no default or weak secrets", () => {
       "TENANT_JWT_SECRET",
       "PLATFORM_JWT_SECRET",
       "OTP_SECRET",
+      "MFA_ENCRYPTION_KEY",
     ]) {
       expect(
         issues.some((issue) => issue.startsWith(`${name}:`)),
@@ -218,6 +219,7 @@ function secrets() {
     TENANT_JWT_SECRET: "t".repeat(40),
     PLATFORM_JWT_SECRET: "p".repeat(40),
     OTP_SECRET: "o".repeat(40),
+    MFA_ENCRYPTION_KEY: "m".repeat(40),
   };
 }
 

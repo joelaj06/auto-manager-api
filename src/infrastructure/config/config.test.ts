@@ -9,6 +9,7 @@ const requiredSecrets = {
   TENANT_JWT_SECRET: "t".repeat(40),
   PLATFORM_JWT_SECRET: "p".repeat(40),
   OTP_SECRET: "o".repeat(40),
+  MFA_ENCRYPTION_KEY: "m".repeat(40),
 };
 
 /** Settings production requires on top of the secrets. */
@@ -41,6 +42,7 @@ describe("loadConfig", () => {
       trustProxyHops: 0,
       corsAllowedOrigins: [],
       rateLimit: { windowMs: 60_000, max: 300 },
+      authRateLimitMax: 30,
       bodyLimitKb: 1_024,
       exposeOpenApi: true,
     });

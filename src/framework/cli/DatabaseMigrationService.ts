@@ -11,6 +11,7 @@ import {
 } from "../../infrastructure/database/migrations/TenantSchemaMigrator.js";
 import type { PostgresConnectionFactory } from "../../infrastructure/database/postgres/PostgresConnectionFactory.js";
 import { JobQueueInstaller } from "../../infrastructure/jobs/JobQueueInstaller.js";
+import { PlatformCatalogueSync } from "../../infrastructure/platform/PlatformCatalogueSync.js";
 import { JOB_QUEUE_SCHEMA } from "../../infrastructure/jobs/PgBossJobQueue.js";
 import { TYPES } from "../dependency-injection/types.js";
 
@@ -56,6 +57,13 @@ export class DatabaseMigrationService {
       );
       const { queues } = await installer.install(platformClient);
       this.log(`job queue: schema ${JOB_QUEUE_SCHEMA} ready, ${queues} queues`);
+      const catalogue = await new PlatformCatalogueSync().sync(platformClient);
+      this.log(
+        `platform catalogue: ${catalogue.permissions} permissions, ${catalogue.systemRoles} system roles` +
+          (catalogue.changedRoles.length > 0
+            ? ` (updated: ${catalogue.changedRoles.join(", ")})`
+            : ""),
+      );
 
       const tenantMigrator = new TenantSchemaMigrator(this.runner, {
         connect: (database) => this.connections.connect("migrator", database),

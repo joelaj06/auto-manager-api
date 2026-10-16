@@ -1,7 +1,13 @@
 import { SessionNotActiveError } from "../errors/AuthErrors.js";
 
 export type SessionRevocationReason =
-  "logout" | "refresh_token_reuse" | "password_changed" | "user_disabled" | "admin_revoked";
+  | "logout"
+  | "refresh_token_reuse"
+  | "password_changed"
+  | "user_disabled"
+  | "admin_revoked"
+  /** Console sessions only: no request within the idle window. */
+  | "idle_timeout";
 
 export type AuthSessionProps = Readonly<{
   id: string;

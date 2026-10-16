@@ -13,6 +13,21 @@ export type EmailTemplateData = {
     expiresInMinutes: number;
     businessName: string | null;
   }>;
+
+  "platform.staff_invitation": Readonly<{
+    name: string;
+    invitedBy: string | null;
+    acceptUrl: string;
+    expiresInHours: number;
+  }>;
+  "platform.new_sign_in": Readonly<{
+    name: string;
+    at: string;
+    ip: string | null;
+    device: string | null;
+  }>;
+  "platform.staff_locked": Readonly<{ staffEmail: string; at: string; ip: string | null }>;
+  "platform.approval_requested": Readonly<{ requestedBy: string; summary: string; reason: string }>;
 };
 
 export type EmailTemplateKey = keyof EmailTemplateData;
@@ -55,7 +70,54 @@ ${bodyHtml}
 
 const greeting = (name: string | null) => (name === null ? "Hello," : `Hello ${name},`);
 
+const CONSOLE = `${PRODUCT} console`;
+
+function simple(subject: string, paragraphs: readonly string[]): RenderedEmail {
+  return {
+    subject,
+    text: paragraphs.join("\n\n"),
+    html: layout(subject, paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("\n")),
+  };
+}
+
 const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => RenderedEmail } = {
+  "platform.staff_invitation": (data) => {
+    const subject = `You're invited to the ${CONSOLE}`;
+    const by = data.invitedBy === null ? "" : ` by ${data.invitedBy}`;
+    const text = [
+      greeting(data.name),
+      "",
+      `You have been invited${by} to the ${CONSOLE}.`,
+      `Accept the invitation and set up your account: ${data.acceptUrl}`,
+      "",
+      `The link expires in ${data.expiresInHours} hours and works once. You will set a password and an authenticator app.`,
+    ].join("\n");
+    const html = layout(
+      subject,
+      `<p>${escapeHtml(greeting(data.name))}</p>
+<p>You have been invited${escapeHtml(by)} to the ${escapeHtml(CONSOLE)}.</p>
+<p><a href="${escapeHtml(data.acceptUrl)}" style="display:inline-block;padding:10px 16px;background:#1f6feb;color:#fff;border-radius:6px;text-decoration:none">Accept invitation</a></p>
+<p>The link expires in ${data.expiresInHours} hours and works once. You will set a password and an authenticator app.</p>`,
+    );
+    return { subject, text, html };
+  },
+  "platform.new_sign_in": (data) =>
+    simple(`New sign-in to the ${CONSOLE}`, [
+      greeting(data.name),
+      `Your account signed in from a new device at ${data.at}${data.ip === null ? "" : ` (IP ${data.ip})`}${data.device === null ? "" : ` using ${data.device}`}.`,
+      "If this was not you, contact a Super Admin immediately to disable your account.",
+    ]),
+  "platform.staff_locked": (data) =>
+    simple(`Security alert: staff account locked`, [
+      `The staff account ${data.staffEmail} was locked at ${data.at} after repeated failed sign-in attempts${data.ip === null ? "" : ` from IP ${data.ip}`}.`,
+      "It unlocks automatically in 15 minutes. Check the audit log if this is unexpected.",
+    ]),
+  "platform.approval_requested": (data) =>
+    simple(`Approval needed: ${data.summary}`, [
+      `${data.requestedBy} asked for approval: ${data.summary}.`,
+      `Reason: ${data.reason}`,
+      `Review it in the ${CONSOLE} under Approvals.`,
+    ]),
   "auth.otp_code": (data) => {
     const action = PURPOSE_TEXT[data.purpose] ?? "continue";
     const where = data.businessName === null ? PRODUCT : `${data.businessName} on ${PRODUCT}`;

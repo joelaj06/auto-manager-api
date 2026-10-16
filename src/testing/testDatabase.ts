@@ -60,6 +60,7 @@ export function testConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     TENANT_JWT_SECRET: "test-tenant-jwt-secret-0123456789-abcdef",
     PLATFORM_JWT_SECRET: "test-platform-jwt-secret-0123456789-abcdef",
     OTP_SECRET: "test-otp-secret-0123456789-abcdefghijklmn",
+    MFA_ENCRYPTION_KEY: "test-mfa-encryption-key-0123456789-abcdef",
     // Mailpit: a test container's mapped port, or the compose / CI service.
     SMTP_HOST: process.env.SMTP_HOST ?? "localhost",
     SMTP_PORT: process.env.SMTP_PORT ?? "1025",

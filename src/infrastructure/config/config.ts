@@ -50,6 +50,8 @@ const envSchema = z
     CORS_ALLOWED_ORIGINS: corsOrigins,
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).default(60_000),
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(300),
+    /** Sign-in and other credential endpoints: requests per client IP per 15 minutes. */
+    AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(30),
     HTTP_BODY_LIMIT_KB: z.coerce.number().int().min(1).max(10_240).default(1_024),
     /** Serve /api/v1/openapi.json (defaults to on outside production). */
     EXPOSE_OPENAPI: booleanFlag.optional(),
@@ -100,6 +102,15 @@ const envSchema = z
     OTP_SECRET: signingSecret,
     OTP_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
     OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+
+    // --- Platform console (staff) ---
+    /** Key for encrypting staff TOTP secrets at rest. */
+    MFA_ENCRYPTION_KEY: signingSecret,
+    /** Console origin, used in invitation links. */
+    PLATFORM_CONSOLE_URL: z.url().default("http://localhost:5173"),
+    PLATFORM_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(600),
+    PLATFORM_SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(480).default(60),
+    PLATFORM_SESSION_MAX_HOURS: z.coerce.number().int().min(1).max(24).default(12),
 
     // --- Background jobs (pg-boss in the platform database) ---
     /** Jobs of each type a worker process runs at the same time. */
@@ -199,6 +210,8 @@ export type HttpConfig = Readonly<{
   trustProxyHops: number;
   corsAllowedOrigins: readonly string[];
   rateLimit: Readonly<{ windowMs: number; max: number }>;
+  /** Stricter limit for credential endpoints (per 15 minutes). */
+  authRateLimitMax: number;
   bodyLimitKb: number;
   exposeOpenApi: boolean;
 }>;
@@ -212,6 +225,13 @@ export type AuthConfig = Readonly<{
   otpSecret: string;
   otpTtlMinutes: number;
   otpMaxAttempts: number;
+  mfaEncryptionKey: string;
+  platform: Readonly<{
+    consoleUrl: string;
+    accessTokenTtlSeconds: number;
+    sessionIdleMinutes: number;
+    sessionMaxHours: number;
+  }>;
 }>;
 
 export type BackupConfig = Readonly<{
@@ -285,6 +305,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       trustProxyHops: e.TRUST_PROXY_HOPS,
       corsAllowedOrigins: Object.freeze([...e.CORS_ALLOWED_ORIGINS]),
       rateLimit: Object.freeze({ windowMs: e.RATE_LIMIT_WINDOW_MS, max: e.RATE_LIMIT_MAX }),
+      authRateLimitMax: e.AUTH_RATE_LIMIT_MAX,
       bodyLimitKb: e.HTTP_BODY_LIMIT_KB,
       exposeOpenApi: e.EXPOSE_OPENAPI ?? e.NODE_ENV !== "production",
     }),
@@ -297,6 +318,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       otpSecret: e.OTP_SECRET,
       otpTtlMinutes: e.OTP_TTL_MINUTES,
       otpMaxAttempts: e.OTP_MAX_ATTEMPTS,
+      mfaEncryptionKey: e.MFA_ENCRYPTION_KEY,
+      platform: Object.freeze({
+        consoleUrl: e.PLATFORM_CONSOLE_URL,
+        accessTokenTtlSeconds: e.PLATFORM_ACCESS_TOKEN_TTL_SECONDS,
+        sessionIdleMinutes: e.PLATFORM_SESSION_IDLE_MINUTES,
+        sessionMaxHours: e.PLATFORM_SESSION_MAX_HOURS,
+      }),
     }),
     backup: Object.freeze({
       directory: e.BACKUP_DIR,

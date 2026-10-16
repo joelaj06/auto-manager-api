@@ -93,10 +93,45 @@ import { PostgresTenantScheduleLedger } from "../../infrastructure/jobs/Postgres
 import { PostgresEmailDeliveries } from "../../infrastructure/notifications/PostgresEmailDeliveries.js";
 import { SmtpEmailSender } from "../../infrastructure/notifications/SmtpEmailSender.js";
 import { JobWorker } from "../jobs/JobWorker.js";
+import { platformRoutes } from "../../adapters/routes/platformRoutes.js";
+import type { IApprovalRequestRepository } from "../../domain/repositories/IApprovalRequestRepository.js";
+import type { IStaffAccountRepository } from "../../domain/repositories/IStaffAccountRepository.js";
+import type { IKnownDevices } from "../../application/ports/IKnownDevices.js";
+import type { IPlatformAuditTrail } from "../../application/ports/IPlatformAuditTrail.js";
+import type { IPlatformRoles } from "../../application/ports/IPlatformRoles.js";
+import type { IPlatformSessions } from "../../application/ports/IPlatformSessions.js";
+import type { IPlatformUnitOfWork } from "../../application/ports/IPlatformUnitOfWork.js";
+import type { ISecretBox } from "../../application/ports/ISecretBox.js";
+import type { IStaffChallenges } from "../../application/ports/IStaffChallenges.js";
+import type { IStaffInvitations } from "../../application/ports/IStaffInvitations.js";
+import type { ITotp } from "../../application/ports/ITotp.js";
+import { ApprovalWorkflow } from "../../application/use-cases/platform/ApprovalWorkflow.js";
+import { StaffAdministration } from "../../application/use-cases/platform/StaffAdministration.js";
+import { StaffSessions } from "../../application/use-cases/platform/StaffSessions.js";
+import { StaffSignIn } from "../../application/use-cases/platform/StaffSignIn.js";
+import { PlatformDb } from "../../infrastructure/platform/PlatformDb.js";
+import { PostgresApprovalRequestRepository } from "../../infrastructure/platform/PostgresApprovalRequestRepository.js";
+import { PostgresKnownDevices } from "../../infrastructure/platform/PostgresKnownDevices.js";
+import { PostgresPlatformAuditTrail } from "../../infrastructure/platform/PostgresPlatformAuditTrail.js";
+import { PostgresPlatformRoles } from "../../infrastructure/platform/PostgresPlatformRoles.js";
+import { PostgresPlatformSessions } from "../../infrastructure/platform/PostgresPlatformSessions.js";
+import { PostgresPlatformUnitOfWork } from "../../infrastructure/platform/PostgresPlatformUnitOfWork.js";
+import { PostgresStaffAccountRepository } from "../../infrastructure/platform/PostgresStaffAccountRepository.js";
+import { PostgresStaffInvitations } from "../../infrastructure/platform/PostgresStaffInvitations.js";
+import { AesGcmSecretBox } from "../../infrastructure/security/AesGcmSecretBox.js";
+import { JwtStaffChallenges } from "../../infrastructure/security/JwtStaffChallenges.js";
+import { TotpService } from "../../infrastructure/security/TotpService.js";
 import { createApp } from "../express/createApp.js";
 import { JsonLogger, jsonSink } from "../logger/JsonLogger.js";
 import { prettySink } from "../logger/prettySink.js";
 import { TYPES } from "./types.js";
+
+/** A step-up (password + code) unlocks sensitive console actions for this long. */
+const STEP_UP_WINDOW_MS = 10 * 60_000;
+/** Failed staff sign-in steps before a 15-minute lock (docs/27 §2). */
+const STAFF_LOCKOUT = Object.freeze({ maxFailedAttempts: 5, lockMs: 15 * 60_000 });
+const INVITATION_TTL_MS = 72 * 3_600_000;
+const APPROVAL_TTL_MS = 24 * 3_600_000;
 
 const OPENAPI_INFO = Object.freeze({
   title: "Autoforce Manager API",
@@ -432,6 +467,7 @@ export function createContainer(
           platformSecret: auth.platformJwtSecret,
           issuer: auth.issuer,
           ttlSeconds: auth.accessTokenTtlSeconds,
+          platformTtlSeconds: auth.platform.accessTokenTtlSeconds,
         },
         clock,
       ),
@@ -623,23 +659,268 @@ export function createContainer(
       [TYPES.UnitOfWork, TYPES.OtpChallengeRepository, TYPES.OtpService, TYPES.Clock],
     );
 
-  // --- HTTP ---
+  // --- Platform console: staff, sessions, approvals, audit ---
   container
-    .bind<AccessGuard>(TYPES.AccessGuard)
+    .bind<PostgresTransactionContext>(TYPES.PlatformTransactionContext)
+    .toResolvedValue(() => new PostgresTransactionContext());
+
+  container
+    .bind<PlatformDb>(TYPES.PlatformDb)
     .toResolvedValue(
-      (
-        authenticate: AuthenticateTenantRequest,
-        resolveTenant: ResolveTenant,
-        authorization: AuthorizationPolicy,
-        tenantContext: ITenantContext,
-      ) => new AccessGuard({ authenticate, resolveTenant, authorization, tenantContext }),
-      [
-        TYPES.AuthenticateTenantRequest,
-        TYPES.ResolveTenant,
-        TYPES.AuthorizationPolicy,
-        TYPES.TenantContext,
-      ],
+      (pool: pg.Pool, tx: PostgresTransactionContext) => new PlatformDb(pool, tx),
+      [TYPES.PlatformDatabasePool, TYPES.PlatformTransactionContext],
     );
+
+  container
+    .bind<IPlatformUnitOfWork>(TYPES.PlatformUnitOfWork)
+    .toResolvedValue(
+      (pool: pg.Pool, tx: PostgresTransactionContext) =>
+        new PostgresPlatformUnitOfWork(pool, tx, db.statementTimeoutMs),
+      [TYPES.PlatformDatabasePool, TYPES.PlatformTransactionContext],
+    );
+
+  const platformRepository = <T>(token: symbol, build: (platformDb: PlatformDb) => T) =>
+    container.bind<T>(token).toResolvedValue(build, [TYPES.PlatformDb]);
+  platformRepository<IStaffAccountRepository>(
+    TYPES.StaffAccountRepository,
+    (p) => new PostgresStaffAccountRepository(p),
+  );
+  platformRepository<IPlatformRoles>(TYPES.PlatformRoles, (p) => new PostgresPlatformRoles(p));
+  platformRepository<IStaffInvitations>(
+    TYPES.StaffInvitations,
+    (p) => new PostgresStaffInvitations(p),
+  );
+  platformRepository<IPlatformSessions>(
+    TYPES.PlatformSessions,
+    (p) => new PostgresPlatformSessions(p),
+  );
+  platformRepository<IApprovalRequestRepository>(
+    TYPES.ApprovalRequestRepository,
+    (p) => new PostgresApprovalRequestRepository(p),
+  );
+  platformRepository<IPlatformAuditTrail>(
+    TYPES.PlatformAuditTrail,
+    (p) => new PostgresPlatformAuditTrail(p),
+  );
+  platformRepository<IKnownDevices>(TYPES.KnownDevices, (p) => new PostgresKnownDevices(p));
+
+  container.bind<ITotp>(TYPES.Totp).toResolvedValue(() => new TotpService());
+  container
+    .bind<ISecretBox>(TYPES.SecretBox)
+    .toResolvedValue(() => new AesGcmSecretBox(auth.mfaEncryptionKey));
+  container
+    .bind<IStaffChallenges>(TYPES.StaffChallenges)
+    .toResolvedValue(
+      (clock: IClock) => new JwtStaffChallenges(auth.platformJwtSecret, auth.issuer, clock),
+      [TYPES.Clock],
+    );
+
+  container.bind<StaffSessions>(TYPES.StaffSessions).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      accounts: IStaffAccountRepository,
+      roles: IPlatformRoles,
+      sessions: IPlatformSessions,
+      accessTokens: IAccessTokenService,
+      refreshTokens: IRefreshTokenService,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new StaffSessions({
+        unitOfWork,
+        accounts,
+        roles,
+        sessions,
+        accessTokens,
+        refreshTokens,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        settings: {
+          idleMs: auth.platform.sessionIdleMinutes * 60_000,
+          maxMs: auth.platform.sessionMaxHours * 3_600_000,
+          stepUpMs: STEP_UP_WINDOW_MS,
+        },
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.StaffAccountRepository,
+      TYPES.PlatformRoles,
+      TYPES.PlatformSessions,
+      TYPES.AccessTokenService,
+      TYPES.RefreshTokenService,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+
+  container.bind<StaffSignIn>(TYPES.StaffSignIn).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      accounts: IStaffAccountRepository,
+      invitations: IStaffInvitations,
+      roles: IPlatformRoles,
+      sessions: StaffSessions,
+      sessionStore: IPlatformSessions,
+      challenges: IStaffChallenges,
+      passwords: IPasswordHasher,
+      totp: ITotp,
+      secrets: ISecretBox,
+      devices: IKnownDevices,
+      notifications: NotificationService,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+    ) =>
+      new StaffSignIn({
+        unitOfWork,
+        accounts,
+        invitations,
+        roles,
+        sessions,
+        sessionStore,
+        challenges,
+        passwords,
+        totp,
+        secrets,
+        devices,
+        notifications,
+        audit,
+        clock,
+        lockout: STAFF_LOCKOUT,
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.StaffAccountRepository,
+      TYPES.StaffInvitations,
+      TYPES.PlatformRoles,
+      TYPES.StaffSessions,
+      TYPES.PlatformSessions,
+      TYPES.StaffChallenges,
+      TYPES.PasswordHasher,
+      TYPES.Totp,
+      TYPES.SecretBox,
+      TYPES.KnownDevices,
+      TYPES.NotificationService,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+    ],
+  );
+
+  container.bind<ApprovalWorkflow>(TYPES.ApprovalWorkflow).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      approvals: IApprovalRequestRepository,
+      roles: IPlatformRoles,
+      audit: IPlatformAuditTrail,
+      notifications: NotificationService,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new ApprovalWorkflow({
+        unitOfWork,
+        approvals,
+        roles,
+        audit,
+        notifications,
+        requestContext,
+        ids,
+        clock,
+        ttlMs: APPROVAL_TTL_MS,
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.ApprovalRequestRepository,
+      TYPES.PlatformRoles,
+      TYPES.PlatformAuditTrail,
+      TYPES.NotificationService,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+
+  container.bind<StaffAdministration>(TYPES.StaffAdministration).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      accounts: IStaffAccountRepository,
+      roles: IPlatformRoles,
+      invitations: IStaffInvitations,
+      sessions: IPlatformSessions,
+      approvals: ApprovalWorkflow,
+      notifications: NotificationService,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) => {
+      const administration = new StaffAdministration({
+        unitOfWork,
+        accounts,
+        roles,
+        invitations,
+        sessions,
+        approvals,
+        notifications,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        settings: {
+          invitationTtlMs: INVITATION_TTL_MS,
+          consoleUrl: auth.platform.consoleUrl,
+        },
+      });
+      approvals.register(administration.roleChangeExecutor());
+      return administration;
+    },
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.StaffAccountRepository,
+      TYPES.PlatformRoles,
+      TYPES.StaffInvitations,
+      TYPES.PlatformSessions,
+      TYPES.ApprovalWorkflow,
+      TYPES.NotificationService,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+
+  // --- HTTP ---
+  container.bind<AccessGuard>(TYPES.AccessGuard).toResolvedValue(
+    (
+      authenticate: AuthenticateTenantRequest,
+      resolveTenant: ResolveTenant,
+      authorization: AuthorizationPolicy,
+      tenantContext: ITenantContext,
+      staffSessions: StaffSessions,
+      clock: IClock,
+    ) =>
+      new AccessGuard({
+        authenticate,
+        resolveTenant,
+        authorization,
+        tenantContext,
+        staffSessions,
+        clock,
+      }),
+    [
+      TYPES.AuthenticateTenantRequest,
+      TYPES.ResolveTenant,
+      TYPES.AuthorizationPolicy,
+      TYPES.TenantContext,
+      TYPES.StaffSessions,
+      TYPES.Clock,
+    ],
+  );
   container
     .bind<IReadinessCheck[]>(TYPES.ReadinessChecks)
     .toResolvedValue(
@@ -662,13 +943,31 @@ export function createContainer(
     );
 
   container.bind<ApiRoute[]>(TYPES.ApiRoutes).toResolvedValue(
-    (health: HealthController) => {
-      const routes = [...healthRoutes(health), ...sessionRoutes()];
+    (
+      health: HealthController,
+      signIn: StaffSignIn,
+      sessions: StaffSessions,
+      administration: StaffAdministration,
+      approvals: ApprovalWorkflow,
+      audit: IPlatformAuditTrail,
+    ) => {
+      const routes = [
+        ...healthRoutes(health),
+        ...sessionRoutes(),
+        ...platformRoutes({ signIn, sessions, administration, approvals, audit }),
+      ];
       return config.http.exposeOpenApi
         ? [...routes, ...openApiRoutes(routes, OPENAPI_INFO)]
         : routes;
     },
-    [TYPES.HealthController],
+    [
+      TYPES.HealthController,
+      TYPES.StaffSignIn,
+      TYPES.StaffSessions,
+      TYPES.StaffAdministration,
+      TYPES.ApprovalWorkflow,
+      TYPES.PlatformAuditTrail,
+    ],
   );
 
   container

@@ -38,6 +38,11 @@ export function createApp(deps: AppDependencies): Express {
   app.use(corsPolicy(deps.http.corsAllowedOrigins));
   app.use(express.json({ limit: `${deps.http.bodyLimitKb}kb` }));
   app.use("/api", rateLimiter(deps.http.rateLimit));
+  // Credential endpoints: a much tighter budget per client (brute force, credential stuffing).
+  app.use(
+    "/api/platform/v1/auth",
+    rateLimiter({ windowMs: 15 * 60_000, max: deps.http.authRateLimitMax }),
+  );
 
   app.use(buildRouter(deps.routes, deps.accessGuard));
 

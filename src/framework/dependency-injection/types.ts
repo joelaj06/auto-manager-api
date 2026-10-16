@@ -65,4 +65,23 @@ export const TYPES = Object.freeze({
   NotificationService: Symbol.for("NotificationService"),
   JobHandlers: Symbol.for("IJobHandler[]"),
   JobWorker: Symbol.for("JobWorker"),
+
+  // Platform console (staff)
+  PlatformTransactionContext: Symbol.for("PlatformTransactionContext"),
+  PlatformDb: Symbol.for("PlatformDb"),
+  PlatformUnitOfWork: Symbol.for("IPlatformUnitOfWork"),
+  StaffAccountRepository: Symbol.for("IStaffAccountRepository"),
+  PlatformRoles: Symbol.for("IPlatformRoles"),
+  StaffInvitations: Symbol.for("IStaffInvitations"),
+  PlatformSessions: Symbol.for("IPlatformSessions"),
+  ApprovalRequestRepository: Symbol.for("IApprovalRequestRepository"),
+  PlatformAuditTrail: Symbol.for("IPlatformAuditTrail"),
+  KnownDevices: Symbol.for("IKnownDevices"),
+  Totp: Symbol.for("ITotp"),
+  SecretBox: Symbol.for("ISecretBox"),
+  StaffChallenges: Symbol.for("IStaffChallenges"),
+  StaffSessions: Symbol.for("StaffSessions"),
+  StaffSignIn: Symbol.for("StaffSignIn"),
+  ApprovalWorkflow: Symbol.for("ApprovalWorkflow"),
+  StaffAdministration: Symbol.for("StaffAdministration"),
 });

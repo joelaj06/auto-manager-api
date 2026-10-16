@@ -8,6 +8,7 @@ import type { IPermissionResolver } from "../application/ports/IPermissionResolv
 import type { ITenantDirectory, TenantSummary } from "../application/ports/ITenantDirectory.js";
 import { AuthenticateTenantRequest } from "../application/use-cases/auth/AuthenticateTenantRequest.js";
 import { ResolveTenant } from "../application/use-cases/auth/ResolveTenant.js";
+import type { StaffSessions } from "../application/use-cases/platform/StaffSessions.js";
 import { createApp } from "../framework/express/createApp.js";
 import { JsonLogger, type LogEntry } from "../framework/logger/JsonLogger.js";
 import type { HttpConfig } from "../infrastructure/config/config.js";
@@ -31,6 +32,7 @@ const http: HttpConfig = {
   trustProxyHops: 0,
   corsAllowedOrigins: [],
   rateLimit: { windowMs: 60_000, max: 1_000 },
+  authRateLimitMax: 1_000,
   bodyLimitKb: 16,
   exposeOpenApi: false,
 };
@@ -88,6 +90,12 @@ export function buildGuardedApp(options: GuardedAppOptions = {}) {
     resolveTenant: new ResolveTenant(directory),
     authorization: new AuthorizationPolicy(),
     tenantContext,
+    // Console routes are not part of this harness.
+    staffSessions: {
+      settings: { idleMs: 3_600_000, maxMs: 43_200_000, stepUpMs: 600_000 },
+      authenticate: () => Promise.reject(new Error("no console in this harness")),
+    } as unknown as StaffSessions,
+    clock: new SystemClock(),
   });
 
   const routes: ApiRoute[] = [

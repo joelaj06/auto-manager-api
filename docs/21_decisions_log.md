@@ -173,6 +173,18 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 85 | Restores | **Only into a new database**; switching a tenant to it is a manual runbook step. The tooling drops only its own `rv_` scratch databases | A restore can never destroy live data by mistake |
 | 86 | PostgreSQL client tools | **From the PATH or the `postgres:18-alpine` image** (`BACKUP_PG_TOOLS=local\|docker`) | The app image is distroless, so the tools can't live there; they must match the server's major version |
 
+## Engineering decisions during P1-1 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 87 | Staff MFA | **TOTP now (RFC 6238, built on Node crypto), passkeys (WebAuthn) later in Phase 1** when the console UI exists. TOTP secrets encrypted at rest with `MFA_ENCRYPTION_KEY`; each code usable once | Satisfies "MFA mandatory" without a browser client; no extra dependency for a ~60-line algorithm verified against the RFC test vectors |
+| 88 | Console sessions | **Session row checked on every console request** (idle 60 min, max 12 h, access tokens 10 min) — unlike tenant requests, which rely on the permission version | Few staff, high privilege: sign-out, disabling and idle expiry must take effect at once |
+| 89 | Step-up | **Automatic from the catalogue**: any route whose platform permission is marked `sensitive` needs a password + code re-check within the last 10 minutes | The rule lives next to the permission, so new sensitive routes cannot forget it |
+| 90 | Four-eyes | **Approval requests with registered executors**; the approver must be a different staff member (enforced in code and by a DB check), may need a specific system role, and approving runs the action in the same transaction behind a savepoint. Requests expire after 24 h | One mechanism for every dangerous action in docs/27 §8; a failed action is recorded as `failed` and never half-applied |
+| 91 | First Super Admin | **Created with `yarn platform:invite-admin` on the server** (also the recovery path); staff can never invite a Super Admin directly — granting it needs another Super Admin's approval | No self-registration of staff (docs/27 §2) and no single person can create a new Super Admin |
+| 92 | Staff escalation | **Non-Super-Admins can assign or define only roles within their own permissions**; nobody changes their own roles or account; the last active Super Admin cannot be disabled or demoted | Prevents privilege escalation and lock-out |
+| 93 | Invitation links | **Token in the URL fragment** (`/accept-invitation#token=…`), stored only as SHA-256, single use, 72 h | Fragments are not sent to servers, so tokens do not end up in proxy or access logs |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

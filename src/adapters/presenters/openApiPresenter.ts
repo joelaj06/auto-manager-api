@@ -51,6 +51,16 @@ function accessDocumentation(access: RouteAccess) {
     schema: { type: "string" },
   };
   if (access.kind === "tenant") return { parameters: [tenantHeader], operation: {} };
+  if (access.kind === "platform") {
+    return {
+      parameters: [],
+      operation: {
+        security: [{ [BEARER_SCHEME]: [] }],
+        "x-audience": "platform",
+        ...(access.permission === null ? {} : { "x-permission": access.permission }),
+      },
+    };
+  }
   return {
     parameters: [tenantHeader],
     operation: {

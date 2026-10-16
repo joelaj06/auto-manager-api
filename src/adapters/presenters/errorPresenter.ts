@@ -80,6 +80,29 @@ const RULES: Readonly<Record<string, Rule>> = {
   OTP_LOCKED: { status: 400 },
   OTP_CHALLENGE_CLOSED: { status: 400, publicMessage: "The code has expired. Request a new code." },
   SESSION_NOT_ACTIVE: { status: 401 },
+
+  // Platform staff (console)
+  INVALID_CREDENTIALS: { status: 401 },
+  INVALID_MFA_CODE: { status: 401 },
+  INVALID_CHALLENGE: { status: 401 },
+  TOO_MANY_ATTEMPTS: { status: 429 },
+  INVITATION_INVALID: { status: 400 },
+  WEAK_PASSWORD: { status: 400 },
+  STEP_UP_REQUIRED: { status: 403 },
+  STAFF_NOT_FOUND: { status: 404 },
+  STAFF_EXISTS: { status: 409 },
+  ROLE_NOT_FOUND: { status: 404 },
+  APPROVAL_NOT_FOUND: { status: 404 },
+  APPROVAL_NOT_PENDING: { status: 409 },
+  APPROVAL_SELF: { status: 403 },
+  APPROVER_ROLE_REQUIRED: { status: 403 },
+  REASON_REQUIRED: { status: 400 },
+  UNKNOWN_PERMISSION: { status: 400 },
+  CANNOT_CHANGE_OWN_ACCOUNT: { status: 422 },
+  LAST_SUPER_ADMIN: { status: 422 },
+  SYSTEM_ROLE_LOCKED: { status: 422 },
+  ROLE_EXCEEDS_OWN_PERMISSIONS: { status: 403 },
+  SUPER_ADMIN_NEEDS_APPROVAL: { status: 422 },
 };
 
 /** RFC 6750 challenge for bearer-token failures. */
