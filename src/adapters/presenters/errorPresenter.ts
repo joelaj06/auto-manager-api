@@ -130,6 +130,13 @@ const RULES: Readonly<Record<string, Rule>> = {
   USER_NOT_FOUND: { status: 404 },
   USER_EXISTS: { status: 409 },
   OWNER_PROTECTED: { status: 422 },
+
+  // Console notes and tags
+  NOTE_NOT_FOUND: { status: 404 },
+  NOTE_NOT_YOURS: { status: 403 },
+  INVALID_NOTE: { status: 400 },
+  INVALID_TAG: { status: 400 },
+
   OWNER_ROLE_PROTECTED: { status: 422 },
   USER_DISABLED: { status: 422 },
   ROLE_IN_USE: { status: 409 },

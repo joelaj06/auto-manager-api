@@ -58,6 +58,8 @@ export interface ITenantProvisioning {
   advance(tenantId: string, step: ProvisioningStep): Promise<void>;
   /** Records the name of the tenant's database (once it exists). */
   setDatabaseName(tenantId: string, databaseName: string): Promise<void>;
+  /** Records the schema version the new database was migrated to (console migration view). */
+  recordSchemaVersion(tenantId: string, version: string | null): Promise<void>;
   /** Records the error; the tenant becomes `provisioning_failed` (retryable). */
   fail(tenantId: string, error: string): Promise<void>;
   /** The tenant becomes `trialing`. */

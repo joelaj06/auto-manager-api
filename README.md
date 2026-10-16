@@ -136,6 +136,13 @@ secret) → `POST /auth/mfa/enrol/confirm` (first code) → tokens. Afterwards `
 last 10 minutes. Staff, roles, approvals (four-eyes) and the audit log are under `/staff`,
 `/roles`, `/approvals` and `/audit-logs`; see the OpenAPI document for every route.
 
+Console views: `GET /dashboard` (tenants by status, applications waiting, trials ending,
+failures), `GET /health` (database, jobs, email, backups, migrations — each `ok`/`warning`/
+`critical`), `GET /tenants?status&q&tag` and `GET /tenants/:id` (360° profile with usage counts
+read from the tenant database), `/tenants/:id/timeline`, `/tenants/:id/notes`,
+`PUT /tenants/:id/tags`, `GET /backups[/summary]`, `GET /migrations`,
+`GET /audit-logs/export` (CSV).
+
 ## Public signup (tenant applications)
 
 `POST /api/v1/applications` creates an application and sends an email code and an SMS code

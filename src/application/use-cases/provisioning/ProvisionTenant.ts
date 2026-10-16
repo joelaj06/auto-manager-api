@@ -88,7 +88,8 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
         await advance("database_created");
       }
       if (!done("schema_migrated")) {
-        await deps.schema.migrate(tenantId);
+        const version = await deps.schema.migrate(tenantId);
+        await deps.provisioning.recordSchemaVersion(tenantId, version);
         await advance("schema_migrated");
       }
       const catalogue = await deps.catalogue.current();

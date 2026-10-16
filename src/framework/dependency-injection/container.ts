@@ -1,3 +1,24 @@
+import { consoleRoutes } from "../../adapters/routes/consoleRoutes.js";
+import type { IConsoleTenantQueries } from "../../application/ports/IConsoleTenantQueries.js";
+import type { IDataOperationsQueries } from "../../application/ports/IDataOperationsQueries.js";
+import type { ISystemProbes } from "../../application/ports/ISystemProbes.js";
+import type { ITenantNotes, ITenantTags } from "../../application/ports/ITenantNotes.js";
+import type { ITenantUsage } from "../../application/ports/ITenantUsage.js";
+import { AuditLogExport } from "../../application/use-cases/console/AuditLogExport.js";
+import { ConsoleDashboard } from "../../application/use-cases/console/ConsoleDashboard.js";
+import { DataOperationsConsole } from "../../application/use-cases/console/DataOperationsConsole.js";
+import { SystemHealthSummary } from "../../application/use-cases/console/SystemHealthSummary.js";
+import { TenantAccounts } from "../../application/use-cases/console/TenantAccounts.js";
+import { TenantNotesAndTags } from "../../application/use-cases/console/TenantNotesAndTags.js";
+import { PostgresConsoleTenantQueries } from "../../infrastructure/console/PostgresConsoleTenantQueries.js";
+import { PostgresDataOperationsQueries } from "../../infrastructure/console/PostgresDataOperationsQueries.js";
+import { PostgresSystemProbes } from "../../infrastructure/console/PostgresSystemProbes.js";
+import {
+  PostgresTenantNotes,
+  PostgresTenantTags,
+} from "../../infrastructure/console/PostgresTenantNotes.js";
+import { PostgresTenantUsage } from "../../infrastructure/console/PostgresTenantUsage.js";
+import { readFileSync } from "node:fs";
 import type { Express } from "express";
 import { Container } from "inversify";
 import type pg from "pg";
@@ -218,6 +239,18 @@ const OWNER_INVITATION_TTL_MS = 7 * 86_400_000;
 const USER_INVITATION_TTL_MS = 72 * 3_600_000;
 /** Failed tenant sign-ins before a 15-minute lock. */
 const TENANT_LOCKOUT = Object.freeze({ maxFailedAttempts: 5, lockMs: 15 * 60_000 });
+
+/** This build's version (package.json), shown in the console health summary. */
+const APP_VERSION = ((): string => {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+    ) as { version?: string };
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+})();
 
 const OPENAPI_INFO = Object.freeze({
   title: "Autoforce Manager API",
@@ -1690,6 +1723,107 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  // --- Console MVP: dashboard, tenant 360, notes & tags, data operations, health ---
+  platformRepository<IConsoleTenantQueries>(
+    TYPES.ConsoleTenantQueries,
+    (p) => new PostgresConsoleTenantQueries(p),
+  );
+  platformRepository<ITenantNotes>(TYPES.TenantNotes, (p) => new PostgresTenantNotes(p));
+  platformRepository<ITenantTags>(TYPES.TenantTags, (p) => new PostgresTenantTags(p));
+  platformRepository<IDataOperationsQueries>(
+    TYPES.DataOperationsQueries,
+    (p) => new PostgresDataOperationsQueries(p),
+  );
+  platformRepository<ISystemProbes>(
+    TYPES.SystemProbes,
+    (p) => new PostgresSystemProbes(p, APP_VERSION),
+  );
+  container
+    .bind<ITenantUsage>(TYPES.TenantUsage)
+    .toResolvedValue(
+      (pools: TenantConnectionPools) => new PostgresTenantUsage(pools),
+      [TYPES.TenantConnectionPools],
+    );
+  container
+    .bind<ConsoleDashboard>(TYPES.ConsoleDashboard)
+    .toResolvedValue(
+      (queries: IConsoleTenantQueries, clock: IClock) => new ConsoleDashboard({ queries, clock }),
+      [TYPES.ConsoleTenantQueries, TYPES.Clock],
+    );
+  container
+    .bind<TenantAccounts>(TYPES.TenantAccounts)
+    .toResolvedValue(
+      (
+        queries: IConsoleTenantQueries,
+        usage: ITenantUsage,
+        directory: ITenantDirectory,
+        clock: IClock,
+        logger: ILogger,
+      ) => new TenantAccounts({ queries, usage, directory, clock, logger }),
+      [
+        TYPES.ConsoleTenantQueries,
+        TYPES.TenantUsage,
+        TYPES.TenantDirectory,
+        TYPES.Clock,
+        TYPES.Logger,
+      ],
+    );
+  container.bind<TenantNotesAndTags>(TYPES.TenantNotesAndTags).toResolvedValue(
+    (
+      notes: ITenantNotes,
+      tags: ITenantTags,
+      directory: ITenantDirectory,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new TenantNotesAndTags({
+        notes,
+        tags,
+        directory,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.TenantNotes,
+      TYPES.TenantTags,
+      TYPES.TenantDirectory,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<DataOperationsConsole>(TYPES.DataOperationsConsole).toResolvedValue(
+    (queries: IDataOperationsQueries, clock: IClock, sets: MigrationSets) =>
+      new DataOperationsConsole({
+        queries,
+        clock,
+        latest: { platform: sets.platform.latestVersion, tenant: sets.tenant.latestVersion },
+      }),
+    [TYPES.DataOperationsQueries, TYPES.Clock, TYPES.MigrationSets],
+  );
+  container
+    .bind<SystemHealthSummary>(TYPES.SystemHealthSummary)
+    .toResolvedValue(
+      (probes: ISystemProbes, dataOperations: DataOperationsConsole, clock: IClock) =>
+        new SystemHealthSummary({ probes, dataOperations, clock }),
+      [TYPES.SystemProbes, TYPES.DataOperationsConsole, TYPES.Clock],
+    );
+  container
+    .bind<AuditLogExport>(TYPES.AuditLogExport)
+    .toResolvedValue(
+      (audit: IPlatformAuditTrail, requestContext: IRequestContext) =>
+        new AuditLogExport({ audit, requestContext }),
+      [TYPES.PlatformAuditTrail, TYPES.RequestContext],
+    );
+
   container
     .bind<IReadinessCheck[]>(TYPES.ReadinessChecks)
     .toResolvedValue(
@@ -1735,6 +1869,12 @@ export function createContainer(
       users: UserAdministration,
       roles: RoleAdministration,
       organisation: OrganisationAdministration,
+      dashboard: ConsoleDashboard,
+      tenantAccounts: TenantAccounts,
+      notes: TenantNotesAndTags,
+      dataOperations: DataOperationsConsole,
+      systemHealth: SystemHealthSummary,
+      auditExport: AuditLogExport,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -1743,6 +1883,14 @@ export function createContainer(
         ...applicationRoutes({ signup, review }),
         ...provisioningRoutes({ console: provisioningConsole, acceptInvitation }),
         ...lifecycleRoutes({ lifecycle, branches, publicConfig, tenantContext, directory }),
+        ...consoleRoutes({
+          dashboard,
+          tenants: tenantAccounts,
+          notes,
+          dataOperations,
+          health: systemHealth,
+          auditExport,
+        }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -1780,6 +1928,12 @@ export function createContainer(
       TYPES.UserAdministration,
       TYPES.RoleAdministration,
       TYPES.OrganisationAdministration,
+      TYPES.ConsoleDashboard,
+      TYPES.TenantAccounts,
+      TYPES.TenantNotesAndTags,
+      TYPES.DataOperationsConsole,
+      TYPES.SystemHealthSummary,
+      TYPES.AuditLogExport,
     ],
   );
 

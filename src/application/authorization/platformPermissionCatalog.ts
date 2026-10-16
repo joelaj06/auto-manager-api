@@ -101,6 +101,7 @@ const definitions = {
     sensitive: true,
     fourEyes: true,
   },
+  "platform.data.migrations.view": { description: "View tenant schema versions and failures" },
   "platform.data.migrations.run": { description: "Run schema migrations", sensitive: true },
   "platform.data.jobs.manage": { description: "Retry and cancel background jobs" },
   "platform.data.scripts.run": {
@@ -235,6 +236,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.alerts.manage",
       "platform.flags.manage",
       "platform.data.backups.view",
+      "platform.data.migrations.view",
       "platform.data.migrations.run",
       "platform.data.jobs.manage",
     ],

@@ -224,6 +224,17 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 111 | Password changes | **Reset and change sign the user out everywhere** (sessions revoked, permission version bumped); the client signs in again | Simple and safe: a stolen session never survives a password change |
 | 112 | Password reset channel | **Email only for now**; phone-only users are reset by their administrator until tenant SMS (their own provider) exists | Decision 17: tenant SMS goes through the tenant's provider, not yet built |
 
+## Engineering decisions during P1-6 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 113 | Console view of a tenant's database | **The 360° profile reads only counts from the tenant database** (users by status, active users, last login, branches, custom roles, database size) in a read-only transaction; if the database cannot be read the profile still loads and says so | docs/27 §2 "least data": business records only through audited support access (later); one slow tenant never breaks the console |
+| 114 | Staff notes and tags | **Only the author edits or deletes a note; anyone with notes access pins; deleting hides the note and the audit log keeps its text.** Tags are free-form but normalised (lowercase, hyphens, ≤30 chars), at most 20 per tenant | Notes are evidence of what staff told or promised a customer; free tags fit the early stage without a tag admin screen |
+| 115 | System health | **Measurements come from infrastructure probes; the application layer judges them against fixed thresholds** (e.g. job waiting 5 min = warning, 30 min = critical; no platform backup in 26 h = critical; failed restore test = critical). A probe that throws is reported as critical, never a 500. pg-boss tables are read directly (read-only) | Unit-testable rules in one place; the console must work best exactly when something is broken |
+| 116 | Migration view | **New permission `platform.data.migrations.view`** (Operations, Engineering); **provisioning records the new database's schema version** in `tenant_schema_status` | Viewing versions is not running migrations (`run` stays sensitive); without the record, new tenants looked "never migrated" |
+| 117 | Audit export | **CSV export capped at 10,000 rows (a header says when cut off), spreadsheet formulas neutralised, and every export is itself audited** | Exports leave the system; the trail must show who took what |
+| 118 | Dashboard scope | **Billing tiles (MRR, ARR, tenants due for automatic deactivation) and DAU/MAU are deferred** to subscriptions (P1-10) and `usage_daily` | No billing data exists yet; counting active users across every tenant database per page view does not scale |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

@@ -130,4 +130,18 @@ export const TYPES = Object.freeze({
   UserAdministration: Symbol.for("UserAdministration"),
   RoleAdministration: Symbol.for("RoleAdministration"),
   OrganisationAdministration: Symbol.for("OrganisationAdministration"),
+
+  // Console MVP (P1-6)
+  ConsoleTenantQueries: Symbol.for("IConsoleTenantQueries"),
+  TenantUsage: Symbol.for("ITenantUsage"),
+  TenantNotes: Symbol.for("ITenantNotes"),
+  TenantTags: Symbol.for("ITenantTags"),
+  DataOperationsQueries: Symbol.for("IDataOperationsQueries"),
+  SystemProbes: Symbol.for("ISystemProbes"),
+  ConsoleDashboard: Symbol.for("ConsoleDashboard"),
+  TenantAccounts: Symbol.for("TenantAccounts"),
+  TenantNotesAndTags: Symbol.for("TenantNotesAndTags"),
+  DataOperationsConsole: Symbol.for("DataOperationsConsole"),
+  SystemHealthSummary: Symbol.for("SystemHealthSummary"),
+  AuditLogExport: Symbol.for("AuditLogExport"),
 });

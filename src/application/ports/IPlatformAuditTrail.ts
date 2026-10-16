@@ -21,6 +21,8 @@ export type PlatformAuditQuery = Readonly<{
   actorId?: string;
   action?: string;
   targetTenantId?: string;
+  entityType?: string;
+  entityId?: string;
   from?: Date;
   to?: Date;
   limit: number;

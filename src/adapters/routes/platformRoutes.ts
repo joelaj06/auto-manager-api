@@ -373,6 +373,12 @@ export function platformRoutes(deps: PlatformRouteDependencies): ApiRoute[] {
             .max(100)
             .optional(),
           targetTenantId: uuid.optional(),
+          entityType: z
+            .string()
+            .regex(/^[a-z][a-z0-9_]*$/)
+            .max(60)
+            .optional(),
+          entityId: z.string().min(1).max(100).optional(),
           from: z.coerce.date().optional(),
           to: z.coerce.date().optional(),
           before: uuid.optional(),

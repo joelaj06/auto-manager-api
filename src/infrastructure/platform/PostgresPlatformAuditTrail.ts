@@ -68,6 +68,8 @@ export class PostgresPlatformAuditTrail implements IPlatformAuditTrail {
           and ($4::timestamptz is null or occurred_at >= $4)
           and ($5::timestamptz is null or occurred_at < $5)
           and ($6::uuid is null or id < $6)
+          and ($8::text is null or entity_type = $8)
+          and ($9::text is null or entity_id = $9)
         order by id desc
         limit $7`,
       [
@@ -78,6 +80,8 @@ export class PostgresPlatformAuditTrail implements IPlatformAuditTrail {
         query.to ?? null,
         query.before ?? null,
         query.limit,
+        query.entityType ?? null,
+        query.entityId ?? null,
       ],
     );
     return rows.map((r) => ({

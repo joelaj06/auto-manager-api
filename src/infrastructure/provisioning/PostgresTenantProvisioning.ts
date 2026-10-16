@@ -119,6 +119,17 @@ export class PostgresTenantProvisioning implements ITenantProvisioning {
     ]);
   }
 
+  async recordSchemaVersion(tenantId: string, version: string | null): Promise<void> {
+    await this.db.query(
+      `insert into tenant_schema_status (tenant_id, schema_version, status, error, updated_at)
+       values ($1, $2, 'ok', null, now())
+       on conflict (tenant_id) do update
+         set schema_version = excluded.schema_version, status = 'ok', error = null,
+             updated_at = now()`,
+      [tenantId, version],
+    );
+  }
+
   async fail(tenantId: string, error: string): Promise<void> {
     await this.db.query(
       "update tenant_provisioning set status = 'failed', last_error = $2, updated_at = now() where tenant_id = $1",
