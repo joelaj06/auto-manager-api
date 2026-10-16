@@ -75,6 +75,9 @@ const envSchema = z
     TENANT_DB_PASSWORD: requiredSecret,
     MIGRATOR_DB_USER: roleName.default("migrator"),
     MIGRATOR_DB_PASSWORD: requiredSecret,
+    /** Read-only role used by backups (pg_dump). */
+    BACKUP_DB_USER: roleName.default("backup"),
+    BACKUP_DB_PASSWORD: requiredSecret,
 
     // --- Pools and timeouts ---
     PLATFORM_POOL_MAX: z.coerce.number().int().min(1).max(200).default(10),
@@ -102,6 +105,16 @@ const envSchema = z
     /** Jobs of each type a worker process runs at the same time. */
     JOB_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(4),
     JOB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(5),
+
+    // --- Backups (docs/26) ---
+    /** Root of local backup storage (off-site object storage replaces it with hosting). */
+    BACKUP_DIR: z.string().min(1).default("backups"),
+    /** RSA public key (PEM) backups are encrypted for; the private key stays off the server. */
+    BACKUP_PUBLIC_KEY_FILE: z.string().min(1).optional(),
+    /** Where pg_dump / pg_restore come from: the PATH, or the PostgreSQL Docker image. */
+    BACKUP_PG_TOOLS: z.enum(["local", "docker"]).default("local"),
+    BACKUP_PG_TOOLS_IMAGE: z.string().min(1).default("postgres:18-alpine"),
+    BACKUP_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
 
     // --- Platform email (SMTP) ---
     // No defaults in production: host and sender must be chosen explicitly there.
@@ -172,6 +185,7 @@ export type DatabaseConfig = Readonly<{
     platform: DatabaseRoleCredentials;
     tenant: DatabaseRoleCredentials;
     migrator: DatabaseRoleCredentials;
+    backup: DatabaseRoleCredentials;
   }>;
   platformPoolMax: number;
   tenantPools: Readonly<{ maxPools: number; maxConnections: number; idleTimeoutMs: number }>;
@@ -200,6 +214,13 @@ export type AuthConfig = Readonly<{
   otpMaxAttempts: number;
 }>;
 
+export type BackupConfig = Readonly<{
+  directory: string;
+  publicKeyFile: string | undefined;
+  pgTools: Readonly<{ mode: "local" | "docker"; image: string }>;
+  concurrency: number;
+}>;
+
 export type JobsConfig = Readonly<{ workerConcurrency: number; poolMax: number }>;
 
 export type EmailConfig = Readonly<{
@@ -225,6 +246,7 @@ export type AppConfig = Readonly<{
   auth: AuthConfig;
   jobs: JobsConfig;
   email: EmailConfig;
+  backup: BackupConfig;
 }>;
 
 export class ConfigError extends Error {
@@ -276,6 +298,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       otpTtlMinutes: e.OTP_TTL_MINUTES,
       otpMaxAttempts: e.OTP_MAX_ATTEMPTS,
     }),
+    backup: Object.freeze({
+      directory: e.BACKUP_DIR,
+      publicKeyFile: e.BACKUP_PUBLIC_KEY_FILE,
+      pgTools: Object.freeze({ mode: e.BACKUP_PG_TOOLS, image: e.BACKUP_PG_TOOLS_IMAGE }),
+      concurrency: e.BACKUP_CONCURRENCY,
+    }),
     jobs: Object.freeze({ workerConcurrency: e.JOB_WORKER_CONCURRENCY, poolMax: e.JOB_POOL_MAX }),
     email: Object.freeze({
       smtp: Object.freeze({
@@ -299,6 +327,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         platform: Object.freeze({ user: e.PLATFORM_DB_USER, password: e.PLATFORM_DB_PASSWORD }),
         tenant: Object.freeze({ user: e.TENANT_DB_USER, password: e.TENANT_DB_PASSWORD }),
         migrator: Object.freeze({ user: e.MIGRATOR_DB_USER, password: e.MIGRATOR_DB_PASSWORD }),
+        backup: Object.freeze({ user: e.BACKUP_DB_USER, password: e.BACKUP_DB_PASSWORD }),
       }),
       platformPoolMax: e.PLATFORM_POOL_MAX,
       tenantPools: Object.freeze({

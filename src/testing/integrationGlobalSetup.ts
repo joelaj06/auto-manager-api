@@ -49,6 +49,7 @@ async function prepareDatabases(): Promise<void> {
       roles: TEST_DATABASE.roles,
       platformDatabase: TEST_DATABASE.platformDatabase,
       tenantTemplateDatabase: TEST_DATABASE.templateDatabase,
+      tenantDatabasePrefix: TEST_DATABASE.tenantPrefix,
     });
   } finally {
     await admin.end();

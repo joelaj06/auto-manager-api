@@ -65,7 +65,7 @@ export class TenantDatabaseProvisioner implements ITenantDatabaseProvisioner {
         `revoke connect, temporary on database ${ident(databaseName)} from public`,
       );
       await maintenance.query(
-        `grant connect on database ${ident(databaseName)} to ${ident(DATABASE_GROUP_ROLES.tenantReadWrite)}`,
+        `grant connect on database ${ident(databaseName)} to ${ident(DATABASE_GROUP_ROLES.tenantReadWrite)}, ${ident(DATABASE_GROUP_ROLES.backupReader)}`,
       );
       return created;
     } finally {

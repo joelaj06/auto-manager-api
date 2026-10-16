@@ -12,7 +12,7 @@ export type ConnectionSettings = Readonly<{
   sslCaFile?: string | undefined;
 }>;
 
-export type DatabaseRole = "platform" | "tenant" | "migrator";
+export type DatabaseRole = "platform" | "tenant" | "migrator" | "backup";
 
 const APPLICATION_NAME = "autoforce-api";
 

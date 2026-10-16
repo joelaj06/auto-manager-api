@@ -7,9 +7,12 @@ export type ClusterBootstrapOptions = Readonly<{
     platform: DatabaseRoleCredentials;
     tenant: DatabaseRoleCredentials;
     migrator: DatabaseRoleCredentials;
+    backup: DatabaseRoleCredentials;
   }>;
   platformDatabase: string;
   tenantTemplateDatabase: string;
+  /** Existing tenant databases (by name prefix) get CONNECT for the backup group. */
+  tenantDatabasePrefix: string;
 }>;
 
 const ident = (name: string) => pg.escapeIdentifier(name);
@@ -24,6 +27,7 @@ const RESTRICTED = "nosuperuser nocreaterole noreplication nobypassrls";
  *  - migrator: owns every application database and runs DDL; may create databases.
  *  - platform app user ∈ af_platform_rw: data access to the platform database only.
  *  - tenant app user ∈ af_tenant_rw: data access to tenant databases only.
+ *  - backup user ∈ af_backup (pg_read_all_data): reads every application database, writes none.
  */
 export class ClusterBootstrapper {
   constructor(
@@ -33,22 +37,26 @@ export class ClusterBootstrapper {
 
   async bootstrap(options: ClusterBootstrapOptions): Promise<void> {
     const { roles } = options;
-    const { platformReadWrite, tenantReadWrite } = DATABASE_GROUP_ROLES;
+    const { platformReadWrite, tenantReadWrite, backupReader } = DATABASE_GROUP_ROLES;
 
     await this.ensureGroupRole(platformReadWrite);
     await this.ensureGroupRole(tenantReadWrite);
+    await this.ensureGroupRole(backupReader);
+    await this.admin.query(`grant pg_read_all_data to ${ident(backupReader)}`);
     await this.ensureLoginRole(roles.migrator, `${RESTRICTED} createdb`);
     await this.ensureLoginRole(roles.platform, `${RESTRICTED} nocreatedb`);
     await this.ensureLoginRole(roles.tenant, `${RESTRICTED} nocreatedb`);
+    await this.ensureLoginRole(roles.backup, `${RESTRICTED} nocreatedb`);
     await this.admin.query(`grant ${ident(platformReadWrite)} to ${ident(roles.platform.user)}`);
     await this.admin.query(`grant ${ident(tenantReadWrite)} to ${ident(roles.tenant.user)}`);
+    await this.admin.query(`grant ${ident(backupReader)} to ${ident(roles.backup.user)}`);
     this.log("roles ready");
 
     const platform = options.platformDatabase;
     const platformCreated = await this.ensureDatabase(platform, roles.migrator.user);
     await this.admin.query(`revoke connect, temporary on database ${ident(platform)} from public`);
     await this.admin.query(
-      `grant connect on database ${ident(platform)} to ${ident(platformReadWrite)}`,
+      `grant connect on database ${ident(platform)} to ${ident(platformReadWrite)}, ${ident(backupReader)}`,
     );
     this.log(`platform database ${platform} ${platformCreated ? "created" : "exists"}`);
 
@@ -58,6 +66,18 @@ export class ClusterBootstrapper {
     // Marked as a template so the migrator may clone it; only the migrator can connect to it.
     await this.admin.query(`alter database ${ident(template)} is_template true`);
     this.log(`tenant template database ${template} ${templateCreated ? "created" : "exists"}`);
+
+    // Tenant databases created before the backup role existed.
+    const { rows } = await this.admin.query<{ datname: string }>(
+      "select datname from pg_database where starts_with(datname, $1) and not datistemplate",
+      [options.tenantDatabasePrefix],
+    );
+    for (const { datname } of rows) {
+      await this.admin.query(
+        `grant connect on database ${ident(datname)} to ${ident(backupReader)}`,
+      );
+    }
+    if (rows.length > 0) this.log(`backup access granted on ${rows.length} tenant database(s)`);
   }
 
   private async roleExists(role: string): Promise<boolean> {

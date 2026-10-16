@@ -163,6 +163,16 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 80 | Runtime regular expressions | **Banned in production code by ESLint** (`no-restricted-syntax`); search uses SQL with escaped input | Audit C7 (ReDoS / regex injection) cannot come back |
 | 81 | Load testing | **k6 scripts in `load/k6`**, run with a local k6 or the pinned `grafana/k6` image; profiles smoke/load/stress | No install needed; the same scripts run against staging once hosting exists |
 
+## Engineering decisions during P0-4, local part (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 82 | Backup encryption | **Client-side, public-key**: each file gets a fresh AES-256 key wrapped with an RSA-4096 public key (OAEP-SHA-256) and is sealed in 64 KiB AES-GCM chunks (STREAM construction). The private key and its passphrase live off the server | The server (or anyone who compromises it) can create backups but not read them; tampering, truncation and reordering are detected. Built on Node's crypto, so no extra binary is needed |
+| 83 | Backup consistency checks | **Dump on an exported snapshot and count every table's rows in that snapshot**; the restore test compares counts exactly | Turns "the restore worked" into "the restore contains exactly what was backed up" |
+| 84 | Backup role | **Dedicated `backup` login role** (group `af_backup`, `pg_read_all_data`), CONNECT on every application database | Backups never run with write privileges (doc 22 §2.4) |
+| 85 | Restores | **Only into a new database**; switching a tenant to it is a manual runbook step. The tooling drops only its own `rv_` scratch databases | A restore can never destroy live data by mistake |
+| 86 | PostgreSQL client tools | **From the PATH or the `postgres:18-alpine` image** (`BACKUP_PG_TOOLS=local\|docker`) | The app image is distroless, so the tools can't live there; they must match the server's major version |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

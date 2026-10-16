@@ -15,6 +15,7 @@ export const TEST_DATABASE = Object.freeze({
     platform: Object.freeze({ user: "test_platform_app", password: "test_platform_app_pw" }),
     tenant: Object.freeze({ user: "test_tenant_app", password: "test_tenant_app_pw" }),
     migrator: Object.freeze({ user: "test_migrator", password: "test_migrator_pw" }),
+    backup: Object.freeze({ user: "test_backup", password: "test_backup_pw" }),
   }),
 });
 
@@ -52,6 +53,8 @@ export function testConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     TENANT_DB_PASSWORD: TEST_DATABASE.roles.tenant.password,
     MIGRATOR_DB_USER: TEST_DATABASE.roles.migrator.user,
     MIGRATOR_DB_PASSWORD: TEST_DATABASE.roles.migrator.password,
+    BACKUP_DB_USER: TEST_DATABASE.roles.backup.user,
+    BACKUP_DB_PASSWORD: TEST_DATABASE.roles.backup.password,
     TENANT_POOL_IDLE_TIMEOUT_MS: "5000",
     LOG_LEVEL: "silent",
     TENANT_JWT_SECRET: "test-tenant-jwt-secret-0123456789-abcdef",

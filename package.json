@@ -22,6 +22,7 @@
     "db:migrate": "tsx --env-file-if-exists=.env src/framework/cli/dbMigrate.ts",
     "db:status": "tsx --env-file-if-exists=.env src/framework/cli/dbStatus.ts",
     "db:load-test": "tsx --env-file-if-exists=.env src/framework/cli/dbLoadTest.ts",
+    "backup": "tsx --env-file-if-exists=.env src/framework/cli/backup.ts",
     "load:health": "load/run.sh health",
     "load:auth": "load/run.sh auth-rejection",
     "typecheck": "tsc -p tsconfig.json --noEmit",

@@ -38,6 +38,7 @@
 | 28 | [Tenant roles, permissions & seeding](28_tenant_roles_permissions_and_seeding.md) | Permission catalogue in the platform DB, seeded into each tenant DB at creation; system vs custom roles, scopes, limits, sync on releases |
 | 29 | [Reseller / partner program](29_reseller_partner_program.md) | Reseller console accounts, referral attribution, per-reseller commission terms (Super Admin), commission ledger and payouts, what resellers can see |
 | 30 | [Implementation plan (phased)](30_implementation_plan.md) | **Authoritative build plan**: phases 0–9, work packages, milestones M0–M6, exit criteria, risks, what is needed before Phase 0 |
+| 31 | [Backup & restore runbooks](31_backup_restore_runbooks.md) | Backup keys, taking backups, the automated restore test, restoring one tenant / the platform / a whole server, validation queries |
 
 ## Legend used across docs
 

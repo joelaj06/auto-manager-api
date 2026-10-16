@@ -121,6 +121,21 @@ The worker is a second process from the same image: `yarn dev:worker` locally,
   (http://localhost:8025).
 - Jobs of deactivated tenants are skipped; failed jobs retry with backoff.
 
+## Backups
+
+Logical, encrypted backups of every tenant database and the platform database, with an
+automated restore test. Runbooks: [docs/31](docs/31_backup_restore_runbooks.md).
+
+```
+BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn backup keygen --out ./backup-keys   # once; keep the private key offline
+yarn backup run                                    # platform + all tenants (needs BACKUP_PUBLIC_KEY_FILE)
+yarn backup list
+BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn backup verify --private-key <file> --sample 3
+BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn backup restore --private-key <file> --id <id> --into <new database>
+```
+
+Without PostgreSQL client tools installed, set `BACKUP_PG_TOOLS=docker` (uses `postgres:18-alpine`).
+
 ## Tests and security checks
 
 | Suite             | Where                                             | What it guarantees                                                                                                                                                                                                                                                                                                                                                         |

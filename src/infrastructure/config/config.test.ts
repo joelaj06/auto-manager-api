@@ -5,6 +5,7 @@ const requiredSecrets = {
   PLATFORM_DB_PASSWORD: "platform-secret-1234",
   TENANT_DB_PASSWORD: "tenant-secret-12345",
   MIGRATOR_DB_PASSWORD: "migrator-secret-1234",
+  BACKUP_DB_PASSWORD: "backup-secret-12345",
   TENANT_JWT_SECRET: "t".repeat(40),
   PLATFORM_JWT_SECRET: "p".repeat(40),
   OTP_SECRET: "o".repeat(40),

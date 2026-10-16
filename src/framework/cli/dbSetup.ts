@@ -36,6 +36,7 @@ runCommand("db:setup", async () => {
       roles: config.database.roles,
       platformDatabase: config.database.platformDatabase,
       tenantTemplateDatabase: config.database.tenantTemplateDatabase,
+      tenantDatabasePrefix: config.database.tenantDatabasePrefix,
     });
   } finally {
     await admin.end();
