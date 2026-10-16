@@ -37,6 +37,7 @@ function setup() {
   const directory: ITenantDirectory = {
     findBySlug: () => Promise.resolve(null),
     findById: (id) => Promise.resolve(tenants.find((t) => t.id === id) ?? null),
+    invalidate: () => undefined,
   };
   const logger: ILogger = {
     debug: vi.fn(),

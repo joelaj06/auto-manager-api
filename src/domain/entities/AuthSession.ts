@@ -7,7 +7,9 @@ export type SessionRevocationReason =
   | "user_disabled"
   | "admin_revoked"
   /** Console sessions only: no request within the idle window. */
-  | "idle_timeout";
+  | "idle_timeout"
+  /** Tenant sessions: the whole tenant was deactivated. */
+  | "tenant_deactivated";
 
 export type AuthSessionProps = Readonly<{
   id: string;

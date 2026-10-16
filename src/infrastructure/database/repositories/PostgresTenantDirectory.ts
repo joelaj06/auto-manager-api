@@ -13,17 +13,22 @@ export type TenantDirectoryOptions = Readonly<{ cacheTtlMs: number; maxEntries: 
 
 /**
  * Tenant lookups from the platform registry, cached in-process because every tenant request
- * needs one. Status changes (suspension, reactivation) take effect within `cacheTtlMs`. Unknown
- * slugs are not cached so a newly provisioned tenant is usable immediately.
+ * needs one. Status changes take effect at once in the process that made them (`invalidate`)
+ * and within `cacheTtlMs` (5 s) in other API instances. Unknown slugs are not cached so a newly
+ * provisioned tenant is usable immediately.
  */
 export class PostgresTenantDirectory implements ITenantDirectory {
   private readonly cache: TtlCache<TenantSummary | null>;
 
   constructor(
     private readonly platform: Queryable,
-    options: TenantDirectoryOptions = { cacheTtlMs: 30_000, maxEntries: 10_000 },
+    options: TenantDirectoryOptions = { cacheTtlMs: 5_000, maxEntries: 10_000 },
   ) {
     this.cache = new TtlCache({ ttlMs: options.cacheTtlMs, maxEntries: options.maxEntries });
+  }
+
+  invalidate(): void {
+    this.cache.clear();
   }
 
   findBySlug(slug: string): Promise<TenantSummary | null> {

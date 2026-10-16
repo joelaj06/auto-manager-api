@@ -118,6 +118,13 @@ const RULES: Readonly<Record<string, Rule>> = {
   // Provisioning
   PROVISIONING_NOT_FOUND: { status: 404 },
   PROVISIONING_NOT_RETRYABLE: { status: 409 },
+
+  // Tenant and branch lifecycle
+  TENANT_READ_ONLY: { status: 403 },
+  TENANT_STATE: { status: 409 },
+  BRANCH_DEACTIVATED: { status: 403 },
+  BRANCH_NOT_FOUND: { status: 404 },
+  BRANCH_DEACTIVATION_BLOCKED: { status: 422 },
 };
 
 /** RFC 6750 challenge for bearer-token failures. */

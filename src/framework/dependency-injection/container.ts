@@ -53,6 +53,25 @@ import type { IOtpChallengeRepository } from "../../domain/repositories/IOtpChal
 import { CachingPermissionResolver } from "../../infrastructure/authorization/CachingPermissionResolver.js";
 import { PostgresTenantPermissionResolver } from "../../infrastructure/authorization/PostgresTenantPermissionResolver.js";
 import { provisioningRoutes } from "../../adapters/routes/provisioningRoutes.js";
+import { lifecycleRoutes } from "../../adapters/routes/lifecycleRoutes.js";
+import type { IBranchDeactivationCheck, IBranches } from "../../application/ports/IBranches.js";
+import type {
+  IOrganisationReader,
+  ITenantPublicProfiles,
+} from "../../application/ports/ITenantPublicProfiles.js";
+import type { ITenantSessionRevoker } from "../../application/ports/ITenantSessionRevoker.js";
+import type { IPermissionCache } from "../../application/ports/IPermissionCache.js";
+import { BranchLifecycle } from "../../application/use-cases/tenants/BranchLifecycle.js";
+import { TenantLifecycleService } from "../../application/use-cases/tenants/TenantLifecycleService.js";
+import { TenantPublicConfig } from "../../application/use-cases/tenants/TenantPublicConfig.js";
+import type { ITenantLifecycleRepository } from "../../domain/repositories/ITenantLifecycleRepository.js";
+import { PostgresTenantLifecycleRepository } from "../../infrastructure/tenants/PostgresTenantLifecycleRepository.js";
+import {
+  PostgresBranches,
+  PostgresOrganisationReader,
+  PostgresTenantSessionRevoker,
+} from "../../infrastructure/tenants/PostgresTenantOrganisation.js";
+import { PostgresTenantPublicProfiles } from "../../infrastructure/tenants/PostgresTenantPublicProfiles.js";
 import type { IOrphanDatabases } from "../../application/ports/IOrphanDatabases.js";
 import type { IPermissionCatalogueSource } from "../../application/ports/IPermissionCatalogueSource.js";
 import type { ITenantProvisioning } from "../../application/ports/ITenantProvisioning.js";
@@ -546,6 +565,13 @@ export function createContainer(
       (pools: TenantConnectionPools) =>
         new CachingPermissionResolver(new PostgresTenantPermissionResolver(pools)),
       [TYPES.TenantConnectionPools],
+    );
+  // The same caching resolver, seen as the cache to invalidate after permission-relevant changes.
+  container
+    .bind<IPermissionCache>(TYPES.PermissionCache)
+    .toResolvedValue(
+      (resolver: IPermissionResolver) => resolver as CachingPermissionResolver,
+      [TYPES.PermissionResolver],
     );
 
   container
@@ -1238,6 +1264,126 @@ export function createContainer(
     ],
   );
 
+  // --- Tenant and branch lifecycle, public tenant-config ---
+  platformRepository<ITenantLifecycleRepository>(
+    TYPES.TenantLifecycleRepository,
+    (p) => new PostgresTenantLifecycleRepository(p),
+  );
+  platformRepository<ITenantPublicProfiles>(
+    TYPES.TenantPublicProfiles,
+    (p) => new PostgresTenantPublicProfiles(p),
+  );
+  const tenantRepository = <T>(token: symbol, build: (tx: PostgresTransactionContext) => T) =>
+    container.bind<T>(token).toResolvedValue(build, [TYPES.PostgresTransactionContext]);
+  tenantRepository<ITenantSessionRevoker>(
+    TYPES.TenantSessionRevoker,
+    (tx) => new PostgresTenantSessionRevoker(tx),
+  );
+  tenantRepository<IBranches>(TYPES.Branches, (tx) => new PostgresBranches(tx));
+  tenantRepository<IOrganisationReader>(
+    TYPES.OrganisationReader,
+    (tx) => new PostgresOrganisationReader(tx),
+  );
+  // Modules register their branch-deactivation checks here (open rentals, cash sessions, …).
+  container.bind<IBranchDeactivationCheck[]>(TYPES.BranchDeactivationChecks).toConstantValue([]);
+
+  container.bind<TenantLifecycleService>(TYPES.TenantLifecycleService).toResolvedValue(
+    (
+      platformUnitOfWork: IPlatformUnitOfWork,
+      tenants: ITenantLifecycleRepository,
+      directory: ITenantDirectory,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      sessions: ITenantSessionRevoker,
+      seeder: ITenantSeeder,
+      notifications: NotificationService,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new TenantLifecycleService({
+        platformUnitOfWork,
+        tenants,
+        directory,
+        tenantContext,
+        tenantUnitOfWork,
+        sessions,
+        seeder,
+        notifications,
+        audit,
+        requestContext,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.TenantLifecycleRepository,
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TenantSessionRevoker,
+      TYPES.TenantSeeder,
+      TYPES.NotificationService,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+
+  container.bind<BranchLifecycle>(TYPES.BranchLifecycle).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      branches: IBranches,
+      checks: IBranchDeactivationCheck[],
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+      tenantContext: ITenantContext,
+      permissionCache: IPermissionCache,
+    ) =>
+      new BranchLifecycle({
+        unitOfWork,
+        branches,
+        checks,
+        auditTrail,
+        requestContext,
+        tenantContext,
+        permissionCache,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.Branches,
+      TYPES.BranchDeactivationChecks,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.TenantContext,
+      TYPES.PermissionCache,
+    ],
+  );
+
+  container
+    .bind<TenantPublicConfig>(TYPES.TenantPublicConfig)
+    .toResolvedValue(
+      (
+        profiles: ITenantPublicProfiles,
+        tenantContext: ITenantContext,
+        unitOfWork: IUnitOfWork,
+        organisation: IOrganisationReader,
+        clock: IClock,
+      ) => new TenantPublicConfig({ profiles, tenantContext, unitOfWork, organisation, clock }),
+      [
+        TYPES.TenantPublicProfiles,
+        TYPES.TenantContext,
+        TYPES.UnitOfWork,
+        TYPES.OrganisationReader,
+        TYPES.Clock,
+      ],
+    );
+
   // --- HTTP ---
   container.bind<AccessGuard>(TYPES.AccessGuard).toResolvedValue(
     (
@@ -1298,6 +1444,11 @@ export function createContainer(
       review: ApplicationReview,
       provisioningConsole: ProvisioningConsole,
       acceptInvitation: AcceptUserInvitation,
+      lifecycle: TenantLifecycleService,
+      branches: BranchLifecycle,
+      publicConfig: TenantPublicConfig,
+      tenantContext: ITenantContext,
+      directory: ITenantDirectory,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -1305,6 +1456,7 @@ export function createContainer(
         ...platformRoutes({ signIn, sessions, administration, approvals, audit }),
         ...applicationRoutes({ signup, review }),
         ...provisioningRoutes({ console: provisioningConsole, acceptInvitation }),
+        ...lifecycleRoutes({ lifecycle, branches, publicConfig, tenantContext, directory }),
       ];
       return config.http.exposeOpenApi
         ? [...routes, ...openApiRoutes(routes, OPENAPI_INFO)]
@@ -1321,6 +1473,11 @@ export function createContainer(
       TYPES.ApplicationReview,
       TYPES.ProvisioningConsole,
       TYPES.AcceptUserInvitation,
+      TYPES.TenantLifecycleService,
+      TYPES.BranchLifecycle,
+      TYPES.TenantPublicConfig,
+      TYPES.TenantContext,
+      TYPES.TenantDirectory,
     ],
   );
 

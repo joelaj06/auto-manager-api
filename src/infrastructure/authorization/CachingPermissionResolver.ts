@@ -1,4 +1,5 @@
 import type { PermissionGrants } from "../../application/authorization/Principal.js";
+import type { IPermissionCache } from "../../application/ports/IPermissionCache.js";
 import type { IPermissionResolver } from "../../application/ports/IPermissionResolver.js";
 import { TtlCache } from "../cache/TtlCache.js";
 
@@ -21,7 +22,7 @@ const DEFAULTS: PermissionCacheOptions = {
  * grants are cached per (tenant, user, version), so a role edit — which bumps the version — is
  * picked up as soon as the version cache expires.
  */
-export class CachingPermissionResolver implements IPermissionResolver {
+export class CachingPermissionResolver implements IPermissionResolver, IPermissionCache {
   private readonly versions: TtlCache<number | null>;
   private readonly grants: TtlCache<PermissionGrants | null>;
 
@@ -49,6 +50,10 @@ export class CachingPermissionResolver implements IPermissionResolver {
       () => this.inner.resolve(tenantId, userId, permissionVersion),
       (grants) => grants !== null,
     );
+  }
+
+  forgetTenant(tenantId: string): void {
+    this.versions.deleteByPrefix(`${tenantId}:`);
   }
 
   /** Drops this process's cached version for a user (call after changing their roles). */

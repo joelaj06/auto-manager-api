@@ -205,6 +205,15 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 102 | System roles at launch | **Owner, Administrator, Branch Manager, Accountant, Auditor**; module roles (Fleet Officer, Rental Agent, Driver, …) arrive with their modules' permissions | Avoids seeding roles that grant nothing yet; the catalogue sync adds them to every tenant later |
 | 103 | User directory | **Email and phone stored as HMAC-SHA256** (key derived from `OTP_SECRET`) | Multi-tenant login lookups without a plain list of every tenant user's contacts in the platform DB; rotating `OTP_SECRET` requires re-hashing |
 
+## Engineering decisions during P1-4 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 104 | Immediate deactivation | **Commit the status, forget this process's cached status (other API instances follow within 5 s — directory cache TTL lowered from 30 s), and revoke every session in the tenant database** | "Deactivating blocks every user immediately" (P1 exit criterion) without a platform lookup on every request; refresh tokens die at once, access tokens are rejected through the status check |
+| 105 | Restore semantics | **Restore returns the status the tenant had before** (read-only remembered across a deactivation); sessions are not restored — users sign in again | Matches docs/27 §3.3; nothing about the tenant's data or branches changes |
+| 106 | Read-only enforcement | **Every non-GET request on a tenant route is refused while read-only** unless the route explicitly allows it (`allowWhenReadOnly`, e.g. sign-out); sign-in routes are unaffected | One rule in the guard instead of per-endpoint checks |
+| 107 | Branch deactivation effects | **Assignments to a deactivated branch grant nothing; members get a new permission version; a user whose branches are all deactivated gets `403 BRANCH_DEACTIVATED`**; deactivation is refused for the default and the last active branch, and modules add their own precondition checks | docs/27 §3.5: nobody reaches a deactivated branch, nothing live is left inside it, the tenant keeps working |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

@@ -156,6 +156,15 @@ it and calls `POST /api/v1/auth/invitations/accept` with `X-Tenant: <slug>` and
 `{ token, password }` to get tokens — then `GET /api/v1/me` shows their permissions. Progress and
 retry: `GET/POST /api/platform/v1/tenants/:id/provisioning[/retry]`.
 
+## Tenant lifecycle and branches
+
+Console (step-up required): `POST /api/platform/v1/tenants/:id/deactivate`
+(`{ reasonCategory, reason, message }`), `…/restore`, `…/read-only`, `…/read-only/clear`,
+`GET …/status-history`, and `…/branches[/:branchId/deactivate|reactivate]`. Tenant owners:
+`GET /api/v1/branches`, `POST /api/v1/branches/:id/deactivate|reactivate`. Apps call
+`GET /api/v1/public/tenant-config?slug=` to show the business name, currency and any blocking
+notice.
+
 ## Backups
 
 Logical, encrypted backups of every tenant database and the platform database, with an

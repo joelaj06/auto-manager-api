@@ -14,4 +14,6 @@ export type TenantSummary = Readonly<{ id: string; slug: string; status: TenantS
 export interface ITenantDirectory {
   findBySlug(slug: string): Promise<TenantSummary | null>;
   findById(id: string): Promise<TenantSummary | null>;
+  /** Forgets cached entries after a status change in this process (others expire within seconds). */
+  invalidate(): void;
 }

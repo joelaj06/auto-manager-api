@@ -46,6 +46,7 @@ const tenants: TenantSummary[] = [
 const directory: ITenantDirectory = {
   findBySlug: (slug) => Promise.resolve(tenants.find((t) => t.slug === slug) ?? null),
   findById: (id) => Promise.resolve(tenants.find((t) => t.id === id) ?? null),
+  invalidate: () => undefined,
 };
 
 /** USER exists in every tenant and may list users only. */

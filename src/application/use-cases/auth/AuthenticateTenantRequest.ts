@@ -1,7 +1,11 @@
 import { assertTenantUsable } from "../../authorization/TenantAccessRules.js";
 import { Principal } from "../../authorization/Principal.js";
 import { InvalidAccessTokenError } from "../../errors/AuthErrors.js";
-import { TenantMismatchError, TenantNotFoundError } from "../../errors/TenantErrors.js";
+import {
+  BranchDeactivatedError,
+  TenantMismatchError,
+  TenantNotFoundError,
+} from "../../errors/TenantErrors.js";
 import type { IAccessTokenService } from "../../ports/IAccessTokenService.js";
 import type { IPermissionResolver } from "../../ports/IPermissionResolver.js";
 import type { ITenantDirectory, TenantSummary } from "../../ports/ITenantDirectory.js";
@@ -54,6 +58,8 @@ export class AuthenticateTenantRequest {
 
     const grants = await deps.permissions.resolve(tenant.id, subject.userId, version);
     if (grants === null) throw new InvalidAccessTokenError("user_unavailable");
+    // Every branch of this user is deactivated: the tenant works, this user does not (docs/27 §3.5).
+    if (grants.allBranchesInactive === true) throw new BranchDeactivatedError();
 
     return {
       tenant,

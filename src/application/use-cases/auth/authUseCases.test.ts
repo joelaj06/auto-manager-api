@@ -155,6 +155,7 @@ class FakeDirectory implements ITenantDirectory {
   ];
   findBySlug = (slug: string) => Promise.resolve(this.tenants.find((t) => t.slug === slug) ?? null);
   findById = (id: string) => Promise.resolve(this.tenants.find((t) => t.id === id) ?? null);
+  invalidate = () => undefined;
 }
 
 const otp: IOtpService = {

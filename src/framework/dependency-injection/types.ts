@@ -35,6 +35,7 @@ export const TYPES = Object.freeze({
   OtpService: Symbol.for("IOtpService"),
   TenantDirectory: Symbol.for("ITenantDirectory"),
   PermissionResolver: Symbol.for("IPermissionResolver"),
+  PermissionCache: Symbol.for("IPermissionCache"),
 
   // Repositories
   AuthSessionRepository: Symbol.for("IAuthSessionRepository"),
@@ -105,4 +106,15 @@ export const TYPES = Object.freeze({
   ProvisioningJobHandlers: Symbol.for("ProvisioningJobHandlers"),
   ProvisioningConsole: Symbol.for("ProvisioningConsole"),
   AcceptUserInvitation: Symbol.for("AcceptUserInvitation"),
+
+  // Tenant and branch lifecycle
+  TenantLifecycleRepository: Symbol.for("ITenantLifecycleRepository"),
+  TenantSessionRevoker: Symbol.for("ITenantSessionRevoker"),
+  Branches: Symbol.for("IBranches"),
+  BranchDeactivationChecks: Symbol.for("IBranchDeactivationCheck[]"),
+  TenantPublicProfiles: Symbol.for("ITenantPublicProfiles"),
+  OrganisationReader: Symbol.for("IOrganisationReader"),
+  TenantLifecycleService: Symbol.for("TenantLifecycleService"),
+  BranchLifecycle: Symbol.for("BranchLifecycle"),
+  TenantPublicConfig: Symbol.for("TenantPublicConfig"),
 });

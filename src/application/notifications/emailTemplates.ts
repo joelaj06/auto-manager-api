@@ -52,6 +52,12 @@ export type EmailTemplateData = {
     businessName: string;
     reason: string | null;
   }>;
+  "tenant.deactivated": Readonly<{
+    ownerName: string;
+    businessName: string;
+    message: string | null;
+  }>;
+  "tenant.restored": Readonly<{ ownerName: string; businessName: string; message: string | null }>;
   "tenant.welcome_owner": Readonly<{
     ownerName: string;
     businessName: string;
@@ -181,6 +187,18 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       `We are sorry, but we cannot accept the application for ${data.businessName} at this time.`,
       ...(data.reason === null ? [] : [`Reason: ${data.reason}`]),
       "If you think this is a mistake, reply to this email or contact our support team.",
+    ]),
+  "tenant.deactivated": (data) =>
+    simple(`${data.businessName} has been deactivated`, [
+      greeting(data.ownerName),
+      `Access to ${PRODUCT} for ${data.businessName} has been switched off. Nobody in your business can sign in until it is restored. Your data is kept safely and nothing has been deleted.`,
+      ...(data.message === null ? [] : [data.message]),
+      "Reply to this email or contact our support team to restore access.",
+    ]),
+  "tenant.restored": (data) =>
+    simple(`${data.businessName} is active again`, [
+      greeting(data.ownerName),
+      `Access to ${PRODUCT} for ${data.businessName} has been restored. Everyone can sign in again; all your data is as it was.`,
     ]),
   "tenant.welcome_owner": (data) =>
     simple(`Welcome to ${PRODUCT} — ${data.businessName} is ready`, [

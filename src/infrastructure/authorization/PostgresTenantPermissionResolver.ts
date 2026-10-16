@@ -12,8 +12,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * A tenant user's effective permissions from their role assignments (docs/28 §3.3): the union of
- * the roles' grants, keeping the widest scope per permission. Deprecated permissions and deleted
- * roles grant nothing; disabled and invited users have no permissions (and no valid version).
+ * the roles' grants, keeping the widest scope per permission. Deprecated permissions, deleted
+ * roles and assignments to deactivated branches grant nothing; disabled and invited users have no
+ * permissions (and no valid version). Only active branches count as the user's branches.
  * Wrapped by CachingPermissionResolver.
  */
 export class PostgresTenantPermissionResolver implements IPermissionResolver {
@@ -59,7 +60,10 @@ export class PostgresTenantPermissionResolver implements IPermissionResolver {
              join roles r on r.id = ur.role_id and r.deleted_at is null
              join role_permissions rp on rp.role_id = r.id
              join permissions p on p.key = rp.permission_key and not p.deprecated
-            where ur.user_id = $1`,
+            left join branches b on b.id = ur.branch_id
+            where ur.user_id = $1
+              -- An assignment to a deactivated branch grants nothing (docs/28 rule 14).
+              and (ur.branch_id is null or b.status = 'active')`,
           [userId],
         );
         const permissions = new Map<string, PermissionGrant>();
@@ -72,13 +76,18 @@ export class PostgresTenantPermissionResolver implements IPermissionResolver {
             });
           }
         }
-        const branches = await tx.query<{ branch_id: string }>(
-          `select ub.branch_id from user_branches ub
-             join branches b on b.id = ub.branch_id and b.status = 'active'
+        const branches = await tx.query<{ branch_id: string; active: boolean }>(
+          `select ub.branch_id, b.status = 'active' as active from user_branches ub
+             join branches b on b.id = ub.branch_id
             where ub.user_id = $1`,
           [userId],
         );
-        return { permissions, branchIds: branches.rows.map((b) => b.branch_id) };
+        const active = branches.rows.filter((b) => b.active).map((b) => b.branch_id);
+        return {
+          permissions,
+          branchIds: active,
+          allBranchesInactive: branches.rows.length > 0 && active.length === 0,
+        };
       },
       { readOnly: true },
     );

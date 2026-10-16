@@ -8,6 +8,7 @@ import {
   PermissionDeniedError,
 } from "../../application/errors/AuthErrors.js";
 import { StepUpRequiredError } from "../../application/errors/StaffErrors.js";
+import { TenantReadOnlyError } from "../../application/errors/TenantErrors.js";
 import type { IClock } from "../../application/ports/IClock.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { TenantSummary } from "../../application/ports/ITenantDirectory.js";
@@ -20,6 +21,7 @@ import type { RouteAccess } from "../routes/RouteAccess.js";
 export const TENANT_HEADER = "x-tenant";
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
 const MAX_TOKEN_LENGTH = 4_096;
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 type Locals = { tenant?: TenantSummary; principal?: Principal; staff?: PlatformPrincipal };
 
@@ -71,6 +73,14 @@ export class AccessGuard {
         });
         if (access.permission !== null) {
           this.deps.authorization.require(principal, access.permission);
+        }
+        // Read-only tenants: reads only (docs/27 §3.3); sign-in routes are `tenant` routes.
+        if (
+          tenant.status === "read_only" &&
+          !SAFE_METHODS.has(req.method) &&
+          access.allowWhenReadOnly !== true
+        ) {
+          throw new TenantReadOnlyError();
         }
         locals.tenant = tenant;
         locals.principal = principal;

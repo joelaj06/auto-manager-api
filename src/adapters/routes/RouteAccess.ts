@@ -13,7 +13,12 @@ import type { PlatformPermissionKey } from "../../application/authorization/plat
 export type RouteAccess =
   | Readonly<{ kind: "public" }>
   | Readonly<{ kind: "tenant" }>
-  | Readonly<{ kind: "authenticated"; permission: PermissionKey | null }>
+  | Readonly<{
+      kind: "authenticated";
+      permission: PermissionKey | null;
+      /** Lets a non-GET route work while the tenant is read-only (e.g. sign-out). */
+      allowWhenReadOnly?: boolean;
+    }>
   | Readonly<{ kind: "platform"; permission: PlatformPermissionKey | null }>;
 
 export const access = Object.freeze({

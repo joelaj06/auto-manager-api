@@ -9,8 +9,10 @@ export type PermissionGrant = Readonly<{
 /** A user's effective permissions (union over their role assignments) and branches. */
 export type PermissionGrants = Readonly<{
   permissions: ReadonlyMap<string, PermissionGrant>;
-  /** Branches the user is assigned to (used by branch-scoped grants). */
+  /** Active branches the user is assigned to (used by branch-scoped grants). */
   branchIds: readonly string[];
+  /** The user belongs to branches, but every one of them is deactivated (docs/27 §3.5). */
+  allBranchesInactive?: boolean;
 }>;
 
 /** The authenticated tenant user behind the current request. */
