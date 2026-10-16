@@ -41,7 +41,7 @@ jobs:
       - run: yarn test
 
   integration:
-    name: Integration tests (PostgreSQL, Redis)
+    name: Integration tests (PostgreSQL, Redis, Mailpit)
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -66,6 +66,17 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      # SMTP sink for the email delivery tests (SMTP 1025, HTTP API 8025).
+      mailpit:
+        image: axllent/mailpit:v1.31.6
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "/mailpit readyz"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20

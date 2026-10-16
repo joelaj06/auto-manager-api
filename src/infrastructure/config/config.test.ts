@@ -10,6 +10,12 @@ const requiredSecrets = {
   OTP_SECRET: "o".repeat(40),
 };
 
+/** Settings production requires on top of the secrets. */
+const productionEmail = {
+  SMTP_HOST: "smtp.example.com",
+  EMAIL_FROM: "Autoforce <no-reply@example.com>",
+};
+
 function issuesOf(attempt: () => unknown): readonly string[] {
   try {
     attempt();
@@ -58,6 +64,7 @@ describe("loadConfig", () => {
   it("reads and coerces values from the environment", () => {
     const config = loadConfig({
       ...requiredSecrets,
+      ...productionEmail,
       NODE_ENV: "production",
       PORT: "8080",
       LOG_LEVEL: "warn",
@@ -94,7 +101,12 @@ describe("loadConfig", () => {
   });
 
   it("hides the OpenAPI document in production unless enabled explicitly", () => {
-    const production = { ...requiredSecrets, NODE_ENV: "production", DATABASE_SSL: "require" };
+    const production = {
+      ...requiredSecrets,
+      ...productionEmail,
+      NODE_ENV: "production",
+      DATABASE_SSL: "require",
+    };
     expect(loadConfig(production).http.exposeOpenApi).toBe(false);
     expect(loadConfig({ ...production, EXPOSE_OPENAPI: "true" }).http.exposeOpenApi).toBe(true);
   });
@@ -141,8 +153,31 @@ describe("loadConfig", () => {
   });
 
   it("requires an explicit SSL mode in production", () => {
-    const issues = issuesOf(() => loadConfig({ ...requiredSecrets, NODE_ENV: "production" }));
+    const issues = issuesOf(() =>
+      loadConfig({ ...requiredSecrets, ...productionEmail, NODE_ENV: "production" }),
+    );
     expect(issues).toEqual([expect.stringMatching(/^DATABASE_SSL:/)]);
+  });
+
+  it("defaults email to the local Mailpit outside production", () => {
+    const config = loadConfig(requiredSecrets);
+    expect(config.email.smtp).toMatchObject({ host: "localhost", port: 1025, secure: false });
+    expect(config.email.from).toMatch(/<no-reply@/);
+    expect(config.jobs).toEqual({ workerConcurrency: 4, poolMax: 5 });
+  });
+
+  it("requires an SMTP host and sender in production, and a password with an SMTP user", () => {
+    const issues = issuesOf(() =>
+      loadConfig({ ...requiredSecrets, NODE_ENV: "production", DATABASE_SSL: "require" }),
+    );
+    expect(issues).toEqual([
+      expect.stringMatching(/^SMTP_HOST:/),
+      expect.stringMatching(/^EMAIL_FROM:/),
+    ]);
+    const auth = issuesOf(() => loadConfig({ ...requiredSecrets, SMTP_USER: "mailer" }));
+    expect(auth).toEqual([expect.stringMatching(/^SMTP_PASSWORD:/)]);
+    const from = issuesOf(() => loadConfig({ ...requiredSecrets, EMAIL_FROM: "not an address" }));
+    expect(from).toEqual([expect.stringMatching(/^EMAIL_FROM:/)]);
   });
 
   it("requires a CA file for verify-full", () => {

@@ -1,7 +1,7 @@
 {
   "name": "auto-manager-api",
   "version": "2.0.0-alpha.0",
-  "description": "Autoforce Manager API — multi-tenant fleet, rental, work & pay and dealership platform",
+  "description": "Autoforce Manager API \u2014 multi-tenant fleet, rental, work & pay and dealership platform",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -14,8 +14,10 @@
   "packageManager": "yarn@1.22.22",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "dev:worker": "tsx watch --env-file-if-exists=.env src/worker.ts",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=.env --enable-source-maps dist/index.js",
+    "start:worker": "node --env-file-if-exists=.env --enable-source-maps dist/worker.js",
     "db:setup": "tsx --env-file-if-exists=.env src/framework/cli/dbSetup.ts",
     "db:migrate": "tsx --env-file-if-exists=.env src/framework/cli/dbMigrate.ts",
     "db:status": "tsx --env-file-if-exists=.env src/framework/cli/dbStatus.ts",
@@ -38,7 +40,9 @@
     "helmet": "^8.3.0",
     "inversify": "^8.2.3",
     "jose": "^6.2.12",
+    "nodemailer": "10.0.13",
     "pg": "^8.23.1",
+    "pg-boss": "12.35.1",
     "reflect-metadata": "^0.2.2",
     "zod": "^4.6.7"
   },

@@ -60,6 +60,38 @@ import { CryptoRefreshTokenService } from "../../infrastructure/security/CryptoR
 import { HmacOtpService } from "../../infrastructure/security/HmacOtpService.js";
 import { JwtAccessTokenService } from "../../infrastructure/security/JwtAccessTokenService.js";
 import { SystemClock } from "../../infrastructure/time/SystemClock.js";
+import { PgBoss } from "pg-boss";
+import { EventHandlerRegistry } from "../../application/events/EventHandlerRegistry.js";
+import type { IEventHandler } from "../../application/events/IEventHandler.js";
+import type { IJobHandler } from "../../application/jobs/IJobHandler.js";
+import { NotificationService } from "../../application/notifications/NotificationService.js";
+import type { IEmailDeliveries } from "../../application/ports/IEmailDeliveries.js";
+import type { IEmailSender } from "../../application/ports/IEmailSender.js";
+import type { IJobQueue } from "../../application/ports/IJobQueue.js";
+import type { IOutboxStore } from "../../application/ports/IOutboxStore.js";
+import type { IProcessedMessages } from "../../application/ports/IProcessedMessages.js";
+import type { ITenantRetention } from "../../application/ports/ITenantRetention.js";
+import type { ITenantRoster } from "../../application/ports/ITenantRoster.js";
+import type { ITenantScheduleLedger } from "../../application/ports/ITenantScheduleLedger.js";
+import { DeliverEvent } from "../../application/use-cases/jobs/DeliverEvent.js";
+import { DrainOutbox } from "../../application/use-cases/jobs/DrainOutbox.js";
+import { RunDailyMaintenance } from "../../application/use-cases/jobs/RunDailyMaintenance.js";
+import { RunTenantSchedules } from "../../application/use-cases/jobs/RunTenantSchedules.js";
+import { SendQueuedEmail } from "../../application/use-cases/jobs/SendQueuedEmail.js";
+import { SweepOutboxes } from "../../application/use-cases/jobs/SweepOutboxes.js";
+import { PostgresOutboxStore } from "../../infrastructure/database/repositories/PostgresOutboxStore.js";
+import { PostgresProcessedMessages } from "../../infrastructure/database/repositories/PostgresProcessedMessages.js";
+import { PostgresTenantRetention } from "../../infrastructure/database/repositories/PostgresTenantRetention.js";
+import { PostgresTenantRoster } from "../../infrastructure/database/repositories/PostgresTenantRoster.js";
+import {
+  PgBossJobQueue,
+  pgBossOptions,
+  type JobQueueMode,
+} from "../../infrastructure/jobs/PgBossJobQueue.js";
+import { PostgresTenantScheduleLedger } from "../../infrastructure/jobs/PostgresTenantScheduleLedger.js";
+import { PostgresEmailDeliveries } from "../../infrastructure/notifications/PostgresEmailDeliveries.js";
+import { SmtpEmailSender } from "../../infrastructure/notifications/SmtpEmailSender.js";
+import { JobWorker } from "../jobs/JobWorker.js";
 import { createApp } from "../express/createApp.js";
 import { JsonLogger, jsonSink } from "../logger/JsonLogger.js";
 import { prettySink } from "../logger/prettySink.js";
@@ -77,9 +109,19 @@ const OPENAPI_INFO = Object.freeze({
  * layers stay free of the DI framework and behave identically under tsc, tsx and Vitest
  * (docs/21_decisions_log.md, decision 67).
  *
- * Resources (pools) are released through `onDeactivation`; call `disposeContainer` on shutdown.
+ * Resources (pools, the job queue, the SMTP transport) are released through `onDeactivation`;
+ * call `disposeContainer` on shutdown.
  */
-export function createContainer(config: AppConfig, migrations: MigrationSets): Container {
+export type ContainerOptions = Readonly<{
+  /** `worker` processes also run queue maintenance and cron schedules. */
+  jobQueueMode?: JobQueueMode;
+}>;
+
+export function createContainer(
+  config: AppConfig,
+  migrations: MigrationSets,
+  options: ContainerOptions = {},
+): Container {
   const container = new Container({ defaultScope: "Singleton" });
   const db = config.database;
   const auth = config.auth;
@@ -97,7 +139,9 @@ export function createContainer(config: AppConfig, migrations: MigrationSets): C
       new JsonLogger({
         level: config.logLevel,
         sink: config.logFormat === "pretty" ? prettySink : jsonSink,
-        bindings: { service: "autoforce-api" },
+        bindings: {
+          service: options.jobQueueMode === "worker" ? "autoforce-worker" : "autoforce-api",
+        },
         contextProvider: () => {
           const current = requestContext.current();
           return current === undefined ? undefined : { requestId: current.requestId };
@@ -173,8 +217,17 @@ export function createContainer(config: AppConfig, migrations: MigrationSets): C
         tenantContext: ITenantContext,
         pools: TenantConnectionPools,
         tx: PostgresTransactionContext,
-      ) => new PostgresTenantUnitOfWork(tenantContext, pools, tx),
-      [TYPES.TenantContext, TYPES.TenantConnectionPools, TYPES.PostgresTransactionContext],
+        logger: ILogger,
+      ) =>
+        new PostgresTenantUnitOfWork(tenantContext, pools, tx, (error) =>
+          logger.warn("After-commit hook failed", { error }),
+        ),
+      [
+        TYPES.TenantContext,
+        TYPES.TenantConnectionPools,
+        TYPES.PostgresTransactionContext,
+        TYPES.Logger,
+      ],
     );
 
   container
@@ -191,12 +244,166 @@ export function createContainer(config: AppConfig, migrations: MigrationSets): C
       [TYPES.PostgresTransactionContext],
     );
 
+  container.bind<IOutbox>(TYPES.Outbox).toResolvedValue(
+    (tx: PostgresTransactionContext, tenantContext: ITenantContext, queue: IJobQueue) =>
+      // After commit, ask the worker to publish this tenant's new events.
+      new PostgresOutbox(tx, async () => {
+        const tenantId = tenantContext.currentTenantId().value;
+        await queue.enqueue("outbox.drain", { tenantId }, { singletonKey: tenantId });
+      }),
+    [TYPES.PostgresTransactionContext, TYPES.TenantContext, TYPES.JobQueue],
+  );
+
+  // --- Background jobs, events and notifications ---
   container
-    .bind<IOutbox>(TYPES.Outbox)
+    .bind<PgBossJobQueue>(TYPES.JobQueue)
     .toResolvedValue(
-      (tx: PostgresTransactionContext) => new PostgresOutbox(tx),
+      (factory: PostgresConnectionFactory, logger: ILogger) =>
+        new PgBossJobQueue(
+          new PgBoss(
+            pgBossOptions(
+              factory.clientConfig("platform", db.platformDatabase),
+              options.jobQueueMode ?? "api",
+              config.jobs.poolMax,
+            ),
+          ),
+          (error) => logger.error("Job queue error", { error }),
+        ),
+      [TYPES.PostgresConnectionFactory, TYPES.Logger],
+    )
+    .onDeactivation((queue) => queue.stop(config.shutdownTimeoutMs));
+
+  container
+    .bind<IOutboxStore>(TYPES.OutboxStore)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresOutboxStore(tx),
       [TYPES.PostgresTransactionContext],
     );
+
+  container
+    .bind<IProcessedMessages>(TYPES.ProcessedMessages)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresProcessedMessages(tx),
+      [TYPES.PostgresTransactionContext],
+    );
+
+  container
+    .bind<ITenantRetention>(TYPES.TenantRetention)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresTenantRetention(tx),
+      [TYPES.PostgresTransactionContext],
+    );
+
+  container
+    .bind<ITenantRoster>(TYPES.TenantRoster)
+    .toResolvedValue(
+      (pool: pg.Pool) => new PostgresTenantRoster(pool),
+      [TYPES.PlatformDatabasePool],
+    );
+
+  container
+    .bind<ITenantScheduleLedger>(TYPES.TenantScheduleLedger)
+    .toResolvedValue(
+      (pool: pg.Pool, queue: PgBossJobQueue) => new PostgresTenantScheduleLedger(pool, queue),
+      [TYPES.PlatformDatabasePool, TYPES.JobQueue],
+    );
+
+  // Modules register their event handlers here as they are built.
+  container.bind<IEventHandler[]>(TYPES.EventHandlers).toConstantValue([]);
+
+  container
+    .bind<EventHandlerRegistry>(TYPES.EventHandlerRegistry)
+    .toResolvedValue(
+      (handlers: IEventHandler[]) => new EventHandlerRegistry(handlers),
+      [TYPES.EventHandlers],
+    );
+
+  container
+    .bind<IEmailDeliveries>(TYPES.EmailDeliveries)
+    .toResolvedValue(
+      (pool: pg.Pool, queue: PgBossJobQueue) => new PostgresEmailDeliveries(pool, queue),
+      [TYPES.PlatformDatabasePool, TYPES.JobQueue],
+    );
+
+  container
+    .bind<SmtpEmailSender>(TYPES.EmailSender)
+    .toResolvedValue(() => new SmtpEmailSender({ ...config.email.smtp, from: config.email.from }))
+    .onDeactivation((sender) => sender.close());
+
+  container
+    .bind<NotificationService>(TYPES.NotificationService)
+    .toResolvedValue(
+      (deliveries: IEmailDeliveries) => new NotificationService(deliveries),
+      [TYPES.EmailDeliveries],
+    );
+
+  container
+    .bind<IJobHandler[]>(TYPES.JobHandlers)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        outbox: IOutboxStore,
+        processed: IProcessedMessages,
+        handlers: EventHandlerRegistry,
+        queue: IJobQueue,
+        roster: ITenantRoster,
+        ledger: ITenantScheduleLedger,
+        retention: ITenantRetention,
+        deliveries: IEmailDeliveries,
+        sender: IEmailSender,
+        clock: IClock,
+        logger: ILogger,
+      ): IJobHandler[] => [
+        new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
+        new SweepOutboxes({ roster, queue }),
+        new DeliverEvent({ unitOfWork, processed, handlers, logger }),
+        new RunTenantSchedules({ roster, ledger, clock, logger }),
+        new RunDailyMaintenance({ unitOfWork, retention, clock, logger }),
+        new SendQueuedEmail({ deliveries, sender, clock, logger }),
+      ],
+      [
+        TYPES.UnitOfWork,
+        TYPES.OutboxStore,
+        TYPES.ProcessedMessages,
+        TYPES.EventHandlerRegistry,
+        TYPES.JobQueue,
+        TYPES.TenantRoster,
+        TYPES.TenantScheduleLedger,
+        TYPES.TenantRetention,
+        TYPES.EmailDeliveries,
+        TYPES.EmailSender,
+        TYPES.Clock,
+        TYPES.Logger,
+      ],
+    );
+
+  container.bind<JobWorker>(TYPES.JobWorker).toResolvedValue(
+    (
+      queue: PgBossJobQueue,
+      handlers: IJobHandler[],
+      tenantContext: ITenantContext,
+      tenants: ITenantDirectory,
+      requestContext: IRequestContext,
+      logger: ILogger,
+    ) =>
+      new JobWorker({
+        queue,
+        handlers,
+        tenantContext,
+        tenants,
+        requestContext,
+        logger,
+        concurrency: config.jobs.workerConcurrency,
+      }),
+    [
+      TYPES.JobQueue,
+      TYPES.JobHandlers,
+      TYPES.TenantContext,
+      TYPES.TenantDirectory,
+      TYPES.RequestContext,
+      TYPES.Logger,
+    ],
+  );
 
   container.bind<ITenantDatabaseProvisioner>(TYPES.TenantDatabaseProvisioner).toResolvedValue(
     (factory: PostgresConnectionFactory, naming: TenantDatabaseNaming) =>

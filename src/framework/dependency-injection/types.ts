@@ -50,4 +50,19 @@ export const TYPES = Object.freeze({
   IssueOtpChallenge: Symbol.for("IssueOtpChallenge"),
   VerifyOtpChallenge: Symbol.for("VerifyOtpChallenge"),
   AccessGuard: Symbol.for("AccessGuard"),
+
+  // Background jobs, events and notifications
+  JobQueue: Symbol.for("IJobQueue"),
+  OutboxStore: Symbol.for("IOutboxStore"),
+  ProcessedMessages: Symbol.for("IProcessedMessages"),
+  TenantRetention: Symbol.for("ITenantRetention"),
+  TenantRoster: Symbol.for("ITenantRoster"),
+  TenantScheduleLedger: Symbol.for("ITenantScheduleLedger"),
+  EventHandlers: Symbol.for("IEventHandler[]"),
+  EventHandlerRegistry: Symbol.for("EventHandlerRegistry"),
+  EmailDeliveries: Symbol.for("IEmailDeliveries"),
+  EmailSender: Symbol.for("IEmailSender"),
+  NotificationService: Symbol.for("NotificationService"),
+  JobHandlers: Symbol.for("IJobHandler[]"),
+  JobWorker: Symbol.for("JobWorker"),
 });

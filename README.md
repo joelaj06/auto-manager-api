@@ -57,6 +57,7 @@ database, the template and every tenant database.
 | Command                             | What it does                                                                                                  |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `yarn dev`                          | Run the app with reload on change (tsx)                                                                       |
+| `yarn dev:worker`                   | Run the background worker with reload (jobs, scheduler, outbox, email)                                        |
 | `yarn build`                        | Compile to `dist/`                                                                                            |
 | `yarn start`                        | Run the compiled app                                                                                          |
 | `yarn typecheck`                    | Type-check everything (`tsc --noEmit`)                                                                        |
@@ -95,6 +96,28 @@ Conventions for every endpoint:
   authorization headers and connection-string credentials are redacted automatically.
 - **Shutdown:** on SIGTERM/SIGINT the server stops accepting requests, finishes in-flight ones
   and closes database pools, within `SHUTDOWN_TIMEOUT_MS`.
+
+## Background jobs, events and email
+
+The worker is a second process from the same image: `yarn dev:worker` locally,
+`node dist/worker.js` in the container (override the image `CMD`).
+
+- **Queue:** pg-boss in the platform database (schema `pgboss`). `yarn db:migrate` installs and
+  upgrades it as the migrator and creates one queue per entry of
+  `application/jobs/jobCatalog.ts`; the app role gets data access only.
+- **Outbox:** events written with `IOutbox` inside a unit of work trigger an `outbox.drain` job
+  after commit. The drain fans each event out to its subscribed handlers (`event.deliver`), which
+  run in the tenant's transaction and record `event:<handler>:<eventId>` in `processed_messages`,
+  so a redelivered event changes nothing. An hourly sweep catches triggers lost in a crash.
+- **Scheduler:** every 15 minutes `scheduler.tick` enqueues each tenant's daily jobs once its
+  local time (`tenants.timezone`, default `Africa/Accra`) reaches their hour; the ledger
+  `tenant_schedule_runs` makes it once per tenant per local day, and missed ticks catch up.
+  Today: `tenant.daily_maintenance` (retention clean-up) at 02:00.
+- **Email:** `NotificationService.sendEmail` renders a template (`application/notifications`),
+  stores it in `email_deliveries` with an idempotency key and enqueues `email.send` in the same
+  transaction. Content is erased once sent. Locally mail goes to Mailpit
+  (http://localhost:8025).
+- Jobs of deactivated tenants are skipped; failed jobs retry with backoff.
 
 ## Continuous integration
 

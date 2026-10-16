@@ -10,14 +10,20 @@ import {
   type TenantMigrationReport,
 } from "../../infrastructure/database/migrations/TenantSchemaMigrator.js";
 import type { PostgresConnectionFactory } from "../../infrastructure/database/postgres/PostgresConnectionFactory.js";
+import { JobQueueInstaller } from "../../infrastructure/jobs/JobQueueInstaller.js";
+import { JOB_QUEUE_SCHEMA } from "../../infrastructure/jobs/PgBossJobQueue.js";
 import { TYPES } from "../dependency-injection/types.js";
 
 export type MigrationReport = Readonly<{
   platform: MigrateResult;
+  jobQueues: number;
   tenants: TenantMigrationReport;
 }>;
 
-/** Migrates the platform database, then the tenant template, then every tenant database. */
+/**
+ * Migrates the platform database (SQL files, then the pg-boss job queue schema and queues), then
+ * the tenant template, then every tenant database.
+ */
 export class DatabaseMigrationService {
   constructor(
     private readonly config: AppConfig,
@@ -45,6 +51,11 @@ export class DatabaseMigrationService {
       this.log(
         `platform ${db.platformDatabase}: ${platform.applied.length} applied, at ${platform.currentVersion ?? "(none)"}`,
       );
+      const installer = new JobQueueInstaller(
+        this.connections.clientConfig("migrator", db.platformDatabase),
+      );
+      const { queues } = await installer.install(platformClient);
+      this.log(`job queue: schema ${JOB_QUEUE_SCHEMA} ready, ${queues} queues`);
 
       const tenantMigrator = new TenantSchemaMigrator(this.runner, {
         connect: (database) => this.connections.connect("migrator", database),
@@ -53,7 +64,7 @@ export class DatabaseMigrationService {
         log: this.log,
       });
       const tenants = await tenantMigrator.migrate(platformClient, this.migrations.tenant);
-      return { platform, tenants };
+      return { platform, jobQueues: queues, tenants };
     } finally {
       await platformClient.end();
     }

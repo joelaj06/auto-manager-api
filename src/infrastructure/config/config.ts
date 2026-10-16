@@ -97,6 +97,26 @@ const envSchema = z
     OTP_SECRET: signingSecret,
     OTP_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
     OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+
+    // --- Background jobs (pg-boss in the platform database) ---
+    /** Jobs of each type a worker process runs at the same time. */
+    JOB_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(4),
+    JOB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(5),
+
+    // --- Platform email (SMTP) ---
+    // No defaults in production: host and sender must be chosen explicitly there.
+    SMTP_HOST: z.string().min(1).optional(),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(1025),
+    SMTP_SECURE: booleanFlag.default(false),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASSWORD: requiredSecret.optional(),
+    EMAIL_FROM: z
+      .string()
+      .regex(
+        /^[^<>]*<[^\s@<>]+@[^\s@<>]+>$|^[^\s@<>]+@[^\s@<>]+$/,
+        "must be an address or Name <address>",
+      )
+      .optional(),
   })
   .superRefine((env, ctx) => {
     if (env.TENANT_JWT_SECRET === env.PLATFORM_JWT_SECRET) {
@@ -111,6 +131,20 @@ const envSchema = z
         code: "custom",
         path: ["DATABASE_SSL"],
         message: "must be set explicitly in production (disable | require | verify-full)",
+      });
+    }
+    if (env.NODE_ENV === "production") {
+      for (const variable of ["SMTP_HOST", "EMAIL_FROM"] as const) {
+        if (env[variable] === undefined) {
+          ctx.addIssue({ code: "custom", path: [variable], message: "must be set in production" });
+        }
+      }
+    }
+    if (env.SMTP_USER !== undefined && env.SMTP_PASSWORD === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["SMTP_PASSWORD"],
+        message: "is required when SMTP_USER is set",
       });
     }
     if (env.DATABASE_SSL === "verify-full" && env.DATABASE_SSL_CA_FILE === undefined) {
@@ -166,6 +200,19 @@ export type AuthConfig = Readonly<{
   otpMaxAttempts: number;
 }>;
 
+export type JobsConfig = Readonly<{ workerConcurrency: number; poolMax: number }>;
+
+export type EmailConfig = Readonly<{
+  smtp: Readonly<{
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string | undefined;
+    password: string | undefined;
+  }>;
+  from: string;
+}>;
+
 export type AppConfig = Readonly<{
   env: "development" | "test" | "production";
   isProduction: boolean;
@@ -176,6 +223,8 @@ export type AppConfig = Readonly<{
   http: HttpConfig;
   database: DatabaseConfig;
   auth: AuthConfig;
+  jobs: JobsConfig;
+  email: EmailConfig;
 }>;
 
 export class ConfigError extends Error {
@@ -226,6 +275,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       otpSecret: e.OTP_SECRET,
       otpTtlMinutes: e.OTP_TTL_MINUTES,
       otpMaxAttempts: e.OTP_MAX_ATTEMPTS,
+    }),
+    jobs: Object.freeze({ workerConcurrency: e.JOB_WORKER_CONCURRENCY, poolMax: e.JOB_POOL_MAX }),
+    email: Object.freeze({
+      smtp: Object.freeze({
+        host: e.SMTP_HOST ?? "localhost",
+        port: e.SMTP_PORT,
+        secure: e.SMTP_SECURE,
+        user: e.SMTP_USER,
+        password: e.SMTP_PASSWORD,
+      }),
+      from: e.EMAIL_FROM ?? "Autoforce Manager <no-reply@autoforce.localhost>",
     }),
     database: Object.freeze({
       host: e.DATABASE_HOST,

@@ -2,7 +2,13 @@ import { TenantInactiveError, TenantNotFoundError } from "../errors/TenantErrors
 import type { TenantStatus, TenantSummary } from "../ports/ITenantDirectory.js";
 
 /** Statuses in which the tenant's users may use the system (docs/25 tenant lifecycle). */
-const USABLE: ReadonlySet<TenantStatus> = new Set(["trialing", "active", "past_due", "read_only"]);
+export const USABLE_TENANT_STATUSES: readonly TenantStatus[] = Object.freeze([
+  "trialing",
+  "active",
+  "past_due",
+  "read_only",
+]);
+const USABLE: ReadonlySet<TenantStatus> = new Set(USABLE_TENANT_STATUSES);
 /** Tenants that do not exist yet as far as their users are concerned. */
 const NOT_READY: ReadonlySet<TenantStatus> = new Set(["provisioning", "provisioning_failed"]);
 

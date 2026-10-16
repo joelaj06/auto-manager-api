@@ -4,9 +4,15 @@ import type { PostgresTransactionContext } from "../postgres/PostgresTransaction
 
 const EVENT_TYPE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
-/** Writes to the tenant's outbox table; the outbox worker (P0-8) publishes after commit. */
+/**
+ * Writes to the tenant's outbox table. After the transaction commits, `onCommitted` runs once
+ * (however many events were written) — in production it enqueues an `outbox.drain` job.
+ */
 export class PostgresOutbox implements IOutbox {
-  constructor(private readonly transactions: PostgresTransactionContext) {}
+  constructor(
+    private readonly transactions: PostgresTransactionContext,
+    private readonly onCommitted?: () => Promise<void>,
+  ) {}
 
   async enqueue(event: OutboxEvent): Promise<string> {
     if (!EVENT_TYPE.test(event.eventType)) {
@@ -26,6 +32,9 @@ export class PostgresOutbox implements IOutbox {
     );
     const id = rows[0]?.id;
     if (id === undefined) throw new Error("Outbox insert returned no id");
+    if (this.onCommitted !== undefined) {
+      this.transactions.afterCommit("outbox.drain", this.onCommitted);
+    }
     return id;
   }
 }

@@ -106,7 +106,7 @@ export default defineConfig(
   },
   {
     // The entry point reports startup failures and CLI commands print results to the console.
-    files: ["src/index.ts", "src/framework/**/*.ts"],
+    files: ["src/index.ts", "src/worker.ts", "src/framework/**/*.ts"],
     rules: { "no-console": "off" },
   },
   {

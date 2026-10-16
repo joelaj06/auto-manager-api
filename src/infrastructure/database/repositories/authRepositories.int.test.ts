@@ -16,6 +16,7 @@ import type { IRefreshTokenService } from "../../../application/ports/IRefreshTo
 import type { IRequestContext } from "../../../application/ports/IRequestContext.js";
 import type { ITenantContext } from "../../../application/ports/ITenantContext.js";
 import type { ITenantDatabaseProvisioner } from "../../../application/ports/ITenantDatabaseProvisioner.js";
+import type { ITenantRetention } from "../../../application/ports/ITenantRetention.js";
 import type { IUnitOfWork } from "../../../application/ports/IUnitOfWork.js";
 import type { IssueOtpChallenge } from "../../../application/use-cases/auth/IssueOtpChallenge.js";
 import { RefreshAuthSession } from "../../../application/use-cases/auth/RefreshAuthSession.js";
@@ -221,5 +222,59 @@ describe("PostgresTenantDirectory", () => {
     await expect(directory.findBySlug("no-such-tenant")).resolves.toBeNull();
     await expect(directory.findBySlug("bad slug; drop")).resolves.toBeNull();
     await expect(directory.findById("not-a-uuid")).resolves.toBeNull();
+  });
+});
+
+describe("PostgresTenantRetention", () => {
+  it("deletes only rows past their retention period", async () => {
+    const day = 86_400_000;
+    const now = new Date();
+    const old = new Date(now.getTime() - 40 * day);
+    const recent = new Date(now.getTime() - day);
+    const [oldSession, freshSession] = [randomUUID(), randomUUID()];
+    await query(
+      `insert into auth_sessions
+         (id, user_id, refresh_token_hash, created_at, last_rotated_at, expires_at)
+       values ($1, $3, $4, $5, $5, $6), ($2, $3, $7, $5, $5, $8)`,
+      [
+        oldSession,
+        freshSession,
+        userId,
+        randomUUID(),
+        new Date(now.getTime() - 80 * day),
+        old,
+        randomUUID(),
+        new Date(now.getTime() + day),
+      ],
+    );
+    await query("insert into processed_messages (key, processed_at) values ($1, $2), ($3, $4)", [
+      `old-${randomUUID()}`,
+      old,
+      `new-${randomUUID()}`,
+      recent,
+    ]);
+
+    const retention = container.get<ITenantRetention>(TYPES.TenantRetention);
+    const removed = await asTenant(() =>
+      unitOfWork.run(() =>
+        retention.purge(
+          {
+            sessionsAfterDays: 30,
+            otpChallengesAfterDays: 7,
+            processedMessagesAfterDays: 30,
+            publishedEventsAfterDays: 7,
+          },
+          now,
+        ),
+      ),
+    );
+    expect(removed.sessionsAfterDays).toBeGreaterThanOrEqual(1);
+    expect(removed.processedMessagesAfterDays).toBeGreaterThanOrEqual(1);
+
+    const sessions = await query<{ id: string }>(
+      "select id from auth_sessions where id = any($1)",
+      [[oldSession, freshSession]],
+    );
+    expect(sessions.map((s) => s.id)).toEqual([freshSession]);
   });
 });

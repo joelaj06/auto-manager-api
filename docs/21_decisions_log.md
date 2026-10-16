@@ -144,6 +144,16 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 71 | Route access | **Every route must declare `access`** (`public` / `tenant` / `authenticated` + catalogue permission); the router refuses to mount protected routes without the guard, and a test checks every route and limits public routes to an allow-list | Implements "no endpoint ships without a permission" (Phase 0 exit criterion) at compile time and in CI |
 | 72 | Tenant addressing | **`X-Tenant` header (slug), optional on authenticated requests** — the token's `tid` decides, a different header is rejected | Works the same for the mobile app and the web portal; subdomain resolution is added with the portal hosting |
 
+## Engineering decisions during P0-8 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 73 | Job queue (open question 32) | **pg-boss** in the platform database — the default listed in doc 30 §8.3 | One less moving part than BullMQ + Redis; jobs can be enqueued in the same transaction as platform rows (schedule ledger, email deliveries). Redis stays for cache/rate limits. *Reversible: say if you prefer BullMQ* |
+| 74 | Queue schema ownership | **The migrator installs and upgrades the pg-boss schema during `db:migrate`; the app role gets DML only** (`migrate: false`, `reindex: false`). Queues are non-partitioned, so creating one needs no DDL | Keeps decision 66: the running app can never change schemas |
+| 75 | Event delivery | **At-least-once with idempotent handlers.** Outbox rows are drained into one `event.deliver` job per subscribed handler; handlers record `event:<handler>:<eventId>` in `processed_messages` in the same transaction as their changes. Side effects outside the tenant DB are enqueued as their own idempotent jobs | No distributed transaction exists between tenant and platform DBs; this makes duplicates harmless instead of trying to prevent them |
+| 76 | Tenant scheduling | **15-minute tick; each daily job runs once its local hour is reached, once per (tenant, job, local date)** via `tenant_schedule_runs`, written in the same transaction as the job | Tenants can be in different timezones; a missed tick (deploy, outage) catches up the same day |
+| 77 | Platform email content | **Rendered at request time, stored until sent, then erased**; the delivery row remains | Emails can contain one-time codes and links; nothing sensitive stays at rest longer than needed |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.
