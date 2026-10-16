@@ -4,7 +4,8 @@ import { loadConfig, type AppConfig } from "../infrastructure/config/config.js";
 /**
  * Integration-test database settings. Tests use their own roles and databases (suffix _test,
  * tenant prefix tt_) so they never touch development data, and can run against the compose
- * cluster locally or the PostgreSQL service in CI.
+ * cluster locally or the PostgreSQL service in CI. Where the cluster is comes from POSTGRES_*,
+ * which the integration global setup sets when it starts a test container (testInfrastructure).
  */
 export const TEST_DATABASE = Object.freeze({
   platformDatabase: "autoforce_platform_test",
@@ -56,6 +57,9 @@ export function testConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     TENANT_JWT_SECRET: "test-tenant-jwt-secret-0123456789-abcdef",
     PLATFORM_JWT_SECRET: "test-platform-jwt-secret-0123456789-abcdef",
     OTP_SECRET: "test-otp-secret-0123456789-abcdefghijklmn",
+    // Mailpit: a test container's mapped port, or the compose / CI service.
+    SMTP_HOST: process.env.SMTP_HOST ?? "localhost",
+    SMTP_PORT: process.env.SMTP_PORT ?? "1025",
     ...overrides,
   });
 }

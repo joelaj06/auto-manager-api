@@ -26,6 +26,11 @@ export class Principal {
     return this.grants.branchIds;
   }
 
+  /** Every granted permission with its scope (for "what may I do" screens). */
+  grantedPermissions(): ReadonlyArray<readonly [string, PermissionGrant]> {
+    return [...this.grants.permissions.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }
+
   grantFor(permission: PermissionKey): PermissionGrant | undefined {
     return this.grants.permissions.get(permission);
   }

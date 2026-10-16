@@ -5,6 +5,7 @@ import { HealthController } from "../../adapters/controllers/HealthController.js
 import type { ApiRoute } from "../../adapters/routes/ApiRoute.js";
 import { healthRoutes } from "../../adapters/routes/healthRoutes.js";
 import { openApiRoutes } from "../../adapters/routes/openApiRoutes.js";
+import { sessionRoutes } from "../../adapters/routes/sessionRoutes.js";
 import type { ILogger } from "../../application/ports/ILogger.js";
 import type { IReadinessCheck } from "../../application/ports/IReadinessCheck.js";
 import type { IRequestContext } from "../../application/ports/IRequestContext.js";
@@ -662,7 +663,7 @@ export function createContainer(
 
   container.bind<ApiRoute[]>(TYPES.ApiRoutes).toResolvedValue(
     (health: HealthController) => {
-      const routes = [...healthRoutes(health)];
+      const routes = [...healthRoutes(health), ...sessionRoutes()];
       return config.http.exposeOpenApi
         ? [...routes, ...openApiRoutes(routes, OPENAPI_INFO)]
         : routes;

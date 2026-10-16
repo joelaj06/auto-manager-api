@@ -82,6 +82,8 @@ jobs:
           --health-retries 20
     env:
       NODE_ENV: test
+      # Use the service containers above instead of starting Testcontainers.
+      TEST_INFRA: external
       POSTGRES_USER: autoforce
       POSTGRES_PASSWORD: autoforce_ci_only
       POSTGRES_HOST: localhost

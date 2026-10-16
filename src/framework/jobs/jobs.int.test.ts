@@ -10,23 +10,23 @@ import type { IOutbox } from "../../application/ports/IOutbox.js";
 import type { IRequestContext } from "../../application/ports/IRequestContext.js";
 import type { ISequenceGenerator } from "../../application/ports/ISequenceGenerator.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
-import type { ITenantDatabaseProvisioner } from "../../application/ports/ITenantDatabaseProvisioner.js";
 import type { ITenantDirectory } from "../../application/ports/ITenantDirectory.js";
 import type { ITenantScheduleLedger } from "../../application/ports/ITenantScheduleLedger.js";
 import type { IUnitOfWork } from "../../application/ports/IUnitOfWork.js";
-import { TenantId } from "../../domain/value-objects/TenantId.js";
+import type { TenantId } from "../../domain/value-objects/TenantId.js";
 import type { PgBossJobQueue } from "../../infrastructure/jobs/PgBossJobQueue.js";
 import { MigrationSets } from "../../infrastructure/database/migrations/MigrationCatalog.js";
 import type { PostgresConnectionFactory } from "../../infrastructure/database/postgres/PostgresConnectionFactory.js";
 import type { PostgresTransactionContext } from "../../infrastructure/database/postgres/PostgresTransactionContext.js";
+import { TenantFixtures } from "../../testing/fixtures/TenantFixtures.js";
 import { testConfig } from "../../testing/testDatabase.js";
 import { createContainer, disposeContainer } from "../dependency-injection/container.js";
 import { TYPES } from "../dependency-injection/types.js";
 import { JobWorker } from "./JobWorker.js";
 
 const MAILPIT = process.env.MAILPIT_URL ?? "http://localhost:8025";
-const tenantId = TenantId.from(randomUUID());
-const closedTenantId = TenantId.from(randomUUID());
+let tenantId: TenantId;
+let closedTenantId: TenantId;
 
 /** Records every delivery; counts runs inside the tenant transaction with a counter. */
 const deliveries: DeliveredEvent[] = [];
@@ -53,13 +53,6 @@ async function eventually<T>(probe: () => Promise<T | undefined>, timeoutMs = 20
   }
 }
 
-async function registerTenant(id: TenantId, status: string): Promise<void> {
-  await platform.query(
-    "insert into tenants (id, slug, name, status) values ($1, $2, 'Jobs test', $3)",
-    [id.value, `jobs-${id.value.slice(0, 8)}`, status],
-  );
-}
-
 beforeAll(async () => {
   const config = testConfig({ LOG_LEVEL: "silent" });
   container = createContainer(config, await MigrationSets.load(config.database.migrationsDir), {
@@ -69,10 +62,9 @@ beforeAll(async () => {
   sequences = container.get<ISequenceGenerator>(TYPES.SequenceGenerator);
   platform = container.get<pg.Pool>(TYPES.PlatformDatabasePool);
 
-  const provisioner = container.get<ITenantDatabaseProvisioner>(TYPES.TenantDatabaseProvisioner);
-  for (const id of [tenantId, closedTenantId]) await provisioner.provision(id);
-  await registerTenant(tenantId, "active");
-  await registerTenant(closedTenantId, "deactivated");
+  const fixtures = new TenantFixtures(container);
+  tenantId = (await fixtures.create()).id;
+  closedTenantId = (await fixtures.create({ status: "deactivated" })).id;
 
   // A fast-polling worker with the container's handlers.
   await new JobWorker({

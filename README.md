@@ -54,18 +54,19 @@ database, the template and every tenant database.
 
 ## Scripts
 
-| Command                             | What it does                                                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `yarn dev`                          | Run the app with reload on change (tsx)                                                                       |
-| `yarn dev:worker`                   | Run the background worker with reload (jobs, scheduler, outbox, email)                                        |
-| `yarn build`                        | Compile to `dist/`                                                                                            |
-| `yarn start`                        | Run the compiled app                                                                                          |
-| `yarn typecheck`                    | Type-check everything (`tsc --noEmit`)                                                                        |
-| `yarn lint` / `yarn lint:fix`       | ESLint, including architecture boundary rules                                                                 |
-| `yarn format` / `yarn format:check` | Prettier                                                                                                      |
-| `yarn test` / `yarn test:watch`     | Unit tests (Vitest)                                                                                           |
-| `yarn test:integration`             | Integration tests (`*.int.test.ts`) against the compose PostgreSQL (uses its own `_test` databases and roles) |
-| `yarn verify`                       | Typecheck, lint, format check and tests — run before every commit                                             |
+| Command                               | What it does                                                                                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `yarn dev`                            | Run the app with reload on change (tsx)                                                                                                                           |
+| `yarn dev:worker`                     | Run the background worker with reload (jobs, scheduler, outbox, email)                                                                                            |
+| `yarn build`                          | Compile to `dist/`                                                                                                                                                |
+| `yarn start`                          | Run the compiled app                                                                                                                                              |
+| `yarn typecheck`                      | Type-check everything (`tsc --noEmit`)                                                                                                                            |
+| `yarn lint` / `yarn lint:fix`         | ESLint, including architecture boundary rules                                                                                                                     |
+| `yarn format` / `yarn format:check`   | Prettier                                                                                                                                                          |
+| `yarn test` / `yarn test:watch`       | Unit tests (Vitest)                                                                                                                                               |
+| `yarn test:integration`               | Integration tests (`*.int.test.ts`) in throw-away PostgreSQL + Mailpit containers (needs Docker); `TEST_INFRA=external` uses the running compose services instead |
+| `yarn load:health` / `yarn load:auth` | k6 load scripts against a running API (`PROFILE=smoke\|load\|stress`, `BASE_URL=…`); uses a local `k6` or the k6 Docker image                                     |
+| `yarn verify`                         | Typecheck, lint, format check and tests — run before every commit                                                                                                 |
 
 ## HTTP API
 
@@ -73,6 +74,7 @@ database, the template and every tenant database.
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `GET /health/live`         | Liveness: the process is up (never touches dependencies)                                                    |
 | `GET /health/ready`        | Readiness: dependencies answer (`503` when not) — no details are exposed                                    |
+| `GET /api/v1/me`           | The signed-in user, their business and permissions (bearer token)                                           |
 | `GET /api/v1/openapi.json` | OpenAPI 3.1 document generated from the route declarations (off in production unless `EXPOSE_OPENAPI=true`) |
 
 Conventions for every endpoint:
@@ -118,6 +120,19 @@ The worker is a second process from the same image: `yarn dev:worker` locally,
   transaction. Content is erased once sent. Locally mail goes to Mailpit
   (http://localhost:8025).
 - Jobs of deactivated tenants are skipped; failed jobs retry with backoff.
+
+## Tests and security checks
+
+| Suite             | Where                                             | What it guarantees                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit              | `src/**/*.test.ts`                                | Domain rules, use cases, adapters, config — no I/O                                                                                                                                                                                                                                                                                                                         |
+| Integration       | `src/**/*.int.test.ts`                            | Repositories, migrations, provisioning, jobs and email against real PostgreSQL and Mailpit                                                                                                                                                                                                                                                                                 |
+| Tenant isolation  | `src/testing/isolation`                           | Generated over **every table** of the tenant schema: a row written by tenant A is invisible to tenant B; the app role owns nothing and cannot truncate, add triggers or create objects; append-only tables reject changes; tenant A's token is rejected on tenant B through the real app. A new table fails this suite until it gets a fixture in `tenantTableFixtures.ts` |
+| Audit regressions | `src/framework/security/auditRegressions.test.ts` | One block per v1 audit finding C1–C7 (docs/01)                                                                                                                                                                                                                                                                                                                             |
+| Load              | `load/k6`                                         | Health probes and bad-token rejection under load, with latency thresholds                                                                                                                                                                                                                                                                                                  |
+
+`src/testing/fixtures/TenantFixtures.ts` creates real tenants (database + platform row) for
+integration tests, with helpers to run SQL as the tenant and issue its access tokens.
 
 ## Continuous integration
 

@@ -71,7 +71,8 @@ const architecture = (policies) => ({
 });
 
 export default defineConfig(
-  { ignores: ["dist/**", "coverage/**", "node_modules/**", "docs/**", ".qodo/**"] },
+  // load/: k6 scripts run in k6's own JavaScript runtime, not Node.
+  { ignores: ["dist/**", "coverage/**", "node_modules/**", "docs/**", ".qodo/**", "load/**"] },
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   {
@@ -113,6 +114,22 @@ export default defineConfig(
     files: ["src/**/*.ts"],
     ignores: ["src/**/*.test.ts"],
     ...architecture([...layerPolicies, ...productionOnlyPolicies]),
+  },
+  {
+    // Audit finding C7: regular expressions built from runtime strings allow ReDoS and regex
+    // injection. Patterns must be literals; search uses SQL (ILIKE with escaped input, pg_trgm).
+    files: ["src/**/*.ts"],
+    ignores: ["src/**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "NewExpression[callee.name='RegExp'], CallExpression[callee.name='RegExp']",
+          message:
+            "Do not build regular expressions at runtime (audit C7). Use a regex literal, or escaped SQL ILIKE / pg_trgm for search.",
+        },
+      ],
+    },
   },
   {
     files: ["src/**/*.test.ts"],

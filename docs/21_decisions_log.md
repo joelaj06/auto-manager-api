@@ -154,6 +154,15 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 76 | Tenant scheduling | **15-minute tick; each daily job runs once its local hour is reached, once per (tenant, job, local date)** via `tenant_schedule_runs`, written in the same transaction as the job | Tenants can be in different timezones; a missed tick (deploy, outage) catches up the same day |
 | 77 | Platform email content | **Rendered at request time, stored until sent, then erased**; the delivery row remains | Emails can contain one-time codes and links; nothing sensitive stays at rest longer than needed |
 
+## Engineering decisions during P0-9 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 78 | Integration test infrastructure | **Testcontainers by default** (PostgreSQL 18 + Mailpit per run, data on tmpfs); `TEST_INFRA=external` for the compose stack, and CI keeps its service containers | Tests never depend on or touch development data, and need nothing started by hand; CI stays fast with pre-started services |
+| 79 | Isolation coverage | **Every tenant table needs an isolation fixture or a written exemption**, enforced by a test that discovers tables from the migrated template | Isolation tests cannot silently fall behind the schema (docs/04 §13) |
+| 80 | Runtime regular expressions | **Banned in production code by ESLint** (`no-restricted-syntax`); search uses SQL with escaped input | Audit C7 (ReDoS / regex injection) cannot come back |
+| 81 | Load testing | **k6 scripts in `load/k6`**, run with a local k6 or the pinned `grafana/k6` image; profiles smoke/load/stress | No install needed; the same scripts run against staging once hosting exists |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.
