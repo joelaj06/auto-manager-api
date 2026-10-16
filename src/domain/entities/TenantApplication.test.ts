@@ -63,15 +63,16 @@ describe("TenantApplication", () => {
   });
 
   it("approves only from review and records the options", () => {
-    expect(() => submit().approve("s1", { plan: "standard", trialDays: 14 }, null, now)).toThrow(
-      ApplicationStateError,
-    );
+    expect(() =>
+      submit().approve("s1", { plan: "standard", trialDays: 14 }, null, now, "t1"),
+    ).toThrow(ApplicationStateError);
     const app = verified();
-    app.approve("s1", { plan: "standard", trialDays: 14 }, "looks good", now);
+    app.approve("s1", { plan: "standard", trialDays: 14 }, "looks good", now, "t1");
     expect(app.snapshot()).toMatchObject({
       status: "approved",
       reviewedBy: "s1",
       approvalOptions: { trialDays: 14 },
+      tenantId: "t1",
     });
     expect(() => app.reject("s1", "changed my mind", null, now)).toThrow(ApplicationStateError);
   });

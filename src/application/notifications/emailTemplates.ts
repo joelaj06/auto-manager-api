@@ -52,6 +52,14 @@ export type EmailTemplateData = {
     businessName: string;
     reason: string | null;
   }>;
+  "tenant.welcome_owner": Readonly<{
+    ownerName: string;
+    businessName: string;
+    slug: string;
+    setPasswordUrl: string;
+    expiresInHours: number;
+    trialDays: number;
+  }>;
 };
 
 export type EmailTemplateKey = keyof EmailTemplateData;
@@ -173,6 +181,13 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       `We are sorry, but we cannot accept the application for ${data.businessName} at this time.`,
       ...(data.reason === null ? [] : [`Reason: ${data.reason}`]),
       "If you think this is a mistake, reply to this email or contact our support team.",
+    ]),
+  "tenant.welcome_owner": (data) =>
+    simple(`Welcome to ${PRODUCT} — ${data.businessName} is ready`, [
+      greeting(data.ownerName),
+      `Your account for ${data.businessName} is ready. Your business address is "${data.slug}", and your ${data.trialDays}-day trial starts now.`,
+      `Set your password and sign in: ${data.setPasswordUrl}`,
+      `The link works once and expires in ${data.expiresInHours} hours. You are the owner and can invite your team after signing in.`,
     ]),
   "auth.otp_code": (data) => {
     const action = PURPOSE_TEXT[data.purpose] ?? "continue";

@@ -195,6 +195,16 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 97 | Risk signals | **Informational only at launch** (manual approval): disposable email, previously rejected contact, existing customer, duplicate business name, ≥ 3 applications from one IP in 24 h, existing tenant name; level high/medium/low | Focuses reviewers now; the same signals can gate the optional auto-approval mode later |
 | 98 | Re-applying | **Rejection blocks new applications from the same email or phone for 30 days by default** (reviewer can change it, 0 = no block); the message never says why | docs/27 §3.2 "can re-apply after N days" without telling a bad actor what triggered it |
 
+## Engineering decisions during P1-3 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 99 | Query layer (decision 64 follow-up) | **Stay with plain `pg` and typed repository classes** for module tables too | 25+ repositories already follow this pattern with explicit SQL, upserts, locks and keyset queries; an ORM/query builder now would add a second style without removing real risk. Revisit if query composition becomes painful |
+| 100 | Tax codes | **Seeded as inactive placeholders without rates** (VAT, NHIL, GETFund, WHT); a code cannot be activated without a rate | Rates change and differ per business; hard-coding them risks silently wrong invoices |
+| 101 | Provisioning | **Resumable saga with persisted steps; every step idempotent; nothing dropped automatically** — failed tenants stay `provisioning_failed` with the error, staff retry from the console, a sweep re-queues stalled sagas and only *reports* orphan databases | Safe retries without destroying data (decision 36); clear operator view |
+| 102 | System roles at launch | **Owner, Administrator, Branch Manager, Accountant, Auditor**; module roles (Fleet Officer, Rental Agent, Driver, …) arrive with their modules' permissions | Avoids seeding roles that grant nothing yet; the catalogue sync adds them to every tenant later |
+| 103 | User directory | **Email and phone stored as HMAC-SHA256** (key derived from `OTP_SECRET`) | Multi-tenant login lookups without a plain list of every tenant user's contacts in the platform DB; rotating `OTP_SECRET` requires re-hashing |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

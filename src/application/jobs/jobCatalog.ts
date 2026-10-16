@@ -29,6 +29,14 @@ export type JobPayloads = {
   "tenant.daily_maintenance": Readonly<{ tenantId: string; localDate: string }>;
   /** Send one queued platform email. */
   "email.send": Readonly<{ deliveryId: string }>;
+  /** Run (or resume) the provisioning saga of an approved tenant. */
+  "tenant.provision": Readonly<{ tenantId: string }>;
+  /** Re-queue stalled provisioning and report orphan databases. */
+  "provisioning.sweep": Readonly<Record<string, never>>;
+  /** Bring one tenant's permissions and system roles to the current catalogue. */
+  "tenant.catalogue_sync": Readonly<{ tenantId: string; version: number }>;
+  /** Enqueue a catalogue sync for every tenant behind the current catalogue version. */
+  "catalogue.sweep": Readonly<Record<string, never>>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -108,6 +116,45 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryDelaySeconds: 30,
     retryBackoff: true,
     expireInSeconds: 120,
+  },
+  "tenant.provision": {
+    description: "Provision an approved tenant (resumable saga)",
+    // Not tenant-scoped: the tenant is not usable yet; the saga enters its context itself.
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 5,
+    retryDelaySeconds: 30,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  },
+  "provisioning.sweep": {
+    description: "Re-queue stalled provisioning and report orphan databases",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 600,
+    cron: "*/10 * * * *",
+  },
+  "tenant.catalogue_sync": {
+    description: "Sync a tenant's permissions and system roles with the catalogue",
+    tenantScoped: true,
+    policy: "stately",
+    retryLimit: 5,
+    retryDelaySeconds: 60,
+    retryBackoff: true,
+    expireInSeconds: 300,
+  },
+  "catalogue.sweep": {
+    description: "Enqueue catalogue syncs for tenants behind the current version",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 900,
+    cron: "23 * * * *",
   },
 } satisfies Record<JobName, JobDefinition>);
 

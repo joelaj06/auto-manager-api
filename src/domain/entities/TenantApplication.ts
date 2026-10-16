@@ -51,6 +51,8 @@ export type TenantApplicationProps = Readonly<{
   decisionReason: string | null;
   reapplyAfter: Date | null;
   approvalOptions: ApprovalOptions | null;
+  /** The tenant created for this application at approval. */
+  tenantId: string | null;
   createdIp: string | null;
   createdUserAgent: string | null;
   termsAcceptedAt: Date;
@@ -78,8 +80,8 @@ export class ApplicationMessageRequiredError extends DomainError {
  *   pending_review → needs_info → (applicant replies) → pending_review
  *   pending_review | needs_info → approved | rejected
  *
- * Approval only records the decision and provisioning options; the database is created by the
- * provisioning saga (P1-3). A rejection can block re-applying for a while.
+ * Approval records the decision, the provisioning options and the tenant reserved for it; the
+ * provisioning saga then creates the database. A rejection can block re-applying for a while.
  */
 export class TenantApplication {
   private constructor(private props: TenantApplicationProps) {}
@@ -113,6 +115,7 @@ export class TenantApplication {
       decisionReason: null,
       reapplyAfter: null,
       approvalOptions: null,
+      tenantId: null,
       createdIp: params.ip,
       createdUserAgent: params.userAgent,
       termsAcceptedAt: params.now,
@@ -186,7 +189,13 @@ export class TenantApplication {
     this.props = { ...this.props, assignedTo: staffId };
   }
 
-  approve(staffId: string, options: ApprovalOptions, note: string | null, now: Date): void {
+  approve(
+    staffId: string,
+    options: ApprovalOptions,
+    note: string | null,
+    now: Date,
+    tenantId: string,
+  ): void {
     if (this.props.status !== "pending_review")
       throw new ApplicationStateError("approve", this.props.status);
     this.props = {
@@ -196,6 +205,7 @@ export class TenantApplication {
       reviewedAt: now,
       decisionReason: note,
       approvalOptions: options,
+      tenantId,
     };
   }
 

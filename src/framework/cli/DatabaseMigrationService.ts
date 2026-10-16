@@ -12,6 +12,7 @@ import {
 import type { PostgresConnectionFactory } from "../../infrastructure/database/postgres/PostgresConnectionFactory.js";
 import { JobQueueInstaller } from "../../infrastructure/jobs/JobQueueInstaller.js";
 import { PlatformCatalogueSync } from "../../infrastructure/platform/PlatformCatalogueSync.js";
+import { TenantCatalogueSync } from "../../infrastructure/provisioning/TenantCatalogueSync.js";
 import { JOB_QUEUE_SCHEMA } from "../../infrastructure/jobs/PgBossJobQueue.js";
 import { TYPES } from "../dependency-injection/types.js";
 
@@ -57,6 +58,10 @@ export class DatabaseMigrationService {
       );
       const { queues } = await installer.install(platformClient);
       this.log(`job queue: schema ${JOB_QUEUE_SCHEMA} ready, ${queues} queues`);
+      const tenantCatalogue = await new TenantCatalogueSync().sync(platformClient);
+      this.log(
+        `tenant catalogue: version ${tenantCatalogue.version}${tenantCatalogue.released ? " (new — tenants sync hourly)" : ""}`,
+      );
       const catalogue = await new PlatformCatalogueSync().sync(platformClient);
       this.log(
         `platform catalogue: ${catalogue.permissions} permissions, ${catalogue.systemRoles} system roles` +

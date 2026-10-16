@@ -146,6 +146,16 @@ last 10 minutes. Staff, roles, approvals (four-eyes) and the audit log are under
 verified, the application appears in the console queue (`/api/platform/v1/applications`) for
 staff to request information, approve or reject.
 
+## Tenant provisioning
+
+Approving an application (console) reserves the tenant and queues the provisioning saga, which
+the worker (`yarn dev:worker`) runs: database from the template, migrations, seed (organisation,
+HQ branch, permissions and system roles from the platform catalogue, expense categories, tax-code
+placeholders, owner), user directory, then a welcome email with a one-time link. The owner opens
+it and calls `POST /api/v1/auth/invitations/accept` with `X-Tenant: <slug>` and
+`{ token, password }` to get tokens — then `GET /api/v1/me` shows their permissions. Progress and
+retry: `GET/POST /api/platform/v1/tenants/:id/provisioning[/retry]`.
+
 ## Backups
 
 Logical, encrypted backups of every tenant database and the platform database, with an

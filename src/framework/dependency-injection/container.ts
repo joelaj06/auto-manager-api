@@ -51,7 +51,34 @@ import { VerifyOtpChallenge } from "../../application/use-cases/auth/VerifyOtpCh
 import type { IAuthSessionRepository } from "../../domain/repositories/IAuthSessionRepository.js";
 import type { IOtpChallengeRepository } from "../../domain/repositories/IOtpChallengeRepository.js";
 import { CachingPermissionResolver } from "../../infrastructure/authorization/CachingPermissionResolver.js";
-import { NoUsersPermissionResolver } from "../../infrastructure/authorization/NoUsersPermissionResolver.js";
+import { PostgresTenantPermissionResolver } from "../../infrastructure/authorization/PostgresTenantPermissionResolver.js";
+import { provisioningRoutes } from "../../adapters/routes/provisioningRoutes.js";
+import type { IOrphanDatabases } from "../../application/ports/IOrphanDatabases.js";
+import type { IPermissionCatalogueSource } from "../../application/ports/IPermissionCatalogueSource.js";
+import type { ITenantProvisioning } from "../../application/ports/ITenantProvisioning.js";
+import type { ITenantSchemaUpdater } from "../../application/ports/ITenantSchemaUpdater.js";
+import type { ITenantSeeder } from "../../application/ports/ITenantSeeder.js";
+import type { ITenantUserAccounts } from "../../application/ports/ITenantUserAccounts.js";
+import type { IUserDirectory } from "../../application/ports/IUserDirectory.js";
+import type { IUserInvitations } from "../../application/ports/IUserInvitations.js";
+import { AcceptUserInvitation } from "../../application/use-cases/auth/AcceptUserInvitation.js";
+import {
+  SweepCatalogue,
+  SweepProvisioning,
+  SyncTenantCatalogue,
+} from "../../application/use-cases/provisioning/maintenanceJobs.js";
+import { ProvisioningConsole } from "../../application/use-cases/provisioning/ProvisioningConsole.js";
+import { ProvisionTenant } from "../../application/use-cases/provisioning/ProvisionTenant.js";
+import { HmacUserDirectory } from "../../infrastructure/provisioning/HmacUserDirectory.js";
+import { MigratorTenantSchemaUpdater } from "../../infrastructure/provisioning/MigratorTenantSchemaUpdater.js";
+import { PostgresOrphanDatabases } from "../../infrastructure/provisioning/PostgresOrphanDatabases.js";
+import { PostgresPermissionCatalogueSource } from "../../infrastructure/provisioning/PostgresPermissionCatalogueSource.js";
+import { PostgresTenantProvisioning } from "../../infrastructure/provisioning/PostgresTenantProvisioning.js";
+import { PostgresTenantSeeder } from "../../infrastructure/provisioning/PostgresTenantSeeder.js";
+import {
+  PostgresTenantUserAccounts,
+  PostgresUserInvitations,
+} from "../../infrastructure/provisioning/PostgresTenantUsers.js";
 import { PostgresAuthSessionRepository } from "../../infrastructure/database/repositories/PostgresAuthSessionRepository.js";
 import { PostgresOtpChallengeRepository } from "../../infrastructure/database/repositories/PostgresOtpChallengeRepository.js";
 import { PostgresTenantDirectory } from "../../infrastructure/database/repositories/PostgresTenantDirectory.js";
@@ -148,6 +175,10 @@ const APPROVAL_TTL_MS = 24 * 3_600_000;
 const DEFAULT_TRIAL_DAYS = 14;
 /** A rejected applicant can apply again after this many days, unless the reviewer changes it. */
 const DEFAULT_REAPPLY_AFTER_DAYS = 30;
+/** New tenants (Ghana market); each changes it in organisation settings. */
+const DEFAULT_TENANT_TIMEZONE = "Africa/Accra";
+const DEFAULT_BRANCH = Object.freeze({ code: "HQ", name: "Head office" });
+const OWNER_INVITATION_TTL_MS = 7 * 86_400_000;
 
 const OPENAPI_INFO = Object.freeze({
   title: "Autoforce Manager API",
@@ -405,6 +436,7 @@ export function createContainer(
         sender: IEmailSender,
         clock: IClock,
         logger: ILogger,
+        provisioningHandlers: IJobHandler[],
       ): IJobHandler[] => [
         new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
         new SweepOutboxes({ roster, queue }),
@@ -412,6 +444,7 @@ export function createContainer(
         new RunTenantSchedules({ roster, ledger, clock, logger }),
         new RunDailyMaintenance({ unitOfWork, retention, clock, logger }),
         new SendQueuedEmail({ deliveries, sender, clock, logger }),
+        ...provisioningHandlers,
       ],
       [
         TYPES.UnitOfWork,
@@ -426,6 +459,7 @@ export function createContainer(
         TYPES.EmailSender,
         TYPES.Clock,
         TYPES.Logger,
+        TYPES.ProvisioningJobHandlers,
       ],
     );
 
@@ -508,7 +542,11 @@ export function createContainer(
   // Until the identity module (P1-5) exists no tenant user can be authenticated.
   container
     .bind<IPermissionResolver>(TYPES.PermissionResolver)
-    .toResolvedValue(() => new CachingPermissionResolver(new NoUsersPermissionResolver()));
+    .toResolvedValue(
+      (pools: TenantConnectionPools) =>
+        new CachingPermissionResolver(new PostgresTenantPermissionResolver(pools)),
+      [TYPES.TenantConnectionPools],
+    );
 
   container
     .bind<IAuthSessionRepository>(TYPES.AuthSessionRepository)
@@ -999,6 +1037,9 @@ export function createContainer(
       audit: IPlatformAuditTrail,
       requestContext: IRequestContext,
       clock: IClock,
+      provisioning: ITenantProvisioning,
+      queue: IJobQueue,
+      ids: IIdGenerator,
     ) =>
       new ApplicationReview({
         unitOfWork,
@@ -1009,9 +1050,13 @@ export function createContainer(
         notifications,
         audit,
         requestContext,
+        provisioning,
+        queue,
+        ids,
         clock,
         settings: {
           webAppUrl: config.public.webAppUrl,
+          defaultTimezone: DEFAULT_TENANT_TIMEZONE,
           defaultTrialDays: DEFAULT_TRIAL_DAYS,
           defaultReapplyAfterDays: DEFAULT_REAPPLY_AFTER_DAYS,
         },
@@ -1025,6 +1070,170 @@ export function createContainer(
       TYPES.NotificationService,
       TYPES.PlatformAuditTrail,
       TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.TenantProvisioning,
+      TYPES.JobQueue,
+      TYPES.IdGenerator,
+    ],
+  );
+
+  // --- Provisioning (saga, catalogue sync, owner first login) ---
+  platformRepository<IPermissionCatalogueSource>(
+    TYPES.PermissionCatalogueSource,
+    (p) => new PostgresPermissionCatalogueSource(p),
+  );
+  platformRepository<ITenantProvisioning>(
+    TYPES.TenantProvisioning,
+    (p) => new PostgresTenantProvisioning(p),
+  );
+  platformRepository<IUserDirectory>(
+    TYPES.UserDirectory,
+    (p) => new HmacUserDirectory(p, auth.otpSecret),
+  );
+  container
+    .bind<IOrphanDatabases>(TYPES.OrphanDatabases)
+    .toResolvedValue(
+      (platformDb: PlatformDb, naming: TenantDatabaseNaming) =>
+        new PostgresOrphanDatabases(platformDb, naming, db.tenantDatabasePrefix),
+      [TYPES.PlatformDb, TYPES.TenantDatabaseNaming],
+    );
+  container
+    .bind<ITenantSchemaUpdater>(TYPES.TenantSchemaUpdater)
+    .toResolvedValue(
+      (
+        factory: PostgresConnectionFactory,
+        naming: TenantDatabaseNaming,
+        runner: MigrationRunner,
+        sets: MigrationSets,
+      ) => new MigratorTenantSchemaUpdater(factory, naming, runner, sets.tenant),
+      [
+        TYPES.PostgresConnectionFactory,
+        TYPES.TenantDatabaseNaming,
+        TYPES.MigrationRunner,
+        TYPES.MigrationSets,
+      ],
+    );
+  container
+    .bind<ITenantSeeder>(TYPES.TenantSeeder)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresTenantSeeder(tx),
+      [TYPES.PostgresTransactionContext],
+    );
+  container
+    .bind<IUserInvitations>(TYPES.UserInvitations)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresUserInvitations(tx),
+      [TYPES.PostgresTransactionContext],
+    );
+  container
+    .bind<ITenantUserAccounts>(TYPES.TenantUserAccounts)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresTenantUserAccounts(tx),
+      [TYPES.PostgresTransactionContext],
+    );
+
+  container.bind<IJobHandler[]>(TYPES.ProvisioningJobHandlers).toResolvedValue(
+    (
+      provisioning: ITenantProvisioning,
+      databases: ITenantDatabaseProvisioner,
+      schema: ITenantSchemaUpdater,
+      catalogue: IPermissionCatalogueSource,
+      tenantContext: ITenantContext,
+      unitOfWork: IUnitOfWork,
+      seeder: ITenantSeeder,
+      invitations: IUserInvitations,
+      directory: IUserDirectory,
+      notifications: NotificationService,
+      audit: IPlatformAuditTrail,
+      orphans: IOrphanDatabases,
+      queue: IJobQueue,
+      clock: IClock,
+      logger: ILogger,
+    ): IJobHandler[] => [
+      new ProvisionTenant({
+        provisioning,
+        databases,
+        schema,
+        catalogue,
+        tenantContext,
+        unitOfWork,
+        seeder,
+        invitations,
+        directory,
+        notifications,
+        audit,
+        clock,
+        logger,
+        settings: {
+          webAppUrl: config.public.webAppUrl,
+          ownerInvitationTtlMs: OWNER_INVITATION_TTL_MS,
+          defaultBranch: DEFAULT_BRANCH,
+        },
+      }),
+      new SweepProvisioning({ provisioning, orphans, queue, audit, clock, logger }),
+      new SweepCatalogue({ provisioning, catalogue, queue }),
+      new SyncTenantCatalogue({ catalogue, unitOfWork, seeder, provisioning, logger }),
+    ],
+    [
+      TYPES.TenantProvisioning,
+      TYPES.TenantDatabaseProvisioner,
+      TYPES.TenantSchemaUpdater,
+      TYPES.PermissionCatalogueSource,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TenantSeeder,
+      TYPES.UserInvitations,
+      TYPES.UserDirectory,
+      TYPES.NotificationService,
+      TYPES.PlatformAuditTrail,
+      TYPES.OrphanDatabases,
+      TYPES.JobQueue,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+
+  container
+    .bind<ProvisioningConsole>(TYPES.ProvisioningConsole)
+    .toResolvedValue(
+      (
+        provisioning: ITenantProvisioning,
+        queue: IJobQueue,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+      ) => new ProvisioningConsole({ provisioning, queue, audit, requestContext }),
+      [TYPES.TenantProvisioning, TYPES.JobQueue, TYPES.PlatformAuditTrail, TYPES.RequestContext],
+    );
+
+  container.bind<AcceptUserInvitation>(TYPES.AcceptUserInvitation).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      invitations: IUserInvitations,
+      users: ITenantUserAccounts,
+      passwords: IPasswordHasher,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      startSession: StartAuthSession,
+      clock: IClock,
+    ) =>
+      new AcceptUserInvitation({
+        unitOfWork,
+        invitations,
+        users,
+        passwords,
+        auditTrail,
+        requestContext,
+        startSession,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.UserInvitations,
+      TYPES.TenantUserAccounts,
+      TYPES.PasswordHasher,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.StartAuthSession,
       TYPES.Clock,
     ],
   );
@@ -1087,12 +1296,15 @@ export function createContainer(
       audit: IPlatformAuditTrail,
       signup: ApplicationSignup,
       review: ApplicationReview,
+      provisioningConsole: ProvisioningConsole,
+      acceptInvitation: AcceptUserInvitation,
     ) => {
       const routes = [
         ...healthRoutes(health),
         ...sessionRoutes(),
         ...platformRoutes({ signIn, sessions, administration, approvals, audit }),
         ...applicationRoutes({ signup, review }),
+        ...provisioningRoutes({ console: provisioningConsole, acceptInvitation }),
       ];
       return config.http.exposeOpenApi
         ? [...routes, ...openApiRoutes(routes, OPENAPI_INFO)]
@@ -1107,6 +1319,8 @@ export function createContainer(
       TYPES.PlatformAuditTrail,
       TYPES.ApplicationSignup,
       TYPES.ApplicationReview,
+      TYPES.ProvisioningConsole,
+      TYPES.AcceptUserInvitation,
     ],
   );
 

@@ -13,6 +13,9 @@ import type { NotificationService } from "../../notifications/NotificationServic
 import type { ApplicationEvent, IApplicationEvents } from "../../ports/IApplicationEvents.js";
 import type { IApplicationLookups, SimilarApplication } from "../../ports/IApplicationLookups.js";
 import type { IClock } from "../../ports/IClock.js";
+import type { IIdGenerator } from "../../ports/IIdGenerator.js";
+import type { IJobQueue } from "../../ports/IJobQueue.js";
+import type { ITenantProvisioning } from "../../ports/ITenantProvisioning.js";
 import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
@@ -38,6 +41,8 @@ export type ApplicationDetailView = Omit<TenantApplicationProps, "accessTokenHas
 
 export type ReviewSettings = Readonly<{
   webAppUrl: string;
+  /** Timezone of new tenants (Ghana market; changeable in organisation settings). */
+  defaultTimezone: string;
   defaultTrialDays: number;
   defaultReapplyAfterDays: number;
 }>;
@@ -47,8 +52,9 @@ const DAY_MS = 86_400_000;
 /**
  * The staff review queue (docs/27 §3.2): list and inspect applications (with timeline, risk
  * signals and similar applications), assign a reviewer, ask for more information, approve or
- * reject. Every decision is audited and the applicant is told by email. Approval records the
- * provisioning options; provisioning itself is P1-3.
+ * reject. Every decision is audited and the applicant is told by email. Approval reserves the
+ * tenant (slug, `provisioning` status) in the same transaction and queues the provisioning saga;
+ * if queueing fails, the provisioning sweep picks it up.
  */
 export class ApplicationReview {
   constructor(
@@ -61,6 +67,9 @@ export class ApplicationReview {
       notifications: NotificationService;
       audit: IPlatformAuditTrail;
       requestContext: IRequestContext;
+      provisioning: ITenantProvisioning;
+      queue: IJobQueue;
+      ids: IIdGenerator;
       clock: IClock;
       settings: ReviewSettings;
     }>,
@@ -161,6 +170,7 @@ export class ApplicationReview {
       plan: "standard",
       trialDays: params.trialDays ?? deps.settings.defaultTrialDays,
     };
+    const tenantId = deps.ids.next();
     const application = await this.change(
       id,
       actor,
@@ -168,14 +178,26 @@ export class ApplicationReview {
       "Your application was approved. We are setting up your account.",
       false,
       (app) => {
-        app.approve(actor.userId, options, params.note ?? null, deps.clock.now());
-        return { options, note: params.note ?? null };
+        app.approve(actor.userId, options, params.note ?? null, deps.clock.now(), tenantId);
+        return { options, note: params.note ?? null, tenantId };
       },
       async (app) => {
-        if (await deps.lookups.slugTaken(app.details.desiredSlug, app.id))
+        if (await deps.lookups.slugTaken(app.details.desiredSlug, app.id)) {
           throw new SlugTakenError();
+        }
+        // Reserves the slug and creates the saga record in the same transaction.
+        await deps.provisioning.register({
+          tenantId,
+          slug: app.details.desiredSlug,
+          name: app.details.businessName,
+          timezone: deps.settings.defaultTimezone,
+          applicationId: app.id,
+        });
       },
     );
+    await deps.queue
+      .enqueue("tenant.provision", { tenantId }, { singletonKey: tenantId })
+      .catch(() => undefined); // the provisioning sweep re-queues it within minutes
     await deps.notifications.sendEmail({
       to: application.details.contactEmail,
       template: "application.approved",

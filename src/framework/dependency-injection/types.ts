@@ -92,4 +92,17 @@ export const TYPES = Object.freeze({
   SmsSender: Symbol.for("ISmsSender"),
   ApplicationSignup: Symbol.for("ApplicationSignup"),
   ApplicationReview: Symbol.for("ApplicationReview"),
+
+  // Provisioning and tenant catalogue
+  PermissionCatalogueSource: Symbol.for("IPermissionCatalogueSource"),
+  TenantProvisioning: Symbol.for("ITenantProvisioning"),
+  TenantSeeder: Symbol.for("ITenantSeeder"),
+  UserInvitations: Symbol.for("IUserInvitations"),
+  TenantUserAccounts: Symbol.for("ITenantUserAccounts"),
+  UserDirectory: Symbol.for("IUserDirectory"),
+  TenantSchemaUpdater: Symbol.for("ITenantSchemaUpdater"),
+  OrphanDatabases: Symbol.for("IOrphanDatabases"),
+  ProvisioningJobHandlers: Symbol.for("ProvisioningJobHandlers"),
+  ProvisioningConsole: Symbol.for("ProvisioningConsole"),
+  AcceptUserInvitation: Symbol.for("AcceptUserInvitation"),
 });

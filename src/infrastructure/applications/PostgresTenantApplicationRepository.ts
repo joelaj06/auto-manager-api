@@ -42,6 +42,7 @@ type Row = {
   decision_reason: string | null;
   reapply_after: Date | null;
   approval_options: ApprovalOptions | null;
+  tenant_id: string | null;
   created_ip: string | null;
   created_user_agent: string | null;
   terms_accepted_at: Date;
@@ -53,7 +54,7 @@ const COLUMNS = `id, status, source, business_name, business_type, country,
   contact_phone, tin, registration_number, expected_branches, expected_vehicles, heard_about,
   referral_code, created_by_staff_id, access_token_hash, email_verified_at, phone_verified_at,
   submitted_at, risk_level, risk_signals, assigned_to, reviewed_by, reviewed_at, decision_reason,
-  reapply_after, approval_options, created_ip::text as created_ip, created_user_agent,
+  reapply_after, approval_options, tenant_id, created_ip::text as created_ip, created_user_agent,
   terms_accepted_at, created_at`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -90,6 +91,7 @@ const toEntity = (r: Row) =>
     decisionReason: r.decision_reason,
     reapplyAfter: r.reapply_after,
     approvalOptions: r.approval_options,
+    tenantId: r.tenant_id,
     createdIp: r.created_ip,
     createdUserAgent: r.created_user_agent,
     termsAcceptedAt: r.terms_accepted_at,
@@ -148,9 +150,9 @@ export class PostgresTenantApplicationRepository implements ITenantApplicationRe
           expected_vehicles, heard_about, referral_code, created_by_staff_id, access_token_hash,
           email_verified_at, phone_verified_at, submitted_at, risk_level, risk_signals,
           assigned_to, reviewed_by, reviewed_at, decision_reason, reapply_after, approval_options,
-          created_ip, created_user_agent, terms_accepted_at, created_at)
+          created_ip, created_user_agent, terms_accepted_at, created_at, tenant_id)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-               $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+               $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
        on conflict (id) do update set
          status = excluded.status, business_name = excluded.business_name, tin = excluded.tin,
          registration_number = excluded.registration_number,
@@ -161,6 +163,7 @@ export class PostgresTenantApplicationRepository implements ITenantApplicationRe
          assigned_to = excluded.assigned_to, reviewed_by = excluded.reviewed_by,
          reviewed_at = excluded.reviewed_at, decision_reason = excluded.decision_reason,
          reapply_after = excluded.reapply_after, approval_options = excluded.approval_options,
+         tenant_id = excluded.tenant_id,
          updated_at = now()`,
       [
         s.id,
@@ -196,6 +199,7 @@ export class PostgresTenantApplicationRepository implements ITenantApplicationRe
         s.createdUserAgent?.slice(0, 512) ?? null,
         s.termsAcceptedAt,
         s.createdAt,
+        s.tenantId,
       ],
     );
   }

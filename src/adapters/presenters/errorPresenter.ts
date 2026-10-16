@@ -114,6 +114,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   MESSAGE_REQUIRED: { status: 400 },
   INVALID_PHONE: { status: 400 },
   INVALID_SLUG: { status: 400 },
+
+  // Provisioning
+  PROVISIONING_NOT_FOUND: { status: 404 },
+  PROVISIONING_NOT_RETRYABLE: { status: 409 },
 };
 
 /** RFC 6750 challenge for bearer-token failures. */
