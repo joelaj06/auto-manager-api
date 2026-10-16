@@ -1,7 +1,10 @@
 import { OtpChallenge } from "../../../domain/entities/OtpChallenge.js";
 import type { OtpPurpose } from "../../../domain/enums/OtpPurpose.js";
 import type { IOtpChallengeRepository } from "../../../domain/repositories/IOtpChallengeRepository.js";
-import type { PostgresTransactionContext } from "../postgres/PostgresTransactionContext.js";
+import type { Queryable } from "../postgres/Queryable.js";
+
+/** Where the challenges live: the tenant `otp_challenges` (default) or `platform_otp_challenges`. */
+export type OtpChallengeTable = "otp_challenges" | "platform_otp_challenges";
 
 type ChallengeRow = {
   id: string;
@@ -17,7 +20,11 @@ type ChallengeRow = {
 };
 
 export class PostgresOtpChallengeRepository implements IOtpChallengeRepository {
-  constructor(private readonly transactions: PostgresTransactionContext) {}
+  constructor(
+    /** The current transaction (tenant unit of work) or the platform database. */
+    private readonly source: Readonly<{ current(): Queryable }>,
+    private readonly table: OtpChallengeTable = "otp_challenges",
+  ) {}
 
   findOpen(subject: string, purpose: OtpPurpose): Promise<OtpChallenge | null> {
     return this.loadOpen(subject, purpose, "");
@@ -29,8 +36,8 @@ export class PostgresOtpChallengeRepository implements IOtpChallengeRepository {
 
   async save(challenge: OtpChallenge): Promise<void> {
     const c = challenge.snapshot();
-    await this.transactions.current().query(
-      `insert into otp_challenges
+    await this.source.current().query(
+      `insert into ${this.table}
          (id, subject, purpose, code_hash, attempts, max_attempts, created_at, expires_at,
           consumed_at, invalidated_at)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -58,10 +65,10 @@ export class PostgresOtpChallengeRepository implements IOtpChallengeRepository {
     purpose: OtpPurpose,
     lock: string,
   ): Promise<OtpChallenge | null> {
-    const { rows } = await this.transactions.current().query<ChallengeRow>(
+    const { rows } = await this.source.current().query<ChallengeRow>(
       `select id, subject, purpose, code_hash, attempts, max_attempts, created_at, expires_at,
               consumed_at, invalidated_at
-         from otp_challenges
+         from ${this.table}
         where subject = $1 and purpose = $2 and consumed_at is null and invalidated_at is null
         order by created_at desc
         limit 1${lock}`,

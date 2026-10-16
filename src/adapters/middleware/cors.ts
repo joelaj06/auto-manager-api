@@ -31,7 +31,13 @@ export function corsPolicy(allowList: readonly string[]): RequestHandler {
       callback(null, origin !== undefined && isOriginAllowed(origin, allowList));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id", "X-Tenant"],
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+      "X-Request-Id",
+      "X-Tenant",
+      "X-Application-Token",
+    ],
     exposedHeaders: [
       "X-Request-Id",
       "RateLimit",

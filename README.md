@@ -136,6 +136,16 @@ secret) → `POST /auth/mfa/enrol/confirm` (first code) → tokens. Afterwards `
 last 10 minutes. Staff, roles, approvals (four-eyes) and the audit log are under `/staff`,
 `/roles`, `/approvals` and `/audit-logs`; see the OpenAPI document for every route.
 
+## Public signup (tenant applications)
+
+`POST /api/v1/applications` creates an application and sends an email code and an SMS code
+(locally the SMS appears in the API log as `DEVELOPMENT SMS`; emails in Mailpit once
+`yarn dev:worker` runs). The response contains a private `accessToken`: send it as
+`X-Application-Token` to `GET /api/v1/applications/:id`, `POST …/verify`
+(`{ channel: "email" | "phone", code }`), `POST …/resend-code` and `POST …/reply`. Once both are
+verified, the application appears in the console queue (`/api/platform/v1/applications`) for
+staff to request information, approve or reject.
+
 ## Backups
 
 Logical, encrypted backups of every tenant database and the platform database, with an

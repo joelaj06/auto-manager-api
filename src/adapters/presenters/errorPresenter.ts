@@ -103,6 +103,17 @@ const RULES: Readonly<Record<string, Rule>> = {
   SYSTEM_ROLE_LOCKED: { status: 422 },
   ROLE_EXCEEDS_OWN_PERMISSIONS: { status: 403 },
   SUPER_ADMIN_NEEDS_APPROVAL: { status: 422 },
+
+  // Tenant applications (signup and review)
+  APPLICATION_NOT_FOUND: { status: 404 },
+  APPLICATION_EXISTS: { status: 409 },
+  APPLICATION_STATE: { status: 409 },
+  REAPPLY_LATER: { status: 409 },
+  SLUG_TAKEN: { status: 409 },
+  ALREADY_VERIFIED: { status: 409 },
+  MESSAGE_REQUIRED: { status: 400 },
+  INVALID_PHONE: { status: 400 },
+  INVALID_SLUG: { status: 400 },
 };
 
 /** RFC 6750 challenge for bearer-token failures. */

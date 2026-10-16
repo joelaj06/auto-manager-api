@@ -84,4 +84,12 @@ export const TYPES = Object.freeze({
   StaffSignIn: Symbol.for("StaffSignIn"),
   ApprovalWorkflow: Symbol.for("ApprovalWorkflow"),
   StaffAdministration: Symbol.for("StaffAdministration"),
+
+  // Tenant applications (signup)
+  TenantApplicationRepository: Symbol.for("ITenantApplicationRepository"),
+  ApplicationEvents: Symbol.for("IApplicationEvents"),
+  ApplicationLookups: Symbol.for("IApplicationLookups"),
+  SmsSender: Symbol.for("ISmsSender"),
+  ApplicationSignup: Symbol.for("ApplicationSignup"),
+  ApplicationReview: Symbol.for("ApplicationReview"),
 });

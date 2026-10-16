@@ -127,6 +127,15 @@ const envSchema = z
     BACKUP_PG_TOOLS_IMAGE: z.string().min(1).default("postgres:18-alpine"),
     BACKUP_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
 
+    // --- Public web app and platform SMS ---
+    /** Public web app origin: applicant status links (signup). */
+    WEB_APP_URL: z.url().default("http://localhost:5174"),
+    /**
+     * Platform SMS provider for signup phone verification. `log` writes messages to the log and
+     * is refused at startup in production; a real provider is added once chosen.
+     */
+    SMS_PROVIDER: z.enum(["log"]).default("log"),
+
     // --- Platform email (SMTP) ---
     // No defaults in production: host and sender must be chosen explicitly there.
     SMTP_HOST: z.string().min(1).optional(),
@@ -234,6 +243,8 @@ export type AuthConfig = Readonly<{
   }>;
 }>;
 
+export type PublicConfig = Readonly<{ webAppUrl: string; smsProvider: "log" }>;
+
 export type BackupConfig = Readonly<{
   directory: string;
   publicKeyFile: string | undefined;
@@ -267,6 +278,7 @@ export type AppConfig = Readonly<{
   jobs: JobsConfig;
   email: EmailConfig;
   backup: BackupConfig;
+  public: PublicConfig;
 }>;
 
 export class ConfigError extends Error {
@@ -326,6 +338,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         sessionMaxHours: e.PLATFORM_SESSION_MAX_HOURS,
       }),
     }),
+    public: Object.freeze({ webAppUrl: e.WEB_APP_URL, smsProvider: e.SMS_PROVIDER }),
     backup: Object.freeze({
       directory: e.BACKUP_DIR,
       publicKeyFile: e.BACKUP_PUBLIC_KEY_FILE,

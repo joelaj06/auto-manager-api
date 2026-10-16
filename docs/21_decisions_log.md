@@ -185,6 +185,16 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 92 | Staff escalation | **Non-Super-Admins can assign or define only roles within their own permissions**; nobody changes their own roles or account; the last active Super Admin cannot be disabled or demoted | Prevents privilege escalation and lock-out |
 | 93 | Invitation links | **Token in the URL fragment** (`/accept-invitation#token=…`), stored only as SHA-256, single use, 72 h | Fragments are not sent to servers, so tokens do not end up in proxy or access logs |
 
+## Engineering decisions during P1-2 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 94 | Applicant access | **No account before approval; a private link per application** — random token stored as SHA-256, sent by clients in the `X-Application-Token` header (never in a query string), placed in the URL fragment of emailed links, and **rotated whenever we email a new link** (e.g. an information request) | Applicants can follow and answer without creating credentials; tokens never reach server logs; an old leaked link stops working |
+| 95 | Verification before review | **Email and phone must both be verified** (6-digit codes, 10 min, 5 attempts) before an application reaches staff | Matches docs/27 §3.2 and keeps unverified spam out of the queue |
+| 96 | Platform SMS | **Open decision: platform SMS provider** (Hubtel, Arkesel, mNotify, Twilio…). Until chosen, `SMS_PROVIDER=log` writes messages to the log in development and refuses to send in production (logged as an error at startup) | Signup needs SMS from *our* account, unlike tenant notifications (decision 17). Nothing fake can reach production |
+| 97 | Risk signals | **Informational only at launch** (manual approval): disposable email, previously rejected contact, existing customer, duplicate business name, ≥ 3 applications from one IP in 24 h, existing tenant name; level high/medium/low | Focuses reviewers now; the same signals can gate the optional auto-approval mode later |
+| 98 | Re-applying | **Rejection blocks new applications from the same email or phone for 30 days by default** (reviewer can change it, 0 = no block); the message never says why | docs/27 §3.2 "can re-apply after N days" without telling a bad actor what triggered it |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

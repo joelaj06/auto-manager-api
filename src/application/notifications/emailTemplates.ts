@@ -28,6 +28,30 @@ export type EmailTemplateData = {
   }>;
   "platform.staff_locked": Readonly<{ staffEmail: string; at: string; ip: string | null }>;
   "platform.approval_requested": Readonly<{ requestedBy: string; summary: string; reason: string }>;
+  "application.verify_email": Readonly<{
+    contactName: string;
+    businessName: string;
+    code: string;
+    expiresInMinutes: number;
+    applicationUrl: string;
+  }>;
+  "application.received": Readonly<{
+    contactName: string;
+    businessName: string;
+    applicationUrl: string | null;
+  }>;
+  "application.info_requested": Readonly<{
+    contactName: string;
+    businessName: string;
+    message: string;
+    applicationUrl: string;
+  }>;
+  "application.approved": Readonly<{ contactName: string; businessName: string }>;
+  "application.rejected": Readonly<{
+    contactName: string;
+    businessName: string;
+    reason: string | null;
+  }>;
 };
 
 export type EmailTemplateKey = keyof EmailTemplateData;
@@ -117,6 +141,38 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       `${data.requestedBy} asked for approval: ${data.summary}.`,
       `Reason: ${data.reason}`,
       `Review it in the ${CONSOLE} under Approvals.`,
+    ]),
+  "application.verify_email": (data) =>
+    simple(`${data.code} is your ${PRODUCT} verification code`, [
+      greeting(data.contactName),
+      `Thank you for applying for ${PRODUCT} for ${data.businessName}.`,
+      `Your email verification code is ${data.code}. It expires in ${data.expiresInMinutes} minutes.`,
+      `You can follow your application and enter the codes here: ${data.applicationUrl}`,
+      "Keep this link private — anyone with it can see and answer your application.",
+    ]),
+  "application.received": (data) =>
+    simple(`We received your application for ${data.businessName}`, [
+      greeting(data.contactName),
+      `Your email and phone are verified and your application for ${data.businessName} is now with our team. We usually review applications within one working day.`,
+      ...(data.applicationUrl === null ? [] : [`Follow its status here: ${data.applicationUrl}`]),
+    ]),
+  "application.info_requested": (data) =>
+    simple(`We need a little more information about ${data.businessName}`, [
+      greeting(data.contactName),
+      `Our team reviewed your application and asked: ${data.message}`,
+      `Reply here (this link replaces earlier ones): ${data.applicationUrl}`,
+    ]),
+  "application.approved": (data) =>
+    simple(`Your ${PRODUCT} application is approved`, [
+      greeting(data.contactName),
+      `Good news — ${data.businessName} has been approved. We are setting up your account now and will email your sign-in details shortly.`,
+    ]),
+  "application.rejected": (data) =>
+    simple(`About your ${PRODUCT} application`, [
+      greeting(data.contactName),
+      `We are sorry, but we cannot accept the application for ${data.businessName} at this time.`,
+      ...(data.reason === null ? [] : [`Reason: ${data.reason}`]),
+      "If you think this is a mistake, reply to this email or contact our support team.",
     ]),
   "auth.otp_code": (data) => {
     const action = PURPOSE_TEXT[data.purpose] ?? "continue";

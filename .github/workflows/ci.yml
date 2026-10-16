@@ -140,6 +140,8 @@ jobs:
             -e PLATFORM_JWT_SECRET=smoke_test_only_platform_jwt_secret_0123456789 \
             -e OTP_SECRET=smoke_test_only_otp_secret_0123456789abcdef \
             -e MFA_ENCRYPTION_KEY=smoke_test_only_mfa_key_0123456789abcdefgh \
+            -e SMTP_HOST=smtp.invalid \
+            -e EMAIL_FROM=no-reply@example.invalid \
             autoforce-api:ci
           for _ in $(seq 1 30); do
             if curl -fsS http://localhost:3000/health/live; then break; fi

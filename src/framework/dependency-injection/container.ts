@@ -93,7 +93,19 @@ import { PostgresTenantScheduleLedger } from "../../infrastructure/jobs/Postgres
 import { PostgresEmailDeliveries } from "../../infrastructure/notifications/PostgresEmailDeliveries.js";
 import { SmtpEmailSender } from "../../infrastructure/notifications/SmtpEmailSender.js";
 import { JobWorker } from "../jobs/JobWorker.js";
+import { applicationRoutes } from "../../adapters/routes/applicationRoutes.js";
 import { platformRoutes } from "../../adapters/routes/platformRoutes.js";
+import type { IApplicationEvents } from "../../application/ports/IApplicationEvents.js";
+import type { IApplicationLookups } from "../../application/ports/IApplicationLookups.js";
+import type { ISmsSender } from "../../application/ports/ISmsSender.js";
+import { ApplicationRiskAssessor } from "../../application/services/ApplicationRiskAssessor.js";
+import { ApplicationReview } from "../../application/use-cases/applications/ApplicationReview.js";
+import { ApplicationSignup } from "../../application/use-cases/applications/ApplicationSignup.js";
+import type { ITenantApplicationRepository } from "../../domain/repositories/ITenantApplicationRepository.js";
+import { PostgresApplicationEvents } from "../../infrastructure/applications/PostgresApplicationEvents.js";
+import { PostgresApplicationLookups } from "../../infrastructure/applications/PostgresApplicationLookups.js";
+import { PostgresTenantApplicationRepository } from "../../infrastructure/applications/PostgresTenantApplicationRepository.js";
+import { LoggingSmsSender } from "../../infrastructure/notifications/LoggingSmsSender.js";
 import type { IApprovalRequestRepository } from "../../domain/repositories/IApprovalRequestRepository.js";
 import type { IStaffAccountRepository } from "../../domain/repositories/IStaffAccountRepository.js";
 import type { IKnownDevices } from "../../application/ports/IKnownDevices.js";
@@ -132,6 +144,10 @@ const STEP_UP_WINDOW_MS = 10 * 60_000;
 const STAFF_LOCKOUT = Object.freeze({ maxFailedAttempts: 5, lockMs: 15 * 60_000 });
 const INVITATION_TTL_MS = 72 * 3_600_000;
 const APPROVAL_TTL_MS = 24 * 3_600_000;
+/** Trial length offered at approval unless the reviewer changes it (docs/25). */
+const DEFAULT_TRIAL_DAYS = 14;
+/** A rejected applicant can apply again after this many days, unless the reviewer changes it. */
+const DEFAULT_REAPPLY_AFTER_DAYS = 30;
 
 const OPENAPI_INFO = Object.freeze({
   title: "Autoforce Manager API",
@@ -894,6 +910,125 @@ export function createContainer(
     ],
   );
 
+  // --- Tenant applications (public signup and review queue) ---
+  platformRepository<ITenantApplicationRepository>(
+    TYPES.TenantApplicationRepository,
+    (p) => new PostgresTenantApplicationRepository(p),
+  );
+  platformRepository<IApplicationEvents>(
+    TYPES.ApplicationEvents,
+    (p) => new PostgresApplicationEvents(p),
+  );
+  platformRepository<IApplicationLookups>(
+    TYPES.ApplicationLookups,
+    (p) => new PostgresApplicationLookups(p),
+  );
+
+  container
+    .bind<ISmsSender>(TYPES.SmsSender)
+    .toResolvedValue(
+      (logger: ILogger) => new LoggingSmsSender(logger, config.isProduction),
+      [TYPES.Logger],
+    );
+
+  container.bind<ApplicationSignup>(TYPES.ApplicationSignup).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      platformDb: PlatformDb,
+      applications: ITenantApplicationRepository,
+      events: IApplicationEvents,
+      lookups: IApplicationLookups,
+      otp: IOtpService,
+      ids: IIdGenerator,
+      clock: IClock,
+      notifications: NotificationService,
+      sms: ISmsSender,
+      audit: IPlatformAuditTrail,
+    ) => {
+      // Signup codes live in the platform database (there is no tenant yet).
+      const challenges = new PostgresOtpChallengeRepository(
+        { current: () => platformDb },
+        "platform_otp_challenges",
+      );
+      return new ApplicationSignup({
+        unitOfWork,
+        applications,
+        events,
+        lookups,
+        risk: new ApplicationRiskAssessor(lookups),
+        issueOtp: new IssueOtpChallenge({
+          unitOfWork,
+          challenges,
+          otp,
+          ids,
+          clock,
+          settings: { ttlMs: auth.otpTtlMinutes * 60_000, maxAttempts: auth.otpMaxAttempts },
+        }),
+        verifyOtp: new VerifyOtpChallenge({ unitOfWork, challenges, otp, clock }),
+        notifications,
+        sms,
+        audit,
+        ids,
+        clock,
+        settings: { webAppUrl: config.public.webAppUrl, otpTtlMinutes: auth.otpTtlMinutes },
+      });
+    },
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformDb,
+      TYPES.TenantApplicationRepository,
+      TYPES.ApplicationEvents,
+      TYPES.ApplicationLookups,
+      TYPES.OtpService,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.NotificationService,
+      TYPES.SmsSender,
+      TYPES.PlatformAuditTrail,
+    ],
+  );
+
+  container.bind<ApplicationReview>(TYPES.ApplicationReview).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      applications: ITenantApplicationRepository,
+      events: IApplicationEvents,
+      lookups: IApplicationLookups,
+      staff: IStaffAccountRepository,
+      notifications: NotificationService,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new ApplicationReview({
+        unitOfWork,
+        applications,
+        events,
+        lookups,
+        staff,
+        notifications,
+        audit,
+        requestContext,
+        clock,
+        settings: {
+          webAppUrl: config.public.webAppUrl,
+          defaultTrialDays: DEFAULT_TRIAL_DAYS,
+          defaultReapplyAfterDays: DEFAULT_REAPPLY_AFTER_DAYS,
+        },
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.TenantApplicationRepository,
+      TYPES.ApplicationEvents,
+      TYPES.ApplicationLookups,
+      TYPES.StaffAccountRepository,
+      TYPES.NotificationService,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+
   // --- HTTP ---
   container.bind<AccessGuard>(TYPES.AccessGuard).toResolvedValue(
     (
@@ -950,11 +1085,14 @@ export function createContainer(
       administration: StaffAdministration,
       approvals: ApprovalWorkflow,
       audit: IPlatformAuditTrail,
+      signup: ApplicationSignup,
+      review: ApplicationReview,
     ) => {
       const routes = [
         ...healthRoutes(health),
         ...sessionRoutes(),
         ...platformRoutes({ signIn, sessions, administration, approvals, audit }),
+        ...applicationRoutes({ signup, review }),
       ];
       return config.http.exposeOpenApi
         ? [...routes, ...openApiRoutes(routes, OPENAPI_INFO)]
@@ -967,6 +1105,8 @@ export function createContainer(
       TYPES.StaffAdministration,
       TYPES.ApprovalWorkflow,
       TYPES.PlatformAuditTrail,
+      TYPES.ApplicationSignup,
+      TYPES.ApplicationReview,
     ],
   );
 
