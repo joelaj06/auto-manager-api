@@ -32,7 +32,13 @@ export function corsPolicy(allowList: readonly string[]): RequestHandler {
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id", "X-Tenant"],
-    exposedHeaders: ["X-Request-Id", "RateLimit", "RateLimit-Policy", "Retry-After"],
+    exposedHeaders: [
+      "X-Request-Id",
+      "RateLimit",
+      "RateLimit-Policy",
+      "Retry-After",
+      "WWW-Authenticate",
+    ],
     maxAge: 600,
   });
 }

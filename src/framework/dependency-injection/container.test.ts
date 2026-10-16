@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { ApiRoute } from "../../adapters/routes/ApiRoute.js";
+import { isPermissionKey } from "../../application/authorization/permissionCatalog.js";
 import { MigrationSets } from "../../infrastructure/database/migrations/MigrationCatalog.js";
 import type { TenantConnectionPools } from "../../infrastructure/database/postgres/TenantConnectionPools.js";
 import { testConfig } from "../../testing/testDatabase.js";
@@ -12,6 +14,27 @@ describe("createContainer", () => {
     try {
       for (const [name, token] of Object.entries(TYPES)) {
         expect(container.get(token), name).toBeDefined();
+      }
+    } finally {
+      await disposeContainer(container);
+    }
+  });
+
+  it("declares access on every route, with permissions from the catalogue", async () => {
+    const container = createContainer(testConfig(), await MigrationSets.load("db/migrations"));
+    try {
+      const routes = container.get<ApiRoute[]>(TYPES.ApiRoutes);
+      expect(routes.length).toBeGreaterThan(0);
+      for (const route of routes) {
+        const name = `${route.method.toUpperCase()} ${route.path}`;
+        expect(["public", "tenant", "authenticated"], name).toContain(route.access.kind);
+        if (route.access.kind === "authenticated" && route.access.permission !== null) {
+          expect(isPermissionKey(route.access.permission), name).toBe(true);
+        }
+        if (route.access.kind === "public") {
+          // Public routes are an explicit, short list; anything else must be tenant-scoped.
+          expect(route.path, name).toMatch(/^\/health\/|^\/api\/v1\/openapi\.json$/);
+        }
       }
     } finally {
       await disposeContainer(container);

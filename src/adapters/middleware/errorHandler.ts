@@ -29,6 +29,8 @@ export function errorHandler(logger: ILogger): ErrorRequestHandler {
       ...(serverFailure
         ? { error }
         : { reason: error instanceof Error ? error.message : String(error) }),
+      // Internal detail of auth failures (e.g. "expired", "bad_signature"); never sent to clients.
+      ...(!serverFailure && hasDetail(error) ? { detail: error.reason } : {}),
       ...(presented.securityAlert ? { securityAlert: true } : {}),
     };
     logger[presented.logLevel](
@@ -41,6 +43,15 @@ export function errorHandler(logger: ILogger): ErrorRequestHandler {
       next(error);
       return;
     }
-    res.status(presented.status).json(presented.body);
+    res.status(presented.status).set(presented.headers).json(presented.body);
   };
+}
+
+function hasDetail(error: unknown): error is { reason: string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "reason" in error &&
+    typeof error.reason === "string"
+  );
 }

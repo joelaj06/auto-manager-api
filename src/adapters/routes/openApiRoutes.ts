@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { buildOpenApiDocument, type OpenApiInfo } from "../presenters/openApiPresenter.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
+import { access } from "./RouteAccess.js";
 
 /** GET /api/v1/openapi.json — the document describing `routes` (and itself). */
 export function openApiRoutes(routes: readonly ApiRoute[], info: OpenApiInfo): ApiRoute[] {
@@ -9,6 +10,7 @@ export function openApiRoutes(routes: readonly ApiRoute[], info: OpenApiInfo): A
     path: "/api/v1/openapi.json",
     summary: "OpenAPI document",
     tags: ["meta"],
+    access: access.public(),
     responses: {
       200: { description: "OpenAPI 3.1 document", schema: z.record(z.string(), z.unknown()) },
     },

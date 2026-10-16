@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ApiRoute } from "../routes/ApiRoute.js";
+import type { RouteAccess } from "../routes/RouteAccess.js";
 import { errorEnvelopeSchema } from "./responseEnvelope.js";
 
 export type OpenApiInfo = Readonly<{ title: string; version: string; description?: string }>;
@@ -36,6 +37,31 @@ function parameters(schema: z.ZodObject | undefined, location: "path" | "query")
 
 const jsonContent = (schema: z.ZodType) => ({ "application/json": { schema: toSchema(schema) } });
 
+/** X-Tenant header, bearer requirement and required permission, from the route's access. */
+function accessDocumentation(access: RouteAccess) {
+  if (access.kind === "public") return { parameters: [], operation: {} };
+  const tenantHeader = {
+    name: "X-Tenant",
+    in: "header",
+    required: access.kind === "tenant",
+    description:
+      access.kind === "tenant"
+        ? "Business account (tenant slug)"
+        : "Business account (tenant slug); when sent it must match the access token",
+    schema: { type: "string" },
+  };
+  if (access.kind === "tenant") return { parameters: [tenantHeader], operation: {} };
+  return {
+    parameters: [tenantHeader],
+    operation: {
+      security: [{ [BEARER_SCHEME]: [] }],
+      ...(access.permission === null ? {} : { "x-permission": access.permission }),
+    },
+  };
+}
+
+const BEARER_SCHEME = "bearerAuth";
+
 /**
  * OpenAPI 3.1 document generated from the route declarations, so it cannot drift from the
  * actual validation. Every operation also documents the shared error envelope.
@@ -54,6 +80,7 @@ export function buildOpenApiDocument(routes: readonly ApiRoute[], info: OpenApiI
     responses.default = { description: "Error", content: jsonContent(errorEnvelopeSchema) };
 
     const body = route.request?.body;
+    const documentedAccess = accessDocumentation(route.access);
     const path = (paths[openApiPath(route.path)] ??= {});
     path[route.method] = {
       operationId: operationId(route),
@@ -62,7 +89,9 @@ export function buildOpenApiDocument(routes: readonly ApiRoute[], info: OpenApiI
       parameters: [
         ...parameters(route.request?.params, "path"),
         ...parameters(route.request?.query, "query"),
+        ...documentedAccess.parameters,
       ],
+      ...documentedAccess.operation,
       ...(body === undefined
         ? {}
         : { requestBody: { required: true, content: jsonContent(body) } }),
@@ -70,5 +99,12 @@ export function buildOpenApiDocument(routes: readonly ApiRoute[], info: OpenApiI
     };
   }
 
-  return { openapi: "3.1.0", info, paths };
+  return {
+    openapi: "3.1.0",
+    info,
+    paths,
+    components: {
+      securitySchemes: { [BEARER_SCHEME]: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
+    },
+  };
 }

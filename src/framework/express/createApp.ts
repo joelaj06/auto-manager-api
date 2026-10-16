@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
+import type { AccessGuard } from "../../adapters/middleware/AccessGuard.js";
 import { corsPolicy } from "../../adapters/middleware/cors.js";
 import { errorHandler, notFoundHandler } from "../../adapters/middleware/errorHandler.js";
 import { rateLimiter } from "../../adapters/middleware/rateLimiter.js";
@@ -16,12 +17,15 @@ export type AppDependencies = Readonly<{
   logger: ILogger;
   requestContext: IRequestContext;
   routes: readonly ApiRoute[];
+  /** Required as soon as any route is not public. */
+  accessGuard?: AccessGuard;
 }>;
 
 /**
  * The HTTP pipeline, in order:
  * request id/context → request log → security headers → CORS → JSON body (size-limited)
- * → rate limit (/api only; health probes are exempt) → routes (validated) → 404 → error envelope.
+ * → rate limit (/api only; health probes are exempt) → routes (access check, tenant context,
+ * validation, handler) → 404 → error envelope.
  */
 export function createApp(deps: AppDependencies): Express {
   const app = express();
@@ -35,7 +39,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use(express.json({ limit: `${deps.http.bodyLimitKb}kb` }));
   app.use("/api", rateLimiter(deps.http.rateLimit));
 
-  app.use(buildRouter(deps.routes));
+  app.use(buildRouter(deps.routes, deps.accessGuard));
 
   app.use(notFoundHandler);
   app.use(errorHandler(deps.logger));

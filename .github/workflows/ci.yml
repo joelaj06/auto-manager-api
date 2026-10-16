@@ -122,8 +122,11 @@ jobs:
             -e PLATFORM_DB_PASSWORD=smoke_test_only_pw \
             -e TENANT_DB_PASSWORD=smoke_test_only_pw \
             -e MIGRATOR_DB_PASSWORD=smoke_test_only_pw \
+            -e TENANT_JWT_SECRET=smoke_test_only_tenant_jwt_secret_0123456789 \
+            -e PLATFORM_JWT_SECRET=smoke_test_only_platform_jwt_secret_0123456789 \
+            -e OTP_SECRET=smoke_test_only_otp_secret_0123456789abcdef \
             autoforce-api:ci
-          for attempt in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fsS http://localhost:3000/health/live; then break; fi
             sleep 1
           done

@@ -13,6 +13,7 @@ import { disposeContainer } from "../../framework/dependency-injection/container
 import { TYPES } from "../../framework/dependency-injection/types.js";
 import { createTestContainer } from "../../testing/testContainer.js";
 import { TEST_DATABASE, testConfig } from "../../testing/testDatabase.js";
+import type { MigrationSets } from "./migrations/MigrationCatalog.js";
 import { PgErrorCodes, pgErrorCode } from "./postgres/pgErrors.js";
 import type {
   DatabaseRole,
@@ -99,7 +100,8 @@ describe("TenantDatabaseProvisioner", () => {
       );
       return rows[0]?.v;
     });
-    expect(version).toBe("0001");
+    const latest = container.get<MigrationSets>(TYPES.MigrationSets).tenant.latestVersion;
+    expect(version).toBe(latest);
   });
 });
 

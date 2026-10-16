@@ -30,6 +30,36 @@ import { TenantDatabaseProvisioner } from "../../infrastructure/database/provisi
 import { PostgresAuditTrail } from "../../infrastructure/database/repositories/PostgresAuditTrail.js";
 import { PostgresOutbox } from "../../infrastructure/database/repositories/PostgresOutbox.js";
 import { PostgresSequenceGenerator } from "../../infrastructure/database/repositories/PostgresSequenceGenerator.js";
+import { AccessGuard } from "../../adapters/middleware/AccessGuard.js";
+import { AuthorizationPolicy } from "../../application/authorization/AuthorizationPolicy.js";
+import type { IAccessTokenService } from "../../application/ports/IAccessTokenService.js";
+import type { IClock } from "../../application/ports/IClock.js";
+import type { IIdGenerator } from "../../application/ports/IIdGenerator.js";
+import type { IOtpService } from "../../application/ports/IOtpService.js";
+import type { IPasswordHasher } from "../../application/ports/IPasswordHasher.js";
+import type { IPermissionResolver } from "../../application/ports/IPermissionResolver.js";
+import type { IRefreshTokenService } from "../../application/ports/IRefreshTokenService.js";
+import type { ITenantDirectory } from "../../application/ports/ITenantDirectory.js";
+import { AuthenticateTenantRequest } from "../../application/use-cases/auth/AuthenticateTenantRequest.js";
+import { IssueOtpChallenge } from "../../application/use-cases/auth/IssueOtpChallenge.js";
+import { RefreshAuthSession } from "../../application/use-cases/auth/RefreshAuthSession.js";
+import { ResolveTenant } from "../../application/use-cases/auth/ResolveTenant.js";
+import { RevokeAuthSession } from "../../application/use-cases/auth/RevokeAuthSession.js";
+import { StartAuthSession } from "../../application/use-cases/auth/StartAuthSession.js";
+import { VerifyOtpChallenge } from "../../application/use-cases/auth/VerifyOtpChallenge.js";
+import type { IAuthSessionRepository } from "../../domain/repositories/IAuthSessionRepository.js";
+import type { IOtpChallengeRepository } from "../../domain/repositories/IOtpChallengeRepository.js";
+import { CachingPermissionResolver } from "../../infrastructure/authorization/CachingPermissionResolver.js";
+import { NoUsersPermissionResolver } from "../../infrastructure/authorization/NoUsersPermissionResolver.js";
+import { PostgresAuthSessionRepository } from "../../infrastructure/database/repositories/PostgresAuthSessionRepository.js";
+import { PostgresOtpChallengeRepository } from "../../infrastructure/database/repositories/PostgresOtpChallengeRepository.js";
+import { PostgresTenantDirectory } from "../../infrastructure/database/repositories/PostgresTenantDirectory.js";
+import { UuidV7Generator } from "../../infrastructure/ids/UuidV7Generator.js";
+import { Argon2PasswordHasher } from "../../infrastructure/security/Argon2PasswordHasher.js";
+import { CryptoRefreshTokenService } from "../../infrastructure/security/CryptoRefreshTokenService.js";
+import { HmacOtpService } from "../../infrastructure/security/HmacOtpService.js";
+import { JwtAccessTokenService } from "../../infrastructure/security/JwtAccessTokenService.js";
+import { SystemClock } from "../../infrastructure/time/SystemClock.js";
 import { createApp } from "../express/createApp.js";
 import { JsonLogger, jsonSink } from "../logger/JsonLogger.js";
 import { prettySink } from "../logger/prettySink.js";
@@ -52,6 +82,7 @@ const OPENAPI_INFO = Object.freeze({
 export function createContainer(config: AppConfig, migrations: MigrationSets): Container {
   const container = new Container({ defaultScope: "Singleton" });
   const db = config.database;
+  const auth = config.auth;
 
   container.bind<AppConfig>(TYPES.Config).toConstantValue(config);
   container.bind<MigrationSets>(TYPES.MigrationSets).toConstantValue(migrations);
@@ -178,7 +209,229 @@ export function createContainer(config: AppConfig, migrations: MigrationSets): C
     [TYPES.PostgresConnectionFactory, TYPES.TenantDatabaseNaming],
   );
 
+  // --- Security and identity ---
+  container.bind<IClock>(TYPES.Clock).toResolvedValue(() => new SystemClock());
+  container.bind<IIdGenerator>(TYPES.IdGenerator).toResolvedValue(() => new UuidV7Generator());
+  container
+    .bind<IPasswordHasher>(TYPES.PasswordHasher)
+    .toResolvedValue(() => new Argon2PasswordHasher());
+
+  container.bind<IAccessTokenService>(TYPES.AccessTokenService).toResolvedValue(
+    (clock: IClock) =>
+      new JwtAccessTokenService(
+        {
+          tenantSecret: auth.tenantJwtSecret,
+          platformSecret: auth.platformJwtSecret,
+          issuer: auth.issuer,
+          ttlSeconds: auth.accessTokenTtlSeconds,
+        },
+        clock,
+      ),
+    [TYPES.Clock],
+  );
+
+  container
+    .bind<IRefreshTokenService>(TYPES.RefreshTokenService)
+    .toResolvedValue(() => new CryptoRefreshTokenService());
+
+  container
+    .bind<IOtpService>(TYPES.OtpService)
+    .toResolvedValue(() => new HmacOtpService(auth.otpSecret));
+
+  container
+    .bind<ITenantDirectory>(TYPES.TenantDirectory)
+    .toResolvedValue(
+      (pool: pg.Pool) => new PostgresTenantDirectory(pool),
+      [TYPES.PlatformDatabasePool],
+    );
+
+  // Until the identity module (P1-5) exists no tenant user can be authenticated.
+  container
+    .bind<IPermissionResolver>(TYPES.PermissionResolver)
+    .toResolvedValue(() => new CachingPermissionResolver(new NoUsersPermissionResolver()));
+
+  container
+    .bind<IAuthSessionRepository>(TYPES.AuthSessionRepository)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresAuthSessionRepository(tx),
+      [TYPES.PostgresTransactionContext],
+    );
+
+  container
+    .bind<IOtpChallengeRepository>(TYPES.OtpChallengeRepository)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresOtpChallengeRepository(tx),
+      [TYPES.PostgresTransactionContext],
+    );
+
+  container
+    .bind<AuthorizationPolicy>(TYPES.AuthorizationPolicy)
+    .toResolvedValue(() => new AuthorizationPolicy());
+
+  container.bind<StartAuthSession>(TYPES.StartAuthSession).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      tenantContext: ITenantContext,
+      sessions: IAuthSessionRepository,
+      accessTokens: IAccessTokenService,
+      refreshTokens: IRefreshTokenService,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new StartAuthSession({
+        unitOfWork,
+        tenantContext,
+        sessions,
+        accessTokens,
+        refreshTokens,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        settings: { refreshTokenTtlMs: auth.refreshTokenTtlDays * 86_400_000 },
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TenantContext,
+      TYPES.AuthSessionRepository,
+      TYPES.AccessTokenService,
+      TYPES.RefreshTokenService,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+
+  container.bind<RefreshAuthSession>(TYPES.RefreshAuthSession).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      tenantContext: ITenantContext,
+      sessions: IAuthSessionRepository,
+      accessTokens: IAccessTokenService,
+      refreshTokens: IRefreshTokenService,
+      permissions: IPermissionResolver,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new RefreshAuthSession({
+        unitOfWork,
+        tenantContext,
+        sessions,
+        accessTokens,
+        refreshTokens,
+        permissions,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TenantContext,
+      TYPES.AuthSessionRepository,
+      TYPES.AccessTokenService,
+      TYPES.RefreshTokenService,
+      TYPES.PermissionResolver,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+
+  container
+    .bind<RevokeAuthSession>(TYPES.RevokeAuthSession)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        sessions: IAuthSessionRepository,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+        clock: IClock,
+      ) => new RevokeAuthSession({ unitOfWork, sessions, auditTrail, requestContext, clock }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.AuthSessionRepository,
+        TYPES.AuditTrail,
+        TYPES.RequestContext,
+        TYPES.Clock,
+      ],
+    );
+
+  container
+    .bind<AuthenticateTenantRequest>(TYPES.AuthenticateTenantRequest)
+    .toResolvedValue(
+      (
+        accessTokens: IAccessTokenService,
+        tenants: ITenantDirectory,
+        permissions: IPermissionResolver,
+      ) => new AuthenticateTenantRequest({ accessTokens, tenants, permissions }),
+      [TYPES.AccessTokenService, TYPES.TenantDirectory, TYPES.PermissionResolver],
+    );
+
+  container
+    .bind<ResolveTenant>(TYPES.ResolveTenant)
+    .toResolvedValue(
+      (tenants: ITenantDirectory) => new ResolveTenant(tenants),
+      [TYPES.TenantDirectory],
+    );
+
+  container.bind<IssueOtpChallenge>(TYPES.IssueOtpChallenge).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      challenges: IOtpChallengeRepository,
+      otp: IOtpService,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new IssueOtpChallenge({
+        unitOfWork,
+        challenges,
+        otp,
+        ids,
+        clock,
+        settings: { ttlMs: auth.otpTtlMinutes * 60_000, maxAttempts: auth.otpMaxAttempts },
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.OtpChallengeRepository,
+      TYPES.OtpService,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+
+  container
+    .bind<VerifyOtpChallenge>(TYPES.VerifyOtpChallenge)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        challenges: IOtpChallengeRepository,
+        otp: IOtpService,
+        clock: IClock,
+      ) => new VerifyOtpChallenge({ unitOfWork, challenges, otp, clock }),
+      [TYPES.UnitOfWork, TYPES.OtpChallengeRepository, TYPES.OtpService, TYPES.Clock],
+    );
+
   // --- HTTP ---
+  container
+    .bind<AccessGuard>(TYPES.AccessGuard)
+    .toResolvedValue(
+      (
+        authenticate: AuthenticateTenantRequest,
+        resolveTenant: ResolveTenant,
+        authorization: AuthorizationPolicy,
+        tenantContext: ITenantContext,
+      ) => new AccessGuard({ authenticate, resolveTenant, authorization, tenantContext }),
+      [
+        TYPES.AuthenticateTenantRequest,
+        TYPES.ResolveTenant,
+        TYPES.AuthorizationPolicy,
+        TYPES.TenantContext,
+      ],
+    );
   container
     .bind<IReadinessCheck[]>(TYPES.ReadinessChecks)
     .toResolvedValue(
@@ -213,9 +466,13 @@ export function createContainer(config: AppConfig, migrations: MigrationSets): C
   container
     .bind<Express>(TYPES.HttpApp)
     .toResolvedValue(
-      (logger: ILogger, requestContext: IRequestContext, routes: ApiRoute[]) =>
-        createApp({ http: config.http, logger, requestContext, routes }),
-      [TYPES.Logger, TYPES.RequestContext, TYPES.ApiRoutes],
+      (
+        logger: ILogger,
+        requestContext: IRequestContext,
+        routes: ApiRoute[],
+        accessGuard: AccessGuard,
+      ) => createApp({ http: config.http, logger, requestContext, routes, accessGuard }),
+      [TYPES.Logger, TYPES.RequestContext, TYPES.ApiRoutes, TYPES.AccessGuard],
     );
 
   return container;

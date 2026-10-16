@@ -84,6 +84,13 @@ Conventions for every endpoint:
   all invalid fields are reported at once, values are never echoed.
 - **Security:** helmet headers, CORS allow-list (wildcard subdomains supported), JSON bodies
   limited in size, `/api` rate-limited per client, no stack traces in responses.
+- **Access control:** every route declares `access` (`adapters/routes/RouteAccess.ts`) —
+  `public`, `tenant` (anonymous, for the business named in `X-Tenant`) or `authenticated` with a
+  permission from `application/authorization/permissionCatalog.ts`. Tenant routes run inside
+  that tenant's context, so the unit of work can only reach its database. Bearer tokens are
+  short-lived JWTs signed with a per-tenant key; a token for one business is rejected on
+  another (`401 TENANT_MISMATCH`, logged as a security alert). Refresh tokens rotate on every
+  use and a reused one revokes the session. Sign-in endpoints arrive with users in P1-5.
 - **Logging:** JSON lines (`LOG_FORMAT=json`) or readable (`pretty`); passwords, tokens, OTPs,
   authorization headers and connection-string credentials are redacted automatically.
 - **Shutdown:** on SIGTERM/SIGINT the server stops accepting requests, finishes in-flight ones

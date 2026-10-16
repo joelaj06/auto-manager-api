@@ -135,6 +135,15 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 67 | Dependency injection | **Inversify container** (product owner's choice). *Implementation:* classes carry no decorators; bindings use `toResolvedValue(factory, [tokens])` in `framework/dependency-injection/container.ts`; singletons by default; resources released through `onDeactivation` + `unbindAllAsync()` | Supersedes the "plain composition root" part of decision 62. Inner layers stay free of the DI framework and behave the same under tsc, tsx and Vitest |
 | 68 | Code organisation | **Clean Architecture (onion), OOP, layer-first folders** following the product owner's reference project: `src/{domain, application, adapters, infrastructure, framework}` with `index.ts` / `worker.ts` entries; `I`-prefixed port interfaces in `application/ports` and repository interfaces in `domain/repositories`; use cases as classes in `application/use-cases/<area>`; `Postgres*` implementations in `infrastructure/database` | Supersedes the module-first layout of doc 03 §1. P0-5 restructured accordingly. ESLint enforces the onion (inner layers never import outer ones; domain/application import no third-party packages; production code never imports framework/ or testing/) |
 
+## Engineering decisions during P0-7 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 69 | Access-token keys | **HS256 with a key per tenant derived by HKDF-SHA256** from `TENANT_JWT_SECRET` (context `tenant:<id>`); the platform console uses its own secret and audience | A token can only verify for the tenant in its `tid`, even if a bug skipped the tenant check; one secret to manage. Asymmetric keys (EdDSA) can replace it if other services must verify tokens |
+| 70 | Revocation model | **Stateless access tokens (15 min) + permission version check on every request** (cached ≤ 15 s); refresh tokens rotate and are checked against the session row | Logout stops refresh at once; disabling a user or editing roles bumps the version and rejects existing access tokens within seconds — without a session lookup per request |
+| 71 | Route access | **Every route must declare `access`** (`public` / `tenant` / `authenticated` + catalogue permission); the router refuses to mount protected routes without the guard, and a test checks every route and limits public routes to an allow-list | Implements "no endpoint ships without a permission" (Phase 0 exit criterion) at compile time and in CI |
+| 72 | Tenant addressing | **`X-Tenant` header (slug), optional on authenticated requests** — the token's `tid` decides, a different header is rejected | Works the same for the mobile app and the web portal; subdomain resolution is added with the portal hosting |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

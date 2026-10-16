@@ -27,4 +27,27 @@ export const TYPES = Object.freeze({
   AuditTrail: Symbol.for("IAuditTrail"),
   Outbox: Symbol.for("IOutbox"),
   TenantDatabaseProvisioner: Symbol.for("ITenantDatabaseProvisioner"),
+  Clock: Symbol.for("IClock"),
+  IdGenerator: Symbol.for("IIdGenerator"),
+  PasswordHasher: Symbol.for("IPasswordHasher"),
+  AccessTokenService: Symbol.for("IAccessTokenService"),
+  RefreshTokenService: Symbol.for("IRefreshTokenService"),
+  OtpService: Symbol.for("IOtpService"),
+  TenantDirectory: Symbol.for("ITenantDirectory"),
+  PermissionResolver: Symbol.for("IPermissionResolver"),
+
+  // Repositories
+  AuthSessionRepository: Symbol.for("IAuthSessionRepository"),
+  OtpChallengeRepository: Symbol.for("IOtpChallengeRepository"),
+
+  // Authorization and auth use cases
+  AuthorizationPolicy: Symbol.for("AuthorizationPolicy"),
+  StartAuthSession: Symbol.for("StartAuthSession"),
+  RefreshAuthSession: Symbol.for("RefreshAuthSession"),
+  RevokeAuthSession: Symbol.for("RevokeAuthSession"),
+  AuthenticateTenantRequest: Symbol.for("AuthenticateTenantRequest"),
+  ResolveTenant: Symbol.for("ResolveTenant"),
+  IssueOtpChallenge: Symbol.for("IssueOtpChallenge"),
+  VerifyOtpChallenge: Symbol.for("VerifyOtpChallenge"),
+  AccessGuard: Symbol.for("AccessGuard"),
 });

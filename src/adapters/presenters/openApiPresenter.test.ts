@@ -4,6 +4,7 @@ import { defineRoute } from "../routes/ApiRoute.js";
 import { idParams, paginationQuery } from "../validators/commonRequests.js";
 import { buildOpenApiDocument } from "./openApiPresenter.js";
 import { dataEnvelope } from "./responseEnvelope.js";
+import { access } from "../routes/RouteAccess.js";
 
 const routes = [
   defineRoute({
@@ -11,6 +12,7 @@ const routes = [
     path: "/api/v1/vehicles",
     summary: "List vehicles",
     tags: ["vehicles"],
+    access: access.public(),
     request: { query: paginationQuery },
     responses: {
       200: {
@@ -25,6 +27,7 @@ const routes = [
     path: "/api/v1/vehicles/:id",
     summary: "Update a vehicle",
     tags: ["vehicles"],
+    access: access.public(),
     request: { params: idParams, body: z.object({ colour: z.string().min(1) }) },
     responses: { 200: { description: "Updated" } },
     handler: () => undefined,

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import type { z } from "zod";
+import type { RouteAccess } from "./RouteAccess.js";
 
 export type HttpMethod = "get" | "post" | "put" | "patch" | "delete";
 
@@ -19,14 +20,15 @@ export type ValidatedInput<R extends RouteRequest> = Readonly<{
 }>;
 
 /**
- * One endpoint, declared once: drives routing, request validation and the OpenAPI document.
- * `path` is the full path in Express syntax (e.g. "/api/v1/vehicles/:id").
+ * One endpoint, declared once: drives routing, access control, request validation and the
+ * OpenAPI document. `path` is the full path in Express syntax (e.g. "/api/v1/vehicles/:id").
  */
 export type ApiRoute<R extends RouteRequest = RouteRequest> = Readonly<{
   method: HttpMethod;
   path: string;
   summary: string;
   tags: readonly string[];
+  access: RouteAccess;
   request?: R;
   responses: Readonly<Record<number, RouteResponse>>;
   handler: (input: ValidatedInput<R>, req: Request, res: Response) => Promise<void> | void;

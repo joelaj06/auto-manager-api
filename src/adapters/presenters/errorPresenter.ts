@@ -1,4 +1,5 @@
 import { ApplicationError } from "../../application/errors/ApplicationError.js";
+import { OtpVerificationFailedError } from "../../application/errors/AuthErrors.js";
 import { DomainError } from "../../domain/errors/DomainError.js";
 import { RateLimitedError, RouteNotFoundError } from "../middleware/httpErrors.js";
 import {
@@ -11,6 +12,8 @@ export type ErrorBody = Readonly<{
     code: string;
     message: string;
     details?: readonly ValidationIssue[];
+    /** Wrong one-time code: guesses left before the code locks. */
+    remainingAttempts?: number;
     requestId?: string;
   }>;
 }>;
@@ -22,6 +25,8 @@ export type PresentedError = Readonly<{
   logLevel: "error" | "warn" | "info";
   /** Potential tenant-isolation breach: alert, don't just log. */
   securityAlert: boolean;
+  /** Extra response headers (e.g. WWW-Authenticate on 401). */
+  headers: Readonly<Record<string, string>>;
 }>;
 
 type Rule = Readonly<{
@@ -52,7 +57,36 @@ const RULES: Readonly<Record<string, Rule>> = {
     publicMessage: "The service is temporarily unavailable. Please try again shortly.",
   },
   TENANT_DATABASE_MISMATCH: { status: 500, securityAlert: true },
+
+  // Tenant resolution
+  TENANT_REQUIRED: { status: 400 },
+  TENANT_NOT_FOUND: { status: 404 },
+  TENANT_DEACTIVATED: { status: 403 },
+  TENANT_MISMATCH: { status: 401, securityAlert: true },
+
+  // Authentication and authorization
+  UNAUTHENTICATED: { status: 401 },
+  INVALID_TOKEN: { status: 401 },
+  INVALID_REFRESH_TOKEN: { status: 401 },
+  REFRESH_TOKEN_REUSED: {
+    status: 401,
+    // Same answer as any expired session: the caller must not learn that theft was detected.
+    publicMessage: "The session has expired. Please sign in again.",
+    securityAlert: true,
+  },
+  FORBIDDEN: { status: 403 },
+  OTP_INVALID: { status: 400 },
+  OTP_EXPIRED: { status: 400 },
+  OTP_LOCKED: { status: 400 },
+  OTP_CHALLENGE_CLOSED: { status: 400, publicMessage: "The code has expired. Request a new code." },
+  SESSION_NOT_ACTIVE: { status: 401 },
 };
+
+/** RFC 6750 challenge for bearer-token failures. */
+function authenticateHeader(code: string): Readonly<Record<string, string>> {
+  if (code === "INVALID_TOKEN") return { "WWW-Authenticate": 'Bearer error="invalid_token"' };
+  return { "WWW-Authenticate": "Bearer" };
+}
 
 const GENERIC_MESSAGE = "Something went wrong. Please try again later.";
 
@@ -102,6 +136,8 @@ export function presentError(error: unknown, requestId?: string): PresentedError
   }
 
   const details = error instanceof RequestValidationError ? error.issues : undefined;
+  const remainingAttempts =
+    error instanceof OtpVerificationFailedError ? error.remainingAttempts : undefined;
   return {
     status,
     body: {
@@ -109,10 +145,12 @@ export function presentError(error: unknown, requestId?: string): PresentedError
         code,
         message,
         ...(details === undefined ? {} : { details }),
+        ...(remainingAttempts === undefined ? {} : { remainingAttempts }),
         ...(requestId === undefined ? {} : { requestId }),
       },
     },
     logLevel: status >= 500 ? "error" : status === 429 || status === 404 ? "info" : "warn",
     securityAlert: rule?.securityAlert === true,
+    headers: status === 401 ? authenticateHeader(code) : {},
   };
 }

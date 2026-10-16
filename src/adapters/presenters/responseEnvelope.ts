@@ -11,6 +11,7 @@ export const errorEnvelopeSchema = z.object({
     code: z.string().describe("Stable machine-readable error code"),
     message: z.string(),
     details: z.array(z.object({ field: z.string(), message: z.string() })).optional(),
+    remainingAttempts: z.number().int().optional(),
     requestId: z.string().optional(),
   }),
 });

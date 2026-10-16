@@ -53,6 +53,9 @@ export function testConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     MIGRATOR_DB_PASSWORD: TEST_DATABASE.roles.migrator.password,
     TENANT_POOL_IDLE_TIMEOUT_MS: "5000",
     LOG_LEVEL: "silent",
+    TENANT_JWT_SECRET: "test-tenant-jwt-secret-0123456789-abcdef",
+    PLATFORM_JWT_SECRET: "test-platform-jwt-secret-0123456789-abcdef",
+    OTP_SECRET: "test-otp-secret-0123456789-abcdefghijklmn",
     ...overrides,
   });
 }

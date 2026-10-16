@@ -12,6 +12,8 @@ const logLevels = ["fatal", "error", "warn", "info", "debug", "trace", "silent"]
 const sslModes = ["disable", "require", "verify-full"] as const;
 
 const requiredSecret = z.string().min(12, "must be at least 12 characters");
+/** Signing / HMAC keys: long random strings (e.g. `openssl rand -base64 48`). */
+const signingSecret = z.string().min(32, "must be at least 32 characters");
 const roleName = z
   .string()
   .regex(/^[a-z_][a-z0-9_]{0,62}$/, "must be a lowercase PostgreSQL identifier");
@@ -82,8 +84,28 @@ const envSchema = z
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000),
 
     MIGRATIONS_DIR: z.string().min(1).default("db/migrations"),
+
+    // --- Authentication ---
+    /** Master key for tenant access tokens; a per-tenant key is derived from it (HKDF). */
+    TENANT_JWT_SECRET: signingSecret,
+    /** Separate key for platform-console tokens (never accepted on tenant routes). */
+    PLATFORM_JWT_SECRET: signingSecret,
+    JWT_ISSUER: z.string().min(1).default("autoforce"),
+    ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(900),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+    /** Key for hashing one-time codes at rest (HMAC-SHA256). */
+    OTP_SECRET: signingSecret,
+    OTP_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
+    OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
   })
   .superRefine((env, ctx) => {
+    if (env.TENANT_JWT_SECRET === env.PLATFORM_JWT_SECRET) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PLATFORM_JWT_SECRET"],
+        message: "must differ from TENANT_JWT_SECRET",
+      });
+    }
     if (env.NODE_ENV === "production" && env.DATABASE_SSL === undefined) {
       ctx.addIssue({
         code: "custom",
@@ -133,6 +155,17 @@ export type HttpConfig = Readonly<{
   exposeOpenApi: boolean;
 }>;
 
+export type AuthConfig = Readonly<{
+  tenantJwtSecret: string;
+  platformJwtSecret: string;
+  issuer: string;
+  accessTokenTtlSeconds: number;
+  refreshTokenTtlDays: number;
+  otpSecret: string;
+  otpTtlMinutes: number;
+  otpMaxAttempts: number;
+}>;
+
 export type AppConfig = Readonly<{
   env: "development" | "test" | "production";
   isProduction: boolean;
@@ -142,6 +175,7 @@ export type AppConfig = Readonly<{
   shutdownTimeoutMs: number;
   http: HttpConfig;
   database: DatabaseConfig;
+  auth: AuthConfig;
 }>;
 
 export class ConfigError extends Error {
@@ -182,6 +216,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       rateLimit: Object.freeze({ windowMs: e.RATE_LIMIT_WINDOW_MS, max: e.RATE_LIMIT_MAX }),
       bodyLimitKb: e.HTTP_BODY_LIMIT_KB,
       exposeOpenApi: e.EXPOSE_OPENAPI ?? e.NODE_ENV !== "production",
+    }),
+    auth: Object.freeze({
+      tenantJwtSecret: e.TENANT_JWT_SECRET,
+      platformJwtSecret: e.PLATFORM_JWT_SECRET,
+      issuer: e.JWT_ISSUER,
+      accessTokenTtlSeconds: e.ACCESS_TOKEN_TTL_SECONDS,
+      refreshTokenTtlDays: e.REFRESH_TOKEN_TTL_DAYS,
+      otpSecret: e.OTP_SECRET,
+      otpTtlMinutes: e.OTP_TTL_MINUTES,
+      otpMaxAttempts: e.OTP_MAX_ATTEMPTS,
     }),
     database: Object.freeze({
       host: e.DATABASE_HOST,

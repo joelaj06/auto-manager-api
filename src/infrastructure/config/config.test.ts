@@ -5,6 +5,9 @@ const requiredSecrets = {
   PLATFORM_DB_PASSWORD: "platform-secret-1234",
   TENANT_DB_PASSWORD: "tenant-secret-12345",
   MIGRATOR_DB_PASSWORD: "migrator-secret-1234",
+  TENANT_JWT_SECRET: "t".repeat(40),
+  PLATFORM_JWT_SECRET: "p".repeat(40),
+  OTP_SECRET: "o".repeat(40),
 };
 
 function issuesOf(attempt: () => unknown): readonly string[] {
@@ -110,6 +113,26 @@ describe("loadConfig", () => {
     expect(issues.some((i) => i.startsWith("PLATFORM_DB_PASSWORD:"))).toBe(true);
     expect(issues.some((i) => i.startsWith("TENANT_DB_PASSWORD:"))).toBe(true);
     expect(issues.some((i) => i.startsWith("MIGRATOR_DB_PASSWORD:"))).toBe(true);
+  });
+
+  it("requires long signing secrets and distinct token keys", () => {
+    const short = issuesOf(() => loadConfig({ ...requiredSecrets, OTP_SECRET: "too-short" }));
+    expect(short).toEqual([expect.stringMatching(/^OTP_SECRET:/)]);
+
+    const same = issuesOf(() =>
+      loadConfig({ ...requiredSecrets, PLATFORM_JWT_SECRET: requiredSecrets.TENANT_JWT_SECRET }),
+    );
+    expect(same).toEqual([expect.stringMatching(/^PLATFORM_JWT_SECRET: must differ/)]);
+  });
+
+  it("defaults token lifetimes and OTP limits", () => {
+    expect(loadConfig(requiredSecrets).auth).toMatchObject({
+      issuer: "autoforce",
+      accessTokenTtlSeconds: 900,
+      refreshTokenTtlDays: 30,
+      otpTtlMinutes: 10,
+      otpMaxAttempts: 5,
+    });
   });
 
   it("rejects short passwords", () => {

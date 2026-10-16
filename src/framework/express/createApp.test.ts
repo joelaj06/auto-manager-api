@@ -14,6 +14,7 @@ import type { HttpConfig } from "../../infrastructure/config/config.js";
 import { AsyncLocalRequestContext } from "../../infrastructure/context/AsyncLocalRequestContext.js";
 import { JsonLogger, type LogEntry } from "../logger/JsonLogger.js";
 import { createApp } from "./createApp.js";
+import { access } from "../../adapters/routes/RouteAccess.js";
 
 class SeatLimitReachedError extends DomainError {
   readonly code = "SEAT_LIMIT_REACHED";
@@ -48,6 +49,7 @@ function buildApp(options: { http?: Partial<HttpConfig>; checks?: IReadinessChec
       path: "/api/v1/echo/:id",
       summary: "Echo validated input",
       tags: ["test"],
+      access: access.public(),
       request: {
         params: idParams,
         query: paginationQuery,
@@ -63,6 +65,7 @@ function buildApp(options: { http?: Partial<HttpConfig>; checks?: IReadinessChec
       path: "/api/v1/fail/domain",
       summary: "Throws a domain error",
       tags: ["test"],
+      access: access.public(),
       responses: {},
       handler: () => {
         throw new SeatLimitReachedError();
@@ -73,6 +76,7 @@ function buildApp(options: { http?: Partial<HttpConfig>; checks?: IReadinessChec
       path: "/api/v1/fail/async",
       summary: "Rejects with an unexpected error",
       tags: ["test"],
+      access: access.public(),
       responses: {},
       handler: async () => {
         await Promise.resolve();
@@ -84,6 +88,7 @@ function buildApp(options: { http?: Partial<HttpConfig>; checks?: IReadinessChec
       path: "/api/v1/fail/mismatch",
       summary: "Tenant database mismatch",
       tags: ["test"],
+      access: access.public(),
       responses: {},
       handler: () => {
         throw new TenantDatabaseMismatchError("a", "b", "t_b");
