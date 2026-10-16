@@ -39,9 +39,16 @@ export class StaffFixtures {
     const invited = await this.container
       .get<StaffAdministration>(TYPES.StaffAdministration)
       .invite({ email, name: "Test Staff", roleIds, actor: null });
+    return this.activate(invited.invitationToken!, invited.userId, email);
+  }
 
+  /**
+   * Accepts an invitation (e.g. a partner user's, taken from the queued email), enrols TOTP and
+   * signs in.
+   */
+  async activate(invitationToken: string, userId: string, email: string): Promise<TestStaff> {
     const signIn = this.container.get<StaffSignIn>(TYPES.StaffSignIn);
-    const step = await signIn.acceptInvitation(invited.invitationToken!, TEST_STAFF_PASSWORD);
+    const step = await signIn.acceptInvitation(invitationToken, TEST_STAFF_PASSWORD);
     const { secret } = await signIn.beginTotpEnrolment(step.challengeToken);
     const now = this.container.get<IClock>(TYPES.Clock).now();
     const tokens = await signIn.confirmTotpEnrolment(
@@ -50,7 +57,7 @@ export class StaffFixtures {
       "vitest",
     );
     return {
-      id: invited.userId,
+      id: userId,
       email,
       password: TEST_STAFF_PASSWORD,
       totpSecret: secret,

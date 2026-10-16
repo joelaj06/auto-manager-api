@@ -235,6 +235,18 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 117 | Audit export | **CSV export capped at 10,000 rows (a header says when cut off), spreadsheet formulas neutralised, and every export is itself audited** | Exports leave the system; the trail must show who took what |
 | 118 | Dashboard scope | **Billing tiles (MRR, ARR, tenants due for automatic deactivation) and DAU/MAU are deferred** to subscriptions (P1-10) and `usage_daily` | No billing data exists yet; counting active users across every tenant database per page view does not scale |
 
+## Engineering decisions during P1-7 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 119 | Partner users | **A reseller's users are platform users of type `partner` with a partner id; their permissions are exactly their partner's capability grants.** They never hold staff roles (use case + database trigger), reach only `/partner/*` and their own session routes, and every partner query filters on the partner id taken from the token | One sign-in, MFA and session system for the whole console, with a hard wall between staff and resellers |
+| 120 | Capability catalogue | **Reseller capabilities are a separate audience in the platform catalogue** (`platform.partner.*`), never in staff roles (Super Admin's "all" means all staff permissions). Assisted signup by partners uses `platform.partner.applications.create`, not the staff `platform.applications.create_assisted` | Keeps the two permission sets disjoint so neither side can be granted the other's routes by mistake |
+| 121 | Attribution | **Set at submission (referral code or partner-assisted) and recorded at approval; a paused or terminated partner's code attributes nothing (review signal). Changing it afterwards needs `platform.partners.attribution.manage` (Super Admin by default) and a reason** | docs/29 §3; the "locked at activation" rule is carried by this permission until paid activation exists (P1-10, phase 2) |
+| 122 | Capability and status changes | **Changing capabilities re-issues the partner users' tokens (permission version); terminating disables every user and rejects tokens immediately; pausing blocks new clients only** | Grants take effect at once; a terminated reseller keeps no access, while their tenants keep the attribution |
+| 123 | Abuse controls | **Self-referral (partner's email, phone or TIN on the application) is a high-risk signal; more than 10 assisted applications a day is a review signal and 30 a day is refused** | docs/29 §9 without blocking normal sales activity |
+| 124 | Deferred | **`trusted` is stored but does not auto-approve yet; per-user restrictions inside a partner, commission terms and ledgers come with phase 2** (profile shows `commissionTerms: null` to those allowed to see terms) | No payments exist yet; auto-approval needs the approval policy settled |
+| 125 | Partner replies | **A partner answering an information request is recorded as the applicant's reply, marked "on behalf of partner"** | The client sees one conversation; the trail still shows who wrote it |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

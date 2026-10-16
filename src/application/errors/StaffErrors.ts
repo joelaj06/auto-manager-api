@@ -91,7 +91,8 @@ export class StaffRuleViolationError extends ApplicationError {
       | "ROLE_EXCEEDS_OWN_PERMISSIONS"
       | "SUPER_ADMIN_NEEDS_APPROVAL"
       | "APPROVER_ROLE_REQUIRED"
-      | "UNKNOWN_PERMISSION",
+      | "UNKNOWN_PERMISSION"
+      | "PARTNER_USER_NO_ROLES",
     message: string,
   ) {
     super(message);

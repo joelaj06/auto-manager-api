@@ -3,6 +3,7 @@ import {
   PLATFORM_PERMISSION_CATALOG,
   PLATFORM_PERMISSION_KEYS,
   PLATFORM_ROLE_TEMPLATES,
+  STAFF_PERMISSION_KEYS,
 } from "../../application/authorization/platformPermissionCatalog.js";
 
 export type CatalogueSyncResult = Readonly<{
@@ -58,9 +59,7 @@ export class PlatformCatalogueSync {
         );
         const roleId = rows[0]!.id;
         const wanted = [
-          ...new Set(
-            template.permissions === "all" ? PLATFORM_PERMISSION_KEYS : template.permissions,
-          ),
+          ...new Set(template.permissions === "all" ? STAFF_PERMISSION_KEYS : template.permissions),
         ].sort();
         const current = await client.query<{ permission_key: string }>(
           "select permission_key from platform_role_permissions where role_id = $1 order by permission_key",

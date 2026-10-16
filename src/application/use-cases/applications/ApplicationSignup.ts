@@ -1,17 +1,22 @@
+import type { Partner } from "../../../domain/entities/Partner.js";
 import {
   TenantApplication,
   type ApplicationCorrections,
   type ApplicationDetails,
   type ApplicationStatus,
+  type RiskSignal,
 } from "../../../domain/entities/TenantApplication.js";
 import type { OtpPurpose } from "../../../domain/enums/OtpPurpose.js";
+import type { IPartnerRepository } from "../../../domain/repositories/IPartnerRepository.js";
 import type { ITenantApplicationRepository } from "../../../domain/repositories/ITenantApplicationRepository.js";
+import { ReferralCode } from "../../../domain/value-objects/ReferralCode.js";
 import { PhoneNumber } from "../../../domain/value-objects/PhoneNumber.js";
 import { TenantSlug } from "../../../domain/value-objects/TenantSlug.js";
 import {
   AlreadyVerifiedError,
   ApplicationExistsError,
   ApplicationNotFoundError,
+  PartnerRateLimitedError,
   ReapplyLaterError,
   SlugTakenError,
 } from "../../errors/ApplicationErrors.js";
@@ -68,6 +73,20 @@ export type ApplicantView = Readonly<{
 
 export type SignupSettings = Readonly<{ webAppUrl: string; otpTtlMinutes: number }>;
 
+/** Assisted applications per partner per day: a review signal from, a hard stop at. */
+export const PARTNER_DAILY_SIGNAL = 10;
+export const PARTNER_DAILY_LIMIT = 30;
+const DAY_MS = 24 * 3_600_000;
+
+export type SubmitContext = Readonly<{
+  ip: string | null;
+  userAgent: string | null;
+  /** Console user creating an assisted application (staff or a reseller's user). */
+  staffId?: string | null;
+  /** The reseller whose user creates this application (partner-assisted signup). */
+  partnerId?: string | null;
+}>;
+
 type Channel = "email" | "phone";
 const PURPOSE: Readonly<Record<Channel, OtpPurpose>> = {
   email: "email_verification",
@@ -86,6 +105,7 @@ export class ApplicationSignup {
     private readonly deps: Readonly<{
       unitOfWork: IPlatformUnitOfWork;
       applications: ITenantApplicationRepository;
+      partners: IPartnerRepository;
       events: IApplicationEvents;
       lookups: IApplicationLookups;
       risk: ApplicationRiskAssessor;
@@ -108,10 +128,7 @@ export class ApplicationSignup {
    * Creates an application and sends both verification codes. `staffId` marks an assisted signup:
    * the private link then goes only to the applicant's email.
    */
-  async submit(
-    input: SignupInput,
-    context: Readonly<{ ip: string | null; userAgent: string | null; staffId?: string | null }>,
-  ): Promise<SignupResult> {
+  async submit(input: SignupInput, context: SubmitContext): Promise<SignupResult> {
     const { deps } = this;
     const now = deps.clock.now();
     const details: ApplicationDetails = {
@@ -146,18 +163,21 @@ export class ApplicationSignup {
       ) {
         throw new ReapplyLaterError();
       }
+      const referral = await this.referringPartner(details, context, now);
       const risk = await deps.risk.assess({
         email: details.contactEmail,
         phone: details.contactPhone,
         businessName: details.businessName,
         ip: context.ip,
         now,
+        extra: referral.signals,
       });
       const created = TenantApplication.submit({
         id: deps.ids.next(),
         details,
         source: staffId === null ? "self" : "assisted",
         createdByStaffId: staffId,
+        partnerId: referral.partner?.id ?? null,
         accessTokenHash: link.hash,
         risk,
         ip: context.ip,
@@ -172,11 +192,15 @@ export class ApplicationSignup {
         actorId: staffId,
         message: null,
         internal: true,
-        details: { source: created.snapshot().source, riskLevel: risk.level },
+        details: {
+          source: created.snapshot().source,
+          riskLevel: risk.level,
+          partnerId: referral.partner?.id ?? null,
+        },
       });
       if (staffId !== null) {
         await deps.audit.record({
-          actorType: "platform_staff",
+          actorType: context.partnerId ? "partner" : "platform_staff",
           actorId: staffId,
           action: "application.created_assisted",
           entityType: "tenant_application",
@@ -280,10 +304,36 @@ export class ApplicationSignup {
     message: string,
     corrections: ApplicationCorrections,
   ): Promise<ApplicantView> {
-    const { deps } = this;
     const application = await this.authorise(applicationId, token);
+    await this.applyReply(application.id, message, corrections, null);
+    return this.view(applicationId, token);
+  }
+
+  /**
+   * A reseller answers an information request for their client (docs/29 §6). Only for an
+   * application attributed to that partner; otherwise "not found".
+   */
+  async replyForPartner(
+    applicationId: string,
+    partner: Readonly<{ partnerId: string; userId: string }>,
+    message: string,
+    corrections: ApplicationCorrections,
+  ): Promise<void> {
+    const application = await this.deps.applications.findById(applicationId);
+    if (application === null || application.snapshot().partnerId !== partner.partnerId)
+      throw new ApplicationNotFoundError();
+    await this.applyReply(application.id, message, corrections, partner);
+  }
+
+  private async applyReply(
+    applicationId: string,
+    message: string,
+    corrections: ApplicationCorrections,
+    partner: Readonly<{ partnerId: string; userId: string }> | null,
+  ): Promise<void> {
+    const { deps } = this;
     await deps.unitOfWork.run(async () => {
-      const locked = await deps.applications.lockById(application.id);
+      const locked = await deps.applications.lockById(applicationId);
       if (locked === null) throw new ApplicationNotFoundError();
       locked.reply(message, corrections);
       await deps.applications.save(locked);
@@ -291,13 +341,68 @@ export class ApplicationSignup {
         applicationId: locked.id,
         type: "applicant_replied",
         actorType: "applicant",
-        actorId: null,
+        actorId: partner?.userId ?? null,
         message: message.trim(),
         internal: false,
-        details: { corrections },
+        details: {
+          corrections,
+          ...(partner === null ? {} : { onBehalfOfPartner: partner.partnerId }),
+        },
       });
     });
-    return this.view(applicationId, token);
+  }
+
+  /**
+   * The partner the application is attributed to (docs/29 §3): the partner whose user creates
+   * it, else the active partner of a valid referral code. Adds review signals for self-referral,
+   * an inactive partner's code and bursts of assisted signups.
+   */
+  private async referringPartner(
+    details: ApplicationDetails,
+    context: SubmitContext,
+    now: Date,
+  ): Promise<Readonly<{ partner: Partner | null; signals: RiskSignal[] }>> {
+    const { deps } = this;
+    const signals: RiskSignal[] = [];
+    let partner: Partner | null = null;
+    if (context.partnerId) {
+      partner = await deps.partners.findById(context.partnerId);
+      if (partner === null) throw new ApplicationNotFoundError();
+      partner.assertCanOnboard();
+      const today = await deps.lookups.assistedByPartnerSince(
+        partner.id,
+        new Date(now.getTime() - DAY_MS),
+      );
+      if (today >= PARTNER_DAILY_LIMIT) throw new PartnerRateLimitedError();
+      if (today >= PARTNER_DAILY_SIGNAL)
+        signals.push({
+          code: "partner_velocity",
+          detail: `${today + 1} assisted applications from this partner in 24 hours`,
+        });
+    } else {
+      const code = ReferralCode.tryParse(details.referralCode);
+      const referred = code === null ? null : await deps.partners.findByReferralCode(code.value);
+      if (referred !== null && referred.status === "active") partner = referred;
+      else if (referred !== null)
+        signals.push({
+          code: "referral_partner_inactive",
+          detail: `Referral code of a ${referred.status} partner (not attributed)`,
+        });
+    }
+    if (partner !== null) {
+      const p = partner.snapshot().profile;
+      if (
+        p.email === details.contactEmail ||
+        p.phone === details.contactPhone ||
+        (p.tin !== null && p.tin === details.tin)
+      ) {
+        signals.push({
+          code: "self_referral",
+          detail: "The applicant's contact details or TIN match the referring partner",
+        });
+      }
+    }
+    return { partner, signals };
   }
 
   private async authorise(applicationId: string, token: string): Promise<TenantApplication> {

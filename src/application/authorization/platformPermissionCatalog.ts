@@ -5,11 +5,16 @@
  *
  * `fourEyes`: the action runs only after a second staff member approves (docs/27 §8).
  * `sensitive`: needs a recent step-up (password + code) and is never in a custom role by default.
+ * `audience: "partner"`: a reseller capability (docs/29 §7), granted per partner and never part
+ * of a staff role; staff permissions are never granted to partners. `partnerDefault`: switched on
+ * when a partner is created.
  */
 export type PlatformPermissionDefinition = Readonly<{
   description: string;
   sensitive?: boolean;
   fourEyes?: boolean;
+  audience?: "partner";
+  partnerDefault?: boolean;
 }>;
 
 const definitions = {
@@ -126,7 +131,75 @@ const definitions = {
     sensitive: true,
   },
   "platform.roles.manage": { description: "Create and edit custom staff roles", sensitive: true },
-  "platform.partners.manage": { description: "Manage reseller partners" },
+  "platform.partners.view": { description: "View reseller partners and their tenants" },
+  "platform.partners.manage": {
+    description: "Create and edit partner profiles, pause/resume, invite partner users",
+  },
+  "platform.partners.permissions.grant": {
+    description: "Grant or revoke a partner's capabilities",
+    sensitive: true,
+  },
+  "platform.partners.terminate": { description: "Terminate a partner", sensitive: true },
+  "platform.partners.attribution.manage": {
+    description: "Assign or change the partner a tenant is attributed to",
+    sensitive: true,
+  },
+
+  // --- Reseller capabilities (granted per partner, docs/29 §7) ---
+  "platform.partner.tenants.view": {
+    description: "See the tenants they brought on board",
+    audience: "partner",
+    partnerDefault: true,
+  },
+  "platform.partner.tenants.view_owner_contact": {
+    description: "See the owner's name, phone and email of their tenants",
+    audience: "partner",
+  },
+  "platform.partner.tenants.view_billing_state": {
+    description: "See subscription state and deactivation reasons of their tenants",
+    audience: "partner",
+  },
+  "platform.partner.tenants.view_onboarding": {
+    description: "See onboarding progress of their tenants",
+    audience: "partner",
+  },
+  "platform.partner.commissions.view": {
+    description: "See their commission ledger, statements and payouts",
+    audience: "partner",
+    partnerDefault: true,
+  },
+  "platform.partner.terms.view": {
+    description: "See their own commission terms",
+    audience: "partner",
+    partnerDefault: true,
+  },
+  "platform.partner.applications.create": {
+    description: "Submit assisted signups for clients",
+    audience: "partner",
+    partnerDefault: true,
+  },
+  "platform.partner.applications.respond": {
+    description: "Answer information requests on their applications",
+    audience: "partner",
+    partnerDefault: true,
+  },
+  "platform.partner.export": {
+    description: "Export their tenants and commissions",
+    audience: "partner",
+  },
+  "platform.partner.coupons.use": {
+    description: "Offer coupons up to the configured maximum discount",
+    audience: "partner",
+  },
+  "platform.partner.referral_tools.view": {
+    description: "See their referral code and link",
+    audience: "partner",
+    partnerDefault: true,
+  },
+  "platform.partner.users.manage": {
+    description: "Invite, disable and enable their colleagues' console accounts",
+    audience: "partner",
+  },
   "platform.approvals.approve": {
     description: "Approve or reject four-eyes requests of other staff",
     sensitive: true,
@@ -145,6 +218,26 @@ export const PLATFORM_PERMISSION_KEYS = Object.freeze(
 
 export function isPlatformPermissionKey(value: unknown): value is PlatformPermissionKey {
   return typeof value === "string" && Object.hasOwn(PLATFORM_PERMISSION_CATALOG, value);
+}
+
+const isPartnerKey = (key: PlatformPermissionKey) =>
+  PLATFORM_PERMISSION_CATALOG[key].audience === "partner";
+
+/** Permissions for staff roles (everything except reseller capabilities). */
+export const STAFF_PERMISSION_KEYS = Object.freeze(
+  PLATFORM_PERMISSION_KEYS.filter((key) => !isPartnerKey(key)),
+);
+
+/** Reseller capabilities, grantable per partner. */
+export const PARTNER_CAPABILITY_KEYS = Object.freeze(PLATFORM_PERMISSION_KEYS.filter(isPartnerKey));
+
+/** Capabilities a new partner starts with; the rest are off until granted. */
+export const DEFAULT_PARTNER_CAPABILITIES = Object.freeze(
+  PARTNER_CAPABILITY_KEYS.filter((key) => PLATFORM_PERMISSION_CATALOG[key].partnerDefault),
+);
+
+export function isPartnerCapability(value: unknown): value is PlatformPermissionKey {
+  return isPlatformPermissionKey(value) && isPartnerKey(value);
 }
 
 /** System staff roles (docs/27 §1, §6). Read-only in the console; updated by releases. */
@@ -183,6 +276,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.billing.view",
       "platform.billing.extensions.grant",
       "platform.users.search",
+      "platform.partners.view",
       "platform.approvals.approve",
     ],
   },
@@ -222,6 +316,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.applications.create_assisted",
       "platform.tenants.view",
       "platform.tenants.notes",
+      "platform.partners.view",
       "platform.partners.manage",
       "platform.analytics.view",
     ],

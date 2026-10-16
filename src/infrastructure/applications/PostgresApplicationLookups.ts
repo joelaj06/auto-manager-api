@@ -87,6 +87,15 @@ export class PostgresApplicationLookups implements IApplicationLookups {
     }));
   }
 
+  async assistedByPartnerSince(partnerId: string, since: Date): Promise<number> {
+    const { rows } = await this.db.query<{ n: string }>(
+      `select count(*) as n from tenant_applications
+        where partner_id = $1 and source = 'assisted' and created_at >= $2`,
+      [partnerId, since],
+    );
+    return Number(rows[0]?.n ?? 0);
+  }
+
   async tenantsNamed(businessName: string): Promise<number> {
     const { rows } = await this.db.query<{ n: string }>(
       "select count(*) as n from tenants where lower(trim(name)) = lower(trim($1))",

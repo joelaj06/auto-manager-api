@@ -131,6 +131,17 @@ const RULES: Readonly<Record<string, Rule>> = {
   USER_EXISTS: { status: 409 },
   OWNER_PROTECTED: { status: 422 },
 
+  // Reseller programme
+  PARTNER_NOT_FOUND: { status: 404 },
+  PARTNER_EMAIL_TAKEN: { status: 409 },
+  REFERRAL_CODE_TAKEN: { status: 409 },
+  UNKNOWN_CAPABILITY: { status: 400 },
+  INVALID_REFERRAL_CODE: { status: 400 },
+  PARTNER_INACTIVE: { status: 409 },
+  PARTNER_STATE: { status: 409 },
+  PARTNER_RATE_LIMITED: { status: 429 },
+  PARTNER_USER_NO_ROLES: { status: 422 },
+
   // Console notes and tags
   NOTE_NOT_FOUND: { status: 404 },
   NOTE_NOT_YOURS: { status: 403 },

@@ -33,7 +33,8 @@ export class ProvisionedTenants {
     private readonly approver: TestStaff,
   ) {}
 
-  async create(): Promise<ProvisionedTenant> {
+  /** `partnerId`: the application is attributed to this reseller (as with a referral code). */
+  async create(options: Readonly<{ partnerId?: string }> = {}): Promise<ProvisionedTenant> {
     const unique = randomUUID().slice(0, 8);
     const ownerEmail = `owner-${unique}@example.com`;
     const application = TenantApplication.submit({
@@ -55,6 +56,7 @@ export class ProvisionedTenants {
       },
       source: "self",
       createdByStaffId: null,
+      partnerId: options.partnerId ?? null,
       accessTokenHash: randomUUID().replaceAll("-", ""),
       risk: { level: "low", signals: [] },
       ip: null,

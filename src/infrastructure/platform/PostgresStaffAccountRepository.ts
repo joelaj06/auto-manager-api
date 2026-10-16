@@ -15,10 +15,11 @@ type Row = {
   failed_attempts: number;
   locked_until: Date | null;
   last_login_at: Date | null;
+  partner_id: string | null;
 };
 
 const COLUMNS = `id, email::text as email, name, status, password_hash, totp_secret_enc,
-  totp_enrolled_at, totp_last_step, permission_version, failed_attempts, locked_until, last_login_at`;
+  totp_enrolled_at, totp_last_step, permission_version, failed_attempts, locked_until, last_login_at, partner_id`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const toEntity = (row: Row) =>
@@ -35,6 +36,7 @@ const toEntity = (row: Row) =>
     failedAttempts: row.failed_attempts,
     lockedUntil: row.locked_until,
     lastLoginAt: row.last_login_at,
+    partnerId: row.partner_id,
   });
 
 export class PostgresStaffAccountRepository implements IStaffAccountRepository {
@@ -54,7 +56,15 @@ export class PostgresStaffAccountRepository implements IStaffAccountRepository {
 
   async list(): Promise<StaffAccount[]> {
     const { rows } = await this.db.query<Row>(
-      `select ${COLUMNS} from platform_users order by status, email`,
+      `select ${COLUMNS} from platform_users where user_type = 'staff' order by status, email`,
+    );
+    return rows.map(toEntity);
+  }
+
+  async listByPartner(partnerId: string): Promise<StaffAccount[]> {
+    const { rows } = await this.db.query<Row>(
+      `select ${COLUMNS} from platform_users where partner_id = $1 order by status, email`,
+      [partnerId],
     );
     return rows.map(toEntity);
   }
@@ -64,8 +74,9 @@ export class PostgresStaffAccountRepository implements IStaffAccountRepository {
     await this.db.query(
       `insert into platform_users
          (id, email, name, status, password_hash, totp_secret_enc, totp_enrolled_at, totp_last_step,
-          permission_version, failed_attempts, locked_until, last_login_at, invited_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          permission_version, failed_attempts, locked_until, last_login_at, invited_by,
+          user_type, partner_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        on conflict (id) do update set
          name = excluded.name, status = excluded.status, password_hash = excluded.password_hash,
          totp_secret_enc = excluded.totp_secret_enc, totp_enrolled_at = excluded.totp_enrolled_at,
@@ -86,6 +97,8 @@ export class PostgresStaffAccountRepository implements IStaffAccountRepository {
         s.lockedUntil,
         s.lastLoginAt,
         invitedBy,
+        s.partnerId === null ? "staff" : "partner",
+        s.partnerId,
       ],
     );
   }

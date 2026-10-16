@@ -1,9 +1,11 @@
 import { AuthSession } from "../../../domain/entities/AuthSession.js";
 import type { StaffAccount } from "../../../domain/entities/StaffAccount.js";
+import type { IPartnerRepository } from "../../../domain/repositories/IPartnerRepository.js";
 import type { IStaffAccountRepository } from "../../../domain/repositories/IStaffAccountRepository.js";
 import { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
 import {
-  PLATFORM_PERMISSION_KEYS,
+  isPartnerCapability,
+  STAFF_PERMISSION_KEYS,
   type PlatformPermissionKey,
 } from "../../authorization/platformPermissionCatalog.js";
 import type { AuthenticationResult } from "../../dto/AuthenticationResult.js";
@@ -44,6 +46,7 @@ export class StaffSessions {
       unitOfWork: IPlatformUnitOfWork;
       accounts: IStaffAccountRepository;
       roles: IPlatformRoles;
+      partners: IPartnerRepository;
       sessions: IPlatformSessions;
       accessTokens: IAccessTokenService;
       refreshTokens: IRefreshTokenService;
@@ -183,7 +186,8 @@ export class StaffSessions {
   /**
    * Turns a console access token into the acting staff member: signature and audience, then the
    * session (active, not idle), the account (active, current permission version) and the union
-   * of the permissions of their roles.
+   * of the permissions of their roles. A reseller user instead gets their partner's capability
+   * grants (never staff permissions), and nothing at all once the partner is terminated.
    */
   async authenticate(accessToken: string): Promise<PlatformPrincipal> {
     const { deps } = this;
@@ -205,12 +209,23 @@ export class StaffSessions {
       throw new InvalidAccessTokenError("stale_permissions");
     }
 
-    const roles = await deps.roles.rolesOfUser(account.id);
     const permissions = new Set<PlatformPermissionKey>();
-    for (const role of roles) for (const key of role.permissions) permissions.add(key);
-    // Keys removed from the catalogue never grant anything.
-    for (const key of permissions)
-      if (!PLATFORM_PERMISSION_KEYS.includes(key)) permissions.delete(key);
+    const systemRoles = new Set<string>();
+    if (account.partnerId !== null) {
+      const partner = await deps.partners.findById(account.partnerId);
+      if (partner === null || partner.status === "terminated") {
+        throw new InvalidAccessTokenError("partner_terminated");
+      }
+      for (const key of partner.capabilities) if (isPartnerCapability(key)) permissions.add(key);
+    } else {
+      const roles = await deps.roles.rolesOfUser(account.id);
+      for (const role of roles) {
+        if (role.systemKey !== null) systemRoles.add(role.systemKey);
+        // Keys removed from the catalogue (or partner capabilities) never grant anything.
+        for (const key of role.permissions)
+          if (STAFF_PERMISSION_KEYS.includes(key)) permissions.add(key);
+      }
+    }
 
     if (now.getTime() - state.lastSeenAt.getTime() >= TOUCH_INTERVAL_MS) {
       await deps.sessions.touch(state.session.id, now);
@@ -220,9 +235,10 @@ export class StaffSessions {
       state.session.id,
       account.email,
       account.name,
-      new Set(roles.flatMap((role) => (role.systemKey === null ? [] : [role.systemKey]))),
+      systemRoles,
       permissions,
       state.stepUpAt,
+      account.partnerId,
     );
   }
 

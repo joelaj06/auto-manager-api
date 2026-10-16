@@ -8,5 +8,8 @@ export interface IStaffAccountRepository {
   lockById(id: string): Promise<StaffAccount | null>;
   /** Inserts or updates. */
   save(account: StaffAccount, invitedBy?: string | null): Promise<void>;
+  /** Platform staff only (not partner users). */
   list(): Promise<StaffAccount[]>;
+  /** The console users of one partner. */
+  listByPartner(partnerId: string): Promise<StaffAccount[]>;
 }

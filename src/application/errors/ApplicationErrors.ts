@@ -1,5 +1,13 @@
 import { ApplicationError } from "./ApplicationError.js";
 
+/** A partner submitted too many assisted applications today (429). */
+export class PartnerRateLimitedError extends ApplicationError {
+  readonly code = "PARTNER_RATE_LIMITED";
+  constructor() {
+    super("Too many new applications today. Contact your account manager to raise the limit.");
+  }
+}
+
 /** Unknown application or wrong private-link token — the same answer for both (404). */
 export class ApplicationNotFoundError extends ApplicationError {
   readonly code = "APPLICATION_NOT_FOUND";

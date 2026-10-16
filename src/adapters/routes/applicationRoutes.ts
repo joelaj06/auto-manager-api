@@ -24,7 +24,7 @@ const idParams = z.object({ id: uuid });
 const channel = z.enum(["email", "phone"]);
 const optionalText = (max: number) => z.string().trim().max(max).nullish();
 
-const signupBody = z.object({
+export const signupBody = z.object({
   businessName: z.string().trim().min(2).max(120),
   businessType: z.enum(["fleet", "rental", "dealer", "mixed"]),
   country: z
@@ -42,6 +42,19 @@ const signupBody = z.object({
   heardAbout: optionalText(200),
   referralCode: optionalText(40),
   acceptTerms: z.literal(true, { error: "You must accept the terms to apply" }),
+});
+
+export const replyBody = z.object({
+  message: z.string().trim().min(5).max(2_000),
+  corrections: z
+    .object({
+      businessName: z.string().trim().min(2).max(120).optional(),
+      tin: z.string().trim().max(40).optional(),
+      registrationNumber: z.string().trim().max(60).optional(),
+      expectedBranches: z.number().int().min(1).max(1_000).optional(),
+      expectedVehicles: z.number().int().min(0).max(100_000).optional(),
+    })
+    .default({}),
 });
 
 const tokenOf = (req: Request): string => {
@@ -148,18 +161,7 @@ export function applicationRoutes({ signup, review }: ApplicationRouteDependenci
       access: access.public(),
       request: {
         params: idParams,
-        body: z.object({
-          message: z.string().trim().min(5).max(2_000),
-          corrections: z
-            .object({
-              businessName: z.string().trim().min(2).max(120).optional(),
-              tin: z.string().trim().max(40).optional(),
-              registrationNumber: z.string().trim().max(60).optional(),
-              expectedBranches: z.number().int().min(1).max(1_000).optional(),
-              expectedVehicles: z.number().int().min(0).max(100_000).optional(),
-            })
-            .default({}),
-        }),
+        body: replyBody,
       },
       responses: { 200: { description: "Updated application" } },
       handler: async ({ params, body }, req, res) => {

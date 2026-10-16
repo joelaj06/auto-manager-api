@@ -30,6 +30,7 @@ type Row = {
   heard_about: string | null;
   referral_code: string | null;
   created_by_staff_id: string | null;
+  partner_id: string | null;
   access_token_hash: string;
   email_verified_at: Date | null;
   phone_verified_at: Date | null;
@@ -52,8 +53,8 @@ type Row = {
 const COLUMNS = `id, status, source, business_name, business_type, country,
   desired_slug::text as desired_slug, contact_name, contact_email::text as contact_email,
   contact_phone, tin, registration_number, expected_branches, expected_vehicles, heard_about,
-  referral_code, created_by_staff_id, access_token_hash, email_verified_at, phone_verified_at,
-  submitted_at, risk_level, risk_signals, assigned_to, reviewed_by, reviewed_at, decision_reason,
+  referral_code, created_by_staff_id, partner_id, access_token_hash, email_verified_at,
+  phone_verified_at, submitted_at, risk_level, risk_signals, assigned_to, reviewed_by, reviewed_at, decision_reason,
   reapply_after, approval_options, tenant_id, created_ip::text as created_ip, created_user_agent,
   terms_accepted_at, created_at`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -79,6 +80,7 @@ const toEntity = (r: Row) =>
       referralCode: r.referral_code,
     },
     createdByStaffId: r.created_by_staff_id,
+    partnerId: r.partner_id,
     accessTokenHash: r.access_token_hash,
     emailVerifiedAt: r.email_verified_at,
     phoneVerifiedAt: r.phone_verified_at,
@@ -150,9 +152,9 @@ export class PostgresTenantApplicationRepository implements ITenantApplicationRe
           expected_vehicles, heard_about, referral_code, created_by_staff_id, access_token_hash,
           email_verified_at, phone_verified_at, submitted_at, risk_level, risk_signals,
           assigned_to, reviewed_by, reviewed_at, decision_reason, reapply_after, approval_options,
-          created_ip, created_user_agent, terms_accepted_at, created_at, tenant_id)
+          created_ip, created_user_agent, terms_accepted_at, created_at, tenant_id, partner_id)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-               $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
+               $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
        on conflict (id) do update set
          status = excluded.status, business_name = excluded.business_name, tin = excluded.tin,
          registration_number = excluded.registration_number,
@@ -200,6 +202,7 @@ export class PostgresTenantApplicationRepository implements ITenantApplicationRe
         s.termsAcceptedAt,
         s.createdAt,
         s.tenantId,
+        s.partnerId,
       ],
     );
   }

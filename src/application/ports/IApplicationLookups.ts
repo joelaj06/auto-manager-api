@@ -26,4 +26,6 @@ export interface IApplicationLookups {
   }): Promise<SimilarApplication[]>;
   /** Existing tenants with (nearly) the same business name. */
   tenantsNamed(businessName: string): Promise<number>;
+  /** Applications a partner created (assisted) since `since`. */
+  assistedByPartnerSince(partnerId: string, since: Date): Promise<number>;
 }

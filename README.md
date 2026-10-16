@@ -143,6 +143,13 @@ read from the tenant database), `/tenants/:id/timeline`, `/tenants/:id/notes`,
 `PUT /tenants/:id/tags`, `GET /backups[/summary]`, `GET /migrations`,
 `GET /audit-logs/export` (CSV).
 
+Resellers (docs/29): staff manage partners under `/partners` (create, edit, pause/resume,
+terminate, `PUT /partners/:id/capabilities`, `POST /partners/:id/users/invitations`,
+`/partners/:id/tenants`) and attribution with `PUT /tenants/:id/partner`. A partner's users sign
+in like staff (password + authenticator) and use `/partner/*` only: dashboard, profile and
+referral link, tenants, applications (assisted signup, answering information requests) and,
+if granted, colleagues. Public signups with `referralCode` are attributed to the partner.
+
 ## Public signup (tenant applications)
 
 `POST /api/v1/applications` creates an application and sends an email code and an SMS code

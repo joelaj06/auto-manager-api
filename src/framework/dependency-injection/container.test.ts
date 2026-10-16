@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ApiRoute } from "../../adapters/routes/ApiRoute.js";
 import { isPermissionKey } from "../../application/authorization/permissionCatalog.js";
-import { isPlatformPermissionKey } from "../../application/authorization/platformPermissionCatalog.js";
+import {
+  isPartnerCapability,
+  STAFF_PERMISSION_KEYS,
+} from "../../application/authorization/platformPermissionCatalog.js";
 import { MigrationSets } from "../../infrastructure/database/migrations/MigrationCatalog.js";
 import type { TenantConnectionPools } from "../../infrastructure/database/postgres/TenantConnectionPools.js";
 import { testConfig } from "../../testing/testDatabase.js";
@@ -28,20 +31,28 @@ describe("createContainer", () => {
       expect(routes.length).toBeGreaterThan(0);
       for (const route of routes) {
         const name = `${route.method.toUpperCase()} ${route.path}`;
-        expect(["public", "tenant", "authenticated", "platform"], name).toContain(
+        expect(["public", "tenant", "authenticated", "platform", "partner"], name).toContain(
           route.access.kind,
         );
         if (route.access.kind === "authenticated" && route.access.permission !== null) {
           expect(isPermissionKey(route.access.permission), name).toBe(true);
         }
         if (route.access.kind === "platform" && route.access.permission !== null) {
-          expect(isPlatformPermissionKey(route.access.permission), name).toBe(true);
+          // Staff routes never use reseller capabilities, so partners can never reach them.
+          expect(STAFF_PERMISSION_KEYS, name).toContain(route.access.permission);
         }
+        if (route.access.kind === "partner") {
+          expect(route.path, name).toMatch(/^\/api\/platform\/v1\/partner\//);
+          if (route.access.permission !== null)
+            expect(isPartnerCapability(route.access.permission), name).toBe(true);
+        }
+        if (route.path.startsWith("/api/platform/v1/partner/"))
+          expect(route.access.kind, name).toBe("partner");
         // Console routes live under /api/platform/ only, and nothing tenant-facing lives there.
         if (route.access.kind === "platform")
           expect(route.path, name).toMatch(/^\/api\/platform\//);
         if (route.path.startsWith("/api/platform/")) {
-          expect(["platform", "public"], name).toContain(route.access.kind);
+          expect(["platform", "partner", "public"], name).toContain(route.access.kind);
         }
         if (route.access.kind === "public") {
           // Public routes are an explicit, short list; anything else must be tenant-scoped.

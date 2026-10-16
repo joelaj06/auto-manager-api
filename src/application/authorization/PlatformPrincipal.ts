@@ -11,6 +11,8 @@ export class PlatformPrincipal {
     private readonly permissions: ReadonlySet<PlatformPermissionKey>,
     /** Last re-authentication in this session (null: none). */
     readonly stepUpAt: Date | null,
+    /** Set for a reseller's console user: everything they see is scoped to this partner. */
+    readonly partnerId: string | null = null,
   ) {}
 
   has(permission: PlatformPermissionKey): boolean {

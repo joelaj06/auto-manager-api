@@ -4,7 +4,7 @@ import type { IStaffAccountRepository } from "../../../domain/repositories/IStaf
 import {
   isPlatformPermissionKey,
   PLATFORM_PERMISSION_CATALOG,
-  PLATFORM_PERMISSION_KEYS,
+  STAFF_PERMISSION_KEYS,
   SUPER_ADMIN_ROLE,
 } from "../../authorization/platformPermissionCatalog.js";
 import type { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
@@ -117,8 +117,17 @@ export class StaffAdministration {
     name: string;
     roleIds: readonly string[];
     actor: PlatformPrincipal | null;
+    /** Invites a reseller's console user instead (no roles; docs/29 §2). */
+    partnerId?: string | null;
   }): Promise<StaffInvitationResult> {
     const { deps } = this;
+    const partnerId = params.partnerId ?? null;
+    if (partnerId !== null && params.roleIds.length > 0) {
+      throw new StaffRuleViolationError(
+        "PARTNER_USER_NO_ROLES",
+        "Partner users get their partner's capabilities, not staff roles",
+      );
+    }
     const roles = await this.loadRoles(params.roleIds);
     if (params.actor !== null) {
       if (roles.some((role) => role.systemKey === SUPER_ADMIN_ROLE)) {
@@ -135,9 +144,10 @@ export class StaffAdministration {
       const now = deps.clock.now();
       const email = params.email.trim().toLowerCase();
       let account = await deps.accounts.findByEmail(email);
-      if (account !== null && account.status !== "invited") throw new StaffAlreadyExistsError();
+      if (account !== null && (account.status !== "invited" || account.partnerId !== partnerId))
+        throw new StaffAlreadyExistsError();
       if (account === null) {
-        account = StaffAccount.invite({ id: deps.ids.next(), email, name: params.name });
+        account = StaffAccount.invite({ id: deps.ids.next(), email, name: params.name, partnerId });
         await deps.accounts.save(account, params.actor?.userId ?? null);
       } else {
         await deps.invitations.revokeOpen(account.id, now);
@@ -155,10 +165,13 @@ export class StaffAdministration {
         invitedBy: params.actor?.userId ?? null,
         expiresAt,
       });
-      await this.audit(params.actor, "staff.invited", account.id, null, {
-        email,
-        roles: roles.map((r) => r.name),
-      });
+      await this.audit(
+        params.actor,
+        partnerId === null ? "staff.invited" : "partner_user.invited",
+        account.id,
+        null,
+        { email, roles: roles.map((r) => r.name), partnerId },
+      );
       return { account, expiresAt };
     });
 
@@ -214,6 +227,14 @@ export class StaffAdministration {
         "You cannot change your own roles",
       );
     }
+    const target = await this.deps.accounts.findById(userId);
+    if (target === null) throw new StaffNotFoundError();
+    if (target.isPartnerUser) {
+      throw new StaffRuleViolationError(
+        "PARTNER_USER_NO_ROLES",
+        "Partner users get their partner's capabilities, not staff roles",
+      );
+    }
     const roles = await this.loadRoles(roleIds);
     this.assertWithinOwnPermissions(actor, roles);
     const current = await this.deps.roles.rolesOfUser(userId);
@@ -247,7 +268,7 @@ export class StaffAdministration {
   }
 
   listPermissions() {
-    return PLATFORM_PERMISSION_KEYS.map((key) => ({
+    return STAFF_PERMISSION_KEYS.map((key) => ({
       key,
       description: PLATFORM_PERMISSION_CATALOG[key].description,
       sensitive: PLATFORM_PERMISSION_CATALOG[key].sensitive === true,
@@ -389,7 +410,9 @@ export class StaffAdministration {
   }
 
   private assertRoleInput(input: CustomRoleInput, actor: PlatformPrincipal): void {
-    const unknown = input.permissions.filter((key) => !isPlatformPermissionKey(key));
+    const unknown = input.permissions.filter(
+      (key) => !isPlatformPermissionKey(key) || !STAFF_PERMISSION_KEYS.includes(key),
+    );
     if (unknown.length > 0) {
       throw new StaffRuleViolationError(
         "UNKNOWN_PERMISSION",
@@ -429,7 +452,8 @@ export class StaffAdministration {
     details: Record<string, unknown>,
   ) {
     await this.deps.audit.record({
-      actorType: actor === null ? "system" : "platform_staff",
+      actorType:
+        actor === null ? "system" : actor.partnerId === null ? "platform_staff" : "partner",
       actorId: actor?.userId ?? null,
       action,
       entityType: userId === null ? "platform_role" : "platform_user",

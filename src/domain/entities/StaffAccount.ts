@@ -17,6 +17,8 @@ export type StaffAccountProps = Readonly<{
   failedAttempts: number;
   lockedUntil: Date | null;
   lastLoginAt: Date | null;
+  /** Set for a reseller's console user (docs/29 §2); null for platform staff. */
+  partnerId: string | null;
 }>;
 
 export type LockoutPolicy = Readonly<{ maxFailedAttempts: number; lockMs: number }>;
@@ -46,7 +48,12 @@ export class StaffMfaNotEnrolledError extends DomainError {
 export class StaffAccount {
   private constructor(private props: StaffAccountProps) {}
 
-  static invite(params: { id: string; email: string; name: string }): StaffAccount {
+  static invite(params: {
+    id: string;
+    email: string;
+    name: string;
+    partnerId?: string | null;
+  }): StaffAccount {
     return new StaffAccount({
       id: params.id,
       email: params.email.trim().toLowerCase(),
@@ -60,6 +67,7 @@ export class StaffAccount {
       failedAttempts: 0,
       lockedUntil: null,
       lastLoginAt: null,
+      partnerId: params.partnerId ?? null,
     });
   }
 
@@ -90,6 +98,12 @@ export class StaffAccount {
   }
   get permissionVersion(): number {
     return this.props.permissionVersion;
+  }
+  get partnerId(): string | null {
+    return this.props.partnerId;
+  }
+  get isPartnerUser(): boolean {
+    return this.props.partnerId !== null;
   }
   get mfaEnrolled(): boolean {
     return this.props.totpEnrolledAt !== null;

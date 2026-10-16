@@ -23,7 +23,7 @@ const DISPOSABLE_DOMAINS = new Set([
 const IP_WINDOW_MS = 24 * 3_600_000;
 const IP_LIMIT = 3;
 /** Signals that on their own make an application high risk. */
-const HIGH = new Set(["previously_rejected", "disposable_email"]);
+const HIGH = new Set(["previously_rejected", "disposable_email", "self_referral"]);
 
 /**
  * Basic risk signals shown to reviewers (docs/27 §3.2). Signals never decide on their own at
@@ -39,8 +39,10 @@ export class ApplicationRiskAssessor {
     businessName: string;
     ip: string | null;
     now: Date;
+    /** Signals found by the caller (e.g. about the referring partner). */
+    extra?: readonly RiskSignal[];
   }): Promise<Readonly<{ level: RiskLevel; signals: RiskSignal[] }>> {
-    const signals: RiskSignal[] = [];
+    const signals: RiskSignal[] = [...(params.extra ?? [])];
     const domain = params.email.split("@")[1]?.toLowerCase() ?? "";
     if (DISPOSABLE_DOMAINS.has(domain)) {
       signals.push({ code: "disposable_email", detail: `Disposable email provider (${domain})` });

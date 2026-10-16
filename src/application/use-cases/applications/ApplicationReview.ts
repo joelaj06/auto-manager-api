@@ -16,6 +16,7 @@ import type { IClock } from "../../ports/IClock.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IJobQueue } from "../../ports/IJobQueue.js";
 import type { ITenantProvisioning } from "../../ports/ITenantProvisioning.js";
+import type { IPartnerAttributions } from "../../ports/IPartnerQueries.js";
 import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
@@ -68,6 +69,7 @@ export class ApplicationReview {
       audit: IPlatformAuditTrail;
       requestContext: IRequestContext;
       provisioning: ITenantProvisioning;
+      attributions: IPartnerAttributions;
       queue: IJobQueue;
       ids: IIdGenerator;
       clock: IClock;
@@ -193,6 +195,21 @@ export class ApplicationReview {
           timezone: deps.settings.defaultTimezone,
           applicationId: app.id,
         });
+        // The tenant belongs to the referring partner from now on (docs/29 §3).
+        const { partnerId, source } = app.snapshot();
+        if (partnerId !== null) {
+          await deps.attributions.attribute({
+            tenantId,
+            partnerId,
+            source:
+              source === "assisted" && app.details.referralCode === null
+                ? "assisted"
+                : "referral_code",
+            applicationId: app.id,
+            actorId: actor.userId,
+            reason: null,
+          });
+        }
       },
     );
     await deps.queue

@@ -147,7 +147,7 @@ export function platformRoutes(deps: PlatformRouteDependencies): ApiRoute[] {
       path: `${BASE}/auth/logout`,
       summary: "End the current session",
       tags: TAGS.auth,
-      access: access.staff(),
+      access: access.consoleUser(),
       responses: { 204: { description: "Signed out" } },
       handler: async (_input, _req, res) => {
         await sessions.logout(staffOf(res));
@@ -159,7 +159,7 @@ export function platformRoutes(deps: PlatformRouteDependencies): ApiRoute[] {
       path: `${BASE}/auth/step-up`,
       summary: "Re-authenticate (password + code) before sensitive actions",
       tags: TAGS.auth,
-      access: access.staff(),
+      access: access.consoleUser(),
       request: { body: z.object({ password: z.string().min(1).max(200), code }) },
       responses: { 204: { description: "Sensitive actions allowed for the next minutes" } },
       handler: async ({ body }, _req, res) => {
@@ -172,7 +172,7 @@ export function platformRoutes(deps: PlatformRouteDependencies): ApiRoute[] {
       path: `${BASE}/me`,
       summary: "The signed-in staff member, roles and permissions",
       tags: TAGS.auth,
-      access: access.staff(),
+      access: access.consoleUser(),
       responses: { 200: { description: "Current staff member" } },
       handler: (_input, _req, res) => {
         const staff = staffOf(res);
@@ -181,6 +181,7 @@ export function platformRoutes(deps: PlatformRouteDependencies): ApiRoute[] {
             id: staff.userId,
             email: staff.email,
             name: staff.name,
+            partnerId: staff.partnerId,
             systemRoles: [...staff.systemRoles].sort(),
             permissions: staff.permissionKeys,
             stepUpAt: staff.stepUpAt?.toISOString() ?? null,

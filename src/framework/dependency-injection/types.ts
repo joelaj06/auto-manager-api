@@ -144,4 +144,11 @@ export const TYPES = Object.freeze({
   DataOperationsConsole: Symbol.for("DataOperationsConsole"),
   SystemHealthSummary: Symbol.for("SystemHealthSummary"),
   AuditLogExport: Symbol.for("AuditLogExport"),
+
+  // Reseller programme (P1-7)
+  PartnerRepository: Symbol.for("IPartnerRepository"),
+  PartnerQueries: Symbol.for("IPartnerQueries"),
+  PartnerAttributions: Symbol.for("IPartnerAttributions"),
+  PartnerAdministration: Symbol.for("PartnerAdministration"),
+  PartnerPortal: Symbol.for("PartnerPortal"),
 });

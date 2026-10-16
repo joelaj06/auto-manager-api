@@ -38,7 +38,10 @@ export type TenantApplicationProps = Readonly<{
   status: ApplicationStatus;
   source: "self" | "assisted";
   details: ApplicationDetails;
+  /** Console user who created an assisted application (staff or a reseller's user). */
   createdByStaffId: string | null;
+  /** The reseller this application is attributed to (referral code or partner-assisted). */
+  partnerId: string | null;
   accessTokenHash: string;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
@@ -91,6 +94,7 @@ export class TenantApplication {
     details: ApplicationDetails;
     source: "self" | "assisted";
     createdByStaffId: string | null;
+    partnerId?: string | null;
     accessTokenHash: string;
     risk: Readonly<{ level: RiskLevel; signals: readonly RiskSignal[] }>;
     ip: string | null;
@@ -103,6 +107,7 @@ export class TenantApplication {
       source: params.source,
       details: params.details,
       createdByStaffId: params.createdByStaffId,
+      partnerId: params.partnerId ?? null,
       accessTokenHash: params.accessTokenHash,
       emailVerifiedAt: null,
       phoneVerifiedAt: null,

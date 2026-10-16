@@ -91,6 +91,9 @@ export class AccessGuard {
         const accessToken = bearerTokenOf(req);
         if (accessToken === null) throw new AuthenticationRequiredError();
         const staff = await this.deps.staffSessions.authenticate(accessToken);
+        // Reseller users only reach partner routes and their own session routes.
+        if (staff.partnerId !== null && access.partnerUsers !== true)
+          throw new PermissionDeniedError(access.permission ?? "platform.staff");
         if (access.permission !== null) {
           if (!staff.has(access.permission)) throw new PermissionDeniedError(access.permission);
           const sensitive = PLATFORM_PERMISSION_CATALOG[access.permission].sensitive === true;
@@ -100,6 +103,17 @@ export class AccessGuard {
           }
         }
         locals.staff = staff;
+        return handler();
+      }
+
+      case "partner": {
+        const accessToken = bearerTokenOf(req);
+        if (accessToken === null) throw new AuthenticationRequiredError();
+        const user = await this.deps.staffSessions.authenticate(accessToken);
+        if (user.partnerId === null) throw new PermissionDeniedError("platform.partner");
+        if (access.permission !== null && !user.has(access.permission))
+          throw new PermissionDeniedError(access.permission);
+        locals.staff = user;
         return handler();
       }
     }

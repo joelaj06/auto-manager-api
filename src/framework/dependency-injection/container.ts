@@ -1,3 +1,16 @@
+import { partnerRoutes } from "../../adapters/routes/partnerRoutes.js";
+import type {
+  IPartnerAttributions,
+  IPartnerQueries,
+} from "../../application/ports/IPartnerQueries.js";
+import { PartnerAdministration } from "../../application/use-cases/partners/PartnerAdministration.js";
+import { PartnerPortal } from "../../application/use-cases/partners/PartnerPortal.js";
+import type { IPartnerRepository } from "../../domain/repositories/IPartnerRepository.js";
+import { PostgresPartnerRepository } from "../../infrastructure/partners/PostgresPartnerRepository.js";
+import {
+  PostgresPartnerAttributions,
+  PostgresPartnerQueries,
+} from "../../infrastructure/partners/PostgresPartnerQueries.js";
 import { consoleRoutes } from "../../adapters/routes/consoleRoutes.js";
 import type { IConsoleTenantQueries } from "../../application/ports/IConsoleTenantQueries.js";
 import type { IDataOperationsQueries } from "../../application/ports/IDataOperationsQueries.js";
@@ -860,11 +873,13 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      partners: IPartnerRepository,
     ) =>
       new StaffSessions({
         unitOfWork,
         accounts,
         roles,
+        partners,
         sessions,
         accessTokens,
         refreshTokens,
@@ -889,6 +904,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.PartnerRepository,
     ],
   );
 
@@ -1061,6 +1077,7 @@ export function createContainer(
       notifications: NotificationService,
       sms: ISmsSender,
       audit: IPlatformAuditTrail,
+      partners: IPartnerRepository,
     ) => {
       // Signup codes live in the platform database (there is no tenant yet).
       const challenges = new PostgresOtpChallengeRepository(
@@ -1070,6 +1087,7 @@ export function createContainer(
       return new ApplicationSignup({
         unitOfWork,
         applications,
+        partners,
         events,
         lookups,
         risk: new ApplicationRiskAssessor(lookups),
@@ -1102,6 +1120,7 @@ export function createContainer(
       TYPES.NotificationService,
       TYPES.SmsSender,
       TYPES.PlatformAuditTrail,
+      TYPES.PartnerRepository,
     ],
   );
 
@@ -1119,8 +1138,10 @@ export function createContainer(
       provisioning: ITenantProvisioning,
       queue: IJobQueue,
       ids: IIdGenerator,
+      attributions: IPartnerAttributions,
     ) =>
       new ApplicationReview({
+        attributions,
         unitOfWork,
         applications,
         events,
@@ -1153,6 +1174,101 @@ export function createContainer(
       TYPES.TenantProvisioning,
       TYPES.JobQueue,
       TYPES.IdGenerator,
+      TYPES.PartnerAttributions,
+    ],
+  );
+
+  // --- Reseller programme (partners, partner portal) ---
+  platformRepository<IPartnerRepository>(
+    TYPES.PartnerRepository,
+    (p) => new PostgresPartnerRepository(p),
+  );
+  platformRepository<IPartnerQueries>(TYPES.PartnerQueries, (p) => new PostgresPartnerQueries(p));
+  platformRepository<IPartnerAttributions>(
+    TYPES.PartnerAttributions,
+    (p) => new PostgresPartnerAttributions(p),
+  );
+  container.bind<PartnerAdministration>(TYPES.PartnerAdministration).toResolvedValue(
+    (
+      partners: IPartnerRepository,
+      queries: IPartnerQueries,
+      attributions: IPartnerAttributions,
+      accounts: IStaffAccountRepository,
+      sessions: IPlatformSessions,
+      staff: StaffAdministration,
+      directory: ITenantDirectory,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new PartnerAdministration({
+        partners,
+        queries,
+        attributions,
+        accounts,
+        sessions,
+        staff,
+        directory,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.PartnerRepository,
+      TYPES.PartnerQueries,
+      TYPES.PartnerAttributions,
+      TYPES.StaffAccountRepository,
+      TYPES.PlatformSessions,
+      TYPES.StaffAdministration,
+      TYPES.TenantDirectory,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<PartnerPortal>(TYPES.PartnerPortal).toResolvedValue(
+    (
+      queries: IPartnerQueries,
+      partners: IPartnerRepository,
+      accounts: IStaffAccountRepository,
+      sessions: IPlatformSessions,
+      signup: ApplicationSignup,
+      staff: StaffAdministration,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new PartnerPortal({
+        queries,
+        partners,
+        accounts,
+        sessions,
+        signup,
+        staff,
+        unitOfWork,
+        audit,
+        requestContext,
+        clock,
+        settings: { signupUrl: config.public.webAppUrl },
+      }),
+    [
+      TYPES.PartnerQueries,
+      TYPES.PartnerRepository,
+      TYPES.StaffAccountRepository,
+      TYPES.PlatformSessions,
+      TYPES.ApplicationSignup,
+      TYPES.StaffAdministration,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
     ],
   );
 
@@ -1875,6 +1991,8 @@ export function createContainer(
       dataOperations: DataOperationsConsole,
       systemHealth: SystemHealthSummary,
       auditExport: AuditLogExport,
+      partnerAdministration: PartnerAdministration,
+      partnerPortal: PartnerPortal,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -1891,6 +2009,7 @@ export function createContainer(
           health: systemHealth,
           auditExport,
         }),
+        ...partnerRoutes({ administration: partnerAdministration, portal: partnerPortal }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -1934,6 +2053,8 @@ export function createContainer(
       TYPES.DataOperationsConsole,
       TYPES.SystemHealthSummary,
       TYPES.AuditLogExport,
+      TYPES.PartnerAdministration,
+      TYPES.PartnerPortal,
     ],
   );
 
