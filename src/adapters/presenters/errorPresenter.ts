@@ -125,6 +125,21 @@ const RULES: Readonly<Record<string, Rule>> = {
   BRANCH_DEACTIVATED: { status: 403 },
   BRANCH_NOT_FOUND: { status: 404 },
   BRANCH_DEACTIVATION_BLOCKED: { status: 422 },
+
+  // Tenant identity and organisation
+  USER_NOT_FOUND: { status: 404 },
+  USER_EXISTS: { status: 409 },
+  OWNER_PROTECTED: { status: 422 },
+  OWNER_ROLE_PROTECTED: { status: 422 },
+  USER_DISABLED: { status: 422 },
+  ROLE_IN_USE: { status: 409 },
+  ROLE_NAME_TAKEN: { status: 409 },
+  BRANCH_OUT_OF_SCOPE: { status: 403 },
+  INVALID_SCOPE: { status: 400 },
+  UNKNOWN_BRANCH: { status: 400 },
+  BRANCH_CODE_TAKEN: { status: 409 },
+  INVALID_TIMEZONE: { status: 400 },
+  CONTACT_REQUIRED: { status: 422 },
 };
 
 /** RFC 6750 challenge for bearer-token failures. */

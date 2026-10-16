@@ -10,4 +10,9 @@ export interface IUserDirectory {
     phone: string | null;
     status: "active" | "disabled";
   }): Promise<void>;
+  /** Usable tenants where this email or phone has an active account. */
+  tenantsFor(
+    kind: "email" | "phone",
+    identifier: string,
+  ): Promise<Readonly<{ tenantId: string; slug: string; name: string }>[]>;
 }

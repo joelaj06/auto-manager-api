@@ -117,4 +117,17 @@ export const TYPES = Object.freeze({
   TenantLifecycleService: Symbol.for("TenantLifecycleService"),
   BranchLifecycle: Symbol.for("BranchLifecycle"),
   TenantPublicConfig: Symbol.for("TenantPublicConfig"),
+
+  // Tenant identity and organisation
+  TenantUserRepository: Symbol.for("ITenantUserRepository"),
+  UserMemberships: Symbol.for("IUserMemberships"),
+  TenantRoles: Symbol.for("ITenantRoles"),
+  OrganisationSettings: Symbol.for("IOrganisationSettings"),
+  TenantSessions: Symbol.for("ITenantSessions"),
+  EscalationGuard: Symbol.for("EscalationGuard"),
+  TenantSignIn: Symbol.for("TenantSignIn"),
+  SessionManagement: Symbol.for("SessionManagement"),
+  UserAdministration: Symbol.for("UserAdministration"),
+  RoleAdministration: Symbol.for("RoleAdministration"),
+  OrganisationAdministration: Symbol.for("OrganisationAdministration"),
 });

@@ -29,7 +29,7 @@ export class AuthorizationPolicy {
 
     if (grant.scope === "branch") {
       const branchId = resource.branchId ?? null;
-      return branchId !== null && principal.branchIds.includes(branchId)
+      return branchId !== null && this.grantBranches(principal, grant.branchIds).includes(branchId)
         ? { allowed: true, scope: "branch" }
         : { allowed: false };
     }
@@ -47,6 +47,27 @@ export class AuthorizationPolicy {
     const decision = this.decide(principal, permission, resource);
     if (!decision.allowed) throw new PermissionDeniedError(permission);
     return decision.scope;
+  }
+
+  /**
+   * For list filtering: "all" when the permission covers every branch, otherwise the branches it
+   * covers (empty when not granted or own-only).
+   */
+  branchesFor(principal: Principal, permission: PermissionKey): "all" | readonly string[] {
+    const grant = principal.grantFor(permission);
+    if (grant === undefined || grant.scope === "own") return [];
+    if (grant.scope === "all") return "all";
+    return this.grantBranches(principal, grant.branchIds);
+  }
+
+  private grantBranches(
+    principal: Principal,
+    limited: readonly string[] | undefined,
+  ): readonly string[] {
+    // A branch-limited grant only covers branches the user still belongs to (and that are active).
+    return limited === undefined
+      ? principal.branchIds
+      : limited.filter((b) => principal.branchIds.includes(b));
   }
 
   /** A numeric limit attached to the grant (e.g. maximum discount percent), if any. */

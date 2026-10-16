@@ -54,6 +54,23 @@ import { CachingPermissionResolver } from "../../infrastructure/authorization/Ca
 import { PostgresTenantPermissionResolver } from "../../infrastructure/authorization/PostgresTenantPermissionResolver.js";
 import { provisioningRoutes } from "../../adapters/routes/provisioningRoutes.js";
 import { lifecycleRoutes } from "../../adapters/routes/lifecycleRoutes.js";
+import { identityRoutes } from "../../adapters/routes/identityRoutes.js";
+import { EscalationGuard } from "../../application/authorization/EscalationGuard.js";
+import type { IOrganisationSettings } from "../../application/ports/IOrganisationSettings.js";
+import type { ITenantRoles } from "../../application/ports/ITenantRoles.js";
+import type { ITenantSessions } from "../../application/ports/ITenantSessions.js";
+import type { IUserMemberships } from "../../application/ports/IUserMemberships.js";
+import { OrganisationAdministration } from "../../application/use-cases/identity/OrganisationAdministration.js";
+import { RoleAdministration } from "../../application/use-cases/identity/RoleAdministration.js";
+import { SessionManagement } from "../../application/use-cases/identity/SessionManagement.js";
+import { TenantSignIn } from "../../application/use-cases/identity/TenantSignIn.js";
+import { UserAdministration } from "../../application/use-cases/identity/UserAdministration.js";
+import type { ITenantUserRepository } from "../../domain/repositories/ITenantUserRepository.js";
+import { PostgresOrganisationSettings } from "../../infrastructure/identity/PostgresOrganisationSettings.js";
+import { PostgresTenantRoles } from "../../infrastructure/identity/PostgresTenantRoles.js";
+import { PostgresTenantSessions } from "../../infrastructure/identity/PostgresTenantSessions.js";
+import { PostgresTenantUserRepository } from "../../infrastructure/identity/PostgresTenantUserRepository.js";
+import { PostgresUserMemberships } from "../../infrastructure/identity/PostgresUserMemberships.js";
 import type { IBranchDeactivationCheck, IBranches } from "../../application/ports/IBranches.js";
 import type {
   IOrganisationReader,
@@ -198,6 +215,9 @@ const DEFAULT_REAPPLY_AFTER_DAYS = 30;
 const DEFAULT_TENANT_TIMEZONE = "Africa/Accra";
 const DEFAULT_BRANCH = Object.freeze({ code: "HQ", name: "Head office" });
 const OWNER_INVITATION_TTL_MS = 7 * 86_400_000;
+const USER_INVITATION_TTL_MS = 72 * 3_600_000;
+/** Failed tenant sign-ins before a 15-minute lock. */
+const TENANT_LOCKOUT = Object.freeze({ maxFailedAttempts: 5, lockMs: 15 * 60_000 });
 
 const OPENAPI_INFO = Object.freeze({
   title: "Autoforce Manager API",
@@ -1241,8 +1261,12 @@ export function createContainer(
       requestContext: IRequestContext,
       startSession: StartAuthSession,
       clock: IClock,
+      tenantContext: ITenantContext,
+      directory: IUserDirectory,
     ) =>
       new AcceptUserInvitation({
+        tenantContext,
+        directory,
         unitOfWork,
         invitations,
         users,
@@ -1261,6 +1285,8 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.StartAuthSession,
       TYPES.Clock,
+      TYPES.TenantContext,
+      TYPES.UserDirectory,
     ],
   );
 
@@ -1384,6 +1410,259 @@ export function createContainer(
       ],
     );
 
+  // --- Tenant identity and organisation ---
+  tenantRepository<ITenantUserRepository>(
+    TYPES.TenantUserRepository,
+    (tx) => new PostgresTenantUserRepository(tx),
+  );
+  tenantRepository<IUserMemberships>(
+    TYPES.UserMemberships,
+    (tx) => new PostgresUserMemberships(tx),
+  );
+  tenantRepository<ITenantRoles>(TYPES.TenantRoles, (tx) => new PostgresTenantRoles(tx));
+  tenantRepository<IOrganisationSettings>(
+    TYPES.OrganisationSettings,
+    (tx) => new PostgresOrganisationSettings(tx),
+  );
+  tenantRepository<ITenantSessions>(TYPES.TenantSessions, (tx) => new PostgresTenantSessions(tx));
+  container
+    .bind<EscalationGuard>(TYPES.EscalationGuard)
+    .toResolvedValue(
+      (policy: AuthorizationPolicy) => new EscalationGuard(policy),
+      [TYPES.AuthorizationPolicy],
+    );
+
+  container.bind<TenantSignIn>(TYPES.TenantSignIn).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      tenantContext: ITenantContext,
+      users: ITenantUserRepository,
+      sessions: ITenantSessions,
+      startSession: StartAuthSession,
+      passwords: IPasswordHasher,
+      otp: IOtpService,
+      challenges: IOtpChallengeRepository,
+      ids: IIdGenerator,
+      organisation: IOrganisationSettings,
+      directory: IUserDirectory,
+      permissionCache: IPermissionCache,
+      notifications: NotificationService,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new TenantSignIn({
+        unitOfWork,
+        tenantContext,
+        users,
+        sessions,
+        startSession,
+        passwords,
+        issueOtp: new IssueOtpChallenge({
+          unitOfWork,
+          challenges,
+          otp,
+          ids,
+          clock,
+          settings: { ttlMs: auth.otpTtlMinutes * 60_000, maxAttempts: auth.otpMaxAttempts },
+        }),
+        verifyOtp: new VerifyOtpChallenge({ unitOfWork, challenges, otp, clock }),
+        organisation,
+        directory,
+        permissionCache,
+        notifications,
+        auditTrail,
+        requestContext,
+        clock,
+        logger,
+        lockout: TENANT_LOCKOUT,
+        otpTtlMinutes: auth.otpTtlMinutes,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TenantContext,
+      TYPES.TenantUserRepository,
+      TYPES.TenantSessions,
+      TYPES.StartAuthSession,
+      TYPES.PasswordHasher,
+      TYPES.OtpService,
+      TYPES.OtpChallengeRepository,
+      TYPES.IdGenerator,
+      TYPES.OrganisationSettings,
+      TYPES.UserDirectory,
+      TYPES.PermissionCache,
+      TYPES.NotificationService,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+
+  container.bind<SessionManagement>(TYPES.SessionManagement).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      sessions: ITenantSessions,
+      sessionRepository: IAuthSessionRepository,
+      users: ITenantUserRepository,
+      memberships: IUserMemberships,
+      policy: AuthorizationPolicy,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new SessionManagement({
+        unitOfWork,
+        sessions,
+        sessionRepository,
+        users,
+        memberships,
+        policy,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TenantSessions,
+      TYPES.AuthSessionRepository,
+      TYPES.TenantUserRepository,
+      TYPES.UserMemberships,
+      TYPES.AuthorizationPolicy,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+
+  container.bind<UserAdministration>(TYPES.UserAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      tenantContext: ITenantContext,
+      users: ITenantUserRepository,
+      memberships: IUserMemberships,
+      roles: ITenantRoles,
+      branches: IBranches,
+      invitations: IUserInvitations,
+      sessions: ITenantSessions,
+      organisation: IOrganisationSettings,
+      directory: IUserDirectory,
+      policy: AuthorizationPolicy,
+      escalation: EscalationGuard,
+      permissionCache: IPermissionCache,
+      notifications: NotificationService,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new UserAdministration({
+        unitOfWork,
+        tenantContext,
+        users,
+        memberships,
+        roles,
+        branches,
+        invitations,
+        sessions,
+        organisation,
+        directory,
+        policy,
+        escalation,
+        permissionCache,
+        notifications,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        settings: { webAppUrl: config.public.webAppUrl, invitationTtlMs: USER_INVITATION_TTL_MS },
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TenantContext,
+      TYPES.TenantUserRepository,
+      TYPES.UserMemberships,
+      TYPES.TenantRoles,
+      TYPES.Branches,
+      TYPES.UserInvitations,
+      TYPES.TenantSessions,
+      TYPES.OrganisationSettings,
+      TYPES.UserDirectory,
+      TYPES.AuthorizationPolicy,
+      TYPES.EscalationGuard,
+      TYPES.PermissionCache,
+      TYPES.NotificationService,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+
+  container.bind<RoleAdministration>(TYPES.RoleAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      roles: ITenantRoles,
+      users: ITenantUserRepository,
+      memberships: IUserMemberships,
+      escalation: EscalationGuard,
+      permissionCache: IPermissionCache,
+      tenantContext: ITenantContext,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+    ) =>
+      new RoleAdministration({
+        unitOfWork,
+        roles,
+        users,
+        memberships,
+        escalation,
+        permissionCache,
+        tenantContext,
+        auditTrail,
+        requestContext,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TenantRoles,
+      TYPES.TenantUserRepository,
+      TYPES.UserMemberships,
+      TYPES.EscalationGuard,
+      TYPES.PermissionCache,
+      TYPES.TenantContext,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+    ],
+  );
+
+  container.bind<OrganisationAdministration>(TYPES.OrganisationAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      organisation: IOrganisationSettings,
+      branches: IBranches,
+      policy: AuthorizationPolicy,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+    ) =>
+      new OrganisationAdministration({
+        unitOfWork,
+        organisation,
+        branches,
+        policy,
+        auditTrail,
+        requestContext,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.OrganisationSettings,
+      TYPES.Branches,
+      TYPES.AuthorizationPolicy,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+    ],
+  );
+
   // --- HTTP ---
   container.bind<AccessGuard>(TYPES.AccessGuard).toResolvedValue(
     (
@@ -1449,6 +1728,13 @@ export function createContainer(
       publicConfig: TenantPublicConfig,
       tenantContext: ITenantContext,
       directory: ITenantDirectory,
+      tenantSignIn: TenantSignIn,
+      refresh: RefreshAuthSession,
+      revoke: RevokeAuthSession,
+      sessionManagement: SessionManagement,
+      users: UserAdministration,
+      roles: RoleAdministration,
+      organisation: OrganisationAdministration,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -1457,6 +1743,15 @@ export function createContainer(
         ...applicationRoutes({ signup, review }),
         ...provisioningRoutes({ console: provisioningConsole, acceptInvitation }),
         ...lifecycleRoutes({ lifecycle, branches, publicConfig, tenantContext, directory }),
+        ...identityRoutes({
+          signIn: tenantSignIn,
+          refresh,
+          revoke,
+          sessions: sessionManagement,
+          users,
+          roles,
+          organisation,
+        }),
       ];
       return config.http.exposeOpenApi
         ? [...routes, ...openApiRoutes(routes, OPENAPI_INFO)]
@@ -1478,6 +1773,13 @@ export function createContainer(
       TYPES.TenantPublicConfig,
       TYPES.TenantContext,
       TYPES.TenantDirectory,
+      TYPES.TenantSignIn,
+      TYPES.RefreshAuthSession,
+      TYPES.RevokeAuthSession,
+      TYPES.SessionManagement,
+      TYPES.UserAdministration,
+      TYPES.RoleAdministration,
+      TYPES.OrganisationAdministration,
     ],
   );
 

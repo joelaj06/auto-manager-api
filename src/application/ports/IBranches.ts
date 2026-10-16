@@ -19,6 +19,19 @@ export interface IBranches {
     now: Date,
   ): Promise<void>;
   activeCount(): Promise<number>;
+  create(input: {
+    code: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+  }): Promise<string>;
+  update(
+    id: string,
+    changes: { name?: string; address?: string | null; phone?: string | null },
+  ): Promise<void>;
+  makeDefault(id: string): Promise<void>;
+  codeTaken(code: string): Promise<boolean>;
+  existing(ids: readonly string[]): Promise<string[]>;
   /**
    * Members of the branch and holders of roles assigned to it get a new permission version, so
    * their next request re-evaluates what they may do.

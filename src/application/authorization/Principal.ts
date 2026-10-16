@@ -4,6 +4,11 @@ export type PermissionGrant = Readonly<{
   scope: PermissionScope;
   /** Numeric limits from the role, e.g. { "max_percent": 10 } for a discount permission. */
   limits?: Readonly<Record<string, number>>;
+  /**
+   * For `branch` grants that come only from branch-specific role assignments: the branches they
+   * cover. Absent: all of the user's (active) branches.
+   */
+  branchIds?: readonly string[];
 }>;
 
 /** A user's effective permissions (union over their role assignments) and branches. */

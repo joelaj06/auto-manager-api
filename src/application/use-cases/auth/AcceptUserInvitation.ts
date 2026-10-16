@@ -8,6 +8,8 @@ import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { ITenantUserAccounts } from "../../ports/ITenantUserAccounts.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { IUserInvitations } from "../../ports/IUserInvitations.js";
+import type { ITenantContext } from "../../ports/ITenantContext.js";
+import type { IUserDirectory } from "../../ports/IUserDirectory.js";
 import { assertAcceptablePassword } from "../../services/PasswordPolicy.js";
 import type { StartAuthSession } from "./StartAuthSession.js";
 
@@ -26,6 +28,8 @@ export class AcceptUserInvitation {
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
       startSession: StartAuthSession;
+      tenantContext: ITenantContext;
+      directory: IUserDirectory;
       clock: IClock;
     }>,
   ) {}
@@ -60,6 +64,14 @@ export class AcceptUserInvitation {
         userAgent,
       });
       return account;
+    });
+    // The person can now find this business from the mobile app (multi-business sign-in).
+    await deps.directory.upsert({
+      tenantId: deps.tenantContext.currentTenantId().value,
+      tenantUserId: user.id,
+      email: user.email,
+      phone: user.phone,
+      status: "active",
     });
     return deps.startSession.execute({
       userId: user.id,

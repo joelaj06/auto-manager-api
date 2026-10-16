@@ -165,6 +165,15 @@ Console (step-up required): `POST /api/platform/v1/tenants/:id/deactivate`
 `GET /api/v1/public/tenant-config?slug=` to show the business name, currency and any blocking
 notice.
 
+## Tenant sign-in, users and roles
+
+All with `X-Tenant: <slug>` (except discover). Sign-in: `POST /api/v1/auth/login`
+(`{ identifier, password }`), `/auth/refresh`, `/auth/logout`, `/auth/password-reset[/confirm]`,
+`POST /api/v1/auth/discover` (mobile: which businesses these credentials open). Me:
+`/me/permissions`, `/me/password`, `/me/sessions`. Users: `/users` (list, view, invite, update,
+disable/enable, `PUT /users/:id/roles` with per-branch assignments). Roles: `/roles`,
+`/permissions`. Organisation: `/organisation`, `/settings/numbering`, `/branches`.
+
 ## Backups
 
 Logical, encrypted backups of every tenant database and the platform database, with an

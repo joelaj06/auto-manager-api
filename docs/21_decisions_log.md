@@ -214,6 +214,16 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 106 | Read-only enforcement | **Every non-GET request on a tenant route is refused while read-only** unless the route explicitly allows it (`allowWhenReadOnly`, e.g. sign-out); sign-in routes are unaffected | One rule in the guard instead of per-endpoint checks |
 | 107 | Branch deactivation effects | **Assignments to a deactivated branch grant nothing; members get a new permission version; a user whose branches are all deactivated gets `403 BRANCH_DEACTIVATED`**; deactivation is refused for the default and the last active branch, and modules add their own precondition checks | docs/27 §3.5: nobody reaches a deactivated branch, nothing live is left inside it, the tenant keeps working |
 
+## Engineering decisions during P1-5 (2026-10-16)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 108 | Branch-specific role assignments | **A role assigned for one branch works only in that branch** (an `all` grant becomes `branch` limited to it); across assignments the widest scope wins and branch sets combine; numeric limits take the most generous value | docs/28 "branch-aware assignments" with one deterministic rule set, unit-tested in isolation |
+| 109 | Escalation prevention | **Nobody can define or assign a grant they do not hold with at least the same scope (and in that branch)**; branch-scoped managers only assign per-branch roles in their branches; nobody changes their own roles or branches; the Owner role is never assignable and the owner never disabled | docs/28 §13 escalation tests; fixes the v1 class of bugs behind audit C3 |
+| 110 | Multi-business discovery | **`/auth/discover` needs the password and returns only businesses where it is correct** | Lets the mobile app offer "choose your business" without telling anyone which businesses an email or phone belongs to |
+| 111 | Password changes | **Reset and change sign the user out everywhere** (sessions revoked, permission version bumped); the client signs in again | Simple and safe: a stolen session never survives a password change |
+| 112 | Password reset channel | **Email only for now**; phone-only users are reset by their administrator until tenant SMS (their own provider) exists | Decision 17: tenant SMS goes through the tenant's provider, not yet built |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

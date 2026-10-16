@@ -73,6 +73,69 @@ export class PostgresBranches implements IBranches {
     return Number(rows[0]?.n ?? 0);
   }
 
+  async create(input: {
+    code: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+  }): Promise<string> {
+    const { rows } = await this.transactions
+      .current()
+      .query<{ id: string }>(
+        "insert into branches (code, name, address, phone) values ($1, $2, $3, $4) returning id",
+        [input.code, input.name, input.address, input.phone],
+      );
+    return rows[0]!.id;
+  }
+
+  async update(
+    id: string,
+    changes: { name?: string; address?: string | null; phone?: string | null },
+  ): Promise<void> {
+    await this.transactions.current().query(
+      `update branches set name = coalesce($2, name),
+              address = case when $3 then $4 else address end,
+              phone = case when $5 then $6 else phone end,
+              updated_at = now()
+        where id = $1`,
+      [
+        id,
+        changes.name ?? null,
+        changes.address !== undefined,
+        changes.address ?? null,
+        changes.phone !== undefined,
+        changes.phone ?? null,
+      ],
+    );
+  }
+
+  async makeDefault(id: string): Promise<void> {
+    const tx = this.transactions.current();
+    await tx.query(
+      "update branches set is_default = false, updated_at = now() where is_default and id <> $1",
+      [id],
+    );
+    await tx.query("update branches set is_default = true, updated_at = now() where id = $1", [id]);
+  }
+
+  async codeTaken(code: string): Promise<boolean> {
+    const { rows } = await this.transactions
+      .current()
+      .query<{ taken: boolean }>(
+        "select exists (select 1 from branches where code = $1) as taken",
+        [code],
+      );
+    return rows[0]?.taken === true;
+  }
+
+  async existing(ids: readonly string[]): Promise<string[]> {
+    if (ids.some((id) => !UUID.test(id))) return [];
+    const { rows } = await this.transactions
+      .current()
+      .query<{ id: string }>("select id from branches where id = any($1::uuid[])", [ids]);
+    return rows.map((r) => r.id);
+  }
+
   async invalidateMembers(branchId: string): Promise<number> {
     const { rowCount } = await this.transactions.current().query(
       `update users set permission_version = permission_version + 1, updated_at = now()

@@ -24,6 +24,18 @@ export class HmacUserDirectory implements IUserDirectory {
     return createHmac("sha256", this.key).update(`${kind}:${normalised}`).digest("hex");
   }
 
+  async tenantsFor(kind: "email" | "phone", identifier: string) {
+    const { rows } = await this.db.query<{ tenant_id: string; slug: string; name: string }>(
+      `select d.tenant_id, t.slug::text as slug, t.name
+         from user_directory d join tenants t on t.id = d.tenant_id
+        where d.identifier_hash = $1 and d.status = 'active'
+          and t.status in ('trialing', 'active', 'past_due', 'read_only')
+        order by t.name`,
+      [this.hash(kind, identifier)],
+    );
+    return rows.map((r) => ({ tenantId: r.tenant_id, slug: r.slug, name: r.name }));
+  }
+
   async upsert(entry: {
     tenantId: string;
     tenantUserId: string;

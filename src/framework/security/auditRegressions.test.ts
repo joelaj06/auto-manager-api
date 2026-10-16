@@ -69,11 +69,10 @@ describe("C2 — platform and tenant credentials are separate", () => {
   });
 });
 
-describe("C3 — self-registration never grants elevated roles", () => {
-  it.todo(
-    "public sign-up creates the owner only through tenant provisioning and never looks up roles by name (P1-5, identity module)",
-  );
-});
+// C3 — self-registration never grants elevated roles: covered with a real database in
+// src/framework/identity/identity.int.test.ts ("C3 — sign-up never grants elevated roles"). Public
+// sign-up only creates an application; the owner exists only through provisioning, and the Owner
+// role cannot be assigned through invitations or role changes.
 
 describe("C4 — permission changes and disabling take effect immediately", () => {
   it("rejects a token issued before the user's roles changed", async () => {

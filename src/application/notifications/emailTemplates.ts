@@ -58,6 +58,13 @@ export type EmailTemplateData = {
     message: string | null;
   }>;
   "tenant.restored": Readonly<{ ownerName: string; businessName: string; message: string | null }>;
+  "tenant.user_invitation": Readonly<{
+    name: string;
+    businessName: string;
+    invitedBy: string | null;
+    acceptUrl: string;
+    expiresInHours: number;
+  }>;
   "tenant.welcome_owner": Readonly<{
     ownerName: string;
     businessName: string;
@@ -199,6 +206,13 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
     simple(`${data.businessName} is active again`, [
       greeting(data.ownerName),
       `Access to ${PRODUCT} for ${data.businessName} has been restored. Everyone can sign in again; all your data is as it was.`,
+    ]),
+  "tenant.user_invitation": (data) =>
+    simple(`You're invited to ${data.businessName} on ${PRODUCT}`, [
+      greeting(data.name),
+      `${data.invitedBy ?? "Your team"} invited you to join ${data.businessName} on ${PRODUCT}.`,
+      `Set your password and sign in: ${data.acceptUrl}`,
+      `The link works once and expires in ${data.expiresInHours} hours.`,
     ]),
   "tenant.welcome_owner": (data) =>
     simple(`Welcome to ${PRODUCT} — ${data.businessName} is ready`, [
