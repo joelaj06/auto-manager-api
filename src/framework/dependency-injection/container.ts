@@ -1,3 +1,12 @@
+import { mobileRoutes } from "../../adapters/routes/mobileRoutes.js";
+import type { IConnectLinkSigner } from "../../application/ports/IConnectLinkSigner.js";
+import { MobileConnect } from "../../application/use-cases/mobile/MobileConnect.js";
+import { HostAllowList } from "../../domain/mobile/ConnectLink.js";
+import {
+  DEVELOPMENT_KEY_SEED,
+  Ed25519ConnectLinkSigner,
+} from "../../infrastructure/mobile/Ed25519ConnectLinkSigner.js";
+import { QrcodeSvgRenderer } from "../../infrastructure/mobile/QrcodeSvgRenderer.js";
 import { fileRoutes } from "../../adapters/routes/fileRoutes.js";
 import type { IObjectStorage } from "../../application/ports/IObjectStorage.js";
 import {
@@ -1572,6 +1581,7 @@ export function createContainer(
       organisation: IOrganisationReader,
       clock: IClock,
       storage: IObjectStorage,
+      mobile: MobileConnect,
     ) =>
       new TenantPublicConfig({
         profiles,
@@ -1580,6 +1590,7 @@ export function createContainer(
         organisation,
         clock,
         storage,
+        app: mobile.appInfo(),
       }),
     [
       TYPES.TenantPublicProfiles,
@@ -1588,6 +1599,7 @@ export function createContainer(
       TYPES.OrganisationReader,
       TYPES.Clock,
       TYPES.ObjectStorage,
+      TYPES.MobileConnect,
     ],
   );
 
@@ -1737,6 +1749,7 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      mobile: MobileConnect,
     ) =>
       new UserAdministration({
         unitOfWork,
@@ -1757,7 +1770,12 @@ export function createContainer(
         requestContext,
         ids,
         clock,
-        settings: { webAppUrl: config.public.webAppUrl, invitationTtlMs: USER_INVITATION_TTL_MS },
+        settings: {
+          webAppUrl: config.public.webAppUrl,
+          invitationTtlMs: USER_INVITATION_TTL_MS,
+          appInvitationLink: (slug, token, expiresAt) =>
+            mobile.invitationLink(slug, token, expiresAt),
+        },
       }),
     [
       TYPES.UnitOfWork,
@@ -1778,6 +1796,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.MobileConnect,
     ],
   );
 
@@ -1848,6 +1867,34 @@ export function createContainer(
       TYPES.TenantFileService,
       TYPES.ObjectStorage,
     ],
+  );
+
+  // --- Mobile connect (signed links, QR codes, app-link metadata) ---
+  container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
+    const pem = config.mobile.connectPrivateKeyPem;
+    if (pem !== null) return Ed25519ConnectLinkSigner.fromPem(pem);
+    // Config refuses a missing key in production; locally a fixed development key is used.
+    return Ed25519ConnectLinkSigner.fromSeed(DEVELOPMENT_KEY_SEED);
+  });
+  container.bind<MobileConnect>(TYPES.MobileConnect).toResolvedValue(
+    (signer: IConnectLinkSigner, directory: ITenantDirectory, clock: IClock) =>
+      new MobileConnect({
+        signer,
+        qr: new QrcodeSvgRenderer(),
+        directory,
+        clock,
+        settings: {
+          apiBaseUrl: config.mobile.apiBaseUrl,
+          linkBaseUrl: config.mobile.linkBaseUrl,
+          scheme: config.mobile.scheme,
+          allowedHosts: new HostAllowList(config.mobile.allowedHosts),
+          android: config.mobile.android,
+          ios: config.mobile.ios,
+          minVersion: config.mobile.minVersion,
+          latestVersion: config.mobile.latestVersion,
+        },
+      }),
+    [TYPES.ConnectLinkSigner, TYPES.TenantDirectory, TYPES.Clock],
   );
 
   // --- Files (object storage, tenant and platform file records) ---
@@ -2148,6 +2195,7 @@ export function createContainer(
       tenantFiles: TenantFileUploads,
       applicationDocuments: ApplicationDocuments,
       partnerDocuments: PartnerDocuments,
+      mobile: MobileConnect,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -2166,6 +2214,7 @@ export function createContainer(
         }),
         ...partnerRoutes({ administration: partnerAdministration, portal: partnerPortal }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
+        ...mobileRoutes(mobile),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -2214,6 +2263,7 @@ export function createContainer(
       TYPES.TenantFileUploads,
       TYPES.ApplicationDocuments,
       TYPES.PartnerDocuments,
+      TYPES.MobileConnect,
     ],
   );
 

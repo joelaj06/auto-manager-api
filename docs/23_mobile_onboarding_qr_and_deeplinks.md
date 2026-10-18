@@ -102,3 +102,45 @@ Suggested v1: universal/app links + Android install referrer + "scan again after
 - Domain names: API domain, link domain, portal domain.
 - Store listing names / bundle IDs (needed for `assetlinks.json` and AASA files).
 - Whether the app must work with self-hosted/enterprise backends (affects the allow-list).
+
+## 11. Payload format as built (P1-9) — for the mobile team
+
+**Link** (put in the QR; also works as a normal link):
+
+```
+https://<MOBILE_LINK_BASE_URL>/connect?v=1&api=<url-encoded API base, ends with "/">&t=<slug>[&inv=<token>&exp=<unix seconds>]&k=<key id>&sig=<signature>
+autoforce://connect?<same parameters>          (custom scheme: in-app scanner, fallback)
+```
+
+**Signed message** — UTF-8, lines joined with `\n`, in this exact order, empty value when absent:
+
+```
+autoforce-connect
+v=1
+api=https://api.example.com/
+t=acme-fleet
+inv=
+exp=
+k=k-42a93ac1f826
+```
+
+**Signature**: Ed25519 over that message, base64url (no padding). **Key id**: `k-` + first 12 hex
+characters of SHA-256 of the raw 32-byte public key. The app embeds the trusted keys
+(`{ keyId, publicKey }`, raw key base64url) from `yarn mobile:keygen` or
+`GET /api/v1/public/mobile/connect-keys` at build time — never fetched at runtime.
+
+**The app must, in order**: parse (path `/connect`, `v` = 1, known parameters only) → find the
+key by `k` (unknown key: refuse) → verify `sig` → check the host of `api` against its built-in
+allow-list → if `exp` is present, refuse when past → `GET {api}api/v1/public/tenant-config?slug={t}`
+→ ask "Connect to <name>?" → store `{ api, t }` → with `inv`: open "Set your password"
+(`POST /api/v1/auth/invitations/accept` with `X-Tenant: t`), otherwise the sign-in screen.
+
+**Other pieces**: portal `GET /api/v1/mobile/connect-link` (permission `settings.mobile.connect`)
+returns `{ url, appUrl, qrSvg, … }`; invitation emails contain a signed app link (`inv`, `exp`
+= invitation expiry); `GET /connect` is the fallback page (open the app / get it — the Play Store
+link carries a connect link *without* any invitation token as install referrer); app-link files
+at `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association` (404 until the
+store identifiers are configured); console diagnostics
+`POST /api/platform/v1/mobile/connect-links/verify` (permission `platform.mobile.view`) runs the
+same checks and reports the reason a link is refused.
+

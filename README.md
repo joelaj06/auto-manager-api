@@ -201,6 +201,13 @@ KYC documents with `/api/v1/applications/:id/documents` (X-Application-Token); s
 `/api/platform/v1/applications/:id/documents`; partner documents live under
 `/api/platform/v1/partners/:id/documents`. Abandoned uploads are removed daily.
 
+## Mobile app connect
+
+`GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)
+for the web portal; scanning it opens the app (or `/connect`, which offers the store). Links are
+signed with an Ed25519 key (`yarn mobile:keygen`, then `MOBILE_CONNECT_KEY_FILE`); locally a fixed
+development key is used. Invitation emails include an app link. Payload format: docs/23 §11.
+
 ## Backups
 
 Logical, encrypted backups of every tenant database and the platform database, with an

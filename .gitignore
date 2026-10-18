@@ -134,3 +134,5 @@ dist
 # Local backups and backup keys (never commit)
 /backups/
 *.backup-key.pem
+# Mobile connect signing keys (never commit)
+*.key.pem

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { HostAllowList } from "../../domain/mobile/ConnectLink.js";
 import { z } from "zod";
 
 /**
@@ -36,6 +38,20 @@ const corsOrigins = z
   });
 
 const booleanFlag = z.enum(["true", "false"]).transform((value) => value === "true");
+
+/** Comma-separated list; each entry must match `pattern`. */
+const list = (pattern: RegExp, message: string) =>
+  z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    )
+    .refine((entries) => entries.every((entry) => pattern.test(entry)), { message });
+const semver = z.string().regex(/^\d+\.\d+\.\d+$/, "must be a version like 2.3.0");
 
 const envSchema = z
   .object({
@@ -157,6 +173,40 @@ const envSchema = z
     /** Base URL of public files: a CDN in front of the public bucket, or the bucket itself. */
     FILES_PUBLIC_BASE_URL: z.url().optional(),
 
+    // --- Mobile app connect (docs/23) ---
+    /** The backend URL the app calls (put into connect links). Default: this server locally. */
+    MOBILE_API_BASE_URL: z.url().optional(),
+    /** The link domain (app links / universal links). Default: WEB_APP_URL. */
+    MOBILE_LINK_BASE_URL: z.url().optional(),
+    MOBILE_APP_SCHEME: z
+      .string()
+      .regex(/^[a-z][a-z0-9+.-]{1,30}$/)
+      .default("autoforce"),
+    /** Hosts the app may connect to: api.example.com, *.example.com, localhost:3000. */
+    MOBILE_ALLOWED_API_HOSTS: list(
+      /^(\*\.)?[a-z0-9.-]+(:\d{1,5})?$/,
+      "must be comma-separated hosts like api.example.com or *.example.com",
+    ),
+    /** Ed25519 private key (PKCS#8 PEM) for signing connect links: a file, or the PEM itself. */
+    MOBILE_CONNECT_KEY_FILE: z.string().min(1).optional(),
+    MOBILE_CONNECT_PRIVATE_KEY: z.string().includes("PRIVATE KEY").optional(),
+    MOBILE_ANDROID_PACKAGE: z
+      .string()
+      .regex(/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/)
+      .optional(),
+    MOBILE_ANDROID_CERT_SHA256: list(
+      /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/,
+      "must be comma-separated SHA-256 fingerprints like AB:CD:…",
+    ),
+    MOBILE_IOS_APP_IDS: list(
+      /^[A-Z0-9]{10}\.[a-zA-Z0-9.-]+$/,
+      "must be comma-separated TEAMID.bundle.id values",
+    ),
+    MOBILE_ANDROID_STORE_URL: z.url().optional(),
+    MOBILE_IOS_STORE_URL: z.url().optional(),
+    MOBILE_MIN_APP_VERSION: semver.optional(),
+    MOBILE_LATEST_APP_VERSION: semver.optional(),
+
     // --- Platform email (SMTP) ---
     // No defaults in production: host and sender must be chosen explicitly there.
     SMTP_HOST: z.string().min(1).optional(),
@@ -194,12 +244,47 @@ const envSchema = z
         "STORAGE_ACCESS_KEY_ID",
         "STORAGE_SECRET_ACCESS_KEY",
         "FILES_PUBLIC_BASE_URL",
+        "MOBILE_API_BASE_URL",
+        "MOBILE_LINK_BASE_URL",
       ] as const) {
         if (env[variable] === undefined) {
           ctx.addIssue({ code: "custom", path: [variable], message: "must be set in production" });
         }
       }
     }
+    if (env.NODE_ENV === "production") {
+      if (env.MOBILE_CONNECT_KEY_FILE === undefined && env.MOBILE_CONNECT_PRIVATE_KEY === undefined)
+        ctx.addIssue({
+          code: "custom",
+          path: ["MOBILE_CONNECT_KEY_FILE"],
+          message: "must be set in production (or MOBILE_CONNECT_PRIVATE_KEY)",
+        });
+      if (env.MOBILE_ALLOWED_API_HOSTS.length === 0)
+        ctx.addIssue({
+          code: "custom",
+          path: ["MOBILE_ALLOWED_API_HOSTS"],
+          message: "must be set in production",
+        });
+      for (const variable of ["MOBILE_API_BASE_URL", "MOBILE_LINK_BASE_URL"] as const) {
+        const value = env[variable];
+        if (value !== undefined && !value.startsWith("https://"))
+          ctx.addIssue({
+            code: "custom",
+            path: [variable],
+            message: "must use https in production",
+          });
+      }
+    }
+    if (
+      env.MOBILE_API_BASE_URL !== undefined &&
+      env.MOBILE_ALLOWED_API_HOSTS.length > 0 &&
+      !new HostAllowList(env.MOBILE_ALLOWED_API_HOSTS).allowsUrl(env.MOBILE_API_BASE_URL)
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["MOBILE_ALLOWED_API_HOSTS"],
+        message: "must include the host of MOBILE_API_BASE_URL",
+      });
     if (env.SMTP_USER !== undefined && env.SMTP_PASSWORD === undefined) {
       ctx.addIssue({
         code: "custom",
@@ -281,6 +366,23 @@ export type BackupConfig = Readonly<{
 
 export type JobsConfig = Readonly<{ workerConcurrency: number; poolMax: number }>;
 
+export type MobileConfig = Readonly<{
+  apiBaseUrl: string;
+  linkBaseUrl: string;
+  scheme: string;
+  allowedHosts: readonly string[];
+  /** PEM of the signing key; null: the fixed development key (never in production). */
+  connectPrivateKeyPem: string | null;
+  android: Readonly<{
+    packageName: string | null;
+    certSha256: readonly string[];
+    storeUrl: string | null;
+  }>;
+  ios: Readonly<{ appIds: readonly string[]; storeUrl: string | null }>;
+  minVersion: string | null;
+  latestVersion: string | null;
+}>;
+
 export type StorageConfig = Readonly<{
   endpoint: string | null;
   presignEndpoint: string | null;
@@ -318,6 +420,7 @@ export type AppConfig = Readonly<{
   email: EmailConfig;
   backup: BackupConfig;
   storage: StorageConfig;
+  mobile: MobileConfig;
   public: PublicConfig;
 }>;
 
@@ -351,6 +454,39 @@ function storageConfig(e: z.output<typeof envSchema>): StorageConfig {
     publicBaseUrl:
       e.FILES_PUBLIC_BASE_URL ??
       `${(presignEndpoint ?? LOCAL_STORAGE_ENDPOINT).replace(/\/$/, "")}/${e.STORAGE_PUBLIC_BUCKET}`,
+  });
+}
+
+const origin = (url: string) => new URL(url).origin;
+
+function mobileConfig(e: z.output<typeof envSchema>): MobileConfig {
+  const apiBaseUrl = `${origin(e.MOBILE_API_BASE_URL ?? `http://localhost:${e.PORT}`)}/`;
+  const keyPem =
+    e.MOBILE_CONNECT_PRIVATE_KEY?.replaceAll("\\n", "\n") ??
+    (e.MOBILE_CONNECT_KEY_FILE === undefined
+      ? null
+      : readFileSync(e.MOBILE_CONNECT_KEY_FILE, "utf8"));
+  return Object.freeze({
+    apiBaseUrl,
+    linkBaseUrl: origin(e.MOBILE_LINK_BASE_URL ?? e.WEB_APP_URL),
+    scheme: e.MOBILE_APP_SCHEME,
+    allowedHosts: Object.freeze(
+      e.MOBILE_ALLOWED_API_HOSTS.length > 0
+        ? e.MOBILE_ALLOWED_API_HOSTS.map((h) => h.toLowerCase())
+        : [new URL(apiBaseUrl).host],
+    ),
+    connectPrivateKeyPem: keyPem,
+    android: Object.freeze({
+      packageName: e.MOBILE_ANDROID_PACKAGE ?? null,
+      certSha256: Object.freeze([...e.MOBILE_ANDROID_CERT_SHA256]),
+      storeUrl: e.MOBILE_ANDROID_STORE_URL ?? null,
+    }),
+    ios: Object.freeze({
+      appIds: Object.freeze([...e.MOBILE_IOS_APP_IDS]),
+      storeUrl: e.MOBILE_IOS_STORE_URL ?? null,
+    }),
+    minVersion: e.MOBILE_MIN_APP_VERSION ?? null,
+    latestVersion: e.MOBILE_LATEST_APP_VERSION ?? null,
   });
 }
 
@@ -408,6 +544,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }),
     jobs: Object.freeze({ workerConcurrency: e.JOB_WORKER_CONCURRENCY, poolMax: e.JOB_POOL_MAX }),
     storage: storageConfig(e),
+    mobile: mobileConfig(e),
     email: Object.freeze({
       smtp: Object.freeze({
         host: e.SMTP_HOST ?? "localhost",

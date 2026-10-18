@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig } from "./config.js";
 
@@ -19,6 +20,12 @@ const productionEmail = {
   STORAGE_ACCESS_KEY_ID: "prod-access-key",
   STORAGE_SECRET_ACCESS_KEY: "prod-secret-access-key",
   FILES_PUBLIC_BASE_URL: "https://files.example.com",
+  MOBILE_API_BASE_URL: "https://api.example.com",
+  MOBILE_LINK_BASE_URL: "https://go.example.com",
+  MOBILE_ALLOWED_API_HOSTS: "api.example.com",
+  MOBILE_CONNECT_PRIVATE_KEY: String(
+    generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }),
+  ),
 };
 
 function issuesOf(attempt: () => unknown): readonly string[] {
@@ -190,6 +197,42 @@ describe("loadConfig", () => {
     });
   });
 
+  it("connects the mobile app to this server locally, with the development key", () => {
+    const mobile = loadConfig(requiredSecrets).mobile;
+    expect(mobile).toMatchObject({
+      apiBaseUrl: "http://localhost:3000/",
+      linkBaseUrl: "http://localhost:5174",
+      scheme: "autoforce",
+      allowedHosts: ["localhost:3000"],
+      connectPrivateKeyPem: null,
+      android: { packageName: null, certSha256: [], storeUrl: null },
+    });
+  });
+
+  it("checks mobile settings: https in production, the API host in the allow-list", () => {
+    const production = {
+      ...requiredSecrets,
+      ...productionEmail,
+      NODE_ENV: "production",
+      DATABASE_SSL: "require",
+    };
+    expect(loadConfig(production).mobile).toMatchObject({
+      apiBaseUrl: "https://api.example.com/",
+      allowedHosts: ["api.example.com"],
+    });
+    expect(
+      issuesOf(() => loadConfig({ ...production, MOBILE_API_BASE_URL: "http://api.example.com" })),
+    ).toEqual([expect.stringMatching(/^MOBILE_API_BASE_URL: must use https/)]);
+    expect(
+      issuesOf(() =>
+        loadConfig({ ...production, MOBILE_API_BASE_URL: "https://elsewhere.example.com" }),
+      ),
+    ).toEqual([expect.stringMatching(/^MOBILE_ALLOWED_API_HOSTS: must include/)]);
+    expect(
+      issuesOf(() => loadConfig({ ...requiredSecrets, MOBILE_ANDROID_CERT_SHA256: "nope" })),
+    ).toEqual([expect.stringMatching(/^MOBILE_ANDROID_CERT_SHA256:/)]);
+  });
+
   it("defaults email to the local Mailpit outside production", () => {
     const config = loadConfig(requiredSecrets);
     expect(config.email.smtp).toMatchObject({ host: "localhost", port: 1025, secure: false });
@@ -207,6 +250,10 @@ describe("loadConfig", () => {
       expect.stringMatching(/^STORAGE_ACCESS_KEY_ID:/),
       expect.stringMatching(/^STORAGE_SECRET_ACCESS_KEY:/),
       expect.stringMatching(/^FILES_PUBLIC_BASE_URL:/),
+      expect.stringMatching(/^MOBILE_API_BASE_URL:/),
+      expect.stringMatching(/^MOBILE_LINK_BASE_URL:/),
+      expect.stringMatching(/^MOBILE_CONNECT_KEY_FILE:/),
+      expect.stringMatching(/^MOBILE_ALLOWED_API_HOSTS:/),
     ]);
     const auth = issuesOf(() => loadConfig({ ...requiredSecrets, SMTP_USER: "mailer" }));
     expect(auth).toEqual([expect.stringMatching(/^SMTP_PASSWORD:/)]);

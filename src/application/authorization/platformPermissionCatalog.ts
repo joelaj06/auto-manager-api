@@ -124,6 +124,7 @@ const definitions = {
   "platform.security.access_review.view": { description: "View the staff access review" },
 
   "platform.analytics.view": { description: "View platform analytics" },
+  "platform.mobile.view": { description: "Diagnose mobile connect links and app settings" },
   "platform.settings.manage": { description: "Manage platform settings", sensitive: true },
   "platform.staff.view": { description: "View staff accounts and roles" },
   "platform.staff.manage": {
@@ -293,6 +294,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.users.reset_access",
       "platform.support.access_tenant",
       "platform.support.announcements.manage",
+      "platform.mobile.view",
       "platform.applications.view",
     ],
   },
@@ -334,6 +336,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.data.migrations.view",
       "platform.data.migrations.run",
       "platform.data.jobs.manage",
+      "platform.mobile.view",
     ],
   },
   {

@@ -257,6 +257,16 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 129 | File records | **One `files` table per tenant database and `platform_files` in the platform database, same shape; kinds with fixed rules (types, size, visibility) in code; SVG never accepted** | Tenant data stays in the tenant's database (backups, deletion); platform documents exist before any tenant does |
 | 130 | Lifecycle | **Pending uploads older than 24 h and replaced or removed files are deleted with their bytes** (daily sweep; tenant files in daily maintenance) | Storage never fills with orphans; removed KYC documents really disappear |
 
+## Engineering decisions during P1-9 (2026-10-18)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 131 | Link signatures | **Ed25519 over a fixed, line-based message; key id derived from the public key; the app embeds the trusted public keys at build time** | Small signatures fit in a QR; Node signs it natively; a deterministic message is easy to reproduce in Kotlin/Swift/Dart; key ids allow rotation (ship the new key in the app first) |
+| 132 | Keys per environment | **Production requires a key (file or PEM in the environment); locally a fixed, publicly known development key is used** | Dev builds of the app can embed the dev key and links survive restarts; the dev key can never sign production links |
+| 133 | Allow-list | **`MOBILE_ALLOWED_API_HOSTS` (exact hosts or one-level `*.domain`) must contain the server's own API host; https enforced in production. The app carries the same list** | docs/23 §5: a signed link pointing elsewhere is still refused, and a mis-configured server fails at start-up |
+| 134 | Invitation links | **Invitation emails include a signed app link with the token and the invitation's expiry; the store install referrer never carries a token** (a fresh plain connect link instead) | Opens "set your password" in one tap without handing tokens to third parties |
+| 135 | QR rendering | **Server-side SVG (`qrcode` 1.5.4)**; the portal can also draw its own QR from `url` | The signing key never reaches the browser either way; SVG prints sharply on stickers |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

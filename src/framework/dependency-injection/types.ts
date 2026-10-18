@@ -161,4 +161,8 @@ export const TYPES = Object.freeze({
   TenantFileUploads: Symbol.for("TenantFileUploads"),
   ApplicationDocuments: Symbol.for("ApplicationDocuments"),
   PartnerDocuments: Symbol.for("PartnerDocuments"),
+
+  // Mobile connect (P1-9)
+  ConnectLinkSigner: Symbol.for("IConnectLinkSigner"),
+  MobileConnect: Symbol.for("MobileConnect"),
 });

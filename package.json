@@ -25,6 +25,7 @@
     "platform:invite-admin": "tsx --env-file-if-exists=.env src/framework/cli/platformInviteAdmin.ts",
     "backup": "tsx --env-file-if-exists=.env src/framework/cli/backup.ts",
     "storage:setup": "tsx --env-file-if-exists=.env src/framework/cli/storageSetup.ts",
+    "mobile:keygen": "tsx src/framework/cli/mobileKeygen.ts",
     "load:health": "load/run.sh health",
     "load:auth": "load/run.sh auth-rejection",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -50,6 +51,7 @@
     "nodemailer": "10.0.13",
     "pg": "^8.23.1",
     "pg-boss": "12.35.1",
+    "qrcode": "1.5.4",
     "reflect-metadata": "^0.2.2",
     "zod": "^4.6.7"
   },
@@ -59,6 +61,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "1.5.5",
     "@types/supertest": "^7.2.1",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",

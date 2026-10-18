@@ -63,6 +63,8 @@ export type EmailTemplateData = {
     businessName: string;
     invitedBy: string | null;
     acceptUrl: string;
+    /** Opens the invitation in the mobile app (signed connect link). */
+    appUrl: string | null;
     expiresInHours: number;
   }>;
   "tenant.welcome_owner": Readonly<{
@@ -212,6 +214,9 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       greeting(data.name),
       `${data.invitedBy ?? "Your team"} invited you to join ${data.businessName} on ${PRODUCT}.`,
       `Set your password and sign in: ${data.acceptUrl}`,
+      ...(data.appUrl === null
+        ? []
+        : [`Using the mobile app? Open this link on your phone instead: ${data.appUrl}`]),
       `The link works once and expires in ${data.expiresInHours} hours.`,
     ]),
   "tenant.welcome_owner": (data) =>

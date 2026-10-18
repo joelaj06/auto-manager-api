@@ -53,7 +53,12 @@ export type InviteUserInput = Readonly<{
   roles: readonly RoleAssignment[];
 }>;
 
-export type UserAdministrationSettings = Readonly<{ webAppUrl: string; invitationTtlMs: number }>;
+export type UserAdministrationSettings = Readonly<{
+  webAppUrl: string;
+  invitationTtlMs: number;
+  /** A link that opens the invitation in the mobile app (signed connect link), if available. */
+  appInvitationLink?: (tenantSlug: string, token: string, expiresAt: Date) => string;
+}>;
 
 /**
  * Tenant user management (docs/28, docs/16): list and view (within the caller's branch scope),
@@ -386,6 +391,12 @@ export class UserAdministration {
         businessName: organisation.name,
         invitedBy: inviter?.name ?? null,
         acceptUrl: `${deps.settings.webAppUrl.replace(/\/$/, "")}/${tenantSlug}/accept-invitation#token=${token}`,
+        appUrl:
+          deps.settings.appInvitationLink?.(
+            tenantSlug,
+            token,
+            new Date(deps.clock.now().getTime() + deps.settings.invitationTtlMs),
+          ) ?? null,
         expiresInHours: Math.round(deps.settings.invitationTtlMs / 3_600_000),
       },
       idempotencyKey: `user-invitation:${createHash("sha256").update(token).digest("hex")}`,

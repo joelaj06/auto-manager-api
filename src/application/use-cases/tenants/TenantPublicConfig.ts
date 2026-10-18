@@ -21,7 +21,15 @@ export type TenantPublicConfigView = Readonly<{
   }>;
   currency: Readonly<{ base: string; symbol: string }>;
   auth: Readonly<{ methods: readonly string[]; invitationsOnly: boolean }>;
+  /** Mobile app versions (force update) and store links (docs/23 §6). */
+  app: AppInfo;
   serverTime: string;
+}>;
+
+export type AppInfo = Readonly<{
+  minVersion: string | null;
+  latestVersion: string | null;
+  storeUrls: Readonly<{ android: string | null; ios: string | null }>;
 }>;
 
 const SYMBOLS: Readonly<Record<string, string>> = {
@@ -48,6 +56,7 @@ export class TenantPublicConfig {
       organisation: IOrganisationReader;
       storage: IObjectStorage;
       clock: IClock;
+      app?: AppInfo;
     }>,
   ) {}
 
@@ -77,6 +86,11 @@ export class TenantPublicConfig {
       },
       currency: { base, symbol: SYMBOLS[base] ?? base },
       auth: { methods: ["password"], invitationsOnly: true },
+      app: deps.app ?? {
+        minVersion: null,
+        latestVersion: null,
+        storeUrls: { android: null, ios: null },
+      },
       serverTime: deps.clock.now().toISOString(),
     };
   }
