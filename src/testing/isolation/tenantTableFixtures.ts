@@ -23,6 +23,14 @@ const letters = (marker: string) =>
 const inOneDay = () => new Date(Date.now() + 86_400_000);
 
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  fx_rates: {
+    insert: (marker) => ({
+      sql: `insert into fx_rates (base, quote, rate, rate_date, source)
+            values ('GHS', 'USD', 15.42, current_date - (abs(hashtext($1)) % 3650), 'manual')`,
+      params: [marker],
+    }),
+    find: "select 1 from fx_rates where rate_date = current_date - (abs(hashtext($1)) % 3650)",
+  },
   files: {
     insert: (marker) => ({
       sql: `insert into files (kind, storage_key, visibility, filename, content_type, size_bytes)

@@ -57,6 +57,14 @@ const definitions = {
     sensitive: true,
   },
   "settings.mobile.connect": { description: "Show the mobile-app connect QR code", scopes: ALL },
+  // --- finance and expense reference data ---
+  "finance.fx_rates.view": { description: "View exchange rates", scopes: ALL },
+  "finance.fx_rates.manage": { description: "Enter and remove exchange rates", scopes: ALL },
+  "expenses.categories.manage": {
+    description: "Create, rename and deactivate expense categories",
+    scopes: ALL,
+  },
+
   "billing.view": { description: "View subscription and invoices", scopes: ALL },
   "billing.manage": {
     description: "Pay, change plan, request extensions",

@@ -2,10 +2,7 @@ import type { Request } from "express";
 import { z } from "zod";
 import type { RefreshAuthSession } from "../../application/use-cases/auth/RefreshAuthSession.js";
 import type { RevokeAuthSession } from "../../application/use-cases/auth/RevokeAuthSession.js";
-import {
-  SUPPORTED_CURRENCIES,
-  type OrganisationAdministration,
-} from "../../application/use-cases/identity/OrganisationAdministration.js";
+import { type OrganisationAdministration } from "../../application/use-cases/identity/OrganisationAdministration.js";
 import type { RoleAdministration } from "../../application/use-cases/identity/RoleAdministration.js";
 import type { SessionManagement } from "../../application/use-cases/identity/SessionManagement.js";
 import type { TenantSignIn } from "../../application/use-cases/identity/TenantSignIn.js";
@@ -458,14 +455,13 @@ export function identityRoutes(deps: IdentityRouteDependencies): ApiRoute[] {
     defineRoute({
       method: "patch",
       path: "/api/v1/organisation",
-      summary: "Update the business profile (currency also needs settings.currency.manage)",
+      summary: "Update the business profile (base currency: /settings/currency)",
       tags: ["organisation"],
       access: access.permission("organisation.update"),
       request: {
         body: z.object({
           name: z.string().trim().min(1).max(120).optional(),
           legalName: z.string().trim().max(200).nullable().optional(),
-          baseCurrency: z.enum(SUPPORTED_CURRENCIES).optional(),
           timezone: z.string().trim().min(3).max(64).optional(),
           tin: z.string().trim().max(40).nullable().optional(),
           registrationNumber: z.string().trim().max(60).nullable().optional(),
@@ -499,7 +495,7 @@ export function identityRoutes(deps: IdentityRouteDependencies): ApiRoute[] {
         body: z.record(
           z.string().regex(/^[a-z][a-z_]{1,39}$/),
           z.object({
-            prefix: z.string().regex(/^[A-Z0-9]{1,10}$/),
+            prefix: z.string().regex(/^[A-Z][A-Z0-9]{0,9}$/),
             padding: z.number().int().min(1).max(12),
             yearly: z.boolean(),
           }),

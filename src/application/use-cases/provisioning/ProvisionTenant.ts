@@ -1,3 +1,4 @@
+import { defaultCurrencyFor } from "../../../domain/money/Currency.js";
 import { createHash, randomBytes } from "node:crypto";
 import { TenantId } from "../../../domain/value-objects/TenantId.js";
 import type { IJobHandler } from "../../jobs/IJobHandler.js";
@@ -107,6 +108,7 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
               registrationNumber: app.registrationNumber,
               contactEmail: app.contactEmail,
               contactPhone: app.contactPhone,
+              baseCurrency: defaultCurrencyFor(app.country),
             },
             owner: { name: app.contactName, email: app.contactEmail, phone: app.contactPhone },
             defaultBranch: deps.settings.defaultBranch,

@@ -1,3 +1,16 @@
+import { referenceRoutes } from "../../adapters/routes/referenceRoutes.js";
+import type {
+  IReferenceData,
+  ITenantReferenceData,
+} from "../../application/ports/IReferenceData.js";
+import { CurrencySettingsService } from "../../application/use-cases/reference/CurrencySettingsService.js";
+import { DocumentNumbering } from "../../application/use-cases/reference/DocumentNumbering.js";
+import { ExpenseCategoryAdministration } from "../../application/use-cases/reference/ExpenseCategoryAdministration.js";
+import { FxRateBook } from "../../application/use-cases/reference/FxRateBook.js";
+import { TaxAdministration } from "../../application/use-cases/reference/TaxAdministration.js";
+import { VehicleCatalogue } from "../../application/use-cases/reference/VehicleCatalogue.js";
+import { PostgresReferenceData } from "../../infrastructure/reference/PostgresReferenceData.js";
+import { PostgresTenantReferenceData } from "../../infrastructure/reference/PostgresTenantReferenceData.js";
 import { billingRoutes } from "../../adapters/routes/billingRoutes.js";
 import { BranchEntitlements } from "../../application/use-cases/billing/BranchEntitlements.js";
 import { ManualBilling } from "../../application/use-cases/billing/ManualBilling.js";
@@ -1970,6 +1983,84 @@ export function createContainer(
       [TYPES.SubscriptionAdministration, TYPES.ManualBilling, TYPES.TenantContext],
     );
 
+  // --- Reference data and settings (currencies, tax, FX, expense categories, vehicles) ---
+  platformRepository<IReferenceData>(TYPES.ReferenceData, (p) => new PostgresReferenceData(p));
+  tenantRepository<ITenantReferenceData>(
+    TYPES.TenantReferenceData,
+    (tx) => new PostgresTenantReferenceData(tx),
+  );
+  container
+    .bind<CurrencySettingsService>(TYPES.CurrencySettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        organisation: IOrganisationSettings,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new CurrencySettingsService({ unitOfWork, organisation, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.OrganisationSettings, TYPES.AuditTrail, TYPES.RequestContext],
+    );
+  const tenantReferenceDeps = (): [symbol, symbol, symbol, symbol, symbol, symbol] => [
+    TYPES.UnitOfWork,
+    TYPES.OrganisationSettings,
+    TYPES.TenantReferenceData,
+    TYPES.AuditTrail,
+    TYPES.RequestContext,
+    TYPES.IdGenerator,
+  ];
+  type TenantReferenceArgs = [
+    IUnitOfWork,
+    IOrganisationSettings,
+    ITenantReferenceData,
+    IAuditTrail,
+    IRequestContext,
+    IIdGenerator,
+  ];
+  const referenceDeps = (
+    ...[unitOfWork, organisation, reference, auditTrail, requestContext, ids]: TenantReferenceArgs
+  ) => ({ unitOfWork, organisation, reference, auditTrail, requestContext, ids });
+  container
+    .bind<TaxAdministration>(TYPES.TaxAdministration)
+    .toResolvedValue(
+      (...args: TenantReferenceArgs) => new TaxAdministration(referenceDeps(...args)),
+      tenantReferenceDeps(),
+    );
+  container
+    .bind<FxRateBook>(TYPES.FxRateBook)
+    .toResolvedValue(
+      (...args: TenantReferenceArgs) => new FxRateBook(referenceDeps(...args)),
+      tenantReferenceDeps(),
+    );
+  container
+    .bind<ExpenseCategoryAdministration>(TYPES.ExpenseCategoryAdministration)
+    .toResolvedValue(
+      (...args: TenantReferenceArgs) => new ExpenseCategoryAdministration(referenceDeps(...args)),
+      tenantReferenceDeps(),
+    );
+  container
+    .bind<VehicleCatalogue>(TYPES.VehicleCatalogue)
+    .toResolvedValue(
+      (
+        reference: IReferenceData,
+        unitOfWork: IPlatformUnitOfWork,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+      ) => new VehicleCatalogue({ reference, unitOfWork, audit, requestContext }),
+      [
+        TYPES.ReferenceData,
+        TYPES.PlatformUnitOfWork,
+        TYPES.PlatformAuditTrail,
+        TYPES.RequestContext,
+      ],
+    );
+  container
+    .bind<DocumentNumbering>(TYPES.DocumentNumbering)
+    .toResolvedValue(
+      (organisation: IOrganisationSettings, sequences: ISequenceGenerator) =>
+        new DocumentNumbering({ organisation, sequences }),
+      [TYPES.OrganisationSettings, TYPES.SequenceGenerator],
+    );
+
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
     const pem = config.mobile.connectPrivateKeyPem;
@@ -2301,6 +2392,11 @@ export function createContainer(
       tenantBilling: TenantBilling,
       subscriptionAdministration: SubscriptionAdministration,
       manualBilling: ManualBilling,
+      currencySettings: CurrencySettingsService,
+      taxAdministration: TaxAdministration,
+      fxRateBook: FxRateBook,
+      expenseCategories: ExpenseCategoryAdministration,
+      vehicleCatalogue: VehicleCatalogue,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -2324,6 +2420,13 @@ export function createContainer(
           tenantBilling,
           subscriptions: subscriptionAdministration,
           billing: manualBilling,
+        }),
+        ...referenceRoutes({
+          currencies: currencySettings,
+          tax: taxAdministration,
+          fxRates: fxRateBook,
+          expenseCategories,
+          vehicles: vehicleCatalogue,
         }),
         ...identityRoutes({
           signIn: tenantSignIn,
@@ -2377,6 +2480,11 @@ export function createContainer(
       TYPES.TenantBilling,
       TYPES.SubscriptionAdministration,
       TYPES.ManualBilling,
+      TYPES.CurrencySettingsService,
+      TYPES.TaxAdministration,
+      TYPES.FxRateBook,
+      TYPES.ExpenseCategoryAdministration,
+      TYPES.VehicleCatalogue,
     ],
   );
 

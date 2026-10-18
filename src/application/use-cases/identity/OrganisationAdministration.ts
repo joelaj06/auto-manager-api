@@ -1,6 +1,5 @@
 import type { AuthorizationPolicy } from "../../authorization/AuthorizationPolicy.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { PermissionDeniedError } from "../../errors/AuthErrors.js";
 import { IdentityRuleError } from "../../errors/IdentityErrors.js";
 import { BranchNotFoundError } from "../../errors/TenantErrors.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
@@ -15,16 +14,14 @@ import type {
 import type { IObjectStorage } from "../../ports/IObjectStorage.js";
 import type { FileService } from "../files/FileService.js";
 import type { BranchEntitlements } from "../billing/BranchEntitlements.js";
+import { DEFAULT_NUMBERING } from "../reference/DocumentNumbering.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 
-/** Currencies offered at launch (docs/20); the base currency is GHS by default. */
-export const SUPPORTED_CURRENCIES = ["GHS", "USD", "EUR", "GBP", "NGN", "XOF"] as const;
-
 /**
- * Organisation settings and branch management (docs/20, docs/27 §3.5). Changing the base
- * currency needs `settings.currency.manage` on top of `organisation.update`; timezones must be
- * real IANA names. Branch creation will check the subscription's branch entitlement (P1-10).
+ * Organisation settings and branch management (docs/20, docs/27 §3.5). The base currency is
+ * changed in the currency settings; timezones must be real IANA names; branch creation checks
+ * the subscription's branch entitlement.
  */
 export class OrganisationAdministration {
   constructor(
@@ -73,11 +70,6 @@ export class OrganisationAdministration {
     if (changes.timezone !== undefined) assertTimezone(changes.timezone);
     return deps.unitOfWork.run(async () => {
       const before = await deps.organisation.get();
-      if (changes.baseCurrency !== undefined && changes.baseCurrency !== before.baseCurrency) {
-        if (!deps.policy.decide(actor, "settings.currency.manage").allowed) {
-          throw new PermissionDeniedError("settings.currency.manage");
-        }
-      }
       await deps.organisation.update(changes);
       const { logoFileId: _f, logoStorageKey: _k, ...audited } = before;
       await this.audit(actor, "organisation.updated", "organisation", null, {
@@ -168,6 +160,7 @@ export class OrganisationAdministration {
     const { logoFileId, logoStorageKey, ...rest } = record;
     return {
       ...rest,
+      numbering: { ...DEFAULT_NUMBERING, ...rest.numbering },
       logo:
         logoFileId === null || logoStorageKey === null
           ? null

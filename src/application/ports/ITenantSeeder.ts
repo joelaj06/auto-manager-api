@@ -9,6 +9,8 @@ export type SeedInput = Readonly<{
     registrationNumber: string | null;
     contactEmail: string;
     contactPhone: string;
+    /** Suggested from the country (docs/20 §9); the owner can change it before money is recorded. */
+    baseCurrency: string;
   }>;
   owner: Readonly<{ name: string; email: string; phone: string }>;
   defaultBranch: Readonly<{ code: string; name: string }>;

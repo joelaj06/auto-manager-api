@@ -278,6 +278,18 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 140 | Invoice details | **VAT 0 until the accountant confirms; invoice numbers `AF-INV-YYYY-NNNNNN` with no gaps** (duplicate periods are refused before a number is taken); one invoice per subscription period | Tax records need continuous numbering; VAT registration is open (docs/25 §3) |
 | 141 | Deferred to phase 2 | **Gateway checkout and webhooks, dunning and automatic deactivation, billing-only sign-in (decision 51), extensions, invoice PDFs, proration, enterprise quote builder; entitlements are read at branch activation only (no cache yet)** | Phase 1 needs the skeleton and the hook; these need real payments and the PDF service (P2-10) |
 
+## Engineering decisions during P2-1 (2026-10-18)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 142 | Money type | **Integer minor units of one currency (by the currency's minor units: 2 for GHS, 0 for XOF), exact BigInt arithmetic for percentages and conversions, half-even rounding; amounts arrive as decimal strings (extra decimals refused, never rounded) and leave as `{ amountMinor, currency, formatted }`; `₵` on screens, `GHS` in SMS and exports** | docs/20 §4–8; no float ever touches money |
+| 143 | Base currency | **Changed only in Settings → Currency (no longer on the organisation profile); suggested from the country at provisioning (GH → GHS, NG → NGN, Togo and the other UEMOA countries → XOF); fixed once money is recorded (`base_currency_locked_at`, set by the finance modules); enabled currencies always include the base** | docs/20 §3, §9; history is never silently re-denominated |
+| 144 | Tax codes (refines 100) | **Each business keeps its own codes; a code has a kind and dated rate components (charged on the net or compounding on net + earlier levies); periods of a levy never overlap; a code is usable only when active, and active needs rates (exempt and zero-rated excepted); the rates in force on the document date are applied and snapshotted; tax-inclusive prices are worked back exactly (the last component absorbs rounding). No rates are seeded and there is no platform tax catalogue** | docs/13 §6 rates must come from the accountant; Ghana's levies have changed often; per-business schemes (standard, flat rate) differ |
+| 145 | Exchange rates | **Manual rates per day (1 foreign unit = rate × base), the latest on or before the document date is suggested, one rate per currency per day; removing a rate never changes documents (they keep their own rate)** | docs/20 §5.3 V1; provider feeds later |
+| 146 | Expense categories | **A two-level tree (category → subcategory); defaults seeded at provisioning; renamed, moved or deactivated, never deleted** | docs/12; expenses keep pointing at their category |
+| 147 | Vehicle makes and models | **A platform list (25 common makes in Ghana with their usual models, motor tricycles included) maintained by staff; vehicles may still use free text for rare models (P2-2)** | One spelling per make for reports; no tenant has to type "Toyota" |
+| 148 | Document numbers | **Default formats per document kind (INV, RCT, PAY, EXP, RMT, RNT, CRN yearly; VEH, DRV, CUS running), overridden by the business's formats; gap-free counters per kind (and year) taken in the document's own unit of work** | Continuous numbering for tax documents; rolled-back documents give their number back |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

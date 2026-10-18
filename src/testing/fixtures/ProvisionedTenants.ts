@@ -34,7 +34,9 @@ export class ProvisionedTenants {
   ) {}
 
   /** `partnerId`: the application is attributed to this reseller (as with a referral code). */
-  async create(options: Readonly<{ partnerId?: string }> = {}): Promise<ProvisionedTenant> {
+  async create(
+    options: Readonly<{ partnerId?: string; country?: string }> = {},
+  ): Promise<ProvisionedTenant> {
     const unique = randomUUID().slice(0, 8);
     const ownerEmail = `owner-${unique}@example.com`;
     const application = TenantApplication.submit({
@@ -42,7 +44,7 @@ export class ProvisionedTenants {
       details: {
         businessName: `Test Fleet ${unique}`,
         businessType: "fleet",
-        country: "GH",
+        country: options.country ?? "GH",
         desiredSlug: `fleet-${unique}`,
         contactName: "Test Owner",
         contactEmail: ownerEmail,

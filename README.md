@@ -201,6 +201,16 @@ KYC documents with `/api/v1/applications/:id/documents` (X-Application-Token); s
 `/api/platform/v1/applications/:id/documents`; partner documents live under
 `/api/platform/v1/partners/:id/documents`. Abandoned uploads are removed daily.
 
+## Money, currencies, tax and reference data
+
+Amounts are integer **minor units** of a currency (`GET /api/v1/currencies` lists minor units);
+send amounts as decimal strings (`"1250.50"`), read them as `{ amountMinor, currency, formatted }`.
+Settings: `/api/v1/settings/currency` (base currency locked once money is recorded),
+`/api/v1/settings/tax` and `/api/v1/tax-codes` (each business enters its own rates; codes need
+rates before they can be activated; `POST /tax-codes/:code/preview` shows the result),
+`/api/v1/fx-rates` (manual rates), `/api/v1/expense-categories`,
+`/api/v1/reference/vehicle-makes`.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

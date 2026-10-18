@@ -341,11 +341,16 @@ describe("organisation settings", () => {
     const ok = await api()
       .patch("/api/v1/organisation")
       .set(as(t.ownerAccessToken))
-      .send({ legalName: "Test Fleet Ltd", timezone: "Africa/Lagos", baseCurrency: "USD" });
-    expect(ok.body.data).toMatchObject({
-      legalName: "Test Fleet Ltd",
-      timezone: "Africa/Lagos",
+      .send({ legalName: "Test Fleet Ltd", timezone: "Africa/Lagos" });
+    expect(ok.body.data).toMatchObject({ legalName: "Test Fleet Ltd", timezone: "Africa/Lagos" });
+    // The base currency is changed in the currency settings (P2-1).
+    const currency = await api()
+      .patch("/api/v1/settings/currency")
+      .set(as(t.ownerAccessToken))
+      .send({ baseCurrency: "USD" });
+    expect(currency.body.data).toMatchObject({
       baseCurrency: "USD",
+      enabledCurrencies: ["USD", "GHS"],
     });
 
     const numbering = { invoice: { prefix: "INV", padding: 6, yearly: true } };
@@ -355,7 +360,7 @@ describe("organisation settings", () => {
     ).toBe(204);
     expect(
       (await api().get("/api/v1/settings/numbering").set(as(t.ownerAccessToken))).body.data,
-    ).toEqual(numbering);
+    ).toMatchObject({ ...numbering, receipt: { prefix: "RCT" } });
 
     const config = await api().get("/api/v1/public/tenant-config").query({ slug: t.slug });
     expect(config.body.data.currency).toEqual({ base: "USD", symbol: "$" });

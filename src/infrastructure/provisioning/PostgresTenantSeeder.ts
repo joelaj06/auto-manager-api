@@ -53,10 +53,21 @@ export class PostgresTenantSeeder implements ITenantSeeder {
     const tx = this.transactions.current();
     const o = input.organisation;
     await tx.query(
-      `insert into organisation (name, country, timezone, tin, registration_number, contact_email, contact_phone)
-       values ($1, $2, $3, $4, $5, $6, $7)
+      `insert into organisation (name, country, timezone, tin, registration_number, contact_email,
+                                 contact_phone, base_currency, settings)
+       values ($1, $2, $3, $4, $5, $6, $7, $8::text,
+               jsonb_build_object('currency', jsonb_build_object('enabledCurrencies', jsonb_build_array($8::text))))
        on conflict (singleton) do nothing`,
-      [o.name, o.country, o.timezone, o.tin, o.registrationNumber, o.contactEmail, o.contactPhone],
+      [
+        o.name,
+        o.country,
+        o.timezone,
+        o.tin,
+        o.registrationNumber,
+        o.contactEmail,
+        o.contactPhone,
+        o.baseCurrency,
+      ],
     );
     await tx.query(
       `insert into branches (code, name, is_default)

@@ -128,6 +128,9 @@ const definitions = {
   "platform.security.access_review.view": { description: "View the staff access review" },
 
   "platform.analytics.view": { description: "View platform analytics" },
+  "platform.reference.manage": {
+    description: "Maintain platform reference data (vehicle makes and models)",
+  },
   "platform.mobile.view": { description: "Diagnose mobile connect links and app settings" },
   "platform.settings.manage": { description: "Manage platform settings", sensitive: true },
   "platform.staff.view": { description: "View staff accounts and roles" },
@@ -282,6 +285,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.billing.extensions.grant",
       "platform.users.search",
       "platform.partners.view",
+      "platform.reference.manage",
       "platform.approvals.approve",
     ],
   },

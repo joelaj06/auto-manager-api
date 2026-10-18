@@ -131,6 +131,23 @@ const RULES: Readonly<Record<string, Rule>> = {
   USER_EXISTS: { status: 409 },
   OWNER_PROTECTED: { status: 422 },
 
+  // Money, currencies, tax and reference data
+  UNKNOWN_CURRENCY: { status: 400 },
+  INVALID_AMOUNT: { status: 400 },
+  CURRENCY_MISMATCH: { status: 422 },
+  CURRENCY_BASE_LOCKED: { status: 409 },
+  CURRENCY_NOT_ENABLED: { status: 422 },
+  TAX_CODE_NOT_FOUND: { status: 404 },
+  TAX_RATES_MISSING: { status: 409 },
+  INVALID_TAX_CODE: { status: 422 },
+  FX_RATE_EXISTS: { status: 409 },
+  FX_RATE_NOT_FOUND: { status: 404 },
+  FX_SAME_CURRENCY: { status: 400 },
+  EXPENSE_CATEGORY_NOT_FOUND: { status: 404 },
+  EXPENSE_CATEGORY_RULE: { status: 422 },
+  VEHICLE_MAKE_NOT_FOUND: { status: 404 },
+  VEHICLE_CATALOGUE_RULE: { status: 409 },
+
   // Billing
   SUBSCRIPTION_NOT_FOUND: { status: 404 },
   PLAN_NOT_FOUND: { status: 404 },

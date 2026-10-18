@@ -26,7 +26,36 @@ export type OrganisationView = Readonly<{
 export type OrganisationRecord = Omit<OrganisationView, "logo"> &
   Readonly<{ logoFileId: string | null; logoStorageKey: string | null }>;
 
-export type OrganisationChanges = Partial<Omit<OrganisationView, "country" | "numbering" | "logo">>;
+/** Base currency changes go through the currency settings (lock rule, docs/20 §3). */
+export type OrganisationChanges = Partial<
+  Omit<OrganisationView, "country" | "numbering" | "logo" | "baseCurrency">
+>;
+
+export type CurrencySettings = Readonly<{
+  baseCurrency: string;
+  /** Currencies users may pick on documents; always includes the base currency. */
+  enabledCurrencies: readonly string[];
+  display: Readonly<{ showCodeForForeign: boolean }>;
+  /** Set by the first financial transaction: the base currency cannot change after. */
+  baseCurrencyLockedAt: Date | null;
+}>;
+
+export type TaxScheme = "not_registered" | "standard" | "flat_rate";
+
+export type TaxSettings = Readonly<{
+  scheme: TaxScheme;
+  vatNumber: string | null;
+  /** Prices are entered tax-inclusive (the tax is worked back). */
+  pricesIncludeTax: boolean;
+  defaultSalesTaxCode: string | null;
+}>;
+
+export const DEFAULT_TAX_SETTINGS: TaxSettings = Object.freeze({
+  scheme: "not_registered",
+  vatNumber: null,
+  pricesIncludeTax: false,
+  defaultSalesTaxCode: null,
+});
 
 /** The organisation row of the current tenant (tenant unit of work). */
 export interface IOrganisationSettings {
@@ -34,4 +63,14 @@ export interface IOrganisationSettings {
   setLogo(fileId: string | null): Promise<void>;
   update(changes: OrganisationChanges): Promise<void>;
   setNumbering(numbering: Readonly<Record<string, NumberingFormat>>): Promise<void>;
+  currencySettings(): Promise<CurrencySettings>;
+  setCurrencySettings(
+    settings: Readonly<{
+      baseCurrency: string;
+      enabledCurrencies: readonly string[];
+      display: CurrencySettings["display"];
+    }>,
+  ): Promise<void>;
+  taxSettings(): Promise<TaxSettings>;
+  setTaxSettings(settings: TaxSettings): Promise<void>;
 }

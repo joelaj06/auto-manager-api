@@ -57,7 +57,7 @@ describe("createContainer", () => {
         if (route.access.kind === "public") {
           // Public routes are an explicit, short list; anything else must be tenant-scoped.
           expect(route.path, name).toMatch(
-            /^\/health\/|^\/api\/v1\/openapi\.json$|^\/api\/platform\/v1\/auth\/|^\/api\/v1\/applications|^\/api\/v1\/public\/|^\/api\/v1\/auth\/discover$|^\/connect$|^\/\.well-known\//,
+            /^\/health\/|^\/api\/v1\/openapi\.json$|^\/api\/platform\/v1\/auth\/|^\/api\/v1\/applications|^\/api\/v1\/public\/|^\/api\/v1\/auth\/discover$|^\/connect$|^\/api\/v1\/currencies$|^\/\.well-known\//,
           );
         }
       }

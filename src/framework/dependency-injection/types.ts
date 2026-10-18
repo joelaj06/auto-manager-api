@@ -172,4 +172,14 @@ export const TYPES = Object.freeze({
   ManualBilling: Symbol.for("ManualBilling"),
   BranchEntitlements: Symbol.for("BranchEntitlements"),
   TenantBilling: Symbol.for("TenantBilling"),
+
+  // Reference data and settings (P2-1)
+  ReferenceData: Symbol.for("IReferenceData"),
+  TenantReferenceData: Symbol.for("ITenantReferenceData"),
+  CurrencySettingsService: Symbol.for("CurrencySettingsService"),
+  TaxAdministration: Symbol.for("TaxAdministration"),
+  FxRateBook: Symbol.for("FxRateBook"),
+  ExpenseCategoryAdministration: Symbol.for("ExpenseCategoryAdministration"),
+  VehicleCatalogue: Symbol.for("VehicleCatalogue"),
+  DocumentNumbering: Symbol.for("DocumentNumbering"),
 });
