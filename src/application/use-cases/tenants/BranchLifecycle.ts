@@ -1,6 +1,7 @@
 import { BranchDeactivationBlockedError, BranchNotFoundError } from "../../errors/TenantErrors.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { BranchView, IBranchDeactivationCheck, IBranches } from "../../ports/IBranches.js";
+import type { BranchEntitlements } from "../billing/BranchEntitlements.js";
 import type { IClock } from "../../ports/IClock.js";
 import type { IPermissionCache } from "../../ports/IPermissionCache.js";
 import type { ITenantContext } from "../../ports/ITenantContext.js";
@@ -27,6 +28,8 @@ export class BranchLifecycle {
       tenantContext: ITenantContext;
       permissionCache: IPermissionCache;
       clock: IClock;
+      /** Subscription branch limit for tenant users (staff may reactivate beyond it). */
+      entitlements?: BranchEntitlements;
     }>,
   ) {}
 
@@ -53,14 +56,32 @@ export class BranchLifecycle {
       const affected = await deps.branches.invalidateMembers(branchId);
       await this.audit("branch.deactivated", branch, actor, reason, { affectedUsers: affected });
     });
-    deps.permissionCache.forgetTenant(deps.tenantContext.currentTenantId().value);
+    const tenantId = deps.tenantContext.currentTenantId().value;
+    deps.permissionCache.forgetTenant(tenantId);
+    if (deps.entitlements !== undefined) {
+      const active = await deps.unitOfWork.run(() => deps.branches.activeCount());
+      await deps.entitlements.afterDeactivating(tenantId, active, actor);
+    }
   }
 
-  async reactivate(branchId: string, reason: string, actor: BranchActor): Promise<void> {
+  async reactivate(
+    branchId: string,
+    reason: string,
+    actor: BranchActor,
+    confirmBranchPurchase = false,
+  ): Promise<void> {
     const { deps } = this;
     await deps.unitOfWork.run(async () => {
       const branch = await this.load(branchId);
       if (branch.status === "active") return;
+      if (deps.entitlements !== undefined && actor.type === "user") {
+        const active = await deps.branches.activeCount();
+        await deps.entitlements.beforeActivating(
+          deps.tenantContext.currentTenantId().value,
+          active,
+          { confirmPurchase: confirmBranchPurchase, userId: actor.id },
+        );
+      }
       await deps.branches.setStatus(branchId, "active", null, deps.clock.now());
       const affected = await deps.branches.invalidateMembers(branchId);
       await this.audit("branch.reactivated", branch, actor, reason, { affectedUsers: affected });

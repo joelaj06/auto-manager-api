@@ -200,13 +200,21 @@ export function lifecycleRoutes(deps: LifecycleRouteDependencies): ApiRoute[] {
         summary: `${action === "deactivate" ? "Deactivate" : "Reactivate"} a branch`,
         tags: ["branches"],
         access: access.permission("branches.deactivate"),
-        request: { params: z.object({ id: z.uuid() }), body: z.object({ reason }) },
+        request: {
+          params: z.object({ id: z.uuid() }),
+          body: z.object({ reason, confirmBranchPurchase: z.boolean().default(false) }),
+        },
         responses: { 204: { description: "Done" } },
         handler: async ({ params, body }, _req, res) => {
-          await deps.branches[action](params.id, body.reason, {
-            type: "user",
-            id: principalOf(res).userId,
-          });
+          const actor = { type: "user" as const, id: principalOf(res).userId };
+          if (action === "reactivate")
+            await deps.branches.reactivate(
+              params.id,
+              body.reason,
+              actor,
+              body.confirmBranchPurchase,
+            );
+          else await deps.branches.deactivate(params.id, body.reason, actor);
           done(res);
         },
       }),

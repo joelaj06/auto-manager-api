@@ -526,9 +526,14 @@ export function identityRoutes(deps: IdentityRouteDependencies): ApiRoute[] {
           name: z.string().trim().min(1).max(120),
           address: z.string().trim().max(500).nullish(),
           phone: z.string().trim().max(30).nullish(),
+          /** Beyond the subscription: agree to pay for one more branch (409 explains the price). */
+          confirmBranchPurchase: z.boolean().default(false),
         }),
       },
-      responses: { 201: { description: "Created" } },
+      responses: {
+        201: { description: "Created" },
+        409: { description: "ENTITLEMENT_BRANCH_LIMIT: beyond the subscription" },
+      },
       handler: async ({ body }, _req, res) => {
         res
           .status(201)

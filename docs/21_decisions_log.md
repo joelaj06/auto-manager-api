@@ -267,6 +267,17 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 134 | Invitation links | **Invitation emails include a signed app link with the token and the invitation's expiry; the store install referrer never carries a token** (a fresh plain connect link instead) | Opens "set your password" in one tap without handing tokens to third parties |
 | 135 | QR rendering | **Server-side SVG (`qrcode` 1.5.4)**; the portal can also draw its own QR from `url` | The signing key never reaches the browser either way; SVG prints sharply on stickers |
 
+## Engineering decisions during P1-10 (2026-10-18)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 136 | Manual billing first | **Staff issue each period's invoice and record the payments they receive** (bank transfer, MoMo, cash, cheque; method + reference unique). **Only a fully paid invoice** activates anything; payments never exceed what is outstanding; clients never send amounts | docs/25 §11 phase 1, before a gateway exists; mirrors §5.3 (partial payments do not restore) |
+| 137 | Billed branches = entitlement | **During the trial the billed count follows the active branches (up to the trial limit, 3); a paying tenant adds a branch only by confirming the extra monthly charge; deactivating a branch lowers the count** (from the next invoice); staff can set it | docs/25 §7 "explicit confirmation showing the new price"; the first invoice matches what was used in the trial |
+| 138 | Price list | **No price in code: the standard price per branch is set by staff (sensitive permission, step-up, audited) and invoicing refuses until it is set. Enterprise invoices are entered line by line; licence lines (branch rate, size adjustment) count for commission by default** | Decisions 48, 50, 53, 54; the price is a business decision still open |
+| 139 | Payment and lifecycle | **A paid invoice: subscription active for the invoice's period, licence type locked, tenant trialing/past due → active, billing deactivations (non-payment, trial expiry) lifted; manual deactivations stay** | docs/25 §2.1, §5.3, §5.5 |
+| 140 | Invoice details | **VAT 0 until the accountant confirms; invoice numbers `AF-INV-YYYY-NNNNNN` with no gaps** (duplicate periods are refused before a number is taken); one invoice per subscription period | Tax records need continuous numbering; VAT registration is open (docs/25 §3) |
+| 141 | Deferred to phase 2 | **Gateway checkout and webhooks, dunning and automatic deactivation, billing-only sign-in (decision 51), extensions, invoice PDFs, proration, enterprise quote builder; entitlements are read at branch activation only (no cache yet)** | Phase 1 needs the skeleton and the hook; these need real payments and the PDF service (P2-10) |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

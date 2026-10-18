@@ -54,6 +54,8 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
       directory: IUserDirectory;
       notifications: NotificationService;
       audit: IPlatformAuditTrail;
+      /** Starts the trial subscription (idempotent). */
+      subscriptions: Readonly<{ startTrial(tenantId: string, trialEndsAt: Date): Promise<void> }>;
       clock: IClock;
       logger: ILogger;
       settings: ProvisioningSettings;
@@ -151,8 +153,12 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
         });
         await advance("welcomed");
       }
+      const trialEndsAt = new Date(
+        deps.clock.now().getTime() + record.application.trialDays * DAY_MS,
+      );
+      await deps.subscriptions.startTrial(tenantId, trialEndsAt);
       await deps.provisioning.complete(tenantId, {
-        trialEndsAt: new Date(deps.clock.now().getTime() + record.application.trialDays * DAY_MS),
+        trialEndsAt,
         catalogueVersion: catalogue.version,
       });
       await deps.audit.record({

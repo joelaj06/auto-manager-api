@@ -72,6 +72,10 @@ const definitions = {
   "platform.billing.view": { description: "View billing" },
   "platform.billing.manage": { description: "Manage plans, subscriptions and invoices" },
   "platform.billing.payments.record": { description: "Record payments" },
+  "platform.billing.prices.manage": {
+    description: "Change plan prices",
+    sensitive: true,
+  },
   "platform.billing.refunds.issue": { description: "Issue refunds and credits", sensitive: true },
   "platform.billing.extensions.grant": { description: "Grant payment extensions" },
 

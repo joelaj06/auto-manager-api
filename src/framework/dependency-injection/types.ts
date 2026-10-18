@@ -165,4 +165,11 @@ export const TYPES = Object.freeze({
   // Mobile connect (P1-9)
   ConnectLinkSigner: Symbol.for("IConnectLinkSigner"),
   MobileConnect: Symbol.for("MobileConnect"),
+
+  // Billing (P1-10)
+  BillingRepository: Symbol.for("IBillingRepository"),
+  SubscriptionAdministration: Symbol.for("SubscriptionAdministration"),
+  ManualBilling: Symbol.for("ManualBilling"),
+  BranchEntitlements: Symbol.for("BranchEntitlements"),
+  TenantBilling: Symbol.for("TenantBilling"),
 });

@@ -201,6 +201,16 @@ KYC documents with `/api/v1/applications/:id/documents` (X-Application-Token); s
 `/api/platform/v1/applications/:id/documents`; partner documents live under
 `/api/platform/v1/partners/:id/documents`. Abandoned uploads are removed daily.
 
+## Subscriptions and billing (manual for now)
+
+Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
+branch (`PUT /api/platform/v1/billing/plans/standard/price`, step-up), issue each period's invoice
+(`POST /api/platform/v1/tenants/:id/invoices`) and record payments received
+(`POST /api/platform/v1/billing/invoices/:id/payments`). A fully paid invoice activates the
+subscription and the tenant. Tenants read their Billing tab at `/api/v1/billing/*`. Branches
+beyond the subscription are refused with `ENTITLEMENT_BRANCH_LIMIT` (or added with
+`confirmBranchPurchase: true` once paying). Amounts are in pesewas (minor units).
+
 ## Mobile app connect
 
 `GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)

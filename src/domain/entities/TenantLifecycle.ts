@@ -111,6 +111,32 @@ export class TenantLifecycle {
     return { from, to, reasonCategory: null, message: null };
   }
 
+  /**
+   * A licence payment (docs/25 §5.3): a trial or overdue tenant becomes active; a tenant
+   * deactivated by billing (non-payment, trial expiry) is restored unless staff locked it; a
+   * read-only tenant returns to active afterwards. Returns null when nothing changes now.
+   */
+  recordLicencePayment(now: Date): StatusTransition | null {
+    const from = this.props.status;
+    if (from === "trialing" || from === "past_due") {
+      this.props = { ...this.props, status: "active", statusChangedAt: now };
+      return { from, to: "active", reasonCategory: null, message: null };
+    }
+    if (from === "read_only") {
+      if (this.props.previousStatus === "trialing" || this.props.previousStatus === "past_due")
+        this.props = { ...this.props, previousStatus: "active" };
+      return null;
+    }
+    const billingReason =
+      this.props.deactivationReason === "non_payment" ||
+      this.props.deactivationReason === "trial_expired";
+    if (from === "deactivated" && billingReason && !this.props.autoRestoreLocked) {
+      this.props = { ...this.props, previousStatus: "active" };
+      return this.reactivate(now);
+    }
+    return null;
+  }
+
   setReadOnly(message: string | null, now: Date): StatusTransition {
     const from = this.props.status;
     if (!OPERATING.has(from)) throw new TenantStateError("set read-only", from);

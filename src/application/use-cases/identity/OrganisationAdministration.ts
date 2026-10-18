@@ -14,6 +14,7 @@ import type {
 } from "../../ports/IOrganisationSettings.js";
 import type { IObjectStorage } from "../../ports/IObjectStorage.js";
 import type { FileService } from "../files/FileService.js";
+import type { BranchEntitlements } from "../billing/BranchEntitlements.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 
@@ -37,6 +38,8 @@ export class OrganisationAdministration {
       /** Tenant files (the logo) and storage (its public URL). */
       files: FileService;
       storage: IObjectStorage;
+      /** Subscription branch limit (docs/25 §7); absent: no limit (tests, tooling). */
+      entitlements?: BranchEntitlements;
     }>,
   ) {}
 
@@ -97,13 +100,27 @@ export class OrganisationAdministration {
 
   async createBranch(
     actor: Principal,
-    input: Readonly<{ code: string; name: string; address?: string | null; phone?: string | null }>,
+    input: Readonly<{
+      code: string;
+      name: string;
+      address?: string | null;
+      phone?: string | null;
+      /** The tenant agrees to pay for one more branch when beyond the subscription. */
+      confirmBranchPurchase?: boolean;
+    }>,
   ): Promise<string> {
     const { deps } = this;
     const code = input.code.trim().toUpperCase();
     return deps.unitOfWork.run(async () => {
       if (await deps.branches.codeTaken(code)) {
         throw new IdentityRuleError("BRANCH_CODE_TAKEN", "Another branch already uses this code");
+      }
+      if (deps.entitlements !== undefined) {
+        const active = await deps.branches.activeCount();
+        await deps.entitlements.beforeActivating(actor.tenantId, active, {
+          confirmPurchase: input.confirmBranchPurchase === true,
+          userId: actor.userId,
+        });
       }
       const id = await deps.branches.create({
         code,

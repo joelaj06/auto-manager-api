@@ -1,3 +1,10 @@
+import { billingRoutes } from "../../adapters/routes/billingRoutes.js";
+import { BranchEntitlements } from "../../application/use-cases/billing/BranchEntitlements.js";
+import { ManualBilling } from "../../application/use-cases/billing/ManualBilling.js";
+import { SubscriptionAdministration } from "../../application/use-cases/billing/SubscriptionAdministration.js";
+import { TenantBilling } from "../../application/use-cases/billing/TenantBilling.js";
+import type { IBillingRepository } from "../../domain/repositories/IBillingRepository.js";
+import { PostgresBillingRepository } from "../../infrastructure/billing/PostgresBillingRepository.js";
 import { mobileRoutes } from "../../adapters/routes/mobileRoutes.js";
 import type { IConnectLinkSigner } from "../../application/ports/IConnectLinkSigner.js";
 import { MobileConnect } from "../../application/use-cases/mobile/MobileConnect.js";
@@ -1377,8 +1384,10 @@ export function createContainer(
       queue: IJobQueue,
       clock: IClock,
       logger: ILogger,
+      subscriptions: SubscriptionAdministration,
     ): IJobHandler[] => [
       new ProvisionTenant({
+        subscriptions,
         provisioning,
         databases,
         schema,
@@ -1418,6 +1427,7 @@ export function createContainer(
       TYPES.JobQueue,
       TYPES.Clock,
       TYPES.Logger,
+      TYPES.SubscriptionAdministration,
     ],
   );
 
@@ -1550,6 +1560,7 @@ export function createContainer(
       clock: IClock,
       tenantContext: ITenantContext,
       permissionCache: IPermissionCache,
+      entitlements: BranchEntitlements,
     ) =>
       new BranchLifecycle({
         unitOfWork,
@@ -1560,6 +1571,7 @@ export function createContainer(
         tenantContext,
         permissionCache,
         clock,
+        entitlements,
       }),
     [
       TYPES.UnitOfWork,
@@ -1570,6 +1582,7 @@ export function createContainer(
       TYPES.Clock,
       TYPES.TenantContext,
       TYPES.PermissionCache,
+      TYPES.BranchEntitlements,
     ],
   );
 
@@ -1846,8 +1859,10 @@ export function createContainer(
       requestContext: IRequestContext,
       files: FileService,
       storage: IObjectStorage,
+      entitlements: BranchEntitlements,
     ) =>
       new OrganisationAdministration({
+        entitlements,
         unitOfWork,
         organisation,
         branches,
@@ -1866,8 +1881,94 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.TenantFileService,
       TYPES.ObjectStorage,
+      TYPES.BranchEntitlements,
     ],
   );
+
+  // --- Billing (subscriptions, entitlements, manual invoices and payments) ---
+  platformRepository<IBillingRepository>(
+    TYPES.BillingRepository,
+    (p) => new PostgresBillingRepository(p),
+  );
+  container
+    .bind<SubscriptionAdministration>(TYPES.SubscriptionAdministration)
+    .toResolvedValue(
+      (
+        billing: IBillingRepository,
+        unitOfWork: IPlatformUnitOfWork,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+        ids: IIdGenerator,
+        clock: IClock,
+      ) =>
+        new SubscriptionAdministration({ billing, unitOfWork, audit, requestContext, ids, clock }),
+      [
+        TYPES.BillingRepository,
+        TYPES.PlatformUnitOfWork,
+        TYPES.PlatformAuditTrail,
+        TYPES.RequestContext,
+        TYPES.IdGenerator,
+        TYPES.Clock,
+      ],
+    );
+  container.bind<ManualBilling>(TYPES.ManualBilling).toResolvedValue(
+    (
+      billing: IBillingRepository,
+      subscriptions: SubscriptionAdministration,
+      lifecycle: TenantLifecycleService,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new ManualBilling({
+        billing,
+        subscriptions,
+        lifecycle,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.BillingRepository,
+      TYPES.SubscriptionAdministration,
+      TYPES.TenantLifecycleService,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<BranchEntitlements>(TYPES.BranchEntitlements)
+    .toResolvedValue(
+      (
+        billing: IBillingRepository,
+        subscriptions: SubscriptionAdministration,
+        unitOfWork: IPlatformUnitOfWork,
+        clock: IClock,
+      ) => new BranchEntitlements({ billing, subscriptions, unitOfWork, clock }),
+      [
+        TYPES.BillingRepository,
+        TYPES.SubscriptionAdministration,
+        TYPES.PlatformUnitOfWork,
+        TYPES.Clock,
+      ],
+    );
+  container
+    .bind<TenantBilling>(TYPES.TenantBilling)
+    .toResolvedValue(
+      (
+        subscriptions: SubscriptionAdministration,
+        billing: ManualBilling,
+        tenantContext: ITenantContext,
+      ) => new TenantBilling({ subscriptions, billing, tenantContext }),
+      [TYPES.SubscriptionAdministration, TYPES.ManualBilling, TYPES.TenantContext],
+    );
 
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
@@ -2062,8 +2163,9 @@ export function createContainer(
   container
     .bind<ConsoleDashboard>(TYPES.ConsoleDashboard)
     .toResolvedValue(
-      (queries: IConsoleTenantQueries, clock: IClock) => new ConsoleDashboard({ queries, clock }),
-      [TYPES.ConsoleTenantQueries, TYPES.Clock],
+      (queries: IConsoleTenantQueries, clock: IClock, billing: IBillingRepository) =>
+        new ConsoleDashboard({ queries, clock, billing }),
+      [TYPES.ConsoleTenantQueries, TYPES.Clock, TYPES.BillingRepository],
     );
   container
     .bind<TenantAccounts>(TYPES.TenantAccounts)
@@ -2196,6 +2298,9 @@ export function createContainer(
       applicationDocuments: ApplicationDocuments,
       partnerDocuments: PartnerDocuments,
       mobile: MobileConnect,
+      tenantBilling: TenantBilling,
+      subscriptionAdministration: SubscriptionAdministration,
+      manualBilling: ManualBilling,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -2215,6 +2320,11 @@ export function createContainer(
         ...partnerRoutes({ administration: partnerAdministration, portal: partnerPortal }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...mobileRoutes(mobile),
+        ...billingRoutes({
+          tenantBilling,
+          subscriptions: subscriptionAdministration,
+          billing: manualBilling,
+        }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -2264,6 +2374,9 @@ export function createContainer(
       TYPES.ApplicationDocuments,
       TYPES.PartnerDocuments,
       TYPES.MobileConnect,
+      TYPES.TenantBilling,
+      TYPES.SubscriptionAdministration,
+      TYPES.ManualBilling,
     ],
   );
 

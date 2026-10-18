@@ -131,6 +131,17 @@ const RULES: Readonly<Record<string, Rule>> = {
   USER_EXISTS: { status: 409 },
   OWNER_PROTECTED: { status: 422 },
 
+  // Billing
+  SUBSCRIPTION_NOT_FOUND: { status: 404 },
+  PLAN_NOT_FOUND: { status: 404 },
+  INVOICE_NOT_FOUND: { status: 404 },
+  PRICE_NOT_SET: { status: 409 },
+  LINES_REQUIRED: { status: 400 },
+  DUPLICATE_PAYMENT: { status: 409 },
+  PERIOD_INVOICED: { status: 409 },
+  LICENCE_TYPE_LOCKED: { status: 409 },
+  ENTITLEMENT_BRANCH_LIMIT: { status: 409 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

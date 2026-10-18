@@ -91,6 +91,23 @@ export class TenantLifecycleService {
     await this.notifyOwner(tenant, "tenant.restored", null);
   }
 
+  /**
+   * A licence payment was recorded (docs/25 §5.3): a trial or overdue tenant becomes active and
+   * a billing deactivation (not a manual one) is lifted. Safe to call more than once.
+   */
+  async applyLicencePayment(tenantId: string, actor: PlatformPrincipal): Promise<void> {
+    const before = (await this.deps.directory.findById(tenantId))?.status;
+    const tenant = await this.transition(
+      tenantId,
+      actor,
+      "Licence payment recorded",
+      "tenant.activated_by_payment",
+      (t, now) => t.recordLicencePayment(now),
+    );
+    if (before === "deactivated" && tenant.status !== "deactivated")
+      await this.notifyOwner(tenant, "tenant.restored", null);
+  }
+
   async setReadOnly(
     tenantId: string,
     reason: string,
@@ -113,7 +130,7 @@ export class TenantLifecycleService {
     actor: PlatformPrincipal,
     reason: string,
     action: string,
-    change: (tenant: TenantLifecycle, now: Date) => StatusTransition,
+    change: (tenant: TenantLifecycle, now: Date) => StatusTransition | null,
   ): Promise<TenantLifecycle> {
     const { deps } = this;
     const tenant = await deps.platformUnitOfWork.run(async () => {
@@ -121,6 +138,7 @@ export class TenantLifecycleService {
       if (locked === null) throw new TenantNotFoundForStaffError();
       const transition = change(locked, deps.clock.now());
       await deps.tenants.save(locked);
+      if (transition === null) return locked;
       await deps.tenants.appendHistory({
         tenantId,
         transition,
