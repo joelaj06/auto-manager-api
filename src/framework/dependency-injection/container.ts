@@ -1,3 +1,22 @@
+import { fileRoutes } from "../../adapters/routes/fileRoutes.js";
+import type { IObjectStorage } from "../../application/ports/IObjectStorage.js";
+import {
+  APPLICATION_OWNER,
+  ApplicationDocuments,
+  MAX_APPLICATION_DOCUMENTS,
+} from "../../application/use-cases/applications/ApplicationDocuments.js";
+import { FileService } from "../../application/use-cases/files/FileService.js";
+import { OwnedDocuments } from "../../application/use-cases/files/OwnedDocuments.js";
+import { SweepAbandonedFiles } from "../../application/use-cases/files/SweepAbandonedFiles.js";
+import { TenantFileUploads } from "../../application/use-cases/files/TenantFileUploads.js";
+import {
+  MAX_PARTNER_DOCUMENTS,
+  PARTNER_OWNER,
+  PartnerDocuments,
+} from "../../application/use-cases/partners/PartnerDocuments.js";
+import type { IFileRepository } from "../../domain/repositories/IFileRepository.js";
+import { PostgresFileRepository } from "../../infrastructure/storage/PostgresFileRepository.js";
+import { S3ObjectStorage } from "../../infrastructure/storage/S3ObjectStorage.js";
 import { partnerRoutes } from "../../adapters/routes/partnerRoutes.js";
 import type {
   IPartnerAttributions,
@@ -522,13 +541,16 @@ export function createContainer(
         clock: IClock,
         logger: ILogger,
         provisioningHandlers: IJobHandler[],
+        tenantFiles: FileService,
+        platformFiles: FileService,
       ): IJobHandler[] => [
         new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
         new SweepOutboxes({ roster, queue }),
         new DeliverEvent({ unitOfWork, processed, handlers, logger }),
         new RunTenantSchedules({ roster, ledger, clock, logger }),
-        new RunDailyMaintenance({ unitOfWork, retention, clock, logger }),
+        new RunDailyMaintenance({ unitOfWork, retention, clock, logger, files: tenantFiles }),
         new SendQueuedEmail({ deliveries, sender, clock, logger }),
+        new SweepAbandonedFiles({ files: platformFiles, logger }),
         ...provisioningHandlers,
       ],
       [
@@ -545,6 +567,8 @@ export function createContainer(
         TYPES.Clock,
         TYPES.Logger,
         TYPES.ProvisioningJobHandlers,
+        TYPES.TenantFileService,
+        TYPES.PlatformFileService,
       ],
     );
 
@@ -1540,24 +1564,32 @@ export function createContainer(
     ],
   );
 
-  container
-    .bind<TenantPublicConfig>(TYPES.TenantPublicConfig)
-    .toResolvedValue(
-      (
-        profiles: ITenantPublicProfiles,
-        tenantContext: ITenantContext,
-        unitOfWork: IUnitOfWork,
-        organisation: IOrganisationReader,
-        clock: IClock,
-      ) => new TenantPublicConfig({ profiles, tenantContext, unitOfWork, organisation, clock }),
-      [
-        TYPES.TenantPublicProfiles,
-        TYPES.TenantContext,
-        TYPES.UnitOfWork,
-        TYPES.OrganisationReader,
-        TYPES.Clock,
-      ],
-    );
+  container.bind<TenantPublicConfig>(TYPES.TenantPublicConfig).toResolvedValue(
+    (
+      profiles: ITenantPublicProfiles,
+      tenantContext: ITenantContext,
+      unitOfWork: IUnitOfWork,
+      organisation: IOrganisationReader,
+      clock: IClock,
+      storage: IObjectStorage,
+    ) =>
+      new TenantPublicConfig({
+        profiles,
+        tenantContext,
+        unitOfWork,
+        organisation,
+        clock,
+        storage,
+      }),
+    [
+      TYPES.TenantPublicProfiles,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.OrganisationReader,
+      TYPES.Clock,
+      TYPES.ObjectStorage,
+    ],
+  );
 
   // --- Tenant identity and organisation ---
   tenantRepository<ITenantUserRepository>(
@@ -1793,6 +1825,8 @@ export function createContainer(
       policy: AuthorizationPolicy,
       auditTrail: IAuditTrail,
       requestContext: IRequestContext,
+      files: FileService,
+      storage: IObjectStorage,
     ) =>
       new OrganisationAdministration({
         unitOfWork,
@@ -1801,6 +1835,8 @@ export function createContainer(
         policy,
         auditTrail,
         requestContext,
+        files,
+        storage,
       }),
     [
       TYPES.UnitOfWork,
@@ -1808,6 +1844,122 @@ export function createContainer(
       TYPES.Branches,
       TYPES.AuthorizationPolicy,
       TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.TenantFileService,
+      TYPES.ObjectStorage,
+    ],
+  );
+
+  // --- Files (object storage, tenant and platform file records) ---
+  container
+    .bind<S3ObjectStorage>(TYPES.ObjectStorage)
+    .toResolvedValue(() => new S3ObjectStorage(config.storage))
+    .onDeactivation((storage) => storage.destroy());
+  container
+    .bind<IFileRepository>(TYPES.TenantFileRepository)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext) => new PostgresFileRepository(() => tx.current(), "files"),
+      [TYPES.PostgresTransactionContext],
+    );
+  container
+    .bind<IFileRepository>(TYPES.PlatformFileRepository)
+    .toResolvedValue(
+      (platformDb: PlatformDb) => new PostgresFileRepository(() => platformDb, "platform_files"),
+      [TYPES.PlatformDb],
+    );
+  container.bind<FileService>(TYPES.TenantFileService).toResolvedValue(
+    (
+      files: IFileRepository,
+      storage: IObjectStorage,
+      unitOfWork: IUnitOfWork,
+      tenantContext: ITenantContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new FileService({
+        scope: "tenant",
+        files,
+        storage,
+        unitOfWork,
+        keyPrefix: () => `tenants/${tenantContext.currentTenantId().value}`,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.TenantFileRepository,
+      TYPES.ObjectStorage,
+      TYPES.UnitOfWork,
+      TYPES.TenantContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<FileService>(TYPES.PlatformFileService).toResolvedValue(
+    (
+      files: IFileRepository,
+      storage: IObjectStorage,
+      unitOfWork: IPlatformUnitOfWork,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new FileService({
+        scope: "platform",
+        files,
+        storage,
+        unitOfWork,
+        keyPrefix: () => "platform",
+        ids,
+        clock,
+      }),
+    [
+      TYPES.PlatformFileRepository,
+      TYPES.ObjectStorage,
+      TYPES.PlatformUnitOfWork,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<TenantFileUploads>(TYPES.TenantFileUploads)
+    .toResolvedValue(
+      (files: FileService, policy: AuthorizationPolicy) => new TenantFileUploads({ files, policy }),
+      [TYPES.TenantFileService, TYPES.AuthorizationPolicy],
+    );
+  container.bind<ApplicationDocuments>(TYPES.ApplicationDocuments).toResolvedValue(
+    (applications: ITenantApplicationRepository, files: FileService) =>
+      new ApplicationDocuments({
+        applications,
+        documents: new OwnedDocuments(
+          files,
+          "application_document",
+          APPLICATION_OWNER,
+          MAX_APPLICATION_DOCUMENTS,
+        ),
+      }),
+    [TYPES.TenantApplicationRepository, TYPES.PlatformFileService],
+  );
+  container.bind<PartnerDocuments>(TYPES.PartnerDocuments).toResolvedValue(
+    (
+      partners: IPartnerRepository,
+      files: FileService,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+    ) =>
+      new PartnerDocuments({
+        partners,
+        documents: new OwnedDocuments(
+          files,
+          "partner_document",
+          PARTNER_OWNER,
+          MAX_PARTNER_DOCUMENTS,
+        ),
+        audit,
+        requestContext,
+      }),
+    [
+      TYPES.PartnerRepository,
+      TYPES.PlatformFileService,
+      TYPES.PlatformAuditTrail,
       TYPES.RequestContext,
     ],
   );
@@ -1993,6 +2145,9 @@ export function createContainer(
       auditExport: AuditLogExport,
       partnerAdministration: PartnerAdministration,
       partnerPortal: PartnerPortal,
+      tenantFiles: TenantFileUploads,
+      applicationDocuments: ApplicationDocuments,
+      partnerDocuments: PartnerDocuments,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -2010,6 +2165,7 @@ export function createContainer(
           auditExport,
         }),
         ...partnerRoutes({ administration: partnerAdministration, portal: partnerPortal }),
+        ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -2055,6 +2211,9 @@ export function createContainer(
       TYPES.AuditLogExport,
       TYPES.PartnerAdministration,
       TYPES.PartnerPortal,
+      TYPES.TenantFileUploads,
+      TYPES.ApplicationDocuments,
+      TYPES.PartnerDocuments,
     ],
   );
 

@@ -31,6 +31,17 @@ services:
       timeout: 3s
       retries: 10
 
+  # S3-compatible object storage for files (`yarn storage:setup` creates the buckets).
+  rustfs:
+    image: rustfs/rustfs:1.0.1
+    environment:
+      RUSTFS_ACCESS_KEY: ${STORAGE_ACCESS_KEY_ID:-autoforce}
+      RUSTFS_SECRET_KEY: ${STORAGE_SECRET_ACCESS_KEY:-autoforce_local_only}
+    ports:
+      - "127.0.0.1:${STORAGE_PORT:-9000}:9000"
+    volumes:
+      - storage-data:/data
+
   mailpit:
     image: axllent/mailpit:latest
     ports:
@@ -39,3 +50,4 @@ services:
 
 volumes:
   postgres-data:
+  storage-data:

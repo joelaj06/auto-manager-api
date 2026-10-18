@@ -37,6 +37,8 @@ export type JobPayloads = {
   "tenant.catalogue_sync": Readonly<{ tenantId: string; version: number }>;
   /** Enqueue a catalogue sync for every tenant behind the current catalogue version. */
   "catalogue.sweep": Readonly<Record<string, never>>;
+  /** Remove abandoned platform uploads (tenant uploads: daily maintenance). */
+  "files.sweep": Readonly<Record<string, never>>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -155,6 +157,16 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryBackoff: false,
     expireInSeconds: 900,
     cron: "23 * * * *",
+  },
+  "files.sweep": {
+    description: "Remove platform uploads that were started but never completed",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 300,
+    retryBackoff: false,
+    expireInSeconds: 900,
+    cron: "41 3 * * *",
   },
 } satisfies Record<JobName, JobDefinition>);
 

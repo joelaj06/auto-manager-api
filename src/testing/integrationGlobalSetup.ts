@@ -3,7 +3,8 @@ import { DatabaseMigrationService } from "../framework/cli/DatabaseMigrationServ
 import { ClusterBootstrapper } from "../infrastructure/database/provisioning/ClusterBootstrapper.js";
 import { dropDatabasesWithPrefix, dropTestDatabase } from "./databases.js";
 import { createTestContainer } from "./testContainer.js";
-import { connectAdmin, TEST_DATABASE } from "./testDatabase.js";
+import { S3ObjectStorage } from "../infrastructure/storage/S3ObjectStorage.js";
+import { connectAdmin, TEST_DATABASE, testConfig } from "./testDatabase.js";
 import { startTestInfrastructure, testInfraMode } from "./testInfrastructure.js";
 
 /**
@@ -39,7 +40,26 @@ export default async function setup(): Promise<() => Promise<void>> {
   };
 }
 
+/** Creates the test buckets (idempotent); storage may need a moment after starting. */
+async function prepareStorage(): Promise<void> {
+  const storage = new S3ObjectStorage(testConfig().storage);
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await storage.setup(["http://localhost:5173"]);
+        return;
+      } catch (error) {
+        if (attempt >= 20) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  } finally {
+    storage.destroy();
+  }
+}
+
 async function prepareDatabases(): Promise<void> {
+  await prepareStorage();
   const admin = await connectAdmin();
   try {
     await dropDatabasesWithPrefix(admin, TEST_DATABASE.tenantPrefix);

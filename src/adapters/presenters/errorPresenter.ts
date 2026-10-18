@@ -131,6 +131,11 @@ const RULES: Readonly<Record<string, Rule>> = {
   USER_EXISTS: { status: 409 },
   OWNER_PROTECTED: { status: 422 },
 
+  // Files
+  FILE_NOT_FOUND: { status: 404 },
+  FILE_REJECTED: { status: 400 },
+  FILE_STATE: { status: 409 },
+
   // Reseller programme
   PARTNER_NOT_FOUND: { status: 404 },
   PARTNER_EMAIL_TAKEN: { status: 409 },

@@ -1,6 +1,7 @@
 import { TenantId } from "../../../domain/value-objects/TenantId.js";
 import { TenantNotFoundError } from "../../errors/TenantErrors.js";
 import type { IClock } from "../../ports/IClock.js";
+import type { IObjectStorage } from "../../ports/IObjectStorage.js";
 import type { ITenantContext } from "../../ports/ITenantContext.js";
 import type {
   IOrganisationReader,
@@ -13,6 +14,8 @@ export type TenantPublicConfigView = Readonly<{
     slug: string;
     name: string;
     status: string;
+    /** Public URL of the business logo (CDN), or null. */
+    logoUrl: string | null;
     /** Present when the tenant is blocked or read-only: what the app shows on its blocking screen. */
     notice: Readonly<{ reasonCategory: string | null; message: string | null }> | null;
   }>;
@@ -43,6 +46,7 @@ export class TenantPublicConfig {
       tenantContext: ITenantContext;
       unitOfWork: IUnitOfWork;
       organisation: IOrganisationReader;
+      storage: IObjectStorage;
       clock: IClock;
     }>,
   ) {}
@@ -63,6 +67,10 @@ export class TenantPublicConfig {
         slug: profile.slug,
         name: organisation?.name ?? profile.name,
         status: profile.status,
+        logoUrl:
+          organisation?.logoStorageKey === undefined || organisation.logoStorageKey === null
+            ? null
+            : deps.storage.publicUrl(organisation.logoStorageKey),
         notice: blocked
           ? { reasonCategory: profile.deactivationReason, message: profile.statusMessage }
           : null,

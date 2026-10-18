@@ -151,4 +151,14 @@ export const TYPES = Object.freeze({
   PartnerAttributions: Symbol.for("IPartnerAttributions"),
   PartnerAdministration: Symbol.for("PartnerAdministration"),
   PartnerPortal: Symbol.for("PartnerPortal"),
+
+  // Files (P1-8)
+  ObjectStorage: Symbol.for("IObjectStorage"),
+  TenantFileRepository: Symbol.for("TenantFileRepository"),
+  PlatformFileRepository: Symbol.for("PlatformFileRepository"),
+  TenantFileService: Symbol.for("TenantFileService"),
+  PlatformFileService: Symbol.for("PlatformFileService"),
+  TenantFileUploads: Symbol.for("TenantFileUploads"),
+  ApplicationDocuments: Symbol.for("ApplicationDocuments"),
+  PartnerDocuments: Symbol.for("PartnerDocuments"),
 });

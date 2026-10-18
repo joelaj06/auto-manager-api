@@ -1,7 +1,7 @@
 import { GenericContainer, Wait, type StartedTestContainer } from "testcontainers";
 
 /**
- * Where the integration tests get PostgreSQL and Mailpit from:
+ * Where the integration tests get PostgreSQL, Mailpit and object storage (RustFS) from:
  * - `containers` (default): throw-away containers started by Testcontainers for this run only —
  *   nothing to start by hand, and development data is never touched. Needs Docker.
  * - `external`: services that are already running — the compose stack locally
@@ -13,6 +13,12 @@ export type TestInfraMode = "containers" | "external";
 const POSTGRES_IMAGE = "postgres:18-alpine";
 const MAILPIT_IMAGE = "axllent/mailpit:v1.31.6";
 const POSTGRES_PASSWORD = "autoforce_test_container_only";
+const STORAGE_IMAGE = "rustfs/rustfs:1.0.1";
+/** Same as the defaults of testConfig() (and compose.yaml). */
+export const TEST_STORAGE_CREDENTIALS = Object.freeze({
+  accessKeyId: "autoforce",
+  secretAccessKey: "autoforce_local_only",
+});
 
 export function testInfraMode(env: NodeJS.ProcessEnv = process.env): TestInfraMode {
   const mode = env.TEST_INFRA ?? "containers";
@@ -47,6 +53,18 @@ export async function startTestInfrastructure(): Promise<StartedTestInfrastructu
       .start();
     started.push(mailpit);
 
+    const storage = await new GenericContainer(STORAGE_IMAGE)
+      .withEnvironment({
+        RUSTFS_ACCESS_KEY: TEST_STORAGE_CREDENTIALS.accessKeyId,
+        RUSTFS_SECRET_KEY: TEST_STORAGE_CREDENTIALS.secretAccessKey,
+      })
+      .withExposedPorts(9000)
+      // RustFS runs as a non-root user: the tmpfs must be writable for it.
+      .withTmpFs({ "/data": "rw,mode=1777" })
+      .withWaitStrategy(Wait.forHttp("/health", 9000))
+      .start();
+    started.push(storage);
+
     return {
       env: {
         POSTGRES_HOST: postgres.getHost(),
@@ -56,6 +74,7 @@ export async function startTestInfrastructure(): Promise<StartedTestInfrastructu
         SMTP_HOST: mailpit.getHost(),
         SMTP_PORT: String(mailpit.getMappedPort(1025)),
         MAILPIT_URL: `http://${mailpit.getHost()}:${mailpit.getMappedPort(8025)}`,
+        STORAGE_ENDPOINT: `http://${storage.getHost()}:${storage.getMappedPort(9000)}`,
       },
       stop: async () => {
         await Promise.allSettled(started.map((container) => container.stop()));

@@ -57,7 +57,7 @@ export const replyBody = z.object({
     .default({}),
 });
 
-const tokenOf = (req: Request): string => {
+export const tokenOf = (req: Request): string => {
   const token = req.get(APPLICATION_TOKEN_HEADER);
   if (token === undefined || !/^[A-Za-z0-9_-]{20,100}$/.test(token))
     throw new ApplicationNotFoundError();

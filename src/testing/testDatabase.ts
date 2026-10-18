@@ -64,6 +64,10 @@ export function testConfig(overrides: NodeJS.ProcessEnv = {}): AppConfig {
     // Mailpit: a test container's mapped port, or the compose / CI service.
     SMTP_HOST: process.env.SMTP_HOST ?? "localhost",
     SMTP_PORT: process.env.SMTP_PORT ?? "1025",
+    // RustFS: a test container's mapped port, or the compose / CI service.
+    STORAGE_ENDPOINT: process.env.STORAGE_ENDPOINT ?? "http://localhost:9000",
+    STORAGE_PRIVATE_BUCKET: "autoforce-test-files",
+    STORAGE_PUBLIC_BUCKET: "autoforce-test-public",
     ...overrides,
   });
 }

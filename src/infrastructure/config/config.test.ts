@@ -16,6 +16,9 @@ const requiredSecrets = {
 const productionEmail = {
   SMTP_HOST: "smtp.example.com",
   EMAIL_FROM: "Autoforce <no-reply@example.com>",
+  STORAGE_ACCESS_KEY_ID: "prod-access-key",
+  STORAGE_SECRET_ACCESS_KEY: "prod-secret-access-key",
+  FILES_PUBLIC_BASE_URL: "https://files.example.com",
 };
 
 function issuesOf(attempt: () => unknown): readonly string[] {
@@ -162,6 +165,31 @@ describe("loadConfig", () => {
     expect(issues).toEqual([expect.stringMatching(/^DATABASE_SSL:/)]);
   });
 
+  it("defaults storage to the local RustFS outside production and to AWS in production", () => {
+    expect(loadConfig(requiredSecrets).storage).toEqual({
+      endpoint: "http://localhost:9000",
+      presignEndpoint: "http://localhost:9000",
+      region: "us-east-1",
+      accessKeyId: "autoforce",
+      secretAccessKey: "autoforce_local_only",
+      forcePathStyle: true,
+      privateBucket: "autoforce-files",
+      publicBucket: "autoforce-public",
+      publicBaseUrl: "http://localhost:9000/autoforce-public",
+    });
+    const production = loadConfig({
+      ...requiredSecrets,
+      ...productionEmail,
+      NODE_ENV: "production",
+      DATABASE_SSL: "require",
+    }).storage;
+    expect(production).toMatchObject({
+      endpoint: null,
+      presignEndpoint: null,
+      publicBaseUrl: "https://files.example.com",
+    });
+  });
+
   it("defaults email to the local Mailpit outside production", () => {
     const config = loadConfig(requiredSecrets);
     expect(config.email.smtp).toMatchObject({ host: "localhost", port: 1025, secure: false });
@@ -176,6 +204,9 @@ describe("loadConfig", () => {
     expect(issues).toEqual([
       expect.stringMatching(/^SMTP_HOST:/),
       expect.stringMatching(/^EMAIL_FROM:/),
+      expect.stringMatching(/^STORAGE_ACCESS_KEY_ID:/),
+      expect.stringMatching(/^STORAGE_SECRET_ACCESS_KEY:/),
+      expect.stringMatching(/^FILES_PUBLIC_BASE_URL:/),
     ]);
     const auth = issuesOf(() => loadConfig({ ...requiredSecrets, SMTP_USER: "mailer" }));
     expect(auth).toEqual([expect.stringMatching(/^SMTP_PASSWORD:/)]);

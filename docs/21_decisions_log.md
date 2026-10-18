@@ -247,6 +247,16 @@ Unanswered (proposals stand): extension frequency limit (2 per 90 days), the sch
 | 124 | Deferred | **`trusted` is stored but does not auto-approve yet; per-user restrictions inside a partner, commission terms and ledgers come with phase 2** (profile shows `commissionTerms: null` to those allowed to see terms) | No payments exist yet; auto-approval needs the approval policy settled |
 | 125 | Partner replies | **A partner answering an information request is recorded as the applicant's reply, marked "on behalf of partner"** | The client sees one conversation; the trail still shows who wrote it |
 
+## Engineering decisions during P1-8 (2026-10-18)
+
+| # | Topic | Decision | Why |
+|---|---|---|---|
+| 126 | Object storage | **Any S3-compatible service through the AWS SDK v3; locally (compose, tests, CI) RustFS 1.0.1** (Apache-2.0, S3-compatible). Provider for hosting decided with P0-3 | MinIO no longer publishes community images; RustFS behaves the same for our use (signed URLs, bucket policies, CORS) and nothing in the code is provider-specific |
+| 127 | Upload flow | **Pre-signed PUT straight to storage, then a confirm call**; the signature fixes content type and size, and confirmation checks the stored size and the real type from the first bytes before the file can be used | No file bytes through the API (fixes the old base64-in-JSON limit, docs/03 §12); declared types are never trusted |
+| 128 | Public vs private | **Two buckets: public (anonymous read, served via `FILES_PUBLIC_BASE_URL`, i.e. a CDN later) and private (5-minute signed download links, saved as attachments)** | Logos must be cacheable and linkable; KYC documents must never have a permanent URL |
+| 129 | File records | **One `files` table per tenant database and `platform_files` in the platform database, same shape; kinds with fixed rules (types, size, visibility) in code; SVG never accepted** | Tenant data stays in the tenant's database (backups, deletion); platform documents exist before any tenant does |
+| 130 | Lifecycle | **Pending uploads older than 24 h and replaced or removed files are deleted with their bytes** (daily sweep; tenant files in daily maintenance) | Storage never fills with orphans; removed KYC documents really disappear |
+
 ## Consequences in one page
 
 1. **Rewrite the persistence layer on PostgreSQL**, from a clean schema. Keep the clean-architecture shape and Inversify, replace Mongoose models and repositories. No data to carry over means no migration risk and a chance to fix every model-level bug at the root.

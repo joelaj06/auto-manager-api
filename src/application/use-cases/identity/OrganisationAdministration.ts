@@ -9,8 +9,11 @@ import type {
   IOrganisationSettings,
   NumberingFormat,
   OrganisationChanges,
+  OrganisationRecord,
   OrganisationView,
 } from "../../ports/IOrganisationSettings.js";
+import type { IObjectStorage } from "../../ports/IObjectStorage.js";
+import type { FileService } from "../files/FileService.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 
@@ -31,11 +34,35 @@ export class OrganisationAdministration {
       policy: AuthorizationPolicy;
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
+      /** Tenant files (the logo) and storage (its public URL). */
+      files: FileService;
+      storage: IObjectStorage;
     }>,
   ) {}
 
-  get(): Promise<OrganisationView> {
-    return this.deps.unitOfWork.run(() => this.deps.organisation.get());
+  async get(): Promise<OrganisationView> {
+    return this.view(await this.deps.unitOfWork.run(() => this.deps.organisation.get()));
+  }
+
+  /**
+   * Sets the business logo to an uploaded, checked `organisation_logo` file (null removes it).
+   * The previous logo file is deleted.
+   */
+  async setLogo(actor: Principal, fileId: string | null): Promise<OrganisationView> {
+    const { deps } = this;
+    if (fileId !== null) (await deps.files.load(fileId)).assertUsableAs("organisation_logo");
+    const previous = await deps.unitOfWork.run(async () => {
+      const before = await deps.organisation.get();
+      if (before.logoFileId === fileId) return null;
+      await deps.organisation.setLogo(fileId);
+      await this.audit(actor, "organisation.logo_changed", "organisation", null, {
+        before: before.logoFileId,
+        after: fileId,
+      });
+      return before.logoFileId;
+    });
+    if (previous !== null) await deps.files.remove(previous);
+    return this.get();
   }
 
   async update(actor: Principal, changes: OrganisationChanges): Promise<OrganisationView> {
@@ -49,8 +76,12 @@ export class OrganisationAdministration {
         }
       }
       await deps.organisation.update(changes);
-      await this.audit(actor, "organisation.updated", "organisation", null, { before, changes });
-      return deps.organisation.get();
+      const { logoFileId: _f, logoStorageKey: _k, ...audited } = before;
+      await this.audit(actor, "organisation.updated", "organisation", null, {
+        before: audited,
+        changes,
+      });
+      return this.view(await deps.organisation.get());
     });
   }
 
@@ -114,6 +145,17 @@ export class OrganisationAdministration {
     const reachable = this.deps.policy.branchesFor(actor, "branches.update");
     if (reachable !== "all" && !reachable.includes(id)) throw new BranchNotFoundError();
     return branch;
+  }
+
+  private view(record: OrganisationRecord): OrganisationView {
+    const { logoFileId, logoStorageKey, ...rest } = record;
+    return {
+      ...rest,
+      logo:
+        logoFileId === null || logoStorageKey === null
+          ? null
+          : { fileId: logoFileId, url: this.deps.storage.publicUrl(logoStorageKey) },
+    };
   }
 
   private async audit(

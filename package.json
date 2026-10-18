@@ -1,7 +1,7 @@
 {
   "name": "auto-manager-api",
   "version": "2.0.0-alpha.0",
-  "description": "Autoforce Manager API \u2014 multi-tenant fleet, rental, work & pay and dealership platform",
+  "description": "Autoforce Manager API — multi-tenant fleet, rental, work & pay and dealership platform",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -24,6 +24,7 @@
     "db:load-test": "tsx --env-file-if-exists=.env src/framework/cli/dbLoadTest.ts",
     "platform:invite-admin": "tsx --env-file-if-exists=.env src/framework/cli/platformInviteAdmin.ts",
     "backup": "tsx --env-file-if-exists=.env src/framework/cli/backup.ts",
+    "storage:setup": "tsx --env-file-if-exists=.env src/framework/cli/storageSetup.ts",
     "load:health": "load/run.sh health",
     "load:auth": "load/run.sh auth-rejection",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -37,6 +38,8 @@
     "verify": "yarn typecheck && yarn lint && yarn format:check && yarn test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1146.0",
+    "@aws-sdk/s3-request-presigner": "3.1146.0",
     "argon2": "^0.45.1",
     "cors": "^2.8.6",
     "express": "^5.3.0",

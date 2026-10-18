@@ -167,14 +167,24 @@ export class PostgresOrganisationReader implements IOrganisationReader {
   constructor(private readonly transactions: PostgresTransactionContext) {}
 
   async get() {
-    const { rows } = await this.transactions
-      .current()
-      .query<{ name: string; base_currency: string; timezone: string }>(
-        "select name, base_currency, timezone from organisation",
-      );
+    const { rows } = await this.transactions.current().query<{
+      name: string;
+      base_currency: string;
+      timezone: string;
+      logo_storage_key: string | null;
+    }>(
+      `select o.name, o.base_currency, o.timezone, f.storage_key as logo_storage_key
+           from organisation o
+           left join files f on f.id = o.logo_file_id and f.status = 'ready'`,
+    );
     const r = rows[0];
     return r === undefined
       ? null
-      : { name: r.name, baseCurrency: r.base_currency, timezone: r.timezone };
+      : {
+          name: r.name,
+          baseCurrency: r.base_currency,
+          timezone: r.timezone,
+          logoStorageKey: r.logo_storage_key,
+        };
   }
 }

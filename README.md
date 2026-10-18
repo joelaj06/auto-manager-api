@@ -22,11 +22,12 @@ cp .env.example .env
 yarn install
 docker compose up -d
 yarn db:setup        # roles, platform + template databases, all migrations (idempotent)
+yarn storage:setup   # object storage buckets for files (idempotent)
 yarn dev
 ```
 
 Local services use non-default host ports (PostgreSQL **54320**, Redis **63790**) so they don't
-clash with other projects.
+clash with other projects. Object storage (RustFS, S3-compatible) listens on **9000**.
 
 ## Databases
 
@@ -187,6 +188,18 @@ All with `X-Tenant: <slug>` (except discover). Sign-in: `POST /api/v1/auth/login
 `/me/permissions`, `/me/password`, `/me/sessions`. Users: `/users` (list, view, invite, update,
 disable/enable, `PUT /users/:id/roles` with per-branch assignments). Roles: `/roles`,
 `/permissions`. Organisation: `/organisation`, `/settings/numbering`, `/branches`.
+
+## Files
+
+Files are uploaded straight to S3-compatible storage with pre-signed URLs (no file bytes pass
+through the API): `POST /api/v1/files/uploads` (`kind`, `filename`, `contentType`, `sizeBytes`) →
+`PUT` the bytes to `upload.url` with exactly `upload.headers` → `POST /api/v1/files/:id/complete`
+(the size and the real file type are checked; a mismatch is refused and deleted). Public files
+(the business logo, `PUT /api/v1/organisation/logo`) are served from the public bucket or a CDN
+(`FILES_PUBLIC_BASE_URL`); private files only through short-lived signed links. Applicants attach
+KYC documents with `/api/v1/applications/:id/documents` (X-Application-Token); staff see them at
+`/api/platform/v1/applications/:id/documents`; partner documents live under
+`/api/platform/v1/partners/:id/documents`. Abandoned uploads are removed daily.
 
 ## Backups
 

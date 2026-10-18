@@ -69,6 +69,15 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      # S3-compatible object storage for the files tests.
+      rustfs:
+        image: rustfs/rustfs:1.0.1
+        env:
+          # Throw-away credentials for the CI-only service container (the test defaults).
+          RUSTFS_ACCESS_KEY: autoforce
+          RUSTFS_SECRET_KEY: autoforce_local_only
+        ports:
+          - 9000:9000
       # SMTP sink for the email delivery tests (SMTP 1025, HTTP API 8025).
       mailpit:
         image: axllent/mailpit:v1.31.6
@@ -142,6 +151,9 @@ jobs:
             -e MFA_ENCRYPTION_KEY=smoke_test_only_mfa_key_0123456789abcdefgh \
             -e SMTP_HOST=smtp.invalid \
             -e EMAIL_FROM=no-reply@example.invalid \
+            -e STORAGE_ACCESS_KEY_ID=smoke_test_only \
+            -e STORAGE_SECRET_ACCESS_KEY=smoke_test_only_secret \
+            -e FILES_PUBLIC_BASE_URL=https://files.example.invalid \
             autoforce-api:ci
           for _ in $(seq 1 30); do
             if curl -fsS http://localhost:3000/health/live; then break; fi

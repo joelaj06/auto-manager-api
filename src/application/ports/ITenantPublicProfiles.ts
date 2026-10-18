@@ -16,5 +16,11 @@ export interface ITenantPublicProfiles {
 
 /** The tenant's organisation settings needed publicly (tenant unit of work). */
 export interface IOrganisationReader {
-  get(): Promise<Readonly<{ name: string; baseCurrency: string; timezone: string }> | null>;
+  get(): Promise<Readonly<{
+    name: string;
+    baseCurrency: string;
+    timezone: string;
+    /** Storage key of the public logo file, if any. */
+    logoStorageKey: string | null;
+  }> | null>;
 }

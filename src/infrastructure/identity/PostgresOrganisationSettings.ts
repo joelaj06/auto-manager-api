@@ -2,7 +2,7 @@ import type {
   IOrganisationSettings,
   NumberingFormat,
   OrganisationChanges,
-  OrganisationView,
+  OrganisationRecord,
 } from "../../application/ports/IOrganisationSettings.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
 
@@ -20,7 +20,7 @@ const COLUMNS: Readonly<Record<keyof OrganisationChanges, string>> = {
 export class PostgresOrganisationSettings implements IOrganisationSettings {
   constructor(private readonly transactions: PostgresTransactionContext) {}
 
-  async get(): Promise<OrganisationView> {
+  async get(): Promise<OrganisationRecord> {
     const { rows } = await this.transactions.current().query<{
       name: string;
       legal_name: string | null;
@@ -32,10 +32,14 @@ export class PostgresOrganisationSettings implements IOrganisationSettings {
       contact_email: string | null;
       contact_phone: string | null;
       numbering: Record<string, NumberingFormat> | null;
+      logo_file_id: string | null;
+      logo_storage_key: string | null;
     }>(
-      `select name, legal_name, country, base_currency, timezone, tin, registration_number,
-              contact_email::text as contact_email, contact_phone, settings->'numbering' as numbering
-         from organisation`,
+      `select o.name, o.legal_name, o.country, o.base_currency, o.timezone, o.tin,
+              o.registration_number, o.contact_email::text as contact_email, o.contact_phone,
+              o.settings->'numbering' as numbering, o.logo_file_id, f.storage_key as logo_storage_key
+         from organisation o
+         left join files f on f.id = o.logo_file_id and f.status = 'ready'`,
     );
     const r = rows[0];
     if (r === undefined) throw new Error("Organisation is not set up");
@@ -50,7 +54,15 @@ export class PostgresOrganisationSettings implements IOrganisationSettings {
       contactEmail: r.contact_email,
       contactPhone: r.contact_phone,
       numbering: r.numbering ?? {},
+      logoFileId: r.logo_file_id,
+      logoStorageKey: r.logo_storage_key,
     };
+  }
+
+  async setLogo(fileId: string | null): Promise<void> {
+    await this.transactions
+      .current()
+      .query("update organisation set logo_file_id = $1, updated_at = now()", [fileId]);
   }
 
   async update(changes: OrganisationChanges): Promise<void> {

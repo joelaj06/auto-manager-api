@@ -136,6 +136,27 @@ const envSchema = z
      */
     SMS_PROVIDER: z.enum(["log"]).default("log"),
 
+    // --- Object storage (S3-compatible; files service) ---
+    // Development defaults match compose.yaml (RustFS). Production sets everything explicitly;
+    // without STORAGE_ENDPOINT it talks to AWS S3 in STORAGE_REGION.
+    STORAGE_ENDPOINT: z.url().optional(),
+    /** Endpoint written into pre-signed URLs when clients reach storage at another address. */
+    STORAGE_PRESIGN_ENDPOINT: z.url().optional(),
+    STORAGE_REGION: z.string().min(1).default("us-east-1"),
+    STORAGE_ACCESS_KEY_ID: z.string().min(3).optional(),
+    STORAGE_SECRET_ACCESS_KEY: z.string().min(8).optional(),
+    STORAGE_FORCE_PATH_STYLE: booleanFlag.default(true),
+    STORAGE_PRIVATE_BUCKET: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/)
+      .default("autoforce-files"),
+    STORAGE_PUBLIC_BUCKET: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/)
+      .default("autoforce-public"),
+    /** Base URL of public files: a CDN in front of the public bucket, or the bucket itself. */
+    FILES_PUBLIC_BASE_URL: z.url().optional(),
+
     // --- Platform email (SMTP) ---
     // No defaults in production: host and sender must be chosen explicitly there.
     SMTP_HOST: z.string().min(1).optional(),
@@ -167,7 +188,13 @@ const envSchema = z
       });
     }
     if (env.NODE_ENV === "production") {
-      for (const variable of ["SMTP_HOST", "EMAIL_FROM"] as const) {
+      for (const variable of [
+        "SMTP_HOST",
+        "EMAIL_FROM",
+        "STORAGE_ACCESS_KEY_ID",
+        "STORAGE_SECRET_ACCESS_KEY",
+        "FILES_PUBLIC_BASE_URL",
+      ] as const) {
         if (env[variable] === undefined) {
           ctx.addIssue({ code: "custom", path: [variable], message: "must be set in production" });
         }
@@ -254,6 +281,18 @@ export type BackupConfig = Readonly<{
 
 export type JobsConfig = Readonly<{ workerConcurrency: number; poolMax: number }>;
 
+export type StorageConfig = Readonly<{
+  endpoint: string | null;
+  presignEndpoint: string | null;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  forcePathStyle: boolean;
+  privateBucket: string;
+  publicBucket: string;
+  publicBaseUrl: string;
+}>;
+
 export type EmailConfig = Readonly<{
   smtp: Readonly<{
     host: string;
@@ -278,6 +317,7 @@ export type AppConfig = Readonly<{
   jobs: JobsConfig;
   email: EmailConfig;
   backup: BackupConfig;
+  storage: StorageConfig;
   public: PublicConfig;
 }>;
 
@@ -291,6 +331,27 @@ export class ConfigError extends Error {
     this.name = "ConfigError";
     this.issues = issues;
   }
+}
+
+const LOCAL_STORAGE_ENDPOINT = "http://localhost:9000";
+
+function storageConfig(e: z.output<typeof envSchema>): StorageConfig {
+  const production = e.NODE_ENV === "production";
+  const endpoint = e.STORAGE_ENDPOINT ?? (production ? null : LOCAL_STORAGE_ENDPOINT);
+  const presignEndpoint = e.STORAGE_PRESIGN_ENDPOINT ?? endpoint;
+  return Object.freeze({
+    endpoint,
+    presignEndpoint,
+    region: e.STORAGE_REGION,
+    accessKeyId: e.STORAGE_ACCESS_KEY_ID ?? "autoforce",
+    secretAccessKey: e.STORAGE_SECRET_ACCESS_KEY ?? "autoforce_local_only",
+    forcePathStyle: e.STORAGE_FORCE_PATH_STYLE,
+    privateBucket: e.STORAGE_PRIVATE_BUCKET,
+    publicBucket: e.STORAGE_PUBLIC_BUCKET,
+    publicBaseUrl:
+      e.FILES_PUBLIC_BASE_URL ??
+      `${(presignEndpoint ?? LOCAL_STORAGE_ENDPOINT).replace(/\/$/, "")}/${e.STORAGE_PUBLIC_BUCKET}`,
+  });
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -346,6 +407,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       concurrency: e.BACKUP_CONCURRENCY,
     }),
     jobs: Object.freeze({ workerConcurrency: e.JOB_WORKER_CONCURRENCY, poolMax: e.JOB_POOL_MAX }),
+    storage: storageConfig(e),
     email: Object.freeze({
       smtp: Object.freeze({
         host: e.SMTP_HOST ?? "localhost",

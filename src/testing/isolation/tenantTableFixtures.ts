@@ -23,6 +23,14 @@ const letters = (marker: string) =>
 const inOneDay = () => new Date(Date.now() + 86_400_000);
 
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  files: {
+    insert: (marker) => ({
+      sql: `insert into files (kind, storage_key, visibility, filename, content_type, size_bytes)
+            values ('organisation_logo', $1, 'public', 'isolation.png', 'image/png', 1)`,
+      params: [marker],
+    }),
+    find: "select 1 from files where storage_key = $1",
+  },
   counters: {
     insert: (marker) => ({
       sql: "insert into counters (key, value) values ($1, 1)",
