@@ -1,3 +1,19 @@
+import { remittanceRoutes } from "../../adapters/routes/remittanceRoutes.js";
+import type {
+  IOperationsQueries,
+  IRemittanceSettingsStore,
+} from "../../application/ports/IRemittanceRecords.js";
+import { DriverLedger } from "../../application/use-cases/remittances/DriverLedger.js";
+import { OperationsBoard } from "../../application/use-cases/remittances/OperationsBoard.js";
+import { RemittancePaymentListener } from "../../application/use-cases/remittances/RemittancePaymentListener.js";
+import { RemittanceScheduler } from "../../application/use-cases/remittances/RemittanceScheduler.js";
+import { RemittanceSettingsService } from "../../application/use-cases/remittances/RemittanceSettingsService.js";
+import { Remittances } from "../../application/use-cases/remittances/Remittances.js";
+import {
+  PostgresOperationsQueries,
+  PostgresRemittanceSettingsStore,
+  PostgresRemittances,
+} from "../../infrastructure/remittances/PostgresRemittances.js";
 import type { IExpenseRepository } from "../../domain/repositories/IExpenseRepository.js";
 import { expenseRoutes } from "../../adapters/routes/expenseRoutes.js";
 import type { ITenantDailyTask } from "../../application/jobs/ITenantDailyTask.js";
@@ -2913,6 +2929,9 @@ export function createContainer(
       ids: IIdGenerator,
       clock: IClock,
       expenseRepository: IExpenseRepository,
+      remittanceStore: PostgresRemittances,
+      calendarForListeners: TenantCalendar,
+      postingForListeners: LedgerPosting,
     ) =>
       new PaymentRecording({
         unitOfWork,
@@ -2933,7 +2952,18 @@ export function createContainer(
         requestContext,
         ids,
         clock,
-        reversalListeners: [new ExpensePaymentListener({ expenses: expenseRepository, clock })],
+        reversalListeners: [
+          new ExpensePaymentListener({ expenses: expenseRepository, clock }),
+          new RemittancePaymentListener({
+            remittances: remittanceStore,
+            records: remittanceStore,
+            posting: postingForListeners,
+            calendar: calendarForListeners,
+            // Remittances depends on payment recording: resolved when a reversal happens.
+            book: () => container.get<Remittances>(TYPES.Remittances),
+            clock,
+          }),
+        ],
       }),
     [
       TYPES.UnitOfWork,
@@ -2955,6 +2985,9 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.ExpenseRepository,
+      TYPES.RemittanceStore,
+      TYPES.TenantCalendar,
+      TYPES.LedgerPosting,
     ],
   );
   container.bind<CashSessions>(TYPES.CashSessions).toResolvedValue(
@@ -3243,7 +3276,177 @@ export function createContainer(
   );
   container
     .bind<ITenantDailyTask[]>(TYPES.TenantDailyTasks)
-    .toResolvedValue((recurring: RecurringExpenses) => [recurring], [TYPES.RecurringExpenses]);
+    .toResolvedValue(
+      (recurring: RecurringExpenses, remittances: RemittanceScheduler) => [recurring, remittances],
+      [TYPES.RecurringExpenses, TYPES.RemittanceScheduler],
+    );
+
+  // --- Remittances and the driver ledger ---
+  tenantRepository<PostgresRemittances>(TYPES.RemittanceStore, (tx) => new PostgresRemittances(tx));
+  tenantRepository<IOperationsQueries>(
+    TYPES.OperationsQueries,
+    (tx) => new PostgresOperationsQueries(tx),
+  );
+  tenantRepository<IRemittanceSettingsStore>(
+    TYPES.RemittanceSettingsStore,
+    (tx) => new PostgresRemittanceSettingsStore(tx),
+  );
+  container.bind<Remittances>(TYPES.Remittances).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      store: PostgresRemittances,
+      settings: IRemittanceSettingsStore,
+      assignments: PostgresAssignmentRepository,
+      payments: PaymentRecording,
+      posting: LedgerPosting,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new Remittances({
+        unitOfWork,
+        remittances: store,
+        records: store,
+        settings,
+        assignments,
+        payments,
+        posting,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RemittanceStore,
+      TYPES.RemittanceSettingsStore,
+      TYPES.AssignmentRepository,
+      TYPES.PaymentRecording,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<RemittanceScheduler>(TYPES.RemittanceScheduler).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      store: PostgresRemittances,
+      settings: IRemittanceSettingsStore,
+      organisation: IOrganisationSettings,
+      book: Remittances,
+      posting: LedgerPosting,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new RemittanceScheduler({
+        unitOfWork,
+        remittances: store,
+        records: store,
+        settings,
+        organisation,
+        book,
+        posting,
+        ids,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RemittanceStore,
+      TYPES.RemittanceSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.Remittances,
+      TYPES.LedgerPosting,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<DriverLedger>(TYPES.DriverLedger).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      ledger: ILedger,
+      store: PostgresRemittances,
+      drivers: DriverAdministration,
+      posting: LedgerPosting,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DriverLedger({
+        unitOfWork,
+        ledger,
+        records: store,
+        drivers,
+        posting,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.Ledger,
+      TYPES.RemittanceStore,
+      TYPES.DriverAdministration,
+      TYPES.LedgerPosting,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<OperationsBoard>(TYPES.OperationsBoard)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        queries: IOperationsQueries,
+        settings: IRemittanceSettingsStore,
+        drivers: DriverAdministration,
+        posting: LedgerPosting,
+        scope: BranchScope,
+        calendar: TenantCalendar,
+      ) =>
+        new OperationsBoard({ unitOfWork, queries, settings, drivers, posting, scope, calendar }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.OperationsQueries,
+        TYPES.RemittanceSettingsStore,
+        TYPES.DriverAdministration,
+        TYPES.LedgerPosting,
+        TYPES.BranchScope,
+        TYPES.TenantCalendar,
+      ],
+    );
+  container
+    .bind<RemittanceSettingsService>(TYPES.RemittanceSettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        settings: IRemittanceSettingsStore,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new RemittanceSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.RemittanceSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
+    );
 
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
@@ -3606,6 +3809,10 @@ export function createContainer(
       fuelLogs: FuelLogs,
       expenseAdministration: ExpenseAdministration,
       recurringExpenses: RecurringExpenses,
+      remittanceBook: Remittances,
+      driverLedger: DriverLedger,
+      operationsBoard: OperationsBoard,
+      remittanceSettings: RemittanceSettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -3668,6 +3875,12 @@ export function createContainer(
           fuel: fuelLogs,
           administration: expenseAdministration,
           recurring: recurringExpenses,
+        }),
+        ...remittanceRoutes({
+          remittances: remittanceBook,
+          ledger: driverLedger,
+          board: operationsBoard,
+          settings: remittanceSettings,
         }),
         ...identityRoutes({
           signIn: tenantSignIn,
@@ -3751,6 +3964,10 @@ export function createContainer(
       TYPES.FuelLogs,
       TYPES.ExpenseAdministration,
       TYPES.RecurringExpenses,
+      TYPES.Remittances,
+      TYPES.DriverLedger,
+      TYPES.OperationsBoard,
+      TYPES.RemittanceSettingsService,
     ],
   );
 

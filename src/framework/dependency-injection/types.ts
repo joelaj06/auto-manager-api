@@ -251,4 +251,14 @@ export const TYPES = Object.freeze({
   ExpenseAdministration: Symbol.for("ExpenseAdministration"),
   RecurringExpenses: Symbol.for("RecurringExpenses"),
   TenantDailyTasks: Symbol.for("ITenantDailyTask[]"),
+
+  // Remittances and the driver ledger (P2-7)
+  RemittanceStore: Symbol.for("IRemittanceRecords"),
+  OperationsQueries: Symbol.for("IOperationsQueries"),
+  RemittanceSettingsStore: Symbol.for("IRemittanceSettingsStore"),
+  Remittances: Symbol.for("Remittances"),
+  RemittanceScheduler: Symbol.for("RemittanceScheduler"),
+  DriverLedger: Symbol.for("DriverLedger"),
+  OperationsBoard: Symbol.for("OperationsBoard"),
+  RemittanceSettingsService: Symbol.for("RemittanceSettingsService"),
 });

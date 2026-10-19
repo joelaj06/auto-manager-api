@@ -200,6 +200,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   APPROVAL_LIMIT_EXCEEDED: { status: 403 },
   EXPENSE_SETUP_NOT_FOUND: { status: 404 },
 
+  // Remittances
+  REMITTANCE_NOT_FOUND: { status: 404 },
+  REMITTANCE_RULE: { status: 422 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

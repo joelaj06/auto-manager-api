@@ -196,6 +196,8 @@ export class PostgresLedger implements ILedger {
     };
     const where = ["true"];
     if (filter.accountId !== undefined) where.push(`l.account_id = ${param(filter.accountId)}`);
+    if (filter.accountIds !== undefined)
+      where.push(`l.account_id = any(${param(filter.accountIds)}::uuid[])`);
     if (filter.party !== undefined)
       where.push(
         `l.party_type = ${param(filter.party.type)} and l.party_id = ${param(filter.party.id)}`,
@@ -248,6 +250,21 @@ export class PostgresLedger implements ILedger {
       [accountId, party.type, party.id],
     );
     return Number(rows[0]?.balance ?? 0);
+  }
+
+  async partyNet(
+    accountIds: readonly string[],
+    party: Readonly<{ type: LedgerPartyType; id: string }>,
+    before: string | null,
+  ): Promise<number> {
+    const { rows } = await this.tx.query<{ net: string }>(
+      `select coalesce(sum(l.debit_minor - l.credit_minor), 0) as net
+         from ledger_lines l join journal_entries e on e.id = l.entry_id
+        where l.account_id = any($1::uuid[]) and l.party_type = $2 and l.party_id = $3
+          and ($4::date is null or e.entry_date < $4)`,
+      [accountIds, party.type, party.id, before],
+    );
+    return Number(rows[0]?.net ?? 0);
   }
 
   async booksLockedUntil(): Promise<string | null> {

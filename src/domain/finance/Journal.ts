@@ -23,6 +23,7 @@ export type SystemAccountKey =
   | "payables"
   | "party_credit"
   | "other_income"
+  | "remittance_income"
   | "other_expenses"
   | "vehicle_expenses"
   | "fx_difference"

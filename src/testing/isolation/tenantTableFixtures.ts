@@ -41,7 +41,53 @@ const EXPENSE = `with b as (insert into branches (code, name) values ($2, $1) re
                          amount_minor, net_minor)
                        select 'draft', c.id, $1, b.id, current_date, 100, 100 from b, c returning id)`;
 
+/** A driver's assignment and its remittance (number = marker); `$2` = branch code. */
+const REMITTANCE = `${DRIVER},
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $1, 'Isolation', 'Fixture', 'assigned', b.id from b returning id),
+                 a as (insert into vehicle_assignments (vehicle_id, driver_id, branch_id, type,
+                         remittance_mode, target_minor, target_frequency, started_at,
+                         start_odometer, start_checklist)
+                       select v.id, d.id, b.id, 'remittance', 'fixed_target', 100, 'daily', now(), 0,
+                              '{"items": []}' from v, d, b returning id),
+                 r as (insert into remittances (number, assignment_id, driver_id, vehicle_id, branch_id,
+                         mode, period_start, period_end, expected_minor, status)
+                       select $1, a.id, d.id, v.id, b.id, 'fixed_target', current_date, current_date,
+                              100, 'pending' from a, d, v, b returning id)`;
+
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  remittances: {
+    insert: (marker) => ({
+      sql: `${REMITTANCE}
+            select 1`,
+      params: [marker, `RM${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from remittances where number = $1",
+  },
+  remittance_submissions: {
+    insert: (marker) => ({
+      sql: `${REMITTANCE}
+            insert into remittance_submissions (remittance_id, declared_minor, method, status,
+              submitted_at, notes)
+            select r.id, 100, 'cash', 'submitted', now(), $1 from r`,
+      params: [marker, `RS${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from remittance_submissions where notes = $1",
+  },
+  remittance_payments: {
+    insert: (marker) => ({
+      sql: `${REMITTANCE},
+                 p as (insert into payments (number, direction, method, status, party_type, party_id,
+                         party_name, branch_id, paid_on, currency, fx_rate, amount_minor, amount_base_minor)
+                       select $1 || '-p', 'in', 'cash', 'recorded', 'driver', d.id, 'Isolation', b.id,
+                              current_date, 'GHS', 1, 100, 100 from d, b returning id)
+            insert into remittance_payments (remittance_id, payment_id, amount_minor, settled_minor)
+            select r.id, p.id, 100, 100 from r, p`,
+      params: [marker, `RP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from remittance_payments rp join payments p on p.id = rp.payment_id
+            where p.number = $1 || '-p'`,
+  },
   expense_approval_rules: {
     insert: (marker) => ({
       sql: "insert into expense_approval_rules (name, action) values ($1, 'auto_approve')",

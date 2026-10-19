@@ -198,6 +198,43 @@ const definitions = {
     scopes: BRANCH_OR_ALL,
     sensitive: true,
   },
+  "drivers.ledger.view": {
+    description: "See drivers' ledgers, statements and shortfalls",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "drivers.ledger.adjust": {
+    description: "Charge drivers (deductions) or credit them (bonuses)",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  // --- remittances (docs/09) ---
+  "remittances.list": { description: "List remittances", scopes: BRANCH_OR_ALL },
+  "remittances.view": {
+    description: "Open a remittance with its submissions",
+    scopes: BRANCH_OR_ALL,
+  },
+  "remittances.submit": {
+    description: "Declare what a driver paid (for approval)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "remittances.record": {
+    description: "Record remittance money received directly",
+    scopes: BRANCH_OR_ALL,
+  },
+  "remittances.approve": {
+    description: "Confirm or reject declared remittances",
+    scopes: BRANCH_OR_ALL,
+  },
+  "remittances.waive": {
+    description: "Waive remittance shortfalls",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "operations.board.view": {
+    description: "See the daily operations board",
+    scopes: BRANCH_OR_ALL,
+  },
   "customers.list": { description: "List customers", scopes: ALL },
   "customers.view": { description: "Open a customer", scopes: ALL },
   "customers.create": { description: "Register customers", scopes: ALL },

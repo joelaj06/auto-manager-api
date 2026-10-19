@@ -44,6 +44,8 @@ export type LedgerLineView = Readonly<{
 
 export type LedgerLineFilter = Readonly<{
   accountId?: string;
+  /** Any of these accounts. */
+  accountIds?: readonly string[];
   party?: Readonly<{ type: LedgerPartyType; id: string }>;
   vehicleId?: string;
   branchId?: string;
@@ -68,6 +70,12 @@ export interface ILedger {
   partyBalance(
     accountId: string,
     party: Readonly<{ type: LedgerPartyType; id: string }>,
+  ): Promise<number>;
+  /** Σ(debit − credit) for a party over several accounts, before `date` (null: everything). */
+  partyNet(
+    accountIds: readonly string[],
+    party: Readonly<{ type: LedgerPartyType; id: string }>,
+    before: string | null,
   ): Promise<number>;
   booksLockedUntil(): Promise<string | null>;
   setBooksLockedUntil(date: string | null): Promise<void>;

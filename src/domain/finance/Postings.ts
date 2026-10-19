@@ -1,5 +1,6 @@
 import { Money } from "../money/Money.js";
 import type { Expense } from "../expenses/Expense.js";
+import type { Remittance } from "../remittances/Remittance.js";
 import type { CashSession } from "./CashSession.js";
 import type { Invoice } from "./Invoice.js";
 import {
@@ -186,6 +187,127 @@ export const Postings = {
           memo: p.payeeName,
         }),
       ],
+    });
+  },
+
+  /** A period's target falls due: the driver owes it, the business earned it. */
+  remittanceAccrued(
+    remittance: Remittance,
+    amountMinor: number,
+    accounts: AccountResolver,
+    date: string,
+  ): JournalDraft {
+    const r = remittance.snapshot();
+    const tags = { branchId: r.branchId, vehicleId: r.vehicleId };
+    return journal({
+      date,
+      description: `Remittance due ${r.periodStart}${r.periodEnd === r.periodStart ? "" : ` – ${r.periodEnd}`}`,
+      source: { type: "remittance", id: r.id },
+      reversesId: null,
+      lines: [
+        debit(amountMinor, {
+          accountId: accounts("driver_receivables"),
+          ...tags,
+          party: { type: "driver", id: r.driverId },
+        }),
+        credit(amountMinor, { accountId: accounts("remittance_income"), ...tags }),
+      ],
+    });
+  },
+
+  /**
+   * Confirmed remittance money (already in the driver's credit through the payment): it settles
+   * what the driver owes; for a variable period it is also the period's income.
+   */
+  remittanceSettled(
+    remittance: Remittance,
+    params: Readonly<{ paymentId: string; settled: number; income: number; date: string }>,
+    accounts: AccountResolver,
+  ): JournalDraft | null {
+    const r = remittance.snapshot();
+    if (params.settled === 0 && params.income === 0) return null;
+    const driver = { type: "driver" as const, id: r.driverId };
+    const tags = { branchId: r.branchId, vehicleId: r.vehicleId };
+    return journal({
+      date: params.date,
+      description: `Remittance ${r.number ?? ""} received`.replace("  ", " "),
+      source: { type: "remittance_payment", id: params.paymentId },
+      reversesId: null,
+      lines: [
+        debit(params.income, { accountId: accounts("driver_receivables"), ...tags, party: driver }),
+        credit(params.income, { accountId: accounts("remittance_income"), ...tags }),
+        debit(params.settled, { accountId: accounts("party_credit"), ...tags, party: driver }),
+        credit(params.settled, {
+          accountId: accounts("driver_receivables"),
+          ...tags,
+          party: driver,
+        }),
+      ],
+    });
+  },
+
+  /** Forgiving a shortfall: the income goes and the driver no longer owes it. */
+  remittanceWaived(
+    remittance: Remittance,
+    amountMinor: number,
+    accounts: AccountResolver,
+    date: string,
+  ): JournalDraft {
+    const r = remittance.snapshot();
+    const tags = { branchId: r.branchId, vehicleId: r.vehicleId };
+    return journal({
+      date,
+      description: `Remittance shortfall waived (${r.periodStart})`,
+      source: { type: "remittance_waiver", id: r.id },
+      reversesId: null,
+      lines: [
+        debit(amountMinor, { accountId: accounts("remittance_income"), ...tags }),
+        credit(amountMinor, {
+          accountId: accounts("driver_receivables"),
+          ...tags,
+          party: { type: "driver", id: r.driverId },
+        }),
+      ],
+    });
+  },
+
+  /** A charge to a driver (deduction: fine, damage …) or a credit (bonus). */
+  driverAdjustment(
+    params: Readonly<{
+      id: string;
+      driverId: string;
+      kind: "deduction" | "bonus";
+      amountMinor: number;
+      accountId: string;
+      branchId: string;
+      vehicleId: string | null;
+      date: string;
+      memo: string;
+    }>,
+    accounts: AccountResolver,
+  ): JournalDraft {
+    const driver = {
+      accountId: accounts("driver_receivables"),
+      branchId: params.branchId,
+      vehicleId: params.vehicleId,
+      party: { type: "driver" as const, id: params.driverId },
+      memo: params.memo,
+    };
+    const other = {
+      accountId: params.accountId,
+      branchId: params.branchId,
+      vehicleId: params.vehicleId,
+      memo: params.memo,
+    };
+    return journal({
+      date: params.date,
+      description: `Driver ${params.kind}: ${params.memo}`.slice(0, 300),
+      source: { type: "driver_adjustment", id: params.id },
+      reversesId: null,
+      lines:
+        params.kind === "deduction"
+          ? [debit(params.amountMinor, driver), credit(params.amountMinor, other)]
+          : [debit(params.amountMinor, other), credit(params.amountMinor, driver)],
     });
   },
 

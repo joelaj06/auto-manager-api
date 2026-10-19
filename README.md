@@ -266,6 +266,16 @@ spend automatically; approvers stay within their role's `max_amount_minor` limit
 to `POST /api/v1/vehicles/:id/fuel` (efficiency at `GET …/fuel`), budgets to `/api/v1/budgets`,
 recurring expenses to `/api/v1/recurring-expenses` (created by the daily tenant job).
 
+## Remittances and the driver ledger
+
+Fixed-target assignments get one remittance row per period from the daily tenant job
+(`/api/v1/remittances`). Drivers or staff declare what was paid
+(`POST /remittances/:id/submissions`), a supervisor approves (`…/approve`, which records the
+payment) or rejects it; staff can record money directly (`/record`) and waive shortfalls
+(`/waive`). Variable-mode drivers declare a period with `POST /remittances/declare`.
+`GET /api/v1/drivers/:id/ledger` is the driver's statement, `POST …/ledger/adjustments`
+charges or credits them, and `GET /api/v1/operations/board` is the morning board.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
