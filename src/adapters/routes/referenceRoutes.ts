@@ -366,6 +366,7 @@ export function referenceRoutes(deps: ReferenceRouteDependencies): ApiRoute[] {
           parentId: uuid.nullable().optional(),
           active: z.boolean().optional(),
           sort: z.number().int().min(0).max(100_000).optional(),
+          ledgerAccountId: uuid.nullable().optional(),
         }),
       },
       responses: { 200: { description: "Category" } },

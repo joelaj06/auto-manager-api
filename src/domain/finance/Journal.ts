@@ -18,9 +18,13 @@ export type SystemAccountKey =
   | "bank"
   | "undeposited"
   | "receivables"
+  | "driver_receivables"
+  | "input_tax"
+  | "payables"
   | "party_credit"
   | "other_income"
   | "other_expenses"
+  | "vehicle_expenses"
   | "fx_difference"
   | "cash_over_short"
   | `tax_payable:${string}`;

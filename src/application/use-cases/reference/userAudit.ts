@@ -17,3 +17,20 @@ export async function recordUserAction(
     ip: request?.ip ?? null,
   });
 }
+
+/** A user's action, or the system's (null) when a rule or job acted. */
+export async function recordAction(
+  deps: Readonly<{ auditTrail: IAuditTrail; requestContext: IRequestContext }>,
+  userId: string | null,
+  entry: Omit<AuditEntry, "actorType" | "actorId" | "requestId" | "ip">,
+): Promise<void> {
+  if (userId !== null) return recordUserAction(deps, userId, entry);
+  const request = deps.requestContext.current();
+  await deps.auditTrail.record({
+    ...entry,
+    actorType: "system",
+    actorId: null,
+    requestId: request?.requestId ?? null,
+    ip: request?.ip ?? null,
+  });
+}

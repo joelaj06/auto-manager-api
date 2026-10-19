@@ -34,7 +34,66 @@ const DRIVER = `with b as (insert into branches (code, name) values ($2, $1) ret
                               '+233' || (200000000 + abs(hashtext($1)) % 99999999)::text, b.id
                          from b returning id)`;
 
+/** A branch, a category and a draft expense (description = marker); `$2` branch code, `$3` letters. */
+const EXPENSE = `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 c as (insert into expense_categories (code, name) values ('ex' || $3, 'Isolation') returning id),
+                 e as (insert into expenses (status, category_id, description, branch_id, expense_date,
+                         amount_minor, net_minor)
+                       select 'draft', c.id, $1, b.id, current_date, 100, 100 from b, c returning id)`;
+
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  expense_approval_rules: {
+    insert: (marker) => ({
+      sql: "insert into expense_approval_rules (name, action) values ($1, 'auto_approve')",
+      params: [marker],
+    }),
+    find: "select 1 from expense_approval_rules where name = $1",
+  },
+  expenses: {
+    insert: (marker) => ({
+      sql: `${EXPENSE}
+            select 1`,
+      params: [marker, `EX${letters(marker).toUpperCase().slice(0, 12)}`, letters(marker)],
+    }),
+    find: "select 1 from expenses where description = $1",
+  },
+  expense_lines: {
+    insert: (marker) => ({
+      sql: `${EXPENSE}
+            insert into expense_lines (expense_id, position, amount_minor, net_minor, tax_minor)
+            select e.id, 1, 100, 100, 0 from e`,
+      params: [marker, `EL${letters(marker).toUpperCase().slice(0, 12)}`, letters(marker)],
+    }),
+    find: `select 1 from expense_lines l join expenses e on e.id = l.expense_id
+            where e.description = $1`,
+  },
+  recurring_expenses: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 c as (insert into expense_categories (code, name) values ('rc' || $3, 'Isolation') returning id)
+            insert into recurring_expenses (name, category_id, branch_id, description, amount_minor,
+              frequency, next_run_on)
+            select $1, c.id, b.id, 'Isolation', 100, 'monthly', current_date from b, c`,
+      params: [marker, `RE${letters(marker).toUpperCase().slice(0, 12)}`, letters(marker)],
+    }),
+    find: "select 1 from recurring_expenses where name = $1",
+  },
+  budgets: {
+    insert: (marker) => ({
+      sql: "insert into budgets (name, monthly_amount_minor) values ($1, 100)",
+      params: [marker],
+    }),
+    find: "select 1 from budgets where name = $1",
+  },
+  fuel_logs: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into fuel_logs (vehicle_id, filled_at, litres, amount_minor, odometer, notes)
+            select v.id, now(), 10, 100, 1000, $1 from v`,
+      params: [marker, `FL${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from fuel_logs where notes = $1",
+  },
   ledger_accounts: {
     insert: (marker) => ({
       sql: "insert into ledger_accounts (code, name, type) values ((100000 + abs(hashtext($1)) % 899999)::text, $1, 'income')",

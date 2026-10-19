@@ -42,6 +42,13 @@ export const FILE_KINDS = Object.freeze({
     maxBytes: 10 * MB,
     description: "Scan or photo of a vehicle document (insurance, roadworthy …)",
   },
+  expense_receipt: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: DOCUMENTS,
+    maxBytes: 10 * MB,
+    description: "Receipt or supplier invoice of an expense",
+  },
   party_document: {
     scope: "tenant",
     visibility: "private",

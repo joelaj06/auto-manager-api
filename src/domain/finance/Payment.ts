@@ -37,6 +37,8 @@ export type PaymentProps = Readonly<{
   cashSessionId: string | null;
   vehicleId: string | null;
   notes: string | null;
+  /** What the payment settles (an expense …), when a module recorded it. */
+  source: Readonly<{ type: string; id: string }> | null;
   recordedBy: string | null;
   recordedAt: Date;
   reversedAt: Date | null;

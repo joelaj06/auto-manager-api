@@ -1,3 +1,26 @@
+import type { IExpenseRepository } from "../../domain/repositories/IExpenseRepository.js";
+import { expenseRoutes } from "../../adapters/routes/expenseRoutes.js";
+import type { ITenantDailyTask } from "../../application/jobs/ITenantDailyTask.js";
+import type {
+  IApprovalRules,
+  IBudgets,
+  IExpenseSettingsStore,
+  IFuelLogs,
+  IRecurringExpenses,
+} from "../../application/ports/IExpenseRecords.js";
+import { ExpenseAdministration } from "../../application/use-cases/expenses/ExpenseAdministration.js";
+import { ExpensePaymentListener } from "../../application/use-cases/expenses/ExpensePaymentListener.js";
+import { Expenses } from "../../application/use-cases/expenses/Expenses.js";
+import { FuelLogs } from "../../application/use-cases/expenses/FuelLogs.js";
+import { RecurringExpenses } from "../../application/use-cases/expenses/RecurringExpenses.js";
+import {
+  PostgresApprovalRules,
+  PostgresBudgets,
+  PostgresExpenseRepository,
+  PostgresExpenseSettingsStore,
+  PostgresFuelLogs,
+  PostgresRecurringExpenses,
+} from "../../infrastructure/expenses/PostgresExpenses.js";
 import { financeRoutes } from "../../adapters/routes/financeRoutes.js";
 import type {
   IFinanceQueries,
@@ -640,53 +663,60 @@ export function createContainer(
       [TYPES.EmailDeliveries],
     );
 
-  container
-    .bind<IJobHandler[]>(TYPES.JobHandlers)
-    .toResolvedValue(
-      (
-        unitOfWork: IUnitOfWork,
-        outbox: IOutboxStore,
-        processed: IProcessedMessages,
-        handlers: EventHandlerRegistry,
-        queue: IJobQueue,
-        roster: ITenantRoster,
-        ledger: ITenantScheduleLedger,
-        retention: ITenantRetention,
-        deliveries: IEmailDeliveries,
-        sender: IEmailSender,
-        clock: IClock,
-        logger: ILogger,
-        provisioningHandlers: IJobHandler[],
-        tenantFiles: FileService,
-        platformFiles: FileService,
-      ): IJobHandler[] => [
-        new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
-        new SweepOutboxes({ roster, queue }),
-        new DeliverEvent({ unitOfWork, processed, handlers, logger }),
-        new RunTenantSchedules({ roster, ledger, clock, logger }),
-        new RunDailyMaintenance({ unitOfWork, retention, clock, logger, files: tenantFiles }),
-        new SendQueuedEmail({ deliveries, sender, clock, logger }),
-        new SweepAbandonedFiles({ files: platformFiles, logger }),
-        ...provisioningHandlers,
-      ],
-      [
-        TYPES.UnitOfWork,
-        TYPES.OutboxStore,
-        TYPES.ProcessedMessages,
-        TYPES.EventHandlerRegistry,
-        TYPES.JobQueue,
-        TYPES.TenantRoster,
-        TYPES.TenantScheduleLedger,
-        TYPES.TenantRetention,
-        TYPES.EmailDeliveries,
-        TYPES.EmailSender,
-        TYPES.Clock,
-        TYPES.Logger,
-        TYPES.ProvisioningJobHandlers,
-        TYPES.TenantFileService,
-        TYPES.PlatformFileService,
-      ],
-    );
+  container.bind<IJobHandler[]>(TYPES.JobHandlers).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      outbox: IOutboxStore,
+      processed: IProcessedMessages,
+      handlers: EventHandlerRegistry,
+      queue: IJobQueue,
+      roster: ITenantRoster,
+      ledger: ITenantScheduleLedger,
+      retention: ITenantRetention,
+      deliveries: IEmailDeliveries,
+      sender: IEmailSender,
+      clock: IClock,
+      logger: ILogger,
+      provisioningHandlers: IJobHandler[],
+      tenantFiles: FileService,
+      platformFiles: FileService,
+      tasks: ITenantDailyTask[],
+    ): IJobHandler[] => [
+      new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
+      new SweepOutboxes({ roster, queue }),
+      new DeliverEvent({ unitOfWork, processed, handlers, logger }),
+      new RunTenantSchedules({ roster, ledger, clock, logger }),
+      new RunDailyMaintenance({
+        unitOfWork,
+        retention,
+        clock,
+        logger,
+        files: tenantFiles,
+        tasks,
+      }),
+      new SendQueuedEmail({ deliveries, sender, clock, logger }),
+      new SweepAbandonedFiles({ files: platformFiles, logger }),
+      ...provisioningHandlers,
+    ],
+    [
+      TYPES.UnitOfWork,
+      TYPES.OutboxStore,
+      TYPES.ProcessedMessages,
+      TYPES.EventHandlerRegistry,
+      TYPES.JobQueue,
+      TYPES.TenantRoster,
+      TYPES.TenantScheduleLedger,
+      TYPES.TenantRetention,
+      TYPES.EmailDeliveries,
+      TYPES.EmailSender,
+      TYPES.Clock,
+      TYPES.Logger,
+      TYPES.ProvisioningJobHandlers,
+      TYPES.TenantFileService,
+      TYPES.PlatformFileService,
+      TYPES.TenantDailyTasks,
+    ],
+  );
 
   container.bind<JobWorker>(TYPES.JobWorker).toResolvedValue(
     (
@@ -2129,8 +2159,12 @@ export function createContainer(
   container
     .bind<ExpenseCategoryAdministration>(TYPES.ExpenseCategoryAdministration)
     .toResolvedValue(
-      (...args: TenantReferenceArgs) => new ExpenseCategoryAdministration(referenceDeps(...args)),
-      tenantReferenceDeps(),
+      (...args: [...TenantReferenceArgs, ILedger]) =>
+        new ExpenseCategoryAdministration({
+          ...referenceDeps(...(args.slice(0, 6) as TenantReferenceArgs)),
+          ledger: args[6],
+        }),
+      [...tenantReferenceDeps(), TYPES.Ledger],
     );
   container
     .bind<VehicleCatalogue>(TYPES.VehicleCatalogue)
@@ -2878,6 +2912,7 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      expenseRepository: IExpenseRepository,
     ) =>
       new PaymentRecording({
         unitOfWork,
@@ -2898,6 +2933,7 @@ export function createContainer(
         requestContext,
         ids,
         clock,
+        reversalListeners: [new ExpensePaymentListener({ expenses: expenseRepository, clock })],
       }),
     [
       TYPES.UnitOfWork,
@@ -2918,6 +2954,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.ExpenseRepository,
     ],
   );
   container.bind<CashSessions>(TYPES.CashSessions).toResolvedValue(
@@ -3001,6 +3038,212 @@ export function createContainer(
       ) => new FinanceSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
       [TYPES.UnitOfWork, TYPES.FinanceSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
+
+  // --- Expenses: split, approval, payment, receipts, recurring, budgets, fuel ---
+  tenantRepository<PostgresExpenseRepository>(
+    TYPES.ExpenseRepository,
+    (tx) => new PostgresExpenseRepository(tx),
+  );
+  tenantRepository<IApprovalRules>(TYPES.ApprovalRules, (tx) => new PostgresApprovalRules(tx));
+  tenantRepository<IBudgets>(TYPES.Budgets, (tx) => new PostgresBudgets(tx));
+  tenantRepository<IRecurringExpenses>(
+    TYPES.RecurringExpenseStore,
+    (tx) => new PostgresRecurringExpenses(tx),
+  );
+  tenantRepository<IFuelLogs>(TYPES.FuelLogStore, (tx) => new PostgresFuelLogs(tx));
+  tenantRepository<IExpenseSettingsStore>(
+    TYPES.ExpenseSettingsStore,
+    (tx) => new PostgresExpenseSettingsStore(tx),
+  );
+  container.bind<Expenses>(TYPES.Expenses).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      expenses: PostgresExpenseRepository,
+      rules: IApprovalRules,
+      settings: IExpenseSettingsStore,
+      reference: ITenantReferenceData,
+      organisation: IOrganisationSettings,
+      vehicles: IVehicleRepository,
+      parties: IPartyDirectory,
+      posting: LedgerPosting,
+      payments: PaymentRecording,
+      files: FileService,
+      policy: AuthorizationPolicy,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new Expenses({
+        unitOfWork,
+        expenses,
+        queries: expenses,
+        rules,
+        settings,
+        reference,
+        organisation,
+        vehicles,
+        parties,
+        posting,
+        payments,
+        receipts: new OwnedDocuments(files, "expense_receipt", "expense", 5),
+        policy,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.ExpenseRepository,
+      TYPES.ApprovalRules,
+      TYPES.ExpenseSettingsStore,
+      TYPES.TenantReferenceData,
+      TYPES.OrganisationSettings,
+      TYPES.VehicleRepository,
+      TYPES.PartyDirectory,
+      TYPES.LedgerPosting,
+      TYPES.PaymentRecording,
+      TYPES.TenantFileService,
+      TYPES.AuthorizationPolicy,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<FuelLogs>(TYPES.FuelLogs).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      logs: IFuelLogs,
+      expenses: Expenses,
+      expenseRepository: PostgresExpenseRepository,
+      settings: IExpenseSettingsStore,
+      reference: ITenantReferenceData,
+      vehicles: VehicleAccess,
+      odometer: OdometerLog,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new FuelLogs({
+        unitOfWork,
+        logs,
+        expenses,
+        expenseRepository,
+        settings,
+        reference,
+        vehicles,
+        odometer,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.FuelLogStore,
+      TYPES.Expenses,
+      TYPES.ExpenseRepository,
+      TYPES.ExpenseSettingsStore,
+      TYPES.TenantReferenceData,
+      TYPES.VehicleAccess,
+      TYPES.OdometerLog,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<ExpenseAdministration>(TYPES.ExpenseAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      rules: IApprovalRules,
+      budgets: IBudgets,
+      queries: PostgresExpenseRepository,
+      settings: IExpenseSettingsStore,
+      posting: LedgerPosting,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new ExpenseAdministration({
+        unitOfWork,
+        rules,
+        budgets,
+        queries,
+        settings,
+        posting,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.ApprovalRules,
+      TYPES.Budgets,
+      TYPES.ExpenseRepository,
+      TYPES.ExpenseSettingsStore,
+      TYPES.LedgerPosting,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<RecurringExpenses>(TYPES.RecurringExpenses).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      recurring: IRecurringExpenses,
+      expenses: Expenses,
+      scope: BranchScope,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new RecurringExpenses({
+        unitOfWork,
+        recurring,
+        expenses,
+        scope,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RecurringExpenseStore,
+      TYPES.Expenses,
+      TYPES.BranchScope,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container
+    .bind<ITenantDailyTask[]>(TYPES.TenantDailyTasks)
+    .toResolvedValue((recurring: RecurringExpenses) => [recurring], [TYPES.RecurringExpenses]);
 
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
@@ -3359,6 +3602,10 @@ export function createContainer(
       cashSessions: CashSessions,
       ledgerViews: LedgerViews,
       financeSettings: FinanceSettingsService,
+      expenses: Expenses,
+      fuelLogs: FuelLogs,
+      expenseAdministration: ExpenseAdministration,
+      recurringExpenses: RecurringExpenses,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -3415,6 +3662,12 @@ export function createContainer(
           cashSessions,
           ledger: ledgerViews,
           settings: financeSettings,
+        }),
+        ...expenseRoutes({
+          expenses,
+          fuel: fuelLogs,
+          administration: expenseAdministration,
+          recurring: recurringExpenses,
         }),
         ...identityRoutes({
           signIn: tenantSignIn,
@@ -3494,6 +3747,10 @@ export function createContainer(
       TYPES.CashSessions,
       TYPES.LedgerViews,
       TYPES.FinanceSettingsService,
+      TYPES.Expenses,
+      TYPES.FuelLogs,
+      TYPES.ExpenseAdministration,
+      TYPES.RecurringExpenses,
     ],
   );
 

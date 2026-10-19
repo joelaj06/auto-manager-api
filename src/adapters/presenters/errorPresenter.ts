@@ -194,6 +194,12 @@ const RULES: Readonly<Record<string, Rule>> = {
   CASH_SESSION_REQUIRED: { status: 409 },
   FINANCE_RULE: { status: 422 },
 
+  // Expenses
+  EXPENSE_NOT_FOUND: { status: 404 },
+  EXPENSE_RULE: { status: 422 },
+  APPROVAL_LIMIT_EXCEEDED: { status: 403 },
+  EXPENSE_SETUP_NOT_FOUND: { status: 404 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

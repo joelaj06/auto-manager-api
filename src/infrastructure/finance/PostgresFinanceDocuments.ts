@@ -276,6 +276,8 @@ type PaymentRow = {
   cash_session_id: string | null;
   vehicle_id: string | null;
   notes: string | null;
+  source_type: string | null;
+  source_id: string | null;
   recorded_by: string | null;
   recorded_at: Date;
   reversed_at: Date | null;
@@ -286,8 +288,8 @@ type PaymentRow = {
 const PAYMENT_COLUMNS = `id, number, direction, method, status, party_type, party_id, party_name,
   branch_id, paid_on::text as paid_on, currency, fx_rate::text as fx_rate, amount_minor,
   amount_base_minor, allocated_minor, counter_account_id, reference, momo_network,
-  cash_session_id, vehicle_id, notes, recorded_by, recorded_at, reversed_at, reversed_by,
-  reverse_reason`;
+  cash_session_id, vehicle_id, notes, source_type, source_id, recorded_by, recorded_at,
+  reversed_at, reversed_by, reverse_reason`;
 
 const toPayment = (r: PaymentRow): PaymentProps => ({
   id: r.id,
@@ -311,6 +313,10 @@ const toPayment = (r: PaymentRow): PaymentProps => ({
   cashSessionId: r.cash_session_id,
   vehicleId: r.vehicle_id,
   notes: r.notes,
+  source:
+    r.source_type === null || r.source_id === null
+      ? null
+      : { type: r.source_type, id: r.source_id },
   recordedBy: r.recorded_by,
   recordedAt: r.recorded_at,
   reversedAt: r.reversed_at,
@@ -349,9 +355,10 @@ export class PostgresPaymentRepository implements IPaymentRepository {
       `insert into payments (id, number, direction, method, status, party_type, party_id,
          party_name, branch_id, paid_on, currency, fx_rate, amount_minor, amount_base_minor,
          allocated_minor, counter_account_id, reference, momo_network, cash_session_id,
-         vehicle_id, notes, recorded_by, recorded_at, reversed_at, reversed_by, reverse_reason)
+         vehicle_id, notes, recorded_by, recorded_at, reversed_at, reversed_by, reverse_reason,
+         source_type, source_id)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-         $19, $20, $21, $22, $23, $24, $25, $26)
+         $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
        on conflict (id) do update set status = excluded.status,
          allocated_minor = excluded.allocated_minor, reversed_at = excluded.reversed_at,
          reversed_by = excluded.reversed_by, reverse_reason = excluded.reverse_reason`,
@@ -382,6 +389,8 @@ export class PostgresPaymentRepository implements IPaymentRepository {
         p.reversedAt,
         p.reversedBy,
         p.reverseReason,
+        p.source?.type ?? null,
+        p.source?.id ?? null,
       ],
     );
   }

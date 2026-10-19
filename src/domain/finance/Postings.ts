@@ -1,4 +1,5 @@
 import { Money } from "../money/Money.js";
+import type { Expense } from "../expenses/Expense.js";
 import type { CashSession } from "./CashSession.js";
 import type { Invoice } from "./Invoice.js";
 import {
@@ -86,11 +87,7 @@ export const Postings = {
             credit(p.amountBaseMinor, { accountId: accounts("party_credit"), ...tags, party }),
           ]
         : [
-            debit(p.amountBaseMinor, {
-              accountId: p.counterAccountId!,
-              ...tags,
-              party: p.counterAccountId === accounts("party_credit") ? party : null,
-            }),
+            debit(p.amountBaseMinor, { accountId: p.counterAccountId!, ...tags, party }),
             credit(p.amountBaseMinor, { accountId: money, ...tags }),
           ];
     return journal({
@@ -135,6 +132,59 @@ export const Postings = {
         difference > 0
           ? credit(difference, { accountId: fx, branchId: inv.branchId })
           : debit(-difference, { accountId: fx, branchId: inv.branchId }),
+      ],
+    });
+  },
+
+  /**
+   * Approving an expense: each share is debited to the expense account (or to the driver who
+   * bears the cost), recoverable input tax to its account, and the payee is owed the total.
+   */
+  expenseApproved(
+    expense: Expense,
+    expenseAccountId: string,
+    recoverTax: boolean,
+    accounts: AccountResolver,
+    date: string,
+  ): JournalDraft {
+    const p = expense.snapshot();
+    const driver =
+      p.chargeToDriver && p.driverId !== null ? { type: "driver" as const, id: p.driverId } : null;
+    const debits: JournalLine[] = [];
+    for (const line of p.lines) {
+      const cost = recoverTax ? line.netMinor : line.amountMinor;
+      debits.push(
+        driver === null
+          ? debit(cost, {
+              accountId: expenseAccountId,
+              branchId: p.branchId,
+              vehicleId: line.vehicleId,
+            })
+          : debit(cost, {
+              accountId: accounts("driver_receivables"),
+              branchId: p.branchId,
+              vehicleId: line.vehicleId,
+              party: driver,
+            }),
+      );
+      if (recoverTax && line.taxMinor > 0)
+        debits.push(
+          debit(line.taxMinor, { accountId: accounts("input_tax"), branchId: p.branchId }),
+        );
+    }
+    return journal({
+      date,
+      description: `Expense ${p.number ?? ""}: ${p.description}`.slice(0, 300),
+      source: { type: "expense", id: p.id },
+      reversesId: null,
+      lines: [
+        ...debits,
+        credit(p.amountMinor, {
+          accountId: accounts("payables"),
+          branchId: p.branchId,
+          party: p.payee === null ? null : { type: p.payee.type, id: p.payee.id },
+          memo: p.payeeName,
+        }),
       ],
     });
   },

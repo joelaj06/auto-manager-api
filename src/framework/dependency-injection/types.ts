@@ -238,4 +238,17 @@ export const TYPES = Object.freeze({
   CashSessions: Symbol.for("CashSessions"),
   LedgerViews: Symbol.for("LedgerViews"),
   FinanceSettingsService: Symbol.for("FinanceSettingsService"),
+
+  // Expenses (P2-6)
+  ExpenseRepository: Symbol.for("IExpenseRepository"),
+  ApprovalRules: Symbol.for("IApprovalRules"),
+  Budgets: Symbol.for("IBudgets"),
+  RecurringExpenseStore: Symbol.for("IRecurringExpenses"),
+  FuelLogStore: Symbol.for("IFuelLogs"),
+  ExpenseSettingsStore: Symbol.for("IExpenseSettingsStore"),
+  Expenses: Symbol.for("Expenses"),
+  FuelLogs: Symbol.for("FuelLogs"),
+  ExpenseAdministration: Symbol.for("ExpenseAdministration"),
+  RecurringExpenses: Symbol.for("RecurringExpenses"),
+  TenantDailyTasks: Symbol.for("ITenantDailyTask[]"),
 });

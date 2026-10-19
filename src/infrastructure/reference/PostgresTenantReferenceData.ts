@@ -64,6 +64,7 @@ type CategoryRow = {
   is_system: boolean;
   active: boolean;
   sort: number;
+  ledger_account_id: string | null;
 };
 const toCategory = (r: CategoryRow): ExpenseCategory => ({
   id: r.id,
@@ -73,8 +74,9 @@ const toCategory = (r: CategoryRow): ExpenseCategory => ({
   isSystem: r.is_system,
   active: r.active,
   sort: r.sort,
+  ledgerAccountId: r.ledger_account_id,
 });
-const CATEGORY_COLUMNS = "id, parent_id, code, name, is_system, active, sort";
+const CATEGORY_COLUMNS = "id, parent_id, code, name, is_system, active, sort, ledger_account_id";
 
 /** Tax codes, FX rates and expense categories in the tenant database. */
 export class PostgresTenantReferenceData implements ITenantReferenceData {
@@ -187,12 +189,13 @@ export class PostgresTenantReferenceData implements ITenantReferenceData {
 
   async saveExpenseCategory(c: ExpenseCategory): Promise<void> {
     await this.tx.query(
-      `insert into expense_categories (id, parent_id, code, name, is_system, active, sort)
-       values ($1, $2, $3, $4, $5, $6, $7)
+      `insert into expense_categories (id, parent_id, code, name, is_system, active, sort,
+         ledger_account_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
        on conflict (id) do update set
          parent_id = excluded.parent_id, name = excluded.name, active = excluded.active,
-         sort = excluded.sort, updated_at = now()`,
-      [c.id, c.parentId, c.code, c.name, c.isSystem, c.active, c.sort],
+         sort = excluded.sort, ledger_account_id = excluded.ledger_account_id, updated_at = now()`,
+      [c.id, c.parentId, c.code, c.name, c.isSystem, c.active, c.sort, c.ledgerAccountId],
     );
   }
 }

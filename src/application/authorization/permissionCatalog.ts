@@ -101,6 +101,33 @@ const definitions = {
   // --- finance and expense reference data ---
   "finance.fx_rates.view": { description: "View exchange rates", scopes: ALL },
   "finance.fx_rates.manage": { description: "Enter and remove exchange rates", scopes: ALL },
+  "expenses.list": {
+    description: "List expenses (own: only those you entered)",
+    scopes: ["own", "branch", "all"],
+  },
+  "expenses.view": {
+    description: "Open expenses with receipts (own: only those you entered)",
+    scopes: ["own", "branch", "all"],
+  },
+  "expenses.create": {
+    description: "Enter, correct and submit expenses",
+    scopes: BRANCH_OR_ALL,
+  },
+  "expenses.approve": {
+    description: "Approve or reject expenses (up to the role's max_amount_minor limit)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "expenses.pay": { description: "Pay approved expenses", scopes: BRANCH_OR_ALL },
+  "expenses.void": {
+    description: "Void unpaid expenses",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "expenses.fuel.record": { description: "Record fuel fills", scopes: BRANCH_OR_ALL },
+  "expenses.rules.manage": { description: "Set expense approval rules", scopes: ALL },
+  "expenses.recurring.manage": { description: "Set up recurring expenses", scopes: ALL },
+  "expenses.budgets.view": { description: "See budgets and spending against them", scopes: ALL },
+  "expenses.budgets.manage": { description: "Set budgets", scopes: ALL },
   "expenses.categories.manage": {
     description: "Create, rename and deactivate expense categories",
     scopes: ALL,

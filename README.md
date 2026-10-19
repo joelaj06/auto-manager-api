@@ -257,6 +257,15 @@ business's tax codes — Ghana businesses start with VAT 15% + NHIL 2.5% + GETFu
 money in (to the payer's credit, allocated to invoices) and out (refunds, expenses), with
 receipts at `/payments/:id/receipt`. Cash goes through `/api/v1/cash-sessions`.
 
+## Expenses
+
+`/api/v1/expenses` enters expenses (split across vehicles with `vehicleIds` or `split`), and
+`/submit`, `/approve`, `/reject`, `/pay` and `/void` move them along; receipts are attached at
+`/expenses/:id/receipts`. Approval rules (`/api/v1/expense-approval-rules`) can approve small
+spend automatically; approvers stay within their role's `max_amount_minor` limit. Fuel fills go
+to `POST /api/v1/vehicles/:id/fuel` (efficiency at `GET …/fuel`), budgets to `/api/v1/budgets`,
+recurring expenses to `/api/v1/recurring-expenses` (created by the daily tenant job).
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

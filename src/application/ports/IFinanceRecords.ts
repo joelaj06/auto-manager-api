@@ -141,3 +141,10 @@ export interface IFinanceSettingsStore {
   get(): Promise<FinanceSettings>;
   set(settings: FinanceSettings): Promise<void>;
 }
+
+/** A module that must react when a payment it caused is reversed (reopening an expense …). */
+export interface IPaymentReversalListener {
+  readonly sourceType: string;
+  /** Called inside the reversal's unit of work. */
+  paymentReversed(sourceId: string, paymentId: string): Promise<void>;
+}

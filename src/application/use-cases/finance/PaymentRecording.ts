@@ -22,6 +22,7 @@ import type {
   IFinanceQueries,
   IFinanceSettingsStore,
   ILedger,
+  IPaymentReversalListener,
   PaymentListFilter,
 } from "../../ports/IFinanceRecords.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
@@ -58,6 +59,10 @@ export type PaymentRequest = Readonly<{
   /** Money in: invoices to pay straight away. */
   allocations?: readonly Readonly<{ invoiceId: string; amount: string }>[];
 }>;
+
+/** Recorded by a module for one of its records (an expense …). */
+export type SourcedPaymentRequest = PaymentRequest &
+  Readonly<{ source: Readonly<{ type: string; id: string }> }>;
 
 export type AllocationView = Omit<Allocation, "amountMinor"> &
   Readonly<{ amount: MoneyJson; invoiceNumber: string | null }>;
@@ -121,6 +126,7 @@ export class PaymentRecording {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
+      reversalListeners?: readonly IPaymentReversalListener[];
     }>,
   ) {}
 
@@ -152,7 +158,10 @@ export class PaymentRecording {
     });
   }
 
-  async record(actor: Principal, request: PaymentRequest): Promise<PaymentView> {
+  async record(
+    actor: Principal,
+    request: PaymentRequest | SourcedPaymentRequest,
+  ): Promise<PaymentView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const branchId =
@@ -223,6 +232,7 @@ export class PaymentRecording {
         cashSessionId: sessionId,
         vehicleId: request.vehicleId ?? null,
         notes: request.notes ?? null,
+        source: "source" in request ? request.source : null,
         recordedBy: actor.userId,
         recordedAt: deps.clock.now(),
       });
@@ -300,6 +310,10 @@ export class PaymentRecording {
         actor.userId,
       );
       await deps.payments.save(payment);
+      if (p.source !== null)
+        for (const listener of deps.reversalListeners ?? [])
+          if (listener.sourceType === p.source.type)
+            await listener.paymentReversed(p.source.id, id);
       await this.audit(actor, "payment.reversed", payment, { reason });
       return this.detail(payment);
     });

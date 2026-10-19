@@ -37,6 +37,8 @@ export type ExpenseCategory = Readonly<{
   isSystem: boolean;
   active: boolean;
   sort: number;
+  /** Where its expenses are posted (null: vehicle or other expenses). */
+  ledgerAccountId: string | null;
 }>;
 
 /** The tenant's own reference data (tenant database, tenant unit of work). */

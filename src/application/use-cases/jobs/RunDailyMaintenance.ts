@@ -1,4 +1,5 @@
 import type { IJobHandler } from "../../jobs/IJobHandler.js";
+import type { ITenantDailyTask } from "../../jobs/ITenantDailyTask.js";
 import type { JobPayloads } from "../../jobs/jobCatalog.js";
 import type { IClock } from "../../ports/IClock.js";
 import type { ILogger } from "../../ports/ILogger.js";
@@ -13,7 +14,10 @@ export const DEFAULT_RETENTION: RetentionPolicy = Object.freeze({
   publishedEventsAfterDays: 7,
 });
 
-/** Daily retention clean-up in one tenant database. Naturally idempotent. */
+/**
+ * Daily work in one tenant database: retention clean-up, abandoned uploads, then the modules'
+ * daily tasks. Naturally idempotent (tasks keep their own progress).
+ */
 export class RunDailyMaintenance implements IJobHandler<"tenant.daily_maintenance"> {
   readonly job = "tenant.daily_maintenance" as const;
 
@@ -26,6 +30,8 @@ export class RunDailyMaintenance implements IJobHandler<"tenant.daily_maintenanc
       /** Tenant files: abandoned uploads are removed too. */
       files?: FileService;
       policy?: RetentionPolicy;
+      /** Modules' daily work (recurring expenses …); one failing task does not stop the others. */
+      tasks?: readonly ITenantDailyTask[];
     }>,
   ) {}
 
@@ -35,6 +41,20 @@ export class RunDailyMaintenance implements IJobHandler<"tenant.daily_maintenanc
       deps.retention.purge(deps.policy ?? DEFAULT_RETENTION, deps.clock.now()),
     );
     const abandonedFiles = (await deps.files?.sweepAbandoned()) ?? 0;
+    const failed: string[] = [];
+    for (const task of deps.tasks ?? []) {
+      try {
+        await task.run(localDate);
+      } catch (error) {
+        failed.push(task.name);
+        deps.logger.error("Tenant daily task failed", {
+          tenantId,
+          task: task.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    if (failed.length > 0) throw new Error(`Daily tasks failed: ${failed.join(", ")}`);
     deps.logger.info("Tenant daily maintenance done", {
       tenantId,
       localDate,

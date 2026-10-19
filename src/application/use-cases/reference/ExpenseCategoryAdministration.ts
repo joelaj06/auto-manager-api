@@ -2,6 +2,7 @@ import { DomainError } from "../../../domain/errors/DomainError.js";
 import type { Principal } from "../../authorization/Principal.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
+import type { ILedger } from "../../ports/IFinanceRecords.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { ExpenseCategory, ITenantReferenceData } from "../../ports/IReferenceData.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
@@ -40,6 +41,7 @@ export class ExpenseCategoryAdministration {
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
       ids: IIdGenerator;
+      ledger: ILedger;
     }>,
   ) {}
 
@@ -72,6 +74,7 @@ export class ExpenseCategoryAdministration {
         isSystem: false,
         active: true,
         sort: 1_000,
+        ledgerAccountId: null,
       };
       await deps.reference.saveExpenseCategory(category);
       await recordUserAction(deps, actor.userId, {
@@ -87,7 +90,14 @@ export class ExpenseCategoryAdministration {
   async update(
     actor: Principal,
     id: string,
-    changes: Readonly<{ name?: string; parentId?: string | null; active?: boolean; sort?: number }>,
+    changes: Readonly<{
+      name?: string;
+      parentId?: string | null;
+      active?: boolean;
+      sort?: number;
+      /** An expense account; null: vehicle or other expenses. */
+      ledgerAccountId?: string | null;
+    }>,
   ): Promise<ExpenseCategory> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
@@ -101,7 +111,16 @@ export class ExpenseCategoryAdministration {
         parentId: changes.parentId === undefined ? before.parentId : changes.parentId,
         active: changes.active ?? before.active,
         sort: changes.sort ?? before.sort,
+        ledgerAccountId:
+          changes.ledgerAccountId === undefined ? before.ledgerAccountId : changes.ledgerAccountId,
       };
+      if (changes.ledgerAccountId !== undefined && changes.ledgerAccountId !== null) {
+        const account = (await deps.ledger.accounts()).find(
+          (a) => a.id === changes.ledgerAccountId,
+        );
+        if (account?.type !== "expense")
+          throw new ExpenseCategoryRuleError("Post expenses to an expense account");
+      }
       await deps.reference.saveExpenseCategory(after);
       await recordUserAction(deps, actor.userId, {
         action: "expense_category.updated",

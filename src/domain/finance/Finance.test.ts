@@ -146,6 +146,7 @@ describe("postings", () => {
       cashSessionId: null,
       vehicleId: null,
       notes: null,
+      source: null,
       recordedBy: null,
       recordedAt: now,
     });
