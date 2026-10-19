@@ -1,3 +1,29 @@
+import { vehicleRoutes } from "../../adapters/routes/vehicleRoutes.js";
+import type {
+  IOdometerReadings,
+  IVehicleDocuments,
+  IVehicleGroups,
+  IVehicleQueries,
+  IVehicleSettingsStore,
+} from "../../application/ports/IVehicleRecords.js";
+import { OdometerLog } from "../../application/use-cases/vehicles/OdometerLog.js";
+import { VehicleAccess } from "../../application/use-cases/vehicles/VehicleAccess.js";
+import { VehicleBranchCheck } from "../../application/use-cases/vehicles/VehicleBranchCheck.js";
+import { VehicleDocuments } from "../../application/use-cases/vehicles/VehicleDocuments.js";
+import { VehicleGroupAdministration } from "../../application/use-cases/vehicles/VehicleGroupAdministration.js";
+import { VehicleImportExport } from "../../application/use-cases/vehicles/VehicleImportExport.js";
+import { VehicleOverview } from "../../application/use-cases/vehicles/VehicleOverview.js";
+import { VehiclePhotos } from "../../application/use-cases/vehicles/VehiclePhotos.js";
+import { VehicleRegistry } from "../../application/use-cases/vehicles/VehicleRegistry.js";
+import { VehicleSettingsService } from "../../application/use-cases/vehicles/VehicleSettingsService.js";
+import type { IVehicleRepository } from "../../domain/repositories/IVehicleRepository.js";
+import {
+  PostgresOdometerReadings,
+  PostgresVehicleDocuments,
+  PostgresVehicleGroups,
+  PostgresVehicleSettingsStore,
+} from "../../infrastructure/vehicles/PostgresVehicleRecords.js";
+import { PostgresVehicleRepository } from "../../infrastructure/vehicles/PostgresVehicleRepository.js";
 import { referenceRoutes } from "../../adapters/routes/referenceRoutes.js";
 import type {
   IReferenceData,
@@ -1516,7 +1542,12 @@ export function createContainer(
     (tx) => new PostgresOrganisationReader(tx),
   );
   // Modules register their branch-deactivation checks here (open rentals, cash sessions, …).
-  container.bind<IBranchDeactivationCheck[]>(TYPES.BranchDeactivationChecks).toConstantValue([]);
+  container
+    .bind<IBranchDeactivationCheck[]>(TYPES.BranchDeactivationChecks)
+    .toResolvedValue(
+      (vehicles: IVehicleQueries) => [new VehicleBranchCheck(vehicles)],
+      [TYPES.VehicleQueries],
+    );
 
   container.bind<TenantLifecycleService>(TYPES.TenantLifecycleService).toResolvedValue(
     (
@@ -2061,6 +2092,292 @@ export function createContainer(
       [TYPES.OrganisationSettings, TYPES.SequenceGenerator],
     );
 
+  // --- Vehicles (register, status, documents, odometer, photos, groups, import/export) ---
+  tenantRepository<PostgresVehicleRepository>(
+    TYPES.VehicleRepository,
+    (tx) => new PostgresVehicleRepository(tx),
+  );
+  container
+    .bind<IVehicleQueries>(TYPES.VehicleQueries)
+    .toResolvedValue(
+      (repository: PostgresVehicleRepository) => repository,
+      [TYPES.VehicleRepository],
+    );
+  tenantRepository<IVehicleDocuments>(
+    TYPES.VehicleDocumentRecords,
+    (tx) => new PostgresVehicleDocuments(tx),
+  );
+  tenantRepository<IOdometerReadings>(
+    TYPES.OdometerReadings,
+    (tx) => new PostgresOdometerReadings(tx),
+  );
+  tenantRepository<IVehicleGroups>(TYPES.VehicleGroups, (tx) => new PostgresVehicleGroups(tx));
+  tenantRepository<IVehicleSettingsStore>(
+    TYPES.VehicleSettingsStore,
+    (tx) => new PostgresVehicleSettingsStore(tx),
+  );
+  container
+    .bind<VehicleAccess>(TYPES.VehicleAccess)
+    .toResolvedValue(
+      (vehicles: IVehicleRepository, branches: IBranches, policy: AuthorizationPolicy) =>
+        new VehicleAccess({ vehicles, branches, policy }),
+      [TYPES.VehicleRepository, TYPES.Branches, TYPES.AuthorizationPolicy],
+    );
+  container.bind<VehicleRegistry>(TYPES.VehicleRegistry).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      repository: PostgresVehicleRepository,
+      groups: IVehicleGroups,
+      odometer: IOdometerReadings,
+      settings: IVehicleSettingsStore,
+      organisation: IOrganisationSettings,
+      reference: IReferenceData,
+      numbering: DocumentNumbering,
+      access: VehicleAccess,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new VehicleRegistry({
+        unitOfWork,
+        vehicles: repository,
+        queries: repository,
+        groups,
+        odometer,
+        settings,
+        organisation,
+        reference,
+        numbering,
+        access,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleRepository,
+      TYPES.VehicleGroups,
+      TYPES.OdometerReadings,
+      TYPES.VehicleSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.ReferenceData,
+      TYPES.DocumentNumbering,
+      TYPES.VehicleAccess,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<VehicleDocuments>(TYPES.VehicleDocuments).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      documents: IVehicleDocuments,
+      queries: IVehicleQueries,
+      settings: IVehicleSettingsStore,
+      organisation: IOrganisationSettings,
+      access: VehicleAccess,
+      files: FileService,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new VehicleDocuments({
+        unitOfWork,
+        documents,
+        queries,
+        settings,
+        organisation,
+        access,
+        files: new OwnedDocuments(files, "vehicle_document", "vehicle_document", 5),
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleDocumentRecords,
+      TYPES.VehicleQueries,
+      TYPES.VehicleSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.VehicleAccess,
+      TYPES.TenantFileService,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<OdometerLog>(TYPES.OdometerLog).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      vehicles: IVehicleRepository,
+      readings: IOdometerReadings,
+      access: VehicleAccess,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new OdometerLog({
+        unitOfWork,
+        vehicles,
+        readings,
+        access,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleRepository,
+      TYPES.OdometerReadings,
+      TYPES.VehicleAccess,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<VehiclePhotos>(TYPES.VehiclePhotos).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      vehicles: IVehicleRepository,
+      access: VehicleAccess,
+      files: FileService,
+      clock: IClock,
+    ) =>
+      new VehiclePhotos({
+        unitOfWork,
+        vehicles,
+        access,
+        photos: new OwnedDocuments(files, "vehicle_photo", "vehicle", 30),
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleRepository,
+      TYPES.VehicleAccess,
+      TYPES.TenantFileService,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<VehicleGroupAdministration>(TYPES.VehicleGroupAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      groups: IVehicleGroups,
+      vehicles: IVehicleRepository,
+      access: VehicleAccess,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new VehicleGroupAdministration({
+        unitOfWork,
+        groups,
+        vehicles,
+        access,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleGroups,
+      TYPES.VehicleRepository,
+      TYPES.VehicleAccess,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<VehicleImportExport>(TYPES.VehicleImportExport).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      registry: VehicleRegistry,
+      queries: IVehicleQueries,
+      groups: IVehicleGroups,
+      branches: IBranches,
+      settings: IVehicleSettingsStore,
+      organisation: IOrganisationSettings,
+      reference: IReferenceData,
+      access: VehicleAccess,
+    ) =>
+      new VehicleImportExport({
+        unitOfWork,
+        registry,
+        queries,
+        groups,
+        branches,
+        settings,
+        organisation,
+        reference,
+        access,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleRegistry,
+      TYPES.VehicleQueries,
+      TYPES.VehicleGroups,
+      TYPES.Branches,
+      TYPES.VehicleSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.ReferenceData,
+      TYPES.VehicleAccess,
+    ],
+  );
+  container.bind<VehicleOverview>(TYPES.VehicleOverview).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      access: VehicleAccess,
+      registry: VehicleRegistry,
+      documents: VehicleDocuments,
+      photos: VehiclePhotos,
+      queries: IVehicleQueries,
+      branches: IBranches,
+      clock: IClock,
+    ) =>
+      new VehicleOverview({
+        unitOfWork,
+        access,
+        registry,
+        documents,
+        photos,
+        queries,
+        branches,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleAccess,
+      TYPES.VehicleRegistry,
+      TYPES.VehicleDocuments,
+      TYPES.VehiclePhotos,
+      TYPES.VehicleQueries,
+      TYPES.Branches,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<VehicleSettingsService>(TYPES.VehicleSettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        settings: IVehicleSettingsStore,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new VehicleSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.VehicleSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
+    );
+
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
     const pem = config.mobile.connectPrivateKeyPem;
@@ -2397,6 +2714,14 @@ export function createContainer(
       fxRateBook: FxRateBook,
       expenseCategories: ExpenseCategoryAdministration,
       vehicleCatalogue: VehicleCatalogue,
+      vehicleRegistry: VehicleRegistry,
+      vehicleDocuments: VehicleDocuments,
+      odometerLog: OdometerLog,
+      vehiclePhotos: VehiclePhotos,
+      vehicleGroups: VehicleGroupAdministration,
+      vehicleImportExport: VehicleImportExport,
+      vehicleOverview: VehicleOverview,
+      vehicleSettings: VehicleSettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -2427,6 +2752,16 @@ export function createContainer(
           fxRates: fxRateBook,
           expenseCategories,
           vehicles: vehicleCatalogue,
+        }),
+        ...vehicleRoutes({
+          registry: vehicleRegistry,
+          documents: vehicleDocuments,
+          odometer: odometerLog,
+          photos: vehiclePhotos,
+          groups: vehicleGroups,
+          importExport: vehicleImportExport,
+          overview: vehicleOverview,
+          settings: vehicleSettings,
         }),
         ...identityRoutes({
           signIn: tenantSignIn,
@@ -2485,6 +2820,14 @@ export function createContainer(
       TYPES.FxRateBook,
       TYPES.ExpenseCategoryAdministration,
       TYPES.VehicleCatalogue,
+      TYPES.VehicleRegistry,
+      TYPES.VehicleDocuments,
+      TYPES.OdometerLog,
+      TYPES.VehiclePhotos,
+      TYPES.VehicleGroupAdministration,
+      TYPES.VehicleImportExport,
+      TYPES.VehicleOverview,
+      TYPES.VehicleSettingsService,
     ],
   );
 

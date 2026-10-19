@@ -159,6 +159,16 @@ const RULES: Readonly<Record<string, Rule>> = {
   LICENCE_TYPE_LOCKED: { status: 409 },
   ENTITLEMENT_BRANCH_LIMIT: { status: 409 },
 
+  // Vehicles
+  VEHICLE_NOT_FOUND: { status: 404 },
+  VEHICLE_EXISTS: { status: 409 },
+  INVALID_VEHICLE: { status: 422 },
+  VEHICLE_STATUS_TRANSITION: { status: 422 },
+  ODOMETER_INVALID: { status: 422 },
+  VEHICLE_DOCUMENT_NOT_FOUND: { status: 404 },
+  VEHICLE_GROUP_NOT_FOUND: { status: 404 },
+  VEHICLE_GROUP_NAME_TAKEN: { status: 409 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

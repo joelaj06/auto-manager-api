@@ -211,6 +211,19 @@ rates before they can be activated; `POST /tax-codes/:code/preview` shows the re
 `/api/v1/fx-rates` (manual rates), `/api/v1/expense-categories`,
 `/api/v1/reference/vehicle-makes`.
 
+## Vehicles
+
+`/api/v1/vehicles` is the register, scoped to your branches: register, edit, transfer between
+branches (`POST /vehicles/transfer`), remove mistaken entries (`DELETE` with a reason). Statuses
+change through `POST /vehicles/:id/status` only between states no module owns
+(`GET /api/v1/vehicle-statuses` lists the lifecycle); every change is kept in
+`/vehicles/:id/status-history`. Per vehicle: `/documents` (with scans and compliance),
+`/odometer`, `/photos`, `/overview` and `/timeline`; across the fleet: `/vehicles/compliance`.
+Groups are at `/api/v1/vehicle-groups`, settings (required documents, reminders, custom fields)
+at `/api/v1/settings/vehicles`. CSV: `GET /vehicles/import/template`, `POST /vehicles/import`
+(`{ csv, commit }` — a preview unless `commit`, and all rows or none) and `GET /vehicles/export`.
+Cost and book value appear only with `vehicles.financials.view`.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

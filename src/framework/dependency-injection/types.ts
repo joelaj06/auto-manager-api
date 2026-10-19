@@ -182,4 +182,21 @@ export const TYPES = Object.freeze({
   ExpenseCategoryAdministration: Symbol.for("ExpenseCategoryAdministration"),
   VehicleCatalogue: Symbol.for("VehicleCatalogue"),
   DocumentNumbering: Symbol.for("DocumentNumbering"),
+
+  // Vehicles (P2-2)
+  VehicleRepository: Symbol.for("IVehicleRepository"),
+  VehicleQueries: Symbol.for("IVehicleQueries"),
+  VehicleDocumentRecords: Symbol.for("IVehicleDocuments"),
+  OdometerReadings: Symbol.for("IOdometerReadings"),
+  VehicleGroups: Symbol.for("IVehicleGroups"),
+  VehicleSettingsStore: Symbol.for("IVehicleSettingsStore"),
+  VehicleAccess: Symbol.for("VehicleAccess"),
+  VehicleRegistry: Symbol.for("VehicleRegistry"),
+  VehicleDocuments: Symbol.for("VehicleDocuments"),
+  OdometerLog: Symbol.for("OdometerLog"),
+  VehiclePhotos: Symbol.for("VehiclePhotos"),
+  VehicleGroupAdministration: Symbol.for("VehicleGroupAdministration"),
+  VehicleImportExport: Symbol.for("VehicleImportExport"),
+  VehicleOverview: Symbol.for("VehicleOverview"),
+  VehicleSettingsService: Symbol.for("VehicleSettingsService"),
 });

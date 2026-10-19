@@ -22,7 +22,63 @@ const letters = (marker: string) =>
     .slice(0, 16);
 const inOneDay = () => new Date(Date.now() + 86_400_000);
 
+/** A branch and a vehicle (code = marker) for tables that hang off a vehicle; `$2` = branch code. */
+const VEHICLE = `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $1, 'Isolation', 'Fixture', 'available', b.id from b returning id)`;
+
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  vehicle_groups: {
+    insert: (marker) => ({
+      sql: "insert into vehicle_groups (name) values ($1)",
+      params: [marker],
+    }),
+    find: "select 1 from vehicle_groups where name = $1",
+  },
+  vehicles: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)
+            insert into vehicles (code, make, model, status, branch_id)
+            select $1, 'Isolation', 'Fixture', 'available', b.id from b`,
+      params: [marker, `VH${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from vehicles where code = $1",
+  },
+  vehicle_group_members: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}, g as (insert into vehicle_groups (name) values ($1) returning id)
+            insert into vehicle_group_members (vehicle_id, group_id) select v.id, g.id from v, g`,
+      params: [marker, `GM${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from vehicle_group_members m join vehicles v on v.id = m.vehicle_id
+            where v.code = $1`,
+  },
+  vehicle_status_history: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into vehicle_status_history (vehicle_id, to_status, reason)
+            select v.id, 'available', $1 from v`,
+      params: [marker, `SH${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from vehicle_status_history where reason = $1",
+  },
+  vehicle_documents: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into vehicle_documents (vehicle_id, type, number) select v.id, 'insurance', $1 from v`,
+      params: [marker, `VD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from vehicle_documents where number = $1",
+  },
+  odometer_readings: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into odometer_readings (vehicle_id, value, read_at, note)
+            select v.id, 100, now(), $1 from v`,
+      params: [marker, `OR${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from odometer_readings where note = $1",
+  },
   fx_rates: {
     insert: (marker) => ({
       sql: `insert into fx_rates (base, quote, rate, rate_date, source)

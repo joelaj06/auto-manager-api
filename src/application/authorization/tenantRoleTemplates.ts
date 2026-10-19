@@ -6,8 +6,8 @@ import {
 
 /**
  * System roles seeded into every tenant and kept in sync by releases (docs/28 §6). Tenants cannot
- * edit them, only clone them into custom roles. Roles for modules that do not exist yet (Fleet
- * Officer, Rental Agent, Driver, …) are added together with those modules' permissions.
+ * edit them, only clone them into custom roles. Roles for modules that do not exist yet (Rental
+ * Agent, Driver, …) are added together with those modules' permissions.
  */
 export type TenantRoleTemplate = Readonly<{
   systemKey: string;
@@ -27,6 +27,20 @@ const branch = (keys: readonly PermissionKey[]) =>
     key,
     scope: PERMISSION_CATALOG[key].scopes.includes("branch") ? ("branch" as const) : widest(key),
   }));
+/** Day-to-day vehicle work (no removal, no cost figures). */
+const VEHICLE_OPERATIONS: readonly PermissionKey[] = [
+  "vehicles.list",
+  "vehicles.view",
+  "vehicles.create",
+  "vehicles.update",
+  "vehicles.change_status",
+  "vehicles.import",
+  "vehicles.export",
+  "vehicles.documents.view",
+  "vehicles.documents.manage",
+  "vehicles.odometer.record",
+  "vehicles.photos.manage",
+];
 const readOnly = KEYS.filter((key) => /\.(list|view)$/.test(key));
 
 export const OWNER_ROLE = "owner";
@@ -64,7 +78,16 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "branches.update",
       "organisation.view",
       "settings.view",
+      ...VEHICLE_OPERATIONS,
+      "vehicles.delete",
+      "vehicles.financials.view",
     ]),
+  },
+  {
+    systemKey: "fleet_officer",
+    name: "Fleet Officer",
+    description: "Vehicles, their documents, odometer and status in their branches",
+    grants: branch(["branches.list", "branches.view", "settings.view", ...VEHICLE_OPERATIONS]),
   },
   {
     systemKey: "accountant",
@@ -80,6 +103,11 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "finance.fx_rates.view",
       "finance.fx_rates.manage",
       "expenses.categories.manage",
+      "vehicles.list",
+      "vehicles.view",
+      "vehicles.export",
+      "vehicles.documents.view",
+      "vehicles.financials.view",
       "billing.view",
     ]),
   },

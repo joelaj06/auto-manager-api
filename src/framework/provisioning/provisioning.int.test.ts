@@ -4,6 +4,7 @@ import type { Container } from "inversify";
 import type pg from "pg";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { TENANT_ROLE_TEMPLATES } from "../../application/authorization/tenantRoleTemplates.js";
 import type { IJobHandler } from "../../application/jobs/IJobHandler.js";
 import type { JobName, JobPayloads } from "../../application/jobs/jobCatalog.js";
 import type { IPermissionCatalogueSource } from "../../application/ports/IPermissionCatalogueSource.js";
@@ -194,7 +195,11 @@ describe("provisioning saga", () => {
       `select (select count(*) from users) as users, (select count(*) from branches) as branches,
               (select count(*) from roles) as roles`,
     );
-    expect(counts).toEqual({ users: "1", branches: "1", roles: "5" });
+    expect(counts).toEqual({
+      users: "1",
+      branches: "1",
+      roles: String(TENANT_ROLE_TEMPLATES.length),
+    });
   });
 
   it("lets the owner set a password, sign in and use every permission", async () => {

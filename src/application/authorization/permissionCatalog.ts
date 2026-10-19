@@ -65,6 +65,51 @@ const definitions = {
     scopes: ALL,
   },
 
+  // --- vehicles ---
+  "vehicles.list": { description: "List vehicles", scopes: BRANCH_OR_ALL },
+  "vehicles.view": {
+    description: "Open a vehicle, its photos and timeline",
+    scopes: BRANCH_OR_ALL,
+  },
+  "vehicles.create": { description: "Register vehicles", scopes: BRANCH_OR_ALL },
+  "vehicles.update": {
+    description: "Edit vehicles, move them between branches and groups",
+    scopes: BRANCH_OR_ALL,
+  },
+  "vehicles.delete": { description: "Remove mistaken vehicle entries", scopes: BRANCH_OR_ALL },
+  "vehicles.change_status": {
+    description: "Change a vehicle's status by hand",
+    scopes: BRANCH_OR_ALL,
+  },
+  "vehicles.import": { description: "Import vehicles from CSV", scopes: BRANCH_OR_ALL },
+  "vehicles.export": { description: "Export the vehicle register", scopes: BRANCH_OR_ALL },
+  "vehicles.documents.view": {
+    description: "View vehicle documents and compliance",
+    scopes: BRANCH_OR_ALL,
+  },
+  "vehicles.documents.manage": {
+    description: "Add, renew and remove vehicle documents",
+    scopes: BRANCH_OR_ALL,
+  },
+  "vehicles.odometer.record": { description: "Record odometer readings", scopes: BRANCH_OR_ALL },
+  "vehicles.photos.manage": {
+    description: "Upload and remove vehicle photos",
+    scopes: BRANCH_OR_ALL,
+  },
+  "vehicles.financials.view": {
+    description: "See and edit vehicle cost, residual and book value",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "vehicles.groups.manage": {
+    description: "Create, rename and delete vehicle groups",
+    scopes: ALL,
+  },
+  "settings.vehicles.manage": {
+    description: "Edit vehicle settings (required documents, custom fields)",
+    scopes: ALL,
+  },
+
   "billing.view": { description: "View subscription and invoices", scopes: ALL },
   "billing.manage": {
     description: "Pay, change plan, request extensions",

@@ -28,6 +28,20 @@ export const FILE_KINDS = Object.freeze({
     maxBytes: 2 * MB,
     description: "Business logo (shown in the apps, receipts and the public tenant config)",
   },
+  vehicle_photo: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: IMAGES,
+    maxBytes: 10 * MB,
+    description: "Photo of a vehicle (gallery; one is the primary photo)",
+  },
+  vehicle_document: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: DOCUMENTS,
+    maxBytes: 10 * MB,
+    description: "Scan or photo of a vehicle document (insurance, roadworthy …)",
+  },
   application_document: {
     scope: "platform",
     visibility: "private",
