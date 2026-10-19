@@ -27,7 +27,62 @@ const VEHICLE = `with b as (insert into branches (code, name) values ($2, $1) re
                  v as (insert into vehicles (code, make, model, status, branch_id)
                        select $1, 'Isolation', 'Fixture', 'available', b.id from b returning id)`;
 
+/** A branch and a driver (code = marker) for tables that hang off a driver; `$2` = branch code. */
+const DRIVER = `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 d as (insert into drivers (code, first_name, last_name, phone, branch_id)
+                       select $1, 'Isolation', 'Driver',
+                              '+233' || (200000000 + abs(hashtext($1)) % 99999999)::text, b.id
+                         from b returning id)`;
+
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  drivers: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)
+            insert into drivers (code, first_name, last_name, phone, branch_id)
+            select $1, 'Isolation', 'Driver', '+233' || (200000000 + abs(hashtext($1)) % 99999999)::text, b.id from b`,
+      params: [marker, `DR${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from drivers where code = $1",
+  },
+  driver_guarantors: {
+    insert: (marker) => ({
+      sql: `${DRIVER}
+            insert into driver_guarantors (driver_id, name, phone) select d.id, $1, '+233241234567' from d`,
+      params: [marker, `DG${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from driver_guarantors where name = $1",
+  },
+  customers: {
+    insert: (marker) => ({
+      sql: `insert into customers (code, type, first_name, last_name, name, email)
+            values ($1, 'individual', 'Isolation', 'Customer', 'Isolation Customer', $1 || '@example.com')`,
+      params: [marker],
+    }),
+    find: "select 1 from customers where code = $1",
+  },
+  suppliers: {
+    insert: (marker) => ({
+      sql: "insert into suppliers (code, name, type) values ($1, $1, 'parts')",
+      params: [marker],
+    }),
+    find: "select 1 from suppliers where code = $1",
+  },
+  party_documents: {
+    insert: (marker) => ({
+      sql: `insert into party_documents (party_type, party_id, type, number)
+            values ('customer', gen_random_uuid(), 'passport', $1)`,
+      params: [marker],
+    }),
+    find: "select 1 from party_documents where number = $1",
+  },
+  party_status_history: {
+    insert: (marker) => ({
+      sql: `insert into party_status_history (party_type, party_id, to_status, reason)
+            values ('customer', gen_random_uuid(), 'watch', $1)`,
+      params: [marker],
+    }),
+    find: "select 1 from party_status_history where reason = $1",
+  },
   vehicle_groups: {
     insert: (marker) => ({
       sql: "insert into vehicle_groups (name) values ($1)",

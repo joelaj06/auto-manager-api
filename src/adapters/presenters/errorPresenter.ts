@@ -169,6 +169,17 @@ const RULES: Readonly<Record<string, Rule>> = {
   VEHICLE_GROUP_NOT_FOUND: { status: 404 },
   VEHICLE_GROUP_NAME_TAKEN: { status: 409 },
 
+  // Parties
+  DRIVER_NOT_FOUND: { status: 404 },
+  CUSTOMER_NOT_FOUND: { status: 404 },
+  SUPPLIER_NOT_FOUND: { status: 404 },
+  GUARANTOR_NOT_FOUND: { status: 404 },
+  PARTY_DOCUMENT_NOT_FOUND: { status: 404 },
+  PARTY_EXISTS: { status: 409 },
+  INVALID_PARTY: { status: 422 },
+  DRIVER_STATUS_TRANSITION: { status: 422 },
+  CUSTOMER_RISK: { status: 422 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

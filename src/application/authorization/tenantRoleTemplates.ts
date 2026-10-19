@@ -7,7 +7,7 @@ import {
 /**
  * System roles seeded into every tenant and kept in sync by releases (docs/28 §6). Tenants cannot
  * edit them, only clone them into custom roles. Roles for modules that do not exist yet (Rental
- * Agent, Driver, …) are added together with those modules' permissions.
+ * Agent, Cashier, Driver, …) are added together with those modules' permissions.
  */
 export type TenantRoleTemplate = Readonly<{
   systemKey: string;
@@ -40,6 +40,14 @@ const VEHICLE_OPERATIONS: readonly PermissionKey[] = [
   "vehicles.documents.manage",
   "vehicles.odometer.record",
   "vehicles.photos.manage",
+];
+/** Day-to-day driver work (no removal, termination or identity documents). */
+const DRIVER_OPERATIONS: readonly PermissionKey[] = [
+  "drivers.list",
+  "drivers.view",
+  "drivers.create",
+  "drivers.update",
+  "drivers.suspend",
 ];
 const readOnly = KEYS.filter((key) => /\.(list|view)$/.test(key));
 
@@ -81,13 +89,29 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       ...VEHICLE_OPERATIONS,
       "vehicles.delete",
       "vehicles.financials.view",
+      ...DRIVER_OPERATIONS,
+      "drivers.delete",
+      "drivers.terminate",
+      "drivers.documents.view",
+      "customers.list",
+      "customers.view",
+      "suppliers.list",
+      "suppliers.view",
     ]),
   },
   {
     systemKey: "fleet_officer",
     name: "Fleet Officer",
     description: "Vehicles, their documents, odometer and status in their branches",
-    grants: branch(["branches.list", "branches.view", "settings.view", ...VEHICLE_OPERATIONS]),
+    grants: branch([
+      "branches.list",
+      "branches.view",
+      "settings.view",
+      ...VEHICLE_OPERATIONS,
+      ...DRIVER_OPERATIONS,
+      "suppliers.list",
+      "suppliers.view",
+    ]),
   },
   {
     systemKey: "accountant",
@@ -108,6 +132,13 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "vehicles.export",
       "vehicles.documents.view",
       "vehicles.financials.view",
+      "customers.list",
+      "customers.view",
+      "customers.update",
+      "suppliers.list",
+      "suppliers.view",
+      "suppliers.create",
+      "suppliers.update",
       "billing.view",
     ]),
   },

@@ -4,9 +4,8 @@ import type { AuthorizationPolicy } from "../../authorization/AuthorizationPolic
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
-import { IdentityRuleError } from "../../errors/IdentityErrors.js";
-import { BranchDeactivatedError } from "../../errors/TenantErrors.js";
 import type { BranchView, IBranches } from "../../ports/IBranches.js";
+import { BranchScope } from "../../services/BranchScope.js";
 
 export class VehicleNotFoundError extends ApplicationError {
   readonly code = "VEHICLE_NOT_FOUND";
@@ -29,13 +28,17 @@ export class VehicleExistsError extends ApplicationError {
  * all-branch access.
  */
 export class VehicleAccess {
+  private readonly scope: BranchScope;
+
   constructor(
     private readonly deps: Readonly<{
       vehicles: IVehicleRepository;
       branches: IBranches;
       policy: AuthorizationPolicy;
     }>,
-  ) {}
+  ) {
+    this.scope = new BranchScope({ branches: deps.branches, policy: deps.policy });
+  }
 
   async reach(
     actor: Principal,
@@ -46,40 +49,23 @@ export class VehicleAccess {
     const { deps } = this;
     const vehicle = lock ? await deps.vehicles.lockById(id) : await deps.vehicles.findById(id);
     if (vehicle === null) throw new VehicleNotFoundError();
-    const reachable = deps.policy.branchesFor(actor, permission);
-    if (reachable !== "all") {
-      if (!reachable.includes(vehicle.branchId)) throw new VehicleNotFoundError();
-      return vehicle;
-    }
-    const branch = (await deps.branches.list()).find((b) => b.id === vehicle.branchId);
-    if (branch?.status !== "active") throw new BranchDeactivatedError();
+    await this.scope.assertReaches(
+      actor,
+      permission,
+      vehicle.branchId,
+      () => new VehicleNotFoundError(),
+    );
     return vehicle;
   }
 
   /** The branch exists, is active and is within the caller's scope for `permission`. */
-  async branch(actor: Principal, permission: PermissionKey, branchId: string): Promise<BranchView> {
-    const branch = (await this.deps.branches.list()).find((b) => b.id === branchId);
-    if (branch === undefined) throw new IdentityRuleError("UNKNOWN_BRANCH", "Unknown branch");
-    if (branch.status !== "active") throw new BranchDeactivatedError();
-    const reachable = this.deps.policy.branchesFor(actor, permission);
-    if (reachable !== "all" && !reachable.includes(branchId))
-      throw new IdentityRuleError("BRANCH_OUT_OF_SCOPE", "You can only use branches you manage");
-    return branch;
+  branch(actor: Principal, permission: PermissionKey, branchId: string): Promise<BranchView> {
+    return this.scope.branch(actor, permission, branchId);
   }
 
   /** The default branch, or the caller's only branch, for records created without one. */
-  async defaultBranch(actor: Principal, permission: PermissionKey): Promise<string> {
-    const reachable = this.deps.policy.branchesFor(actor, permission);
-    if (reachable !== "all") {
-      if (reachable.length === 1) return reachable[0]!;
-      throw new IdentityRuleError("UNKNOWN_BRANCH", "Choose the branch of the vehicle");
-    }
-    const branch = (await this.deps.branches.list()).find(
-      (b) => b.isDefault && b.status === "active",
-    );
-    if (branch === undefined)
-      throw new IdentityRuleError("UNKNOWN_BRANCH", "Choose the branch of the vehicle");
-    return branch.id;
+  defaultBranch(actor: Principal, permission: PermissionKey): Promise<string> {
+    return this.scope.defaultBranch(actor, permission, "vehicle");
   }
 
   /** Cost, book value and residual value (sensitive) for a vehicle in `branchId`. */
@@ -88,10 +74,10 @@ export class VehicleAccess {
   }
 
   can(actor: Principal, permission: PermissionKey, branchId: string): boolean {
-    return this.deps.policy.decide(actor, permission, { branchId }).allowed;
+    return this.scope.can(actor, permission, branchId);
   }
 
   branchesFor(actor: Principal, permission: PermissionKey): "all" | readonly string[] {
-    return this.deps.policy.branchesFor(actor, permission);
+    return this.scope.branchesFor(actor, permission);
   }
 }

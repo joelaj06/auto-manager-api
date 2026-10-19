@@ -199,4 +199,20 @@ export const TYPES = Object.freeze({
   VehicleImportExport: Symbol.for("VehicleImportExport"),
   VehicleOverview: Symbol.for("VehicleOverview"),
   VehicleSettingsService: Symbol.for("VehicleSettingsService"),
+
+  // Parties (P2-3)
+  BranchScope: Symbol.for("BranchScope"),
+  DriverRepository: Symbol.for("IDriverRepository"),
+  CustomerRepository: Symbol.for("ICustomerRepository"),
+  SupplierRepository: Symbol.for("ISupplierRepository"),
+  DriverGuarantorRecords: Symbol.for("IDriverGuarantors"),
+  PartyDocumentRecords: Symbol.for("IPartyDocuments"),
+  PartyStatusHistory: Symbol.for("IPartyStatusHistory"),
+  DriverSettingsStore: Symbol.for("IDriverSettingsStore"),
+  DriverAdministration: Symbol.for("DriverAdministration"),
+  DriverGuarantors: Symbol.for("DriverGuarantors"),
+  CustomerAdministration: Symbol.for("CustomerAdministration"),
+  SupplierAdministration: Symbol.for("SupplierAdministration"),
+  PartyDocuments: Symbol.for("PartyDocuments"),
+  DriverSettingsService: Symbol.for("DriverSettingsService"),
 });

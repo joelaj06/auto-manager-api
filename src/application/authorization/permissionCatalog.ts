@@ -110,6 +110,42 @@ const definitions = {
     scopes: ALL,
   },
 
+  // --- parties (drivers belong to a branch; customers and suppliers to the whole business) ---
+  "drivers.list": { description: "List drivers", scopes: BRANCH_OR_ALL },
+  "drivers.view": { description: "Open a driver with their guarantors", scopes: BRANCH_OR_ALL },
+  "drivers.create": { description: "Register drivers", scopes: BRANCH_OR_ALL },
+  "drivers.update": {
+    description: "Edit drivers, guarantors and documents; activate and rehire",
+    scopes: BRANCH_OR_ALL,
+  },
+  "drivers.delete": { description: "Remove mistaken driver entries", scopes: BRANCH_OR_ALL },
+  "drivers.suspend": { description: "Suspend and reinstate drivers", scopes: BRANCH_OR_ALL },
+  "drivers.terminate": { description: "Terminate drivers", scopes: BRANCH_OR_ALL },
+  "drivers.documents.view": {
+    description: "See drivers' and guarantors' identity documents and Ghana Card numbers",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "customers.list": { description: "List customers", scopes: ALL },
+  "customers.view": { description: "Open a customer", scopes: ALL },
+  "customers.create": { description: "Register customers", scopes: ALL },
+  "customers.update": { description: "Edit customers and their documents", scopes: ALL },
+  "customers.delete": { description: "Remove mistaken customer entries", scopes: ALL },
+  "customers.blacklist": {
+    description: "Put customers on watch, blacklist or clear them",
+    scopes: ALL,
+  },
+  "customers.id_documents.view": {
+    description: "See customers' identity documents and Ghana Card numbers",
+    scopes: ALL,
+    sensitive: true,
+  },
+  "suppliers.list": { description: "List suppliers", scopes: ALL },
+  "suppliers.view": { description: "Open a supplier", scopes: ALL },
+  "suppliers.create": { description: "Add suppliers", scopes: ALL },
+  "suppliers.update": { description: "Edit and deactivate suppliers", scopes: ALL },
+  "suppliers.delete": { description: "Remove mistaken supplier entries", scopes: ALL },
+
   "billing.view": { description: "View subscription and invoices", scopes: ALL },
   "billing.manage": {
     description: "Pay, change plan, request extensions",

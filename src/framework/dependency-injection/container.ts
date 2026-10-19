@@ -1,3 +1,27 @@
+import { partyRoutes } from "../../adapters/routes/partyRoutes.js";
+import type {
+  IDriverGuarantors,
+  IDriverSettingsStore,
+  IPartyDocuments,
+  IPartyStatusHistory,
+} from "../../application/ports/IPartyRecords.js";
+import { BranchScope } from "../../application/services/BranchScope.js";
+import { CustomerAdministration } from "../../application/use-cases/parties/CustomerAdministration.js";
+import { DriverAdministration } from "../../application/use-cases/parties/DriverAdministration.js";
+import { DriverBranchCheck } from "../../application/use-cases/parties/DriverBranchCheck.js";
+import { DriverGuarantors } from "../../application/use-cases/parties/DriverGuarantors.js";
+import { DriverSettingsService } from "../../application/use-cases/parties/DriverSettingsService.js";
+import { PartyDocuments } from "../../application/use-cases/parties/PartyDocuments.js";
+import { SupplierAdministration } from "../../application/use-cases/parties/SupplierAdministration.js";
+import { PostgresCustomerRepository } from "../../infrastructure/parties/PostgresCustomerRepository.js";
+import { PostgresDriverRepository } from "../../infrastructure/parties/PostgresDriverRepository.js";
+import {
+  PostgresDriverGuarantors,
+  PostgresDriverSettingsStore,
+  PostgresPartyDocuments,
+  PostgresPartyStatusHistory,
+  PostgresSupplierRepository,
+} from "../../infrastructure/parties/PostgresPartyRecords.js";
 import { vehicleRoutes } from "../../adapters/routes/vehicleRoutes.js";
 import type {
   IOdometerReadings,
@@ -1545,8 +1569,11 @@ export function createContainer(
   container
     .bind<IBranchDeactivationCheck[]>(TYPES.BranchDeactivationChecks)
     .toResolvedValue(
-      (vehicles: IVehicleQueries) => [new VehicleBranchCheck(vehicles)],
-      [TYPES.VehicleQueries],
+      (vehicles: IVehicleQueries, drivers: PostgresDriverRepository) => [
+        new VehicleBranchCheck(vehicles),
+        new DriverBranchCheck(drivers),
+      ],
+      [TYPES.VehicleQueries, TYPES.DriverRepository],
     );
 
   container.bind<TenantLifecycleService>(TYPES.TenantLifecycleService).toResolvedValue(
@@ -2378,6 +2405,240 @@ export function createContainer(
       [TYPES.UnitOfWork, TYPES.VehicleSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
 
+  // --- Parties (drivers, guarantors, customers, suppliers, identity documents) ---
+  container
+    .bind<BranchScope>(TYPES.BranchScope)
+    .toResolvedValue(
+      (branches: IBranches, policy: AuthorizationPolicy) => new BranchScope({ branches, policy }),
+      [TYPES.Branches, TYPES.AuthorizationPolicy],
+    );
+  tenantRepository<PostgresDriverRepository>(
+    TYPES.DriverRepository,
+    (tx) => new PostgresDriverRepository(tx),
+  );
+  tenantRepository<PostgresCustomerRepository>(
+    TYPES.CustomerRepository,
+    (tx) => new PostgresCustomerRepository(tx),
+  );
+  tenantRepository<PostgresSupplierRepository>(
+    TYPES.SupplierRepository,
+    (tx) => new PostgresSupplierRepository(tx),
+  );
+  tenantRepository<IDriverGuarantors>(
+    TYPES.DriverGuarantorRecords,
+    (tx) => new PostgresDriverGuarantors(tx),
+  );
+  tenantRepository<IPartyDocuments>(
+    TYPES.PartyDocumentRecords,
+    (tx) => new PostgresPartyDocuments(tx),
+  );
+  tenantRepository<IPartyStatusHistory>(
+    TYPES.PartyStatusHistory,
+    (tx) => new PostgresPartyStatusHistory(tx),
+  );
+  tenantRepository<IDriverSettingsStore>(
+    TYPES.DriverSettingsStore,
+    (tx) => new PostgresDriverSettingsStore(tx),
+  );
+  container.bind<DriverAdministration>(TYPES.DriverAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      drivers: PostgresDriverRepository,
+      guarantors: IDriverGuarantors,
+      documents: IPartyDocuments,
+      history: IPartyStatusHistory,
+      settings: IDriverSettingsStore,
+      organisation: IOrganisationSettings,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DriverAdministration({
+        unitOfWork,
+        drivers,
+        queries: drivers,
+        guarantors,
+        documents,
+        history,
+        settings,
+        organisation,
+        scope,
+        numbering,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DriverRepository,
+      TYPES.DriverGuarantorRecords,
+      TYPES.PartyDocumentRecords,
+      TYPES.PartyStatusHistory,
+      TYPES.DriverSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<DriverGuarantors>(TYPES.DriverGuarantors).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      drivers: DriverAdministration,
+      guarantors: IDriverGuarantors,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DriverGuarantors({
+        unitOfWork,
+        drivers,
+        guarantors,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DriverAdministration,
+      TYPES.DriverGuarantorRecords,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<CustomerAdministration>(TYPES.CustomerAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      customers: PostgresCustomerRepository,
+      history: IPartyStatusHistory,
+      organisation: IOrganisationSettings,
+      policy: AuthorizationPolicy,
+      numbering: DocumentNumbering,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new CustomerAdministration({
+        unitOfWork,
+        customers,
+        queries: customers,
+        history,
+        organisation,
+        policy,
+        numbering,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.CustomerRepository,
+      TYPES.PartyStatusHistory,
+      TYPES.OrganisationSettings,
+      TYPES.AuthorizationPolicy,
+      TYPES.DocumentNumbering,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<SupplierAdministration>(TYPES.SupplierAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      suppliers: PostgresSupplierRepository,
+      numbering: DocumentNumbering,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new SupplierAdministration({
+        unitOfWork,
+        suppliers,
+        queries: suppliers,
+        numbering,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.SupplierRepository,
+      TYPES.DocumentNumbering,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<PartyDocuments>(TYPES.PartyDocuments).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      documents: IPartyDocuments,
+      drivers: DriverAdministration,
+      guarantors: DriverGuarantors,
+      customers: CustomerAdministration,
+      policy: AuthorizationPolicy,
+      files: FileService,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new PartyDocuments({
+        unitOfWork,
+        documents,
+        drivers,
+        guarantors,
+        customers,
+        policy,
+        files: new OwnedDocuments(files, "party_document", "party_document", 5),
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.PartyDocumentRecords,
+      TYPES.DriverAdministration,
+      TYPES.DriverGuarantors,
+      TYPES.CustomerAdministration,
+      TYPES.AuthorizationPolicy,
+      TYPES.TenantFileService,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<DriverSettingsService>(TYPES.DriverSettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        settings: IDriverSettingsStore,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new DriverSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.DriverSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
+    );
+
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
     const pem = config.mobile.connectPrivateKeyPem;
@@ -2722,6 +2983,12 @@ export function createContainer(
       vehicleImportExport: VehicleImportExport,
       vehicleOverview: VehicleOverview,
       vehicleSettings: VehicleSettingsService,
+      driverAdministration: DriverAdministration,
+      driverGuarantors: DriverGuarantors,
+      customerAdministration: CustomerAdministration,
+      supplierAdministration: SupplierAdministration,
+      partyDocuments: PartyDocuments,
+      driverSettings: DriverSettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -2762,6 +3029,14 @@ export function createContainer(
           importExport: vehicleImportExport,
           overview: vehicleOverview,
           settings: vehicleSettings,
+        }),
+        ...partyRoutes({
+          drivers: driverAdministration,
+          guarantors: driverGuarantors,
+          customers: customerAdministration,
+          suppliers: supplierAdministration,
+          documents: partyDocuments,
+          driverSettings,
         }),
         ...identityRoutes({
           signIn: tenantSignIn,
@@ -2828,6 +3103,12 @@ export function createContainer(
       TYPES.VehicleImportExport,
       TYPES.VehicleOverview,
       TYPES.VehicleSettingsService,
+      TYPES.DriverAdministration,
+      TYPES.DriverGuarantors,
+      TYPES.CustomerAdministration,
+      TYPES.SupplierAdministration,
+      TYPES.PartyDocuments,
+      TYPES.DriverSettingsService,
     ],
   );
 

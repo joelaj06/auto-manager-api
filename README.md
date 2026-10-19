@@ -224,6 +224,19 @@ at `/api/v1/settings/vehicles`. CSV: `GET /vehicles/import/template`, `POST /veh
 (`{ csv, commit }` — a preview unless `commit`, and all rows or none) and `GET /vehicles/export`.
 Cost and book value appear only with `vehicles.financials.view`.
 
+## Drivers, customers and suppliers
+
+`/api/v1/drivers` (scoped to your branches) registers drivers as applicants; they become active
+through `POST /drivers/:id/activate` once `/drivers/:id/onboarding` is complete, and are
+suspended, reinstated, terminated or rehired with a reason (`/suspend`, `/reinstate`,
+`/terminate`, `/rehire`). Guarantors are at `/drivers/:id/guarantors`; licences expiring soon at
+`/drivers/expiring-licences`; the onboarding rules at `/api/v1/settings/drivers`.
+`/api/v1/customers` holds individuals and companies for every branch, with
+`POST /customers/:id/risk` to watch, blacklist or clear them. `/api/v1/suppliers` lists who the
+business buys from. Identity documents and scans (`…/documents`) need the sensitive
+`drivers.documents.view` or `customers.id_documents.view`; without them Ghana Card numbers are
+masked.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
