@@ -81,6 +81,10 @@ const definitions = {
     description: "Change a vehicle's status by hand",
     scopes: BRANCH_OR_ALL,
   },
+  "vehicles.assign_driver": {
+    description: "Assign drivers to vehicles, hand over and end assignments",
+    scopes: BRANCH_OR_ALL,
+  },
   "vehicles.import": { description: "Import vehicles from CSV", scopes: BRANCH_OR_ALL },
   "vehicles.export": { description: "Export the vehicle register", scopes: BRANCH_OR_ALL },
   "vehicles.documents.view": {

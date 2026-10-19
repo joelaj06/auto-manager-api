@@ -215,4 +215,10 @@ export const TYPES = Object.freeze({
   SupplierAdministration: Symbol.for("SupplierAdministration"),
   PartyDocuments: Symbol.for("PartyDocuments"),
   DriverSettingsService: Symbol.for("DriverSettingsService"),
+
+  // Assignments (P2-4)
+  AssignmentRepository: Symbol.for("IAssignmentRepository"),
+  AssignmentSettingsStore: Symbol.for("IAssignmentSettingsStore"),
+  VehicleAssignments: Symbol.for("VehicleAssignments"),
+  AssignmentSettingsService: Symbol.for("AssignmentSettingsService"),
 });

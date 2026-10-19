@@ -399,6 +399,31 @@ export class VehicleRegistry {
     });
   }
 
+  /**
+   * A module moves a vehicle (locked in the caller's unit of work) into or out of one of its
+   * states, with a reference to the record that causes it (an assignment, a rental …).
+   */
+  async moveByModule(
+    vehicle: Vehicle,
+    to: VehicleStatus,
+    params: Readonly<{
+      ref: Readonly<{ type: string; id: string }>;
+      reason: string;
+      userId: string;
+    }>,
+  ): Promise<void> {
+    const { deps } = this;
+    const now = deps.clock.now();
+    const change = vehicle.changeStatus(to, {
+      manual: false,
+      reason: params.reason,
+      ref: params.ref,
+      now,
+    });
+    await deps.vehicles.save(vehicle);
+    await deps.vehicles.recordStatusChange(vehicle.id, change, params.userId, now);
+  }
+
   async statusHistory(actor: Principal, id: string, limit: number): Promise<StatusHistoryEntry[]> {
     return this.deps.unitOfWork.run(async () => {
       await this.deps.access.reach(actor, id, "vehicles.view");

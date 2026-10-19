@@ -16,5 +16,6 @@ export const PgErrorCodes = Object.freeze({
   objectInUse: "55006",
   insufficientPrivilege: "42501",
   uniqueViolation: "23505",
+  exclusionViolation: "23P01",
   queryCanceled: "57014",
 });

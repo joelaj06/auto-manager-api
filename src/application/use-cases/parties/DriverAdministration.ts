@@ -13,6 +13,7 @@ import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { Page } from "../../dto/Page.js";
 import { DriverNotFoundError, PartyExistsError } from "../../errors/PartyErrors.js";
+import type { AssignmentRecord, IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
@@ -38,7 +39,16 @@ import { recordUserAction } from "../reference/userAudit.js";
 export type DriverView = Omit<DriverProps, "deletedAt" | "deletedReason">;
 
 export type DriverDetailView = DriverView &
-  Readonly<{ onboarding: readonly OnboardingItem[]; guarantors: readonly Guarantor[] }>;
+  Readonly<{
+    onboarding: readonly OnboardingItem[];
+    guarantors: readonly Guarantor[];
+    /** The vehicle the driver has now (P2-4 assignments). */
+    currentAssignment: Readonly<{
+      id: string;
+      vehicle: AssignmentRecord["vehicle"];
+      startedAt: Date;
+    }> | null;
+  }>;
 
 export type DriverInput = Partial<DriverDetails> & Readonly<{ branchId?: string }>;
 
@@ -102,6 +112,7 @@ export class DriverAdministration {
       documents: IPartyDocuments;
       history: IPartyStatusHistory;
       settings: IDriverSettingsStore;
+      assignments: IAssignmentQueries;
       organisation: IOrganisationSettings;
       scope: BranchScope;
       numbering: DocumentNumbering;
@@ -174,6 +185,7 @@ export class DriverAdministration {
       const { branchId, ...details } = input;
       driver.update(details, now);
       if (branchId !== undefined && branchId !== before.branchId) {
+        await this.assertNoVehicle(driver, "moved to another branch");
         await deps.scope.branch(actor, "drivers.update", branchId);
         driver.moveToBranch(branchId, now);
       }
@@ -210,6 +222,7 @@ export class DriverAdministration {
       // Activating an applicant and reinstating a suspended driver need different permissions.
       if (from !== null && driver.status !== from)
         throw new DriverStatusError(`Only a driver who is ${from} can be ${audit}`);
+      if (to === "suspended" || to === "terminated") await this.assertNoVehicle(driver, audit);
       const change = driver.changeStatus(to, {
         reason,
         today: await this.today(),
@@ -301,11 +314,25 @@ export class DriverAdministration {
         ? g
         : { ...g, ghanaCardNumber: maskGhanaCard(g.ghanaCardNumber) },
     );
+    const current = await this.deps.assignments.openForDriver(driver.id);
     return {
       ...this.view(actor, driver.snapshot()),
       onboarding: await this.checklist(driver),
       guarantors,
+      currentAssignment:
+        current === null
+          ? null
+          : { id: current.id, vehicle: current.vehicle, startedAt: current.startedAt },
     };
+  }
+
+  /** A driver who has a vehicle keeps their status and branch until the assignment ends. */
+  private async assertNoVehicle(driver: Driver, change: string): Promise<void> {
+    const current = await this.deps.assignments.openForDriver(driver.id);
+    if (current !== null)
+      throw new DriverStatusError(
+        `The driver has ${current.vehicle.plateNumber ?? current.vehicle.code}; end the assignment before they are ${change}`,
+      );
   }
 
   private async checklist(driver: Driver): Promise<OnboardingItem[]> {

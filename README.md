@@ -237,6 +237,15 @@ business buys from. Identity documents and scans (`…/documents`) need the sens
 `drivers.documents.view` or `customers.id_documents.view`; without them Ghana Card numbers are
 masked.
 
+## Assignments
+
+A vehicle has at most one driver and a driver at most one vehicle. `POST
+/api/v1/vehicles/:id/assignment` hands an available vehicle to an active driver with the handover
+checklist (`GET /api/v1/settings/assignments` lists its items), the odometer and the remittance
+terms; `/assignment/end` takes it back, `/assignment/handover` changes the driver in one step and
+`PATCH /assignment/terms` changes the terms. `/api/v1/assignments?open=true` is the current board;
+`/vehicles/:id/assignment-at?at=…` says who had the vehicle at a given time.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

@@ -35,6 +35,19 @@ const DRIVER = `with b as (insert into branches (code, name) values ($2, $1) ret
                          from b returning id)`;
 
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  vehicle_assignments: {
+    insert: (marker) => ({
+      sql: `${DRIVER},
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $1, 'Isolation', 'Fixture', 'assigned', b.id from b returning id)
+            insert into vehicle_assignments (vehicle_id, driver_id, branch_id, type,
+              remittance_mode, started_at, start_odometer, start_checklist, notes)
+            select v.id, d.id, b.id, 'salary', 'none', now(), 0, '{"items": []}', $1
+              from v, d, b`,
+      params: [marker, `VA${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from vehicle_assignments where notes = $1",
+  },
   drivers: {
     insert: (marker) => ({
       sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)

@@ -2,7 +2,9 @@ import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRe
 import {
   checkOdometerReading,
   type OdometerReadingProps,
+  type OdometerSource,
 } from "../../../domain/vehicles/OdometerReading.js";
+import type { Vehicle } from "../../../domain/vehicles/Vehicle.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -57,35 +59,51 @@ export class OdometerLog {
     return deps.unitOfWork.run(async () => {
       // Locking the vehicle serialises readings of the same vehicle.
       const vehicle = await deps.access.reach(actor, vehicleId, "vehicles.odometer.record", true);
-      const now = deps.clock.now();
-      const readAt = input.readAt ?? now;
-      const note = input.note?.trim() ?? null;
-      const reading = {
-        value: input.value,
-        readAt,
-        replacement: input.replacement ?? false,
-        note: note === "" ? null : note,
-      };
-      checkOdometerReading(reading, await deps.readings.neighbours(vehicleId, readAt), now);
-      const recorded: OdometerReadingProps = {
-        ...reading,
-        id: deps.ids.next(),
-        vehicleId,
-        source: "manual",
-        refId: null,
-        recordedBy: actor.userId,
-        createdAt: now,
-      };
-      await deps.readings.add(recorded);
-      vehicle.applyOdometer(reading.value, readAt, now);
-      await deps.vehicles.save(vehicle);
+      const recorded = await this.recordFor(vehicle, input, "manual", null, actor.userId);
       await recordUserAction(deps, actor.userId, {
-        action: reading.replacement ? "vehicle.odometer_replaced" : "vehicle.odometer_recorded",
+        action: recorded.replacement ? "vehicle.odometer_replaced" : "vehicle.odometer_recorded",
         entityType: "vehicle",
         entityId: vehicleId,
-        after: { value: reading.value, readAt, note: reading.note },
+        after: { value: recorded.value, readAt: recorded.readAt, note: recorded.note },
       });
       return recorded;
     });
+  }
+
+  /**
+   * A reading taken by a module (assignment handover, rental check-out …) for a vehicle locked
+   * in the caller's unit of work: same rules as a manual reading.
+   */
+  async recordFor(
+    vehicle: Vehicle,
+    input: OdometerInput,
+    source: OdometerSource,
+    refId: string | null,
+    userId: string | null,
+  ): Promise<OdometerReadingProps> {
+    const { deps } = this;
+    const now = deps.clock.now();
+    const readAt = input.readAt ?? now;
+    const note = input.note?.trim() ?? null;
+    const reading = {
+      value: input.value,
+      readAt,
+      replacement: input.replacement ?? false,
+      note: note === "" ? null : note,
+    };
+    checkOdometerReading(reading, await deps.readings.neighbours(vehicle.id, readAt), now);
+    const recorded: OdometerReadingProps = {
+      ...reading,
+      id: deps.ids.next(),
+      vehicleId: vehicle.id,
+      source,
+      refId,
+      recordedBy: userId,
+      createdAt: now,
+    };
+    await deps.readings.add(recorded);
+    vehicle.applyOdometer(reading.value, readAt, now);
+    await deps.vehicles.save(vehicle);
+    return recorded;
   }
 }

@@ -1,3 +1,11 @@
+import { assignmentRoutes } from "../../adapters/routes/assignmentRoutes.js";
+import type { IAssignmentSettingsStore } from "../../application/ports/IAssignmentRecords.js";
+import { AssignmentSettingsService } from "../../application/use-cases/assignments/AssignmentSettingsService.js";
+import { VehicleAssignments } from "../../application/use-cases/assignments/VehicleAssignments.js";
+import {
+  PostgresAssignmentRepository,
+  PostgresAssignmentSettingsStore,
+} from "../../infrastructure/assignments/PostgresAssignmentRepository.js";
 import { partyRoutes } from "../../adapters/routes/partyRoutes.js";
 import type {
   IDriverGuarantors,
@@ -2369,6 +2377,7 @@ export function createContainer(
       documents: VehicleDocuments,
       photos: VehiclePhotos,
       queries: IVehicleQueries,
+      assignments: PostgresAssignmentRepository,
       branches: IBranches,
       clock: IClock,
     ) =>
@@ -2379,6 +2388,7 @@ export function createContainer(
         documents,
         photos,
         queries,
+        assignments,
         branches,
         clock,
       }),
@@ -2389,6 +2399,7 @@ export function createContainer(
       TYPES.VehicleDocuments,
       TYPES.VehiclePhotos,
       TYPES.VehicleQueries,
+      TYPES.AssignmentRepository,
       TYPES.Branches,
       TYPES.Clock,
     ],
@@ -2448,6 +2459,7 @@ export function createContainer(
       documents: IPartyDocuments,
       history: IPartyStatusHistory,
       settings: IDriverSettingsStore,
+      assignments: PostgresAssignmentRepository,
       organisation: IOrganisationSettings,
       scope: BranchScope,
       numbering: DocumentNumbering,
@@ -2464,6 +2476,7 @@ export function createContainer(
         documents,
         history,
         settings,
+        assignments,
         organisation,
         scope,
         numbering,
@@ -2479,6 +2492,7 @@ export function createContainer(
       TYPES.PartyDocumentRecords,
       TYPES.PartyStatusHistory,
       TYPES.DriverSettingsStore,
+      TYPES.AssignmentRepository,
       TYPES.OrganisationSettings,
       TYPES.BranchScope,
       TYPES.DocumentNumbering,
@@ -2637,6 +2651,75 @@ export function createContainer(
         requestContext: IRequestContext,
       ) => new DriverSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
       [TYPES.UnitOfWork, TYPES.DriverSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
+    );
+
+  // --- Assignments (vehicle ↔ driver, handover checklist, remittance terms) ---
+  tenantRepository<PostgresAssignmentRepository>(
+    TYPES.AssignmentRepository,
+    (tx) => new PostgresAssignmentRepository(tx),
+  );
+  tenantRepository<IAssignmentSettingsStore>(
+    TYPES.AssignmentSettingsStore,
+    (tx) => new PostgresAssignmentSettingsStore(tx),
+  );
+  container.bind<VehicleAssignments>(TYPES.VehicleAssignments).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      assignments: PostgresAssignmentRepository,
+      settings: IAssignmentSettingsStore,
+      vehicles: VehicleAccess,
+      registry: VehicleRegistry,
+      odometer: OdometerLog,
+      documents: VehicleDocuments,
+      drivers: DriverAdministration,
+      organisation: IOrganisationSettings,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new VehicleAssignments({
+        unitOfWork,
+        assignments,
+        queries: assignments,
+        settings,
+        vehicles,
+        registry,
+        odometer,
+        documents,
+        drivers,
+        organisation,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.AssignmentRepository,
+      TYPES.AssignmentSettingsStore,
+      TYPES.VehicleAccess,
+      TYPES.VehicleRegistry,
+      TYPES.OdometerLog,
+      TYPES.VehicleDocuments,
+      TYPES.DriverAdministration,
+      TYPES.OrganisationSettings,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<AssignmentSettingsService>(TYPES.AssignmentSettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        settings: IAssignmentSettingsStore,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new AssignmentSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.AssignmentSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
 
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
@@ -2989,6 +3072,8 @@ export function createContainer(
       supplierAdministration: SupplierAdministration,
       partyDocuments: PartyDocuments,
       driverSettings: DriverSettingsService,
+      vehicleAssignments: VehicleAssignments,
+      assignmentSettings: AssignmentSettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -3038,6 +3123,7 @@ export function createContainer(
           documents: partyDocuments,
           driverSettings,
         }),
+        ...assignmentRoutes({ assignments: vehicleAssignments, settings: assignmentSettings }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -3109,6 +3195,8 @@ export function createContainer(
       TYPES.SupplierAdministration,
       TYPES.PartyDocuments,
       TYPES.DriverSettingsService,
+      TYPES.VehicleAssignments,
+      TYPES.AssignmentSettingsService,
     ],
   );
 

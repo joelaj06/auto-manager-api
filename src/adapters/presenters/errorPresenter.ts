@@ -180,6 +180,12 @@ const RULES: Readonly<Record<string, Rule>> = {
   DRIVER_STATUS_TRANSITION: { status: 422 },
   CUSTOMER_RISK: { status: 422 },
 
+  // Assignments
+  ASSIGNMENT_NOT_FOUND: { status: 404 },
+  ASSIGNMENT_CONFLICT: { status: 409 },
+  ASSIGNMENT_RULE: { status: 422 },
+  VEHICLE_NOT_COMPLIANT: { status: 422 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

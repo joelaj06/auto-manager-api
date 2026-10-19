@@ -34,6 +34,7 @@ const VEHICLE_OPERATIONS: readonly PermissionKey[] = [
   "vehicles.create",
   "vehicles.update",
   "vehicles.change_status",
+  "vehicles.assign_driver",
   "vehicles.import",
   "vehicles.export",
   "vehicles.documents.view",

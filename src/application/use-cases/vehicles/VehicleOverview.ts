@@ -1,5 +1,6 @@
 import type { ComplianceStatus } from "../../../domain/vehicles/VehicleCompliance.js";
 import type { Principal } from "../../authorization/Principal.js";
+import type { IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
 import type { IBranches } from "../../ports/IBranches.js";
 import type { IClock } from "../../ports/IClock.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
@@ -17,8 +18,16 @@ export type VehicleOverviewView = Readonly<{
   vehicle: VehicleView;
   branch: Readonly<{ id: string; code: string; name: string }> | null;
   primaryPhoto: FileView | null;
-  /** Filled by driver assignments (P2-4) and rentals (Phase 3). */
-  currentDriver: null;
+  /** The driver who has the vehicle now (assignment). */
+  currentDriver: Readonly<{
+    assignmentId: string;
+    driverId: string;
+    code: string;
+    name: string;
+    phone: string;
+    since: Date;
+  }> | null;
+  /** Filled by rentals (Phase 5). */
   currentRenter: null;
   /** Null without `vehicles.documents.view`. */
   compliance: ComplianceStatus | null;
@@ -34,8 +43,8 @@ const FIRST_PAGE = 20;
 
 /**
  * The vehicle 360° page (docs/06 §10), skeleton: header, compliance badges, recent distance and
- * a merged timeline of status changes, documents and odometer readings. KPIs and the current
- * driver or renter are added by the modules that produce them.
+ * a merged timeline of status changes, documents and odometer readings, and the current driver.
+ * KPIs and the current renter are added by the modules that produce them.
  */
 export class VehicleOverview {
   constructor(
@@ -46,6 +55,7 @@ export class VehicleOverview {
       documents: VehicleDocuments;
       photos: VehiclePhotos;
       queries: IVehicleQueries;
+      assignments: IAssignmentQueries;
       branches: IBranches;
       clock: IClock;
     }>,
@@ -57,7 +67,19 @@ export class VehicleOverview {
       const vehicle = await deps.access.reach(actor, id, "vehicles.view");
       const now = deps.clock.now();
       const branch = (await deps.branches.list()).find((b) => b.id === vehicle.branchId);
+      const assignment = await deps.assignments.openForVehicle(id);
       return {
+        currentDriver:
+          assignment === null
+            ? null
+            : {
+                assignmentId: assignment.id,
+                driverId: assignment.driver.id,
+                code: assignment.driver.code,
+                name: assignment.driver.name,
+                phone: assignment.driver.phone,
+                since: assignment.startedAt,
+              },
         vehicle: await deps.registry.view(actor, vehicle),
         branch:
           branch === undefined ? null : { id: branch.id, code: branch.code, name: branch.name },
@@ -75,7 +97,6 @@ export class VehicleOverview {
     return {
       ...result,
       primaryPhoto: await deps.photos.primary(id, result.vehicle.primaryPhotoFileId),
-      currentDriver: null,
       currentRenter: null,
       kpis: null,
     };
