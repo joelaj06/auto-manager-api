@@ -186,6 +186,14 @@ const RULES: Readonly<Record<string, Rule>> = {
   ASSIGNMENT_RULE: { status: 422 },
   VEHICLE_NOT_COMPLIANT: { status: 422 },
 
+  // Finance (INVOICE_NOT_FOUND is shared with billing)
+  PAYMENT_NOT_FOUND: { status: 404 },
+  CASH_SESSION_NOT_FOUND: { status: 404 },
+  PERIOD_LOCKED: { status: 409 },
+  FX_RATE_REQUIRED: { status: 422 },
+  CASH_SESSION_REQUIRED: { status: 409 },
+  FINANCE_RULE: { status: 422 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

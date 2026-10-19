@@ -246,6 +246,17 @@ terms; `/assignment/end` takes it back, `/assignment/handover` changes the drive
 `PATCH /assignment/terms` changes the terms. `/api/v1/assignments?open=true` is the current board;
 `/vehicles/:id/assignment-at?at=…` says who had the vehicle at a given time.
 
+## Finance (record only)
+
+Tenants record money; they never process it (decision 16). Every event posts a balanced journal
+entry in the base currency (`/api/v1/ledger/trial-balance`, `/ledger/lines`,
+`/ledger/parties/:type/:id`); posted lines cannot change, corrections are reversals, and
+`PUT /ledger/period-lock` closes past periods. `/api/v1/invoices` drafts, issues (with the
+business's tax codes — Ghana businesses start with VAT 15% + NHIL 2.5% + GETFund 2.5% from
+2026-01-01, editable at `/api/v1/tax-codes`) and voids invoices. `/api/v1/payments` records
+money in (to the payer's credit, allocated to invoices) and out (refunds, expenses), with
+receipts at `/payments/:id/receipt`. Cash goes through `/api/v1/cash-sessions`.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

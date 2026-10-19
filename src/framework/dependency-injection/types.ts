@@ -221,4 +221,21 @@ export const TYPES = Object.freeze({
   AssignmentSettingsStore: Symbol.for("IAssignmentSettingsStore"),
   VehicleAssignments: Symbol.for("VehicleAssignments"),
   AssignmentSettingsService: Symbol.for("AssignmentSettingsService"),
+
+  // Finance (P2-5)
+  TenantCalendar: Symbol.for("TenantCalendar"),
+  Ledger: Symbol.for("ILedger"),
+  InvoiceRepository: Symbol.for("IInvoiceRepository"),
+  PaymentRepository: Symbol.for("IPaymentRepository"),
+  CashSessionRepository: Symbol.for("ICashSessionRepository"),
+  FinanceQueries: Symbol.for("IFinanceQueries"),
+  PartyDirectory: Symbol.for("IPartyDirectory"),
+  FinanceSettingsStore: Symbol.for("IFinanceSettingsStore"),
+  LedgerPosting: Symbol.for("LedgerPosting"),
+  FinanceContext: Symbol.for("FinanceContext"),
+  Invoicing: Symbol.for("Invoicing"),
+  PaymentRecording: Symbol.for("PaymentRecording"),
+  CashSessions: Symbol.for("CashSessions"),
+  LedgerViews: Symbol.for("LedgerViews"),
+  FinanceSettingsService: Symbol.for("FinanceSettingsService"),
 });

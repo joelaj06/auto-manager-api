@@ -57,6 +57,47 @@ const definitions = {
     sensitive: true,
   },
   "settings.mobile.connect": { description: "Show the mobile-app connect QR code", scopes: ALL },
+  // --- finance (record only, decision 16) ---
+  "finance.invoices.view": { description: "View invoices", scopes: BRANCH_OR_ALL },
+  "finance.invoices.manage": {
+    description: "Draft, edit and issue invoices",
+    scopes: BRANCH_OR_ALL,
+  },
+  "finance.invoices.void": {
+    description: "Void issued invoices",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "finance.payments.view": { description: "View payments and receipts", scopes: BRANCH_OR_ALL },
+  "finance.payments.record": {
+    description: "Record payments received and made, and allocate them",
+    scopes: BRANCH_OR_ALL,
+  },
+  "finance.payments.reverse": {
+    description: "Reverse payments and release allocations",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "finance.cash_sessions.manage": {
+    description: "Open and close your own cash session",
+    scopes: BRANCH_OR_ALL,
+  },
+  "finance.cash_sessions.view": {
+    description: "See every cash session and close others' sessions",
+    scopes: BRANCH_OR_ALL,
+  },
+  "finance.ledger.view": {
+    description: "See the ledger, trial balance and party accounts",
+    scopes: ALL,
+    sensitive: true,
+  },
+  "finance.accounts.manage": { description: "Add ledger accounts", scopes: ALL },
+  "finance.period.lock": {
+    description: "Lock and unlock accounting periods",
+    scopes: ALL,
+    sensitive: true,
+  },
+  "finance.settings.manage": { description: "Edit finance settings", scopes: ALL },
   // --- finance and expense reference data ---
   "finance.fx_rates.view": { description: "View exchange rates", scopes: ALL },
   "finance.fx_rates.manage": { description: "Enter and remove exchange rates", scopes: ALL },

@@ -83,13 +83,53 @@ describe("currencies", () => {
 });
 
 describe("tax codes", () => {
-  // Example rates for the test only: real rates are entered by each business (decision 100).
-  it("needs rates before use, applies the rate in force and works back inclusive prices", async () => {
+  it("seeds the Ghana standard rate as one code with three levies (decision 168)", async () => {
     const codes = await api().get("/api/v1/tax-codes").set(owner());
-    expect(codes.body.data.map((c: { code: string }) => c.code)).toEqual(
-      expect.arrayContaining(["VAT", "NHIL", "GETFUND", "WHT"]),
+    const byCode = Object.fromEntries(
+      (codes.body.data as { code: string }[]).map((c) => [c.code, c]),
     );
-    expect(codes.body.data.every((c: { active: boolean }) => !c.active)).toBe(true);
+    expect(Object.keys(byCode).sort()).toEqual(["EXEMPT", "VAT_STANDARD", "WHT", "ZERO_RATED"]);
+    expect(byCode.VAT_STANDARD).toMatchObject({
+      active: true,
+      components: [
+        { key: "vat", rate: "15", base: "net", effectiveFrom: "2026-01-01", effectiveTo: null },
+        { key: "nhil", rate: "2.5", base: "net", effectiveFrom: "2026-01-01" },
+        { key: "getfund", rate: "2.5", base: "net", effectiveFrom: "2026-01-01" },
+      ],
+    });
+    expect(byCode.WHT).toMatchObject({ active: false });
+    const preview = await api()
+      .post("/api/v1/tax-codes/VAT_STANDARD/preview")
+      .set(owner())
+      .send({ amount: "1000", date: "2026-10-19" });
+    expect(preview.body.data).toMatchObject({
+      tax: { amountMinor: 20_000 },
+      gross: { amountMinor: 120_000 },
+    });
+
+    const togo = await tenants.create({ country: "TG" });
+    const other = await api()
+      .get("/api/v1/tax-codes")
+      .set({ Authorization: `Bearer ${togo.ownerAccessToken}` });
+    expect((other.body.data as { code: string }[]).map((c) => c.code).sort()).toEqual([
+      "EXEMPT",
+      "WHT",
+      "ZERO_RATED",
+    ]);
+  });
+
+  // Example rates for the test only: each business can define its own codes and rates.
+  it("needs rates before use, applies the rate in force and works back inclusive prices", async () => {
+    const created = await api()
+      .post("/api/v1/tax-codes")
+      .set(owner())
+      .send({
+        code: "VAT",
+        name: "Value Added Tax",
+        kind: "standard",
+        appliesTo: ["sales", "purchases"],
+      });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
 
     const early = await api().post("/api/v1/tax-codes/VAT/activate").set(owner());
     expect([early.status, early.body.error.code]).toEqual([422, "INVALID_TAX_CODE"]);
@@ -151,7 +191,7 @@ describe("tax codes", () => {
       scheme: "standard",
       vatNumber: null,
       pricesIncludeTax: false,
-      defaultSalesTaxCode: "NHIL",
+      defaultSalesTaxCode: "WHT",
     });
     expect(inactiveDefault.status).toBe(422);
 
@@ -159,6 +199,7 @@ describe("tax codes", () => {
       "select action from audit_logs where entity_type = 'tax_code' and entity_id = 'VAT' order by id",
     );
     expect(audit.map((a) => a.action)).toEqual([
+      "tax_code.created",
       "tax_code.rate_added",
       "tax_code.rate_ended",
       "tax_code.rate_added",

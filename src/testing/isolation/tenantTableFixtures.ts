@@ -35,6 +35,97 @@ const DRIVER = `with b as (insert into branches (code, name) values ($2, $1) ret
                          from b returning id)`;
 
 export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
+  ledger_accounts: {
+    insert: (marker) => ({
+      sql: "insert into ledger_accounts (code, name, type) values ((100000 + abs(hashtext($1)) % 899999)::text, $1, 'income')",
+      params: [marker],
+    }),
+    find: "select 1 from ledger_accounts where name = $1",
+  },
+  journal_entries: {
+    insert: (marker) => ({
+      sql: `insert into journal_entries (number, entry_date, description, source_type, source_id)
+            values ($1, current_date, 'Isolation', 'isolation', gen_random_uuid())`,
+      params: [marker],
+    }),
+    find: "select 1 from journal_entries where number = $1",
+  },
+  ledger_lines: {
+    insert: (marker) => ({
+      sql: `with e as (insert into journal_entries (number, entry_date, description, source_type, source_id)
+                       values ($1, current_date, 'Isolation', 'isolation', gen_random_uuid()) returning id)
+            insert into ledger_lines (entry_id, account_id, debit_minor, credit_minor, memo)
+            select e.id, a.id, case when a.code = '1000' then 100 else 0 end,
+                   case when a.code = '4900' then 100 else 0 end,
+                   case when a.code = '1000' then $1 end
+              from e, ledger_accounts a where a.code in ('1000', '4900')`,
+      params: [marker],
+    }),
+    find: "select 1 from ledger_lines where memo = $1",
+  },
+  invoices: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)
+            insert into invoices (status, party_type, party_id, party_name, branch_id, issue_date,
+              due_date, currency, fx_rate, prices_include_tax)
+            select 'draft', 'customer', gen_random_uuid(), $1, b.id, current_date, current_date, 'GHS', 1, false from b`,
+      params: [marker, `IN${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from invoices where party_name = $1",
+  },
+  invoice_lines: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 i as (insert into invoices (status, party_type, party_id, party_name, branch_id,
+                         issue_date, due_date, currency, fx_rate, prices_include_tax)
+                       select 'draft', 'customer', gen_random_uuid(), 'Isolation', b.id,
+                              current_date, current_date, 'GHS', 1, false from b returning id)
+            insert into invoice_lines (invoice_id, position, description, quantity, unit_price_minor,
+              net_minor, tax_minor, gross_minor, account_id)
+            select i.id, 1, $1, 1, 100, 100, 0, 100, a.id from i, ledger_accounts a where a.code = '4900'`,
+      params: [marker, `IL${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from invoice_lines where description = $1",
+  },
+  cash_sessions: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation') returning id)
+            insert into cash_sessions (branch_id, cashier_id, status, opened_at, opening_float_minor, notes)
+            select b.id, u.id, 'open', now(), 0, $1 from b, u`,
+      params: [marker, `CS${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from cash_sessions where notes = $1",
+  },
+  payments: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)
+            insert into payments (number, direction, method, status, party_type, party_id, party_name,
+              branch_id, paid_on, currency, fx_rate, amount_minor, amount_base_minor)
+            select $1, 'in', 'bank_transfer', 'recorded', 'customer', gen_random_uuid(), 'Isolation',
+                   b.id, current_date, 'GHS', 1, 100, 100 from b`,
+      params: [marker, `PY${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from payments where number = $1",
+  },
+  payment_allocations: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 p as (insert into payments (number, direction, method, status, party_type, party_id,
+                         party_name, branch_id, paid_on, currency, fx_rate, amount_minor, amount_base_minor)
+                       select $1, 'in', 'bank_transfer', 'recorded', 'customer', gen_random_uuid(),
+                              'Isolation', b.id, current_date, 'GHS', 1, 100, 100 from b returning id),
+                 i as (insert into invoices (status, party_type, party_id, party_name, branch_id,
+                         issue_date, due_date, currency, fx_rate, prices_include_tax)
+                       select 'draft', 'customer', gen_random_uuid(), 'Isolation', b.id,
+                              current_date, current_date, 'GHS', 1, false from b returning id)
+            insert into payment_allocations (payment_id, invoice_id, amount_minor, allocated_at)
+            select p.id, i.id, 100, now() from p, i`,
+      params: [marker, `PA${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from payment_allocations a join payments p on p.id = a.payment_id
+            where p.number = $1`,
+  },
   vehicle_assignments: {
     insert: (marker) => ({
       sql: `${DRIVER},

@@ -175,7 +175,8 @@ describe("provisioning saga", () => {
       system_roles: String(catalogue.templates.length),
       owners: "1",
       categories: "11",
-      active_taxes: "0",
+      // VAT_STANDARD, ZERO_RATED and EXEMPT for a Ghana business (decision 168).
+      active_taxes: "3",
       catalogue_version: catalogue.version,
     });
     expect(seeded!.org).toContain("Ama Rentals");

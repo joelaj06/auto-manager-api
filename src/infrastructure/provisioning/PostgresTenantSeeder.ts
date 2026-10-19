@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { CatalogueSnapshot } from "../../application/ports/IPermissionCatalogueSource.js";
 import type {
   CatalogueSyncResult,
@@ -6,6 +7,7 @@ import type {
   TenantOwner,
 } from "../../application/ports/ITenantSeeder.js";
 import { OWNER_ROLE } from "../../application/authorization/tenantRoleTemplates.js";
+import { standardTaxCodes } from "../../domain/tax/TaxTemplates.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
 import type { Queryable } from "../database/postgres/Queryable.js";
 
@@ -24,13 +26,8 @@ const EXPENSE_CATEGORIES: readonly (readonly [string, string])[] = [
   ["other", "Other"],
 ];
 
-/** Placeholders only: inactive and without rates until the business sets them (decision 100). */
-const TAX_CODES: readonly (readonly [string, string])[] = [
-  ["VAT", "Value Added Tax"],
-  ["NHIL", "National Health Insurance Levy"],
-  ["GETFUND", "GETFund Levy"],
-  ["WHT", "Withholding tax"],
-];
+/** Placeholders: inactive and without rates until the business sets them (decision 100). */
+const TAX_PLACEHOLDERS: readonly (readonly [string, string])[] = [["WHT", "Withholding tax"]];
 
 type Owner = {
   id: string;
@@ -82,7 +79,22 @@ export class PostgresTenantSeeder implements ITenantSeeder {
         [code, name],
       );
     }
-    for (const [code, name] of TAX_CODES) {
+    // Standard codes by country (decision 168), then placeholders.
+    for (const code of standardTaxCodes(o.country, randomUUID)) {
+      await tx.query(
+        `insert into tax_codes (code, name, kind, applies_to, components, active)
+         values ($1, $2, $3, $4, $5, $6) on conflict (code) do nothing`,
+        [
+          code.code,
+          code.name,
+          code.kind,
+          code.appliesTo,
+          JSON.stringify(code.components),
+          code.active,
+        ],
+      );
+    }
+    for (const [code, name] of TAX_PLACEHOLDERS) {
       await tx.query(
         `insert into tax_codes (code, name, active, notes) values ($1, $2, false, $3)
          on conflict (code) do nothing`,

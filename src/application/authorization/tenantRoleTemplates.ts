@@ -7,7 +7,7 @@ import {
 /**
  * System roles seeded into every tenant and kept in sync by releases (docs/28 §6). Tenants cannot
  * edit them, only clone them into custom roles. Roles for modules that do not exist yet (Rental
- * Agent, Cashier, Driver, …) are added together with those modules' permissions.
+ * Agent, Driver, …) are added together with those modules' permissions.
  */
 export type TenantRoleTemplate = Readonly<{
   systemKey: string;
@@ -42,6 +42,9 @@ const VEHICLE_OPERATIONS: readonly PermissionKey[] = [
   "vehicles.odometer.record",
   "vehicles.photos.manage",
 ];
+/** Every finance permission (the accountant's role). */
+const FINANCE_ALL: readonly PermissionKey[] = KEYS.filter((key) => key.startsWith("finance."));
+
 /** Day-to-day driver work (no removal, termination or identity documents). */
 const DRIVER_OPERATIONS: readonly PermissionKey[] = [
   "drivers.list",
@@ -98,6 +101,12 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "customers.view",
       "suppliers.list",
       "suppliers.view",
+      "finance.invoices.view",
+      "finance.invoices.manage",
+      "finance.payments.view",
+      "finance.payments.record",
+      "finance.cash_sessions.manage",
+      "finance.cash_sessions.view",
     ]),
   },
   {
@@ -115,6 +124,23 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
     ]),
   },
   {
+    systemKey: "cashier",
+    name: "Cashier",
+    description: "Records payments and runs a cash till in their branches",
+    grants: branch([
+      "branches.list",
+      "branches.view",
+      "customers.list",
+      "customers.view",
+      "drivers.list",
+      "drivers.view",
+      "finance.invoices.view",
+      "finance.payments.view",
+      "finance.payments.record",
+      "finance.cash_sessions.manage",
+    ]),
+  },
+  {
     systemKey: "accountant",
     name: "Accountant",
     description: "Billing, tax and currency settings, reports",
@@ -125,9 +151,8 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "settings.view",
       "settings.tax.manage",
       "settings.currency.manage",
-      "finance.fx_rates.view",
-      "finance.fx_rates.manage",
       "expenses.categories.manage",
+      ...FINANCE_ALL,
       "vehicles.list",
       "vehicles.view",
       "vehicles.export",

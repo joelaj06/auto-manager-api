@@ -1,3 +1,32 @@
+import { financeRoutes } from "../../adapters/routes/financeRoutes.js";
+import type {
+  IFinanceQueries,
+  IFinanceSettingsStore,
+  ILedger,
+  IPartyDirectory,
+} from "../../application/ports/IFinanceRecords.js";
+import { TenantCalendar } from "../../application/services/TenantCalendar.js";
+import { CashSessions } from "../../application/use-cases/finance/CashSessions.js";
+import { FinanceContext } from "../../application/use-cases/finance/FinanceContext.js";
+import { FinanceSettingsService } from "../../application/use-cases/finance/FinanceSettingsService.js";
+import { Invoicing } from "../../application/use-cases/finance/Invoicing.js";
+import { LedgerPosting } from "../../application/use-cases/finance/LedgerPosting.js";
+import { LedgerViews } from "../../application/use-cases/finance/LedgerViews.js";
+import { PaymentRecording } from "../../application/use-cases/finance/PaymentRecording.js";
+import type {
+  ICashSessionRepository,
+  IInvoiceRepository,
+  IPaymentRepository,
+} from "../../domain/repositories/IFinanceRepositories.js";
+import {
+  PostgresCashSessionRepository,
+  PostgresFinanceQueries,
+  PostgresFinanceSettingsStore,
+  PostgresInvoiceRepository,
+  PostgresPartyDirectory,
+  PostgresPaymentRepository,
+} from "../../infrastructure/finance/PostgresFinanceDocuments.js";
+import { PostgresLedger } from "../../infrastructure/finance/PostgresLedger.js";
 import { assignmentRoutes } from "../../adapters/routes/assignmentRoutes.js";
 import type { IAssignmentSettingsStore } from "../../application/ports/IAssignmentRecords.js";
 import { AssignmentSettingsService } from "../../application/use-cases/assignments/AssignmentSettingsService.js";
@@ -2722,6 +2751,257 @@ export function createContainer(
       [TYPES.UnitOfWork, TYPES.AssignmentSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
 
+  // --- Finance (record only): ledger, invoices, payments, cash sessions ---
+  container
+    .bind<TenantCalendar>(TYPES.TenantCalendar)
+    .toResolvedValue(
+      (organisation: IOrganisationSettings, clock: IClock) =>
+        new TenantCalendar({ organisation, clock }),
+      [TYPES.OrganisationSettings, TYPES.Clock],
+    );
+  tenantRepository<ILedger>(TYPES.Ledger, (tx) => new PostgresLedger(tx));
+  tenantRepository<IInvoiceRepository>(
+    TYPES.InvoiceRepository,
+    (tx) => new PostgresInvoiceRepository(tx),
+  );
+  tenantRepository<IPaymentRepository>(
+    TYPES.PaymentRepository,
+    (tx) => new PostgresPaymentRepository(tx),
+  );
+  tenantRepository<ICashSessionRepository>(
+    TYPES.CashSessionRepository,
+    (tx) => new PostgresCashSessionRepository(tx),
+  );
+  tenantRepository<IFinanceQueries>(TYPES.FinanceQueries, (tx) => new PostgresFinanceQueries(tx));
+  tenantRepository<IPartyDirectory>(TYPES.PartyDirectory, (tx) => new PostgresPartyDirectory(tx));
+  tenantRepository<IFinanceSettingsStore>(
+    TYPES.FinanceSettingsStore,
+    (tx) => new PostgresFinanceSettingsStore(tx),
+  );
+  container
+    .bind<LedgerPosting>(TYPES.LedgerPosting)
+    .toResolvedValue(
+      (
+        ledger: ILedger,
+        numbering: DocumentNumbering,
+        organisation: IOrganisationSettings,
+        clock: IClock,
+      ) => new LedgerPosting({ ledger, numbering, organisation, clock }),
+      [TYPES.Ledger, TYPES.DocumentNumbering, TYPES.OrganisationSettings, TYPES.Clock],
+    );
+  container
+    .bind<FinanceContext>(TYPES.FinanceContext)
+    .toResolvedValue(
+      (
+        currencies: CurrencySettingsService,
+        reference: ITenantReferenceData,
+        parties: IPartyDirectory,
+      ) => new FinanceContext({ currencies, reference, parties }),
+      [TYPES.CurrencySettingsService, TYPES.TenantReferenceData, TYPES.PartyDirectory],
+    );
+  container.bind<Invoicing>(TYPES.Invoicing).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      invoices: IInvoiceRepository,
+      queries: IFinanceQueries,
+      ledger: ILedger,
+      posting: LedgerPosting,
+      context: FinanceContext,
+      settings: IFinanceSettingsStore,
+      reference: ITenantReferenceData,
+      organisation: IOrganisationSettings,
+      vehicles: IVehicleRepository,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new Invoicing({
+        unitOfWork,
+        invoices,
+        queries,
+        ledger,
+        posting,
+        context,
+        settings,
+        reference,
+        organisation,
+        vehicles,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.InvoiceRepository,
+      TYPES.FinanceQueries,
+      TYPES.Ledger,
+      TYPES.LedgerPosting,
+      TYPES.FinanceContext,
+      TYPES.FinanceSettingsStore,
+      TYPES.TenantReferenceData,
+      TYPES.OrganisationSettings,
+      TYPES.VehicleRepository,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<PaymentRecording>(TYPES.PaymentRecording).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      payments: IPaymentRepository,
+      invoices: IInvoiceRepository,
+      sessions: ICashSessionRepository,
+      queries: IFinanceQueries,
+      ledger: ILedger,
+      posting: LedgerPosting,
+      context: FinanceContext,
+      settings: IFinanceSettingsStore,
+      organisation: IOrganisationSettings,
+      vehicles: IVehicleRepository,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new PaymentRecording({
+        unitOfWork,
+        payments,
+        invoices,
+        sessions,
+        queries,
+        ledger,
+        posting,
+        context,
+        settings,
+        organisation,
+        vehicles,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.PaymentRepository,
+      TYPES.InvoiceRepository,
+      TYPES.CashSessionRepository,
+      TYPES.FinanceQueries,
+      TYPES.Ledger,
+      TYPES.LedgerPosting,
+      TYPES.FinanceContext,
+      TYPES.FinanceSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.VehicleRepository,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<CashSessions>(TYPES.CashSessions).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      sessions: ICashSessionRepository,
+      queries: IFinanceQueries,
+      posting: LedgerPosting,
+      scope: BranchScope,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new CashSessions({
+        unitOfWork,
+        sessions,
+        queries,
+        posting,
+        scope,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.CashSessionRepository,
+      TYPES.FinanceQueries,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<LedgerViews>(TYPES.LedgerViews).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      ledger: ILedger,
+      posting: LedgerPosting,
+      context: FinanceContext,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+    ) =>
+      new LedgerViews({
+        unitOfWork,
+        ledger,
+        posting,
+        context,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.Ledger,
+      TYPES.LedgerPosting,
+      TYPES.FinanceContext,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+    ],
+  );
+  container
+    .bind<FinanceSettingsService>(TYPES.FinanceSettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        settings: IFinanceSettingsStore,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new FinanceSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.FinanceSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
+    );
+
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
     const pem = config.mobile.connectPrivateKeyPem;
@@ -3074,6 +3354,11 @@ export function createContainer(
       driverSettings: DriverSettingsService,
       vehicleAssignments: VehicleAssignments,
       assignmentSettings: AssignmentSettingsService,
+      invoicing: Invoicing,
+      paymentRecording: PaymentRecording,
+      cashSessions: CashSessions,
+      ledgerViews: LedgerViews,
+      financeSettings: FinanceSettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -3124,6 +3409,13 @@ export function createContainer(
           driverSettings,
         }),
         ...assignmentRoutes({ assignments: vehicleAssignments, settings: assignmentSettings }),
+        ...financeRoutes({
+          invoices: invoicing,
+          payments: paymentRecording,
+          cashSessions,
+          ledger: ledgerViews,
+          settings: financeSettings,
+        }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -3197,6 +3489,11 @@ export function createContainer(
       TYPES.DriverSettingsService,
       TYPES.VehicleAssignments,
       TYPES.AssignmentSettingsService,
+      TYPES.Invoicing,
+      TYPES.PaymentRecording,
+      TYPES.CashSessions,
+      TYPES.LedgerViews,
+      TYPES.FinanceSettingsService,
     ],
   );
 
