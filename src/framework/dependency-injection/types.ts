@@ -262,6 +262,15 @@ export const TYPES = Object.freeze({
   OperationsBoard: Symbol.for("OperationsBoard"),
   RemittanceSettingsService: Symbol.for("RemittanceSettingsService"),
 
+  // Driver app, vehicle issues and PDFs (P2-10)
+  DriverAppLinks: Symbol.for("IDriverAppLinks"),
+  VehicleIssueRepository: Symbol.for("IVehicleIssueRepository"),
+  VehicleIssues: Symbol.for("VehicleIssues"),
+  DriverAppAccess: Symbol.for("DriverAppAccess"),
+  DriverApp: Symbol.for("DriverApp"),
+  PdfRenderer: Symbol.for("IPdfRenderer"),
+  PrintedDocuments: Symbol.for("PrintedDocuments"),
+
   // Notifications (P2-9)
   NotificationSettingsStore: Symbol.for("INotificationSettingsStore"),
   NotificationInbox: Symbol.for("INotificationInbox"),

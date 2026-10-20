@@ -38,6 +38,11 @@ import { recordUserAction } from "../reference/userAudit.js";
 
 export type DriverView = Omit<DriverProps, "deletedAt" | "deletedReason">;
 
+/** A module that reacts to a driver's status change (inside the change's unit of work). */
+export interface IDriverStatusListener {
+  driverStatusChanged(driverId: string, status: DriverStatus): Promise<void>;
+}
+
 export type DriverDetailView = DriverView &
   Readonly<{
     onboarding: readonly OnboardingItem[];
@@ -120,6 +125,8 @@ export class DriverAdministration {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
+      /** Resolved when a status changes (the driver app access depends on this class). */
+      statusListeners?: () => readonly IDriverStatusListener[];
     }>,
   ) {}
 
@@ -231,6 +238,8 @@ export class DriverAdministration {
       });
       await deps.drivers.save(driver);
       await this.recordChange(actor, id, change, now);
+      for (const listener of deps.statusListeners?.() ?? [])
+        await listener.driverStatusChanged(id, change.to);
       await recordUserAction(deps, actor.userId, {
         action: `driver.${audit}`,
         entityType: "driver",

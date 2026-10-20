@@ -35,6 +35,13 @@ export const FILE_KINDS = Object.freeze({
     maxBytes: 10 * MB,
     description: "Photo of a vehicle (gallery; one is the primary photo)",
   },
+  vehicle_issue_photo: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: IMAGES,
+    maxBytes: 10 * MB,
+    description: "Photo of a reported vehicle issue (damage, accident, warning light …)",
+  },
   vehicle_document: {
     scope: "tenant",
     visibility: "private",

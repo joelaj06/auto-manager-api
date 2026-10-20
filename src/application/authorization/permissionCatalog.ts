@@ -15,9 +15,12 @@ export type PermissionDefinition = Readonly<{
   scopes: readonly PermissionScope[];
   /** Sensitive permissions are never copied into cloned roles by default. */
   sensitive?: boolean;
+  /** Self-service for a persona (the driver app): only its own role holds it, not staff roles. */
+  selfService?: boolean;
 }>;
 
 const ALL: readonly PermissionScope[] = ["all"];
+const OWN: readonly PermissionScope[] = ["own"];
 const BRANCH_OR_ALL: readonly PermissionScope[] = ["branch", "all"];
 
 const definitions = {
@@ -177,6 +180,14 @@ const definitions = {
     description: "Create, rename and delete vehicle groups",
     scopes: ALL,
   },
+  "vehicles.issues.view": {
+    description: "See issues reported on vehicles (breakdowns, accidents …)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "vehicles.issues.manage": {
+    description: "Log, acknowledge and resolve vehicle issues",
+    scopes: BRANCH_OR_ALL,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,
@@ -197,6 +208,17 @@ const definitions = {
     description: "See drivers' and guarantors' identity documents and Ghana Card numbers",
     scopes: BRANCH_OR_ALL,
     sensitive: true,
+  },
+  "drivers.app_access.manage": {
+    description: "Give drivers a driver-app login and take it away",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "driver_app.use": {
+    description:
+      "Use the driver app: own vehicle, ledger, remittances, fuel and issue reports (the Driver role)",
+    scopes: OWN,
+    selfService: true,
   },
   "drivers.ledger.view": {
     description: "See drivers' ledgers, statements and shortfalls",
@@ -297,3 +319,10 @@ export const PERMISSION_CATALOG: Readonly<Record<PermissionKey, PermissionDefini
 export function isPermissionKey(value: unknown): value is PermissionKey {
   return typeof value === "string" && Object.hasOwn(PERMISSION_CATALOG, value);
 }
+
+/** Permissions of a persona's own role (the driver app), never held by staff roles or the owner. */
+export const SELF_SERVICE_PERMISSIONS: readonly PermissionKey[] = Object.freeze(
+  (Object.keys(PERMISSION_CATALOG) as PermissionKey[]).filter(
+    (key) => PERMISSION_CATALOG[key].selfService === true,
+  ),
+);

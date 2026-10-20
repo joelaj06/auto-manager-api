@@ -1,6 +1,7 @@
 import { ExpenseRuleError, type PayeeType } from "../../../domain/expenses/Expense.js";
 import { fuelEfficiency, type FuelEfficiency } from "../../../domain/expenses/ExpenseRules.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
+import type { Vehicle } from "../../../domain/vehicles/Vehicle.js";
 import type { IExpenseRepository } from "../../../domain/repositories/IExpenseRepository.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
@@ -68,84 +69,118 @@ export class FuelLogs {
     input: FuelInput,
   ): Promise<Readonly<{ log: FuelLogView; expense: ExpenseView }>> {
     const { deps } = this;
-    return deps.unitOfWork.run(async () => {
-      const vehicle = await deps.vehicles.reach(actor, vehicleId, "expenses.fuel.record", true);
-      const litres = Number(input.litres);
-      if (!Number.isFinite(litres) || litres <= 0 || litres > 2_000)
-        throw new ExpenseRuleError("Litres are above 0 and at most 2000");
-      const { fuelCategoryCode } = await deps.settings.get();
-      const category = (await deps.reference.expenseCategories()).find(
-        (c) => c.code === fuelCategoryCode,
-      );
-      if (category === undefined)
-        throw new ExpenseRuleError(`There is no "${fuelCategoryCode}" expense category`);
-      const now = deps.clock.now();
-      const filledAt = input.filledAt ?? now;
-      const id = deps.ids.next();
-      await deps.odometer.recordFor(
-        vehicle,
-        { value: input.odometer, readAt: filledAt },
-        "fuel",
-        id,
+    return deps.unitOfWork.run(async () =>
+      this.recordLoaded(
         actor.userId,
-      );
-      const station = input.station?.trim() ?? "";
-      const payee: { payeeType?: PayeeType; payeeId?: string; payeeName?: string } =
-        input.supplierId !== undefined && input.supplierId !== null
+        await deps.vehicles.reach(actor, vehicleId, "expenses.fuel.record", true),
+        input,
+        false,
+      ),
+    );
+  }
+
+  /**
+   * A driver logs a fill of the vehicle they drive (driver app). Paid by the driver: the business
+   * owes them the amount once approved; otherwise the station (fuel float, card) is the payee.
+   */
+  async recordByDriver(
+    userId: string,
+    vehicle: Vehicle,
+    driverId: string,
+    input: Omit<FuelInput, "driverId" | "supplierId"> & Readonly<{ paidByDriver: boolean }>,
+  ): Promise<Readonly<{ log: FuelLogView; expense: ExpenseView }>> {
+    const { paidByDriver, ...rest } = input;
+    return this.deps.unitOfWork.run(() =>
+      this.recordLoaded(userId, vehicle, { ...rest, driverId }, paidByDriver),
+    );
+  }
+
+  private async recordLoaded(
+    userId: string,
+    vehicle: Vehicle,
+    input: FuelInput,
+    payDriver: boolean,
+  ): Promise<Readonly<{ log: FuelLogView; expense: ExpenseView }>> {
+    const { deps } = this;
+    const vehicleId = vehicle.id;
+    // Within the caller's unit of work.
+    const litres = Number(input.litres);
+    if (!Number.isFinite(litres) || litres <= 0 || litres > 2_000)
+      throw new ExpenseRuleError("Litres are above 0 and at most 2000");
+    const { fuelCategoryCode } = await deps.settings.get();
+    const category = (await deps.reference.expenseCategories()).find(
+      (c) => c.code === fuelCategoryCode,
+    );
+    if (category === undefined)
+      throw new ExpenseRuleError(`There is no "${fuelCategoryCode}" expense category`);
+    const now = deps.clock.now();
+    const filledAt = input.filledAt ?? now;
+    const id = deps.ids.next();
+    await deps.odometer.recordFor(
+      vehicle,
+      { value: input.odometer, readAt: filledAt },
+      "fuel",
+      id,
+      userId,
+    );
+    const station = input.station?.trim() ?? "";
+    const payee: { payeeType?: PayeeType; payeeId?: string; payeeName?: string } =
+      payDriver && input.driverId !== undefined && input.driverId !== null
+        ? { payeeType: "driver", payeeId: input.driverId }
+        : input.supplierId !== undefined && input.supplierId !== null
           ? { payeeType: "supplier", payeeId: input.supplierId }
           : { payeeName: station === "" ? "Fuel station" : station };
-      const expense = await deps.expenses.draftFor(
-        actor.userId,
-        {
-          categoryId: category.id,
-          description: `Fuel ${input.litres} L${station === "" ? "" : ` at ${station}`}`,
-          branchId: vehicle.branchId,
-          expenseDate: filledAt.toISOString().slice(0, 10),
-          ...payee,
-          driverId: input.driverId ?? null,
-          amount: input.amount,
-          vehicleIds: [vehicleId],
-          notes: input.notes ?? null,
-        },
-        vehicle.branchId,
-        { type: "fuel_log", id },
-      );
-      await deps.expenses.submitLoaded(expense, actor.userId, { skipReceiptRule: true });
-      const base = expense.snapshot().amountMinor;
-      const log: FuelLog = {
-        id,
-        vehicleId,
+    const expense = await deps.expenses.draftFor(
+      userId,
+      {
+        categoryId: category.id,
+        description: `Fuel ${input.litres} L${station === "" ? "" : ` at ${station}`}`,
+        branchId: vehicle.branchId,
+        expenseDate: filledAt.toISOString().slice(0, 10),
+        ...payee,
         driverId: input.driverId ?? null,
-        filledAt,
-        litres: Math.round(litres * 100) / 100,
-        amountMinor: base,
-        odometer: input.odometer,
-        fullTank: input.fullTank ?? true,
-        station: station === "" ? null : station,
-        expenseId: expense.id,
-        notes:
-          input.notes === undefined || input.notes === null || input.notes.trim() === ""
-            ? null
-            : input.notes.trim(),
-        recordedBy: actor.userId,
-        createdAt: now,
-      };
-      await deps.logs.add(log);
-      await recordUserAction(deps, actor.userId, {
-        action: "vehicle.fuel_recorded",
-        entityType: "vehicle",
-        entityId: vehicleId,
-        after: {
-          fuelLogId: id,
-          litres: log.litres,
-          amountMinor: log.amountMinor,
-          odometer: log.odometer,
-        },
-      });
-      const currency = await deps.expenses.baseCurrency();
-      const saved = await deps.expenseRepository.findById(expense.id);
-      return { log: view(log, currency), expense: expenseView(saved!.snapshot(), currency) };
+        amount: input.amount,
+        vehicleIds: [vehicleId],
+        notes: input.notes ?? null,
+      },
+      vehicle.branchId,
+      { type: "fuel_log", id },
+    );
+    await deps.expenses.submitLoaded(expense, userId, { skipReceiptRule: true });
+    const base = expense.snapshot().amountMinor;
+    const log: FuelLog = {
+      id,
+      vehicleId,
+      driverId: input.driverId ?? null,
+      filledAt,
+      litres: Math.round(litres * 100) / 100,
+      amountMinor: base,
+      odometer: input.odometer,
+      fullTank: input.fullTank ?? true,
+      station: station === "" ? null : station,
+      expenseId: expense.id,
+      notes:
+        input.notes === undefined || input.notes === null || input.notes.trim() === ""
+          ? null
+          : input.notes.trim(),
+      recordedBy: userId,
+      createdAt: now,
+    };
+    await deps.logs.add(log);
+    await recordUserAction(deps, userId, {
+      action: "vehicle.fuel_recorded",
+      entityType: "vehicle",
+      entityId: vehicleId,
+      after: {
+        fuelLogId: id,
+        litres: log.litres,
+        amountMinor: log.amountMinor,
+        odometer: log.odometer,
+      },
     });
+    const currency = await deps.expenses.baseCurrency();
+    const saved = await deps.expenseRepository.findById(expense.id);
+    return { log: view(log, currency), expense: expenseView(saved!.snapshot(), currency) };
   }
 
   async report(actor: Principal, vehicleId: string, limit: number): Promise<FuelReport> {

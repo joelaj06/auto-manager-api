@@ -1,3 +1,4 @@
+import { SELF_SERVICE_PERMISSIONS } from "../../application/authorization/permissionCatalog.js";
 import { randomUUID } from "node:crypto";
 import type { CatalogueSnapshot } from "../../application/ports/IPermissionCatalogueSource.js";
 import type {
@@ -221,12 +222,12 @@ export class PostgresTenantSeeder implements ITenantSeeder {
     const { rows } = await tx.query<{ owners: string; missing: string; has_role: boolean }>(
       `select (select count(*) from users where is_owner) as owners,
               (select count(*) from permissions p
-                where not p.deprecated and not exists (
+                where not p.deprecated and p.key <> all($3::text[]) and not exists (
                   select 1 from role_permissions rp join roles r on r.id = rp.role_id
                    where r.system_key = $2 and rp.permission_key = p.key)) as missing,
               exists (select 1 from user_roles ur join roles r on r.id = ur.role_id
                        where ur.user_id = $1 and r.system_key = $2) as has_role`,
-      [ownerId, OWNER_ROLE],
+      [ownerId, OWNER_ROLE, SELF_SERVICE_PERMISSIONS],
     );
     const check = rows[0]!;
     if (Number(check.owners) !== 1)

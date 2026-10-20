@@ -42,3 +42,26 @@ export class PartyExistsError extends ApplicationError {
     super(message);
   }
 }
+
+/** The signed-in user has no driver profile (driver app) — 404. */
+export class DriverProfileNotFoundError extends ApplicationError {
+  readonly code = "DRIVER_PROFILE_NOT_FOUND";
+  constructor() {
+    super("Your account is not linked to a driver profile");
+  }
+}
+
+export class VehicleIssueNotFoundError extends ApplicationError {
+  readonly code = "VEHICLE_ISSUE_NOT_FOUND";
+  constructor() {
+    super("Issue not found");
+  }
+}
+
+/** Giving or taking away a driver's app login is not possible as asked — 409. */
+export class DriverAppAccessError extends ApplicationError {
+  readonly code = "DRIVER_APP_ACCESS";
+  constructor(message: string) {
+    super(message);
+  }
+}

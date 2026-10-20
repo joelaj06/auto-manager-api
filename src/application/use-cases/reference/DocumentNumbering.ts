@@ -12,6 +12,7 @@ export const DEFAULT_NUMBERING: Readonly<Record<string, NumberingFormat>> = Obje
   rental: { prefix: "RNT", padding: 6, yearly: true },
   credit_note: { prefix: "CRN", padding: 6, yearly: true },
   journal: { prefix: "JRN", padding: 6, yearly: true },
+  vehicle_issue: { prefix: "ISS", padding: 6, yearly: true },
   vehicle: { prefix: "VEH", padding: 5, yearly: false },
   driver: { prefix: "DRV", padding: 5, yearly: false },
   customer: { prefix: "CUS", padding: 5, yearly: false },

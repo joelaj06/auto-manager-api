@@ -18,6 +18,7 @@ export const RULE_KEYS = [
   "remittance_cutoff",
   "budget_threshold",
   "expense_approvals",
+  "vehicle_issue_reported",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -81,6 +82,12 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     description: "Morning digest of expenses waiting for approval to the approvers of the branch",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app"] },
+  },
+  vehicle_issue_reported: {
+    description:
+      "A driver or staff member reports a vehicle issue (breakdown, accident …): tell the fleet staff of the branch",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
   },
 });
 

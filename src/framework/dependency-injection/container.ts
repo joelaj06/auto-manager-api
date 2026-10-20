@@ -1,3 +1,16 @@
+import { driverAppRoutes } from "../../adapters/routes/driverAppRoutes.js";
+import type { IDriverAppLinks } from "../../application/ports/IDriverAppLinks.js";
+import type { IPdfRenderer } from "../../application/ports/IPdfRenderer.js";
+import { PrintedDocuments } from "../../application/use-cases/documents/PrintedDocuments.js";
+import { DriverApp } from "../../application/use-cases/driverapp/DriverApp.js";
+import { DriverAppAccess } from "../../application/use-cases/parties/DriverAppAccess.js";
+import { VehicleIssues } from "../../application/use-cases/vehicles/VehicleIssues.js";
+import type { IVehicleIssueRepository } from "../../domain/repositories/IVehicleIssueRepository.js";
+import { PdfKitRenderer } from "../../infrastructure/documents/PdfKitRenderer.js";
+import {
+  PostgresDriverAppLinks,
+  PostgresVehicleIssues,
+} from "../../infrastructure/driverapp/PostgresDriverApp.js";
 import { notificationRoutes } from "../../adapters/routes/notificationRoutes.js";
 import type {
   INotificationDeliveries,
@@ -53,6 +66,7 @@ import type {
 import { DriverLedger } from "../../application/use-cases/remittances/DriverLedger.js";
 import { OperationsBoard } from "../../application/use-cases/remittances/OperationsBoard.js";
 import { RemittancePaymentListener } from "../../application/use-cases/remittances/RemittancePaymentListener.js";
+import { RemittancePaymentPurpose } from "../../application/use-cases/remittances/RemittancePaymentPurpose.js";
 import { RemittanceScheduler } from "../../application/use-cases/remittances/RemittanceScheduler.js";
 import { RemittanceSettingsService } from "../../application/use-cases/remittances/RemittanceSettingsService.js";
 import { Remittances } from "../../application/use-cases/remittances/Remittances.js";
@@ -2598,6 +2612,8 @@ export function createContainer(
       clock: IClock,
     ) =>
       new DriverAdministration({
+        // Driver app access depends on driver administration: resolved on a status change.
+        statusListeners: () => [container.get<DriverAppAccess>(TYPES.DriverAppAccess)],
         unitOfWork,
         drivers,
         queries: drivers,
@@ -3013,6 +3029,9 @@ export function createContainer(
             book: () => container.get<Remittances>(TYPES.Remittances),
             clock,
           }),
+        ],
+        purposes: [
+          new RemittancePaymentPurpose({ remittances: remittanceStore, records: remittanceStore }),
         ],
       }),
     [
@@ -3497,6 +3516,211 @@ export function createContainer(
       ) => new RemittanceSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
       [TYPES.UnitOfWork, TYPES.RemittanceSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
+
+  // --- Driver app, vehicle issues, PDFs ---
+  tenantRepository<IDriverAppLinks>(TYPES.DriverAppLinks, (tx) => new PostgresDriverAppLinks(tx));
+  tenantRepository<IVehicleIssueRepository>(
+    TYPES.VehicleIssueRepository,
+    (tx) => new PostgresVehicleIssues(tx),
+  );
+  container.bind<IPdfRenderer>(TYPES.PdfRenderer).toConstantValue(new PdfKitRenderer());
+  container.bind<PrintedDocuments>(TYPES.PrintedDocuments).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      payments: PaymentRecording,
+      ledger: DriverLedger,
+      organisation: IOrganisationSettings,
+      storage: IObjectStorage,
+      renderer: IPdfRenderer,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new PrintedDocuments({
+        unitOfWork,
+        payments,
+        ledger,
+        organisation,
+        storage,
+        renderer,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.PaymentRecording,
+      TYPES.DriverLedger,
+      TYPES.OrganisationSettings,
+      TYPES.ObjectStorage,
+      TYPES.PdfRenderer,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<VehicleIssues>(TYPES.VehicleIssues).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      issues: IVehicleIssueRepository,
+      vehicles: VehicleAccess,
+      files: FileService,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      notifier: Notifier,
+      notificationSettings: INotificationSettingsStore,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new VehicleIssues({
+        unitOfWork,
+        issues,
+        vehicles,
+        photos: new OwnedDocuments(files, "vehicle_issue_photo", "vehicle_issue", 8),
+        scope,
+        numbering,
+        notifier,
+        notificationSettings,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleIssueRepository,
+      TYPES.VehicleAccess,
+      TYPES.TenantFileService,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.Notifier,
+      TYPES.NotificationSettingsStore,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<DriverAppAccess>(TYPES.DriverAppAccess).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      tenantContext: ITenantContext,
+      drivers: DriverAdministration,
+      links: IDriverAppLinks,
+      users: ITenantUserRepository,
+      memberships: IUserMemberships,
+      roles: ITenantRoles,
+      invitations: IUserInvitations,
+      sessions: ITenantSessions,
+      directory: IUserDirectory,
+      permissionCache: IPermissionCache,
+      organisation: IOrganisationSettings,
+      notifications: NotificationService,
+      deliveries: INotificationDeliveries,
+      notificationSettings: INotificationSettingsStore,
+      mobile: MobileConnect,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DriverAppAccess({
+        unitOfWork,
+        tenantContext,
+        drivers,
+        links,
+        users,
+        memberships,
+        roles,
+        invitations,
+        sessions,
+        directory,
+        permissionCache,
+        organisation,
+        notifications,
+        deliveries,
+        notificationSettings,
+        qr: new QrcodeSvgRenderer(),
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        settings: {
+          webAppUrl: config.public.webAppUrl,
+          invitationTtlMs: USER_INVITATION_TTL_MS,
+          appInvitationLink: (slug, token, expiresAt) =>
+            mobile.invitationLink(slug, token, expiresAt),
+        },
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TenantContext,
+      TYPES.DriverAdministration,
+      TYPES.DriverAppLinks,
+      TYPES.TenantUserRepository,
+      TYPES.UserMemberships,
+      TYPES.TenantRoles,
+      TYPES.UserInvitations,
+      TYPES.TenantSessions,
+      TYPES.UserDirectory,
+      TYPES.PermissionCache,
+      TYPES.OrganisationSettings,
+      TYPES.NotificationService,
+      TYPES.NotificationDeliveries,
+      TYPES.NotificationSettingsStore,
+      TYPES.MobileConnect,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<DriverApp>(TYPES.DriverApp).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      links: IDriverAppLinks,
+      drivers: PostgresDriverRepository,
+      vehicles: IVehicleRepository,
+      assignments: PostgresAssignmentRepository,
+      documents: VehicleDocuments,
+      remittances: Remittances,
+      ledger: DriverLedger,
+      fuel: FuelLogs,
+      issues: VehicleIssues,
+      printed: PrintedDocuments,
+      posting: LedgerPosting,
+      calendar: TenantCalendar,
+    ) =>
+      new DriverApp({
+        unitOfWork,
+        links,
+        drivers,
+        vehicles,
+        assignments,
+        documents,
+        remittances,
+        ledger,
+        fuel,
+        issues,
+        printed,
+        posting,
+        calendar,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DriverAppLinks,
+      TYPES.DriverRepository,
+      TYPES.VehicleRepository,
+      TYPES.AssignmentRepository,
+      TYPES.VehicleDocuments,
+      TYPES.Remittances,
+      TYPES.DriverLedger,
+      TYPES.FuelLogs,
+      TYPES.VehicleIssues,
+      TYPES.PrintedDocuments,
+      TYPES.LedgerPosting,
+      TYPES.TenantCalendar,
+    ],
+  );
 
   // --- Notifications ---
   tenantRepository<INotificationSettingsStore>(
@@ -4113,6 +4337,10 @@ export function createContainer(
       dashboards: Dashboards,
       notificationCenter: NotificationCenter,
       notificationSettings: NotificationSettingsService,
+      driverApp: DriverApp,
+      driverAppAccess: DriverAppAccess,
+      vehicleIssues: VehicleIssues,
+      printedDocuments: PrintedDocuments,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -4184,6 +4412,12 @@ export function createContainer(
         }),
         ...dashboardRoutes({ dashboards }),
         ...notificationRoutes({ center: notificationCenter, settings: notificationSettings }),
+        ...driverAppRoutes({
+          app: driverApp,
+          access: driverAppAccess,
+          issues: vehicleIssues,
+          printed: printedDocuments,
+        }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -4273,6 +4507,10 @@ export function createContainer(
       TYPES.Dashboards,
       TYPES.NotificationCenter,
       TYPES.NotificationSettingsService,
+      TYPES.DriverApp,
+      TYPES.DriverAppAccess,
+      TYPES.VehicleIssues,
+      TYPES.PrintedDocuments,
     ],
   );
 

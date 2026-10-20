@@ -77,8 +77,22 @@ export class DriverLedger {
     period: Readonly<{ from?: string; to?: string }>,
   ): Promise<DriverStatement> {
     const { deps } = this;
+    return deps.unitOfWork.run(async () =>
+      this.statementOf(
+        (await deps.drivers.reach(actor, driverId, "drivers.ledger.view")).snapshot(),
+        period,
+      ),
+    );
+  }
+
+  /** The statement of a driver already reached (staff) or signed in as themselves (driver app). */
+  async statementOf(
+    driver: Readonly<{ id: string; code: string; firstName: string; lastName: string }>,
+    period: Readonly<{ from?: string; to?: string }>,
+  ): Promise<DriverStatement> {
+    const { deps } = this;
+    const driverId = driver.id;
     return deps.unitOfWork.run(async () => {
-      const driver = (await deps.drivers.reach(actor, driverId, "drivers.ledger.view")).snapshot();
       const today = await deps.calendar.today();
       const to = period.to ?? today;
       const from = period.from ?? `${to.slice(0, 7)}-01`;

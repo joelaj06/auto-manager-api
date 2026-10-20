@@ -199,8 +199,8 @@ export class PostgresNotificationDeliveries implements INotificationDeliveries {
   async queue(delivery: NewDelivery): Promise<string | null> {
     const { rows } = await this.tx.query<{ id: string }>(
       `insert into notification_deliveries (channel, rule, recipient_type, recipient_id, address,
-         title, body, data, dedupe_key, send_after)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         title, body, data, dedupe_key, send_after, sensitive)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        on conflict (channel, recipient_id, dedupe_key) do nothing
        returning id`,
       [
@@ -214,6 +214,7 @@ export class PostgresNotificationDeliveries implements INotificationDeliveries {
         JSON.stringify(delivery.data),
         delivery.dedupeKey,
         delivery.sendAfter,
+        delivery.sensitive ?? false,
       ],
     );
     const id = rows[0]?.id ?? null;
@@ -260,7 +261,8 @@ export class PostgresNotificationDeliveries implements INotificationDeliveries {
     await this.tx.query(
       `update notification_deliveries
           set status = 'sent', provider = $2, provider_message_id = $3, sent_at = $4,
-              attempts = attempts + 1, error = null
+              attempts = attempts + 1, error = null,
+              body = case when sensitive then '(erased: it contained a one-time link)' else body end
         where id = $1`,
       [id, provider, messageId, now],
     );
@@ -271,7 +273,9 @@ export class PostgresNotificationDeliveries implements INotificationDeliveries {
       `update notification_deliveries
           set attempts = attempts + 1, error = $2,
               status = case when $3::timestamptz is null then 'failed' else 'queued' end,
-              send_after = coalesce($3, send_after)
+              send_after = coalesce($3, send_after),
+              body = case when sensitive and $3::timestamptz is null
+                          then '(erased: it contained a one-time link)' else body end
         where id = $1`,
       [id, error.slice(0, 1_000), retryAt],
     );
@@ -286,7 +290,9 @@ export class PostgresNotificationDeliveries implements INotificationDeliveries {
 
   async list(filter: Parameters<INotificationDeliveries["list"]>[0]): Promise<Delivery[]> {
     const { rows } = await this.tx.query<DeliveryRow>(
-      `select * from notification_deliveries
+      `select *, case when sensitive and status <> 'sent'
+                      then '(hidden: it contains a one-time link)' else body end as body
+         from notification_deliveries
         where ($1::text is null or channel = $1) and ($2::text is null or status = $2)
           and ($3::uuid is null or recipient_id = $3)
           and ($4::uuid is null or id < $4)

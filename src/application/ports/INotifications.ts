@@ -121,7 +121,8 @@ export type RecipientType = "user" | "driver";
 export type Delivery = Readonly<{
   id: string;
   channel: DeliveryChannel;
-  rule: RuleKey | "test";
+  /** The rule, or a one-off message ("test", "driver_invitation"). */
+  rule: RuleKey | "test" | "driver_invitation";
   recipientType: RecipientType;
   recipientId: string;
   /** Phone (E.164) for SMS, email address, or the user id for push. */
@@ -143,7 +144,12 @@ export type NewDelivery = Pick<
   Delivery,
   "channel" | "rule" | "recipientType" | "recipientId" | "address" | "title" | "body" | "data"
 > &
-  Readonly<{ dedupeKey: string; sendAfter: Date }>;
+  Readonly<{
+    dedupeKey: string;
+    sendAfter: Date;
+    /** The text carries a one-time link: hidden in the log and erased once sent. */
+    sensitive?: boolean;
+  }>;
 
 export interface INotificationDeliveries {
   /** The new delivery's id; null when this recipient already got it on this channel (dedupe). */

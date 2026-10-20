@@ -156,3 +156,15 @@ export interface IPaymentReversalListener {
   /** Called inside the reversal's unit of work. */
   paymentReversed(sourceId: string, paymentId: string): Promise<void>;
 }
+
+/**
+ * What a payment a module recorded was for, as a receipt shows it ("Remittance RMT-… for
+ * 20 Oct"), and how much of it that settled (the rest stays the payer's credit).
+ */
+export interface IPaymentPurpose {
+  readonly sourceType: string;
+  describe(
+    sourceId: string,
+    paymentId: string,
+  ): Promise<Readonly<{ description: string; settledMinor: number }> | null>;
+}

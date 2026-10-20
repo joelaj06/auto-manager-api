@@ -1,5 +1,6 @@
 import {
   PERMISSION_CATALOG,
+  SELF_SERVICE_PERMISSIONS,
   type PermissionKey,
   type PermissionScope,
 } from "./permissionCatalog.js";
@@ -16,7 +17,10 @@ export type TenantRoleTemplate = Readonly<{
   grants: readonly Readonly<{ key: PermissionKey; scope: PermissionScope }>[];
 }>;
 
-const KEYS = Object.keys(PERMISSION_CATALOG) as PermissionKey[];
+/** Staff permissions (self-service ones belong to their persona role only). */
+const KEYS = (Object.keys(PERMISSION_CATALOG) as PermissionKey[]).filter(
+  (key) => !SELF_SERVICE_PERMISSIONS.includes(key),
+);
 const widest = (key: PermissionKey): PermissionScope => {
   const scopes = PERMISSION_CATALOG[key].scopes;
   return scopes.includes("all") ? "all" : scopes.includes("branch") ? "branch" : "own";
@@ -125,6 +129,9 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "dashboards.vehicles.view",
       "dashboards.remittances.view",
       "dashboards.expenses.view",
+      "vehicles.issues.view",
+      "vehicles.issues.manage",
+      "drivers.app_access.manage",
     ]),
   },
   {
@@ -148,6 +155,8 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "remittances.submit",
       "operations.board.view",
       "dashboards.remittances.view",
+      "vehicles.issues.view",
+      "vehicles.issues.manage",
     ]),
   },
   {
@@ -204,6 +213,13 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "suppliers.update",
       "billing.view",
     ]),
+  },
+  {
+    systemKey: "driver",
+    name: "Driver",
+    description:
+      "The driver app: their vehicle, ledger and remittances, fuel and issue reports (given from the driver's page)",
+    grants: [{ key: "driver_app.use", scope: "own" }],
   },
   {
     systemKey: "auditor",

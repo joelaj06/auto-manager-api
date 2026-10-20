@@ -207,6 +207,12 @@ const RULES: Readonly<Record<string, Rule>> = {
   // Dashboards
   REPORT_RANGE: { status: 422 },
 
+  // Driver app and vehicle issues
+  DRIVER_PROFILE_NOT_FOUND: { status: 404 },
+  DRIVER_APP_ACCESS: { status: 409 },
+  VEHICLE_ISSUE_NOT_FOUND: { status: 404 },
+  VEHICLE_ISSUE_RULE: { status: 422 },
+
   // Notifications
   NOTIFICATION_RULE: { status: 422 },
   SMS_NOT_CONFIGURED: { status: 409 },

@@ -22,6 +22,7 @@ import type {
   IFinanceQueries,
   IFinanceSettingsStore,
   ILedger,
+  IPaymentPurpose,
   IPaymentReversalListener,
   PaymentListFilter,
 } from "../../ports/IFinanceRecords.js";
@@ -88,8 +89,14 @@ export type ReceiptView = Readonly<{
   receivedFrom: string;
   amount: MoneyJson;
   method: PaymentMethod;
+  momoNetwork: PaymentProps["momoNetwork"];
   reference: string | null;
-  appliedTo: readonly Readonly<{ invoiceNumber: string | null; amount: MoneyJson }>[];
+  /** What the money paid: invoices, or what the module that recorded it says (a remittance …). */
+  appliedTo: readonly Readonly<{
+    invoiceNumber: string | null;
+    description: string;
+    amount: MoneyJson;
+  }>[];
   /** Kept as the payer's credit. */
   credit: MoneyJson;
   status: PaymentProps["status"];
@@ -127,6 +134,8 @@ export class PaymentRecording {
       ids: IIdGenerator;
       clock: IClock;
       reversalListeners?: readonly IPaymentReversalListener[];
+      /** Describe what module-recorded payments were for, on receipts. */
+      purposes?: readonly IPaymentPurpose[];
     }>,
   ) {}
 
@@ -320,36 +329,83 @@ export class PaymentRecording {
   }
 
   async receipt(actor: Principal, id: string): Promise<ReceiptView> {
-    const { deps } = this;
-    return deps.unitOfWork.run(async () => {
-      const payment = await this.reach(actor, id, "finance.payments.view");
-      const p = payment.snapshot();
-      if (p.direction !== "in") throw new FinanceRuleError("Receipts are for money received");
-      const organisation = await deps.organisation.get();
-      const view = await this.detail(payment);
-      return {
-        business: {
-          name: organisation.legalName ?? organisation.name,
-          tin: organisation.tin,
-          phone: organisation.contactPhone,
-          email: organisation.contactEmail,
-        },
-        number: p.number,
-        date: p.paidOn,
-        receivedFrom: p.partyName,
-        amount: view.amount,
-        method: p.method,
-        reference: p.reference,
-        appliedTo: (view.allocations ?? [])
-          .filter((a) => a.releasedAt === null)
-          .map((a) => ({ invoiceNumber: a.invoiceNumber, amount: a.amount })),
-        credit: view.unallocated,
-        status: p.status,
-      };
+    return this.deps.unitOfWork.run(async () =>
+      this.receiptOf(await this.reach(actor, id, "finance.payments.view")),
+    );
+  }
+
+  /** The receipt of a payment the party made (their own app); others' do not exist for them. */
+  async receiptForParty(
+    party: Readonly<{ type: LedgerPartyType; id: string }>,
+    id: string,
+  ): Promise<ReceiptView> {
+    return this.deps.unitOfWork.run(async () => {
+      const payment = await this.deps.payments.findById(id);
+      const p = payment?.snapshot();
+      if (
+        payment === null ||
+        p?.direction !== "in" ||
+        p.party?.type !== party.type ||
+        p.party.id !== party.id
+      )
+        throw new PaymentNotFoundError();
+      return this.receiptOf(payment);
     });
   }
 
-  /** The payment within the caller's branches (call inside a unit of work). */
+  private async receiptOf(payment: Payment): Promise<ReceiptView> {
+    const { deps } = this;
+    const p = payment.snapshot();
+    if (p.direction !== "in") throw new FinanceRuleError("Receipts are for money received");
+    const organisation = await deps.organisation.get();
+    const view = await this.detail(payment);
+    const invoices = (view.allocations ?? [])
+      .filter((a) => a.releasedAt === null)
+      .map((a) => ({
+        invoiceNumber: a.invoiceNumber,
+        description: a.invoiceNumber === null ? "Invoice" : `Invoice ${a.invoiceNumber}`,
+        amount: a.amount,
+      }));
+    const purpose =
+      p.source === null || p.status === "reversed"
+        ? null
+        : ((await deps.purposes
+            ?.find((x) => x.sourceType === p.source!.type)
+            ?.describe(p.source.id, p.id)) ?? null);
+    const money = (minor: number) => Money.ofMinor(minor, p.currency).toJSON();
+    return {
+      business: {
+        name: organisation.legalName ?? organisation.name,
+        tin: organisation.tin,
+        phone: organisation.contactPhone,
+        email: organisation.contactEmail,
+      },
+      number: p.number,
+      date: p.paidOn,
+      receivedFrom: p.partyName,
+      amount: view.amount,
+      method: p.method,
+      momoNetwork: p.momoNetwork,
+      reference: p.reference,
+      appliedTo:
+        purpose === null
+          ? invoices
+          : [
+              ...invoices,
+              {
+                invoiceNumber: null,
+                description: purpose.description,
+                amount: money(purpose.settledMinor),
+              },
+            ],
+      credit:
+        purpose === null
+          ? view.unallocated
+          : money(view.unallocated.amountMinor - purpose.settledMinor),
+      status: p.status,
+    };
+  }
+
   private async reach(
     actor: Principal,
     id: string,

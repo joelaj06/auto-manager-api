@@ -294,6 +294,15 @@ staff app registers for push with `POST /api/v1/me/push-devices`. `GET /api/v1/n
 is the log of SMS, push and email sent. Locally `PUSH_PROVIDER=log` writes pushes to the API log;
 `PUSH_PROVIDER=fcm` with `FCM_SERVICE_ACCOUNT_FILE` sends them through Firebase.
 
+## Driver app and PDFs
+
+Staff give an active driver an app login with `POST /api/v1/drivers/:id/app-access` (QR to scan,
+SMS and email invitation; `DELETE` takes it away). Signed in with their phone number, the driver
+uses `/api/v1/me/driver` (home), `/vehicle`, `/ledger` and `/ledger/statement.pdf`,
+`/payments/:id/receipt.pdf`, `/remittances` (declare what was paid), `/fuel` and `/issues`.
+Staff handle reported issues at `/api/v1/vehicle-issues` and print receipts
+(`/api/v1/payments/:id/receipt.pdf`) and statements (`/api/v1/drivers/:id/ledger/statement.pdf`).
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

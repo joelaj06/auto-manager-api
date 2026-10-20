@@ -131,32 +131,114 @@ export class Remittances {
   ): Promise<RemittanceView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
-      const assignment = await deps.assignments.at(
-        input.vehicleId,
-        new Date(`${input.periodEnd}T12:00:00Z`),
-      );
-      if (assignment === null || assignment.terms.mode !== "variable")
-        throw new RemittanceRuleError(
-          "No driver on variable remittance had this vehicle in that period",
-        );
+      const assignment = await this.variableAssignment(input.vehicleId, input.periodEnd);
       await deps.scope.branch(actor, "remittances.submit", assignment.branchId);
-      const remittance = Remittance.variable({
-        id: deps.ids.next(),
-        assignmentId: assignment.id,
-        driverId: assignment.driverId,
-        vehicleId: assignment.vehicleId,
-        branchId: assignment.branchId,
-        periodStart: input.periodStart,
-        periodEnd: input.periodEnd,
-        now: deps.clock.now(),
+      return this.declare(actor, assignment, input);
+    });
+  }
+
+  /** A driver declares a variable period of their own vehicle (driver app). */
+  async declareOwn(
+    user: Readonly<{ userId: string }>,
+    driverId: string,
+    input: Readonly<{ vehicleId: string; periodStart: string; periodEnd: string } & Declaration>,
+  ): Promise<RemittanceView> {
+    return this.deps.unitOfWork.run(async () => {
+      const assignment = await this.variableAssignment(input.vehicleId, input.periodEnd);
+      if (assignment.driverId !== driverId)
+        throw new RemittanceRuleError("You did not drive this vehicle in that period");
+      return this.declare(user, assignment, input);
+    });
+  }
+
+  /** A driver's own periods, latest first (driver app). */
+  async listOwn(
+    driverId: string,
+    query: Readonly<{ limit: number; cursor?: string }>,
+  ): Promise<Page<RemittanceView>> {
+    const { deps } = this;
+    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
+    return deps.unitOfWork.run(async () => {
+      const rows = await deps.records.list({
+        branchIds: "all",
+        driverId,
+        limit: query.limit + 1,
+        ...(after === undefined
+          ? {}
+          : { after: { periodStart: String(after[0]), id: String(after[1]) } }),
       });
-      await deps.remittances.save(remittance);
-      await this.addSubmission(actor, remittance, input);
+      const base = await deps.posting.baseCurrency();
+      const page = PageCursor.paginate(rows, query.limit, (r) => [r.periodStart, r.id]);
+      return { ...page, items: page.items.map((r) => remittanceView(r, base)) };
+    });
+  }
+
+  async getOwn(driverId: string, id: string): Promise<RemittanceView> {
+    return this.deps.unitOfWork.run(async () => this.detail(await this.own(driverId, id)));
+  }
+
+  /** A driver declares what they paid for one of their periods (driver app). */
+  async submitOwn(
+    user: Readonly<{ userId: string }>,
+    driverId: string,
+    id: string,
+    declaration: Declaration,
+  ): Promise<RemittanceView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const remittance = await this.own(driverId, id, true);
+      if ((await deps.records.lockOpenSubmission(id)) !== null)
+        throw new RemittanceRuleError(
+          "A declaration for this period is already waiting for approval",
+        );
+      await this.addSubmission(user, remittance, declaration);
       return this.detail(remittance);
     });
   }
 
-  /** Declares what was paid for a period (waits for a supervisor). */
+  private async variableAssignment(vehicleId: string, periodEnd: string) {
+    const assignment = await this.deps.assignments.at(
+      vehicleId,
+      new Date(`${periodEnd}T12:00:00Z`),
+    );
+    if (assignment === null || assignment.terms.mode !== "variable")
+      throw new RemittanceRuleError(
+        "No driver on variable remittance had this vehicle in that period",
+      );
+    return assignment;
+  }
+
+  private async declare(
+    actor: Readonly<{ userId: string }>,
+    assignment: NonNullable<Awaited<ReturnType<Remittances["variableAssignment"]>>>,
+    input: Readonly<{ periodStart: string; periodEnd: string } & Declaration>,
+  ): Promise<RemittanceView> {
+    const { deps } = this;
+    const remittance = Remittance.variable({
+      id: deps.ids.next(),
+      assignmentId: assignment.id,
+      driverId: assignment.driverId,
+      vehicleId: assignment.vehicleId,
+      branchId: assignment.branchId,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      now: deps.clock.now(),
+    });
+    await deps.remittances.save(remittance);
+    await this.addSubmission(actor, remittance, input);
+    return this.detail(remittance);
+  }
+
+  /** One of the driver's own periods; another driver's does not exist for them. */
+  private async own(driverId: string, id: string, lock = false): Promise<Remittance> {
+    const remittance = lock
+      ? await this.deps.remittances.lockById(id)
+      : await this.deps.remittances.findById(id);
+    if (remittance === null || remittance.snapshot().driverId !== driverId)
+      throw new RemittanceNotFoundError();
+    return remittance;
+  }
+
   async submit(actor: Principal, id: string, declaration: Declaration): Promise<RemittanceView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
@@ -342,7 +424,7 @@ export class Remittances {
   }
 
   private async addSubmission(
-    actor: Principal,
+    actor: Readonly<{ userId: string }>,
     remittance: Remittance,
     d: Declaration,
   ): Promise<void> {
@@ -432,7 +514,7 @@ export class Remittances {
   }
 
   private async audit(
-    actor: Principal,
+    actor: Readonly<{ userId: string }>,
     action: string,
     remittance: Remittance,
     metadata: Readonly<Record<string, unknown>>,
