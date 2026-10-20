@@ -261,4 +261,10 @@ export const TYPES = Object.freeze({
   DriverLedger: Symbol.for("DriverLedger"),
   OperationsBoard: Symbol.for("OperationsBoard"),
   RemittanceSettingsService: Symbol.for("RemittanceSettingsService"),
+
+  // Dashboards and stats (P2-8)
+  VehicleStatsStore: Symbol.for("IVehicleStatsStore"),
+  DashboardQueries: Symbol.for("IDashboardQueries"),
+  VehicleStatsBuilder: Symbol.for("VehicleStatsBuilder"),
+  Dashboards: Symbol.for("Dashboards"),
 });

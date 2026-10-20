@@ -326,6 +326,23 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from vehicle_status_history where reason = $1",
   },
+  daily_vehicle_stats: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into daily_vehicle_stats (vehicle_id, stat_date, branch_id, status)
+            select v.id, current_date, b.id, 'available' from v, b`,
+      params: [marker, `DS${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from daily_vehicle_stats s join vehicles v on v.id = s.vehicle_id
+            where v.code = $1`,
+  },
+  stats_dirty_marks: {
+    insert: (marker) => ({
+      sql: "insert into stats_dirty_marks (from_date, reason) values (current_date, $1)",
+      params: [marker],
+    }),
+    find: "select 1 from stats_dirty_marks where reason = $1",
+  },
   vehicle_documents: {
     insert: (marker) => ({
       sql: `${VEHICLE}

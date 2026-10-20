@@ -276,6 +276,14 @@ payment) or rejects it; staff can record money directly (`/record`) and waive sh
 `GET /api/v1/drivers/:id/ledger` is the driver's statement, `POST …/ledger/adjustments`
 charges or credits them, and `GET /api/v1/operations/board` is the morning board.
 
+## Dashboards
+
+`GET /api/v1/dashboards/overview`, `/dashboards/vehicles`, `/dashboards/remittances` and
+`/dashboards/expenses` take `from`, `to` (business dates, default this month to date), `branchId`
+and `groupBy` (`day`, `week` — ISO, Monday–Sunday — or `month`). `GET /api/v1/vehicles/:id/profit`
+is one vehicle's P&L with its trend. Vehicle figures come from `daily_vehicle_stats`, which the
+daily tenant job and each read bring up to date; `POST /api/v1/dashboards/stats/rebuild` forces it.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

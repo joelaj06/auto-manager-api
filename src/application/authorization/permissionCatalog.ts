@@ -235,6 +235,27 @@ const definitions = {
     description: "See the daily operations board",
     scopes: BRANCH_OR_ALL,
   },
+  // --- dashboards (docs/14) ---
+  "dashboards.overview.view": {
+    description: "See the business overview: revenue, costs and cash collected",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dashboards.vehicles.view": {
+    description: "See vehicle profit and loss and utilisation",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dashboards.remittances.view": {
+    description: "See the remittance collection dashboard",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dashboards.expenses.view": {
+    description: "See the expense dashboard",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dashboards.stats.rebuild": {
+    description: "Rebuild the vehicle statistics behind the dashboards",
+    scopes: ALL,
+  },
   "customers.list": { description: "List customers", scopes: ALL },
   "customers.view": { description: "Open a customer", scopes: ALL },
   "customers.create": { description: "Register customers", scopes: ALL },

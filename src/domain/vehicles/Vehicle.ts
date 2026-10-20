@@ -309,21 +309,48 @@ export class Vehicle {
   bookValue(asOf: string, currency: string): Money | null {
     const p = this.props;
     if (p.acquisitionCostMinor === null) return null;
-    const cost = Money.ofMinor(p.acquisitionCostMinor, currency);
-    if (
-      p.depreciationMethod === "none" ||
-      p.acquisitionDate === null ||
-      p.usefulLifeMonths === null
-    )
-      return cost;
-    const months = Math.max(
-      0,
-      Math.min(monthsBetween(p.acquisitionDate, asOf), p.usefulLifeMonths),
-    );
-    const depreciable = BigInt(p.acquisitionCostMinor - (p.residualValueMinor ?? 0));
-    const used = divideHalfEven(depreciable * BigInt(months), BigInt(p.usefulLifeMonths));
-    return cost.subtract(Money.ofMinor(Number(used), currency));
+    return Money.ofMinor(p.acquisitionCostMinor - accumulatedDepreciation(p, asOf), currency);
   }
+}
+
+/** What straight-line depreciation needs to know about a vehicle. */
+export type DepreciableAsset = Pick<
+  VehicleProps,
+  | "acquisitionCostMinor"
+  | "residualValueMinor"
+  | "depreciationMethod"
+  | "acquisitionDate"
+  | "usefulLifeMonths"
+>;
+
+/**
+ * Depreciation charged up to `asOf` (straight-line, by whole months since acquisition), in
+ * minor units of the base currency; 0 when the vehicle is not depreciated.
+ */
+export function accumulatedDepreciation(asset: DepreciableAsset, asOf: string): number {
+  if (
+    asset.acquisitionCostMinor === null ||
+    asset.depreciationMethod === "none" ||
+    asset.acquisitionDate === null ||
+    asset.usefulLifeMonths === null
+  )
+    return 0;
+  const months = Math.max(
+    0,
+    Math.min(monthsBetween(asset.acquisitionDate, asOf), asset.usefulLifeMonths),
+  );
+  const depreciable = BigInt(asset.acquisitionCostMinor - (asset.residualValueMinor ?? 0));
+  return Number(divideHalfEven(depreciable * BigInt(months), BigInt(asset.usefulLifeMonths)));
+}
+
+/** Depreciation of the days `from`–`to` (both included): the vehicle P&L's cost of ownership. */
+export function depreciationBetween(asset: DepreciableAsset, from: string, to: string): number {
+  const before = new Date(`${from}T00:00:00Z`);
+  before.setUTCDate(before.getUTCDate() - 1);
+  return (
+    accumulatedDepreciation(asset, to) -
+    accumulatedDepreciation(asset, before.toISOString().slice(0, 10))
+  );
 }
 
 function monthsBetween(from: string, to: string): number {

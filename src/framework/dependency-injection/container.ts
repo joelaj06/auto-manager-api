@@ -1,3 +1,11 @@
+import { dashboardRoutes } from "../../adapters/routes/dashboardRoutes.js";
+import type { IDashboardQueries, IVehicleStatsStore } from "../../application/ports/IReporting.js";
+import { Dashboards } from "../../application/use-cases/reporting/Dashboards.js";
+import { VehicleStatsBuilder } from "../../application/use-cases/reporting/VehicleStatsBuilder.js";
+import {
+  PostgresDashboardQueries,
+  PostgresVehicleStatsStore,
+} from "../../infrastructure/reporting/PostgresReporting.js";
 import { remittanceRoutes } from "../../adapters/routes/remittanceRoutes.js";
 import type {
   IOperationsQueries,
@@ -3274,12 +3282,12 @@ export function createContainer(
       TYPES.Logger,
     ],
   );
-  container
-    .bind<ITenantDailyTask[]>(TYPES.TenantDailyTasks)
-    .toResolvedValue(
-      (recurring: RecurringExpenses, remittances: RemittanceScheduler) => [recurring, remittances],
-      [TYPES.RecurringExpenses, TYPES.RemittanceScheduler],
-    );
+  container.bind<ITenantDailyTask[]>(TYPES.TenantDailyTasks).toResolvedValue(
+    (recurring: RecurringExpenses, remittances: RemittanceScheduler, stats: VehicleStatsBuilder) =>
+      // Stats last: they read what the other tasks posted.
+      [recurring, remittances, stats],
+    [TYPES.RecurringExpenses, TYPES.RemittanceScheduler, TYPES.VehicleStatsBuilder],
+  );
 
   // --- Remittances and the driver ledger ---
   tenantRepository<PostgresRemittances>(TYPES.RemittanceStore, (tx) => new PostgresRemittances(tx));
@@ -3447,6 +3455,66 @@ export function createContainer(
       ) => new RemittanceSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
       [TYPES.UnitOfWork, TYPES.RemittanceSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
+
+  // --- Dashboards and stats ---
+  tenantRepository<IVehicleStatsStore>(
+    TYPES.VehicleStatsStore,
+    (tx) => new PostgresVehicleStatsStore(tx),
+  );
+  tenantRepository<IDashboardQueries>(
+    TYPES.DashboardQueries,
+    (tx) => new PostgresDashboardQueries(tx),
+  );
+  container
+    .bind<VehicleStatsBuilder>(TYPES.VehicleStatsBuilder)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        stats: IVehicleStatsStore,
+        organisation: IOrganisationSettings,
+        calendar: TenantCalendar,
+        logger: ILogger,
+      ) => new VehicleStatsBuilder({ unitOfWork, stats, organisation, calendar, logger }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.VehicleStatsStore,
+        TYPES.OrganisationSettings,
+        TYPES.TenantCalendar,
+        TYPES.Logger,
+      ],
+    );
+  container.bind<Dashboards>(TYPES.Dashboards).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      queries: IDashboardQueries,
+      stats: VehicleStatsBuilder,
+      expenses: ExpenseAdministration,
+      vehicles: VehicleAccess,
+      posting: LedgerPosting,
+      scope: BranchScope,
+      calendar: TenantCalendar,
+    ) =>
+      new Dashboards({
+        unitOfWork,
+        queries,
+        stats,
+        expenses,
+        vehicles,
+        posting,
+        scope,
+        calendar,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DashboardQueries,
+      TYPES.VehicleStatsBuilder,
+      TYPES.ExpenseAdministration,
+      TYPES.VehicleAccess,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+      TYPES.TenantCalendar,
+    ],
+  );
 
   // --- Mobile connect (signed links, QR codes, app-link metadata) ---
   container.bind<IConnectLinkSigner>(TYPES.ConnectLinkSigner).toResolvedValue(() => {
@@ -3813,6 +3881,7 @@ export function createContainer(
       driverLedger: DriverLedger,
       operationsBoard: OperationsBoard,
       remittanceSettings: RemittanceSettingsService,
+      dashboards: Dashboards,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -3882,6 +3951,7 @@ export function createContainer(
           board: operationsBoard,
           settings: remittanceSettings,
         }),
+        ...dashboardRoutes({ dashboards }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -3968,6 +4038,7 @@ export function createContainer(
       TYPES.DriverLedger,
       TYPES.OperationsBoard,
       TYPES.RemittanceSettingsService,
+      TYPES.Dashboards,
     ],
   );
 

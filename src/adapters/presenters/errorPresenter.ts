@@ -204,6 +204,9 @@ const RULES: Readonly<Record<string, Rule>> = {
   REMITTANCE_NOT_FOUND: { status: 404 },
   REMITTANCE_RULE: { status: 422 },
 
+  // Dashboards
+  REPORT_RANGE: { status: 422 },
+
   // Files
   FILE_NOT_FOUND: { status: 404 },
   FILE_REJECTED: { status: 400 },

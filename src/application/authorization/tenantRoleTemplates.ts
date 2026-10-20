@@ -121,6 +121,10 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "remittances.approve",
       "drivers.ledger.view",
       "operations.board.view",
+      "dashboards.overview.view",
+      "dashboards.vehicles.view",
+      "dashboards.remittances.view",
+      "dashboards.expenses.view",
     ]),
   },
   {
@@ -143,6 +147,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "remittances.view",
       "remittances.submit",
       "operations.board.view",
+      "dashboards.remittances.view",
     ]),
   },
   {
@@ -183,6 +188,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "drivers.ledger.view",
       "drivers.ledger.adjust",
       "operations.board.view",
+      ...KEYS.filter((key) => key.startsWith("dashboards.")),
       ...FINANCE_ALL,
       "vehicles.list",
       "vehicles.view",
