@@ -39,6 +39,14 @@ export type JobPayloads = {
   "catalogue.sweep": Readonly<Record<string, never>>;
   /** Remove abandoned platform uploads (tenant uploads: daily maintenance). */
   "files.sweep": Readonly<Record<string, never>>;
+  /** Send a tenant's due notification messages (SMS, push, email). */
+  "notifications.send": Readonly<{ tenantId: string }>;
+  /** Safety net: a send run for every usable tenant. */
+  "notifications.sweep": Readonly<Record<string, never>>;
+  /** Morning reminders: expiries, remittances due, budgets, approvals waiting. */
+  "tenant.notification_rules": Readonly<{ tenantId: string; localDate: string }>;
+  /** Remittance cut-off check (waits until the tenant's cut-off time). */
+  "tenant.remittance_cutoff": Readonly<{ tenantId: string; localDate: string }>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -168,13 +176,57 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     expireInSeconds: 900,
     cron: "41 3 * * *",
   },
+  "notifications.send": {
+    description: "Send a tenant's due SMS, push and email notifications",
+    tenantScoped: true,
+    policy: "stately",
+    retryLimit: 3,
+    retryDelaySeconds: 30,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  },
+  "notifications.sweep": {
+    description: "Ask every tenant to send its due notifications",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 900,
+    cron: "13 * * * *",
+  },
+  "tenant.notification_rules": {
+    description: "Morning reminders of a tenant (expiries, remittances due, budgets, approvals)",
+    tenantScoped: true,
+    policy: "standard",
+    retryLimit: 3,
+    retryDelaySeconds: 300,
+    retryBackoff: true,
+    expireInSeconds: 1_800,
+  },
+  "tenant.remittance_cutoff": {
+    description: "Remittance cut-off check of a tenant at its cut-off time",
+    tenantScoped: true,
+    policy: "stately",
+    retryLimit: 3,
+    retryDelaySeconds: 300,
+    retryBackoff: true,
+    expireInSeconds: 1_800,
+  },
 } satisfies Record<JobName, JobDefinition>);
 
 export const JOB_NAMES = Object.freeze(Object.keys(JOB_CATALOG) as JobName[]);
 
 /** Daily tenant jobs and the local hour (tenant timezone) from which they may run. */
-export type TenantDailyJob = Readonly<{ job: "tenant.daily_maintenance"; localHour: number }>;
+export type TenantDailyJob = Readonly<{
+  job: "tenant.daily_maintenance" | "tenant.notification_rules" | "tenant.remittance_cutoff";
+  localHour: number;
+}>;
 
 export const TENANT_DAILY_JOBS: readonly TenantDailyJob[] = Object.freeze([
   { job: "tenant.daily_maintenance", localHour: 2 },
+  // After the daily job has created today's remittance rows; before most people's day starts.
+  { job: "tenant.notification_rules", localHour: 7 },
+  // Waits inside the job for the business's cut-off time (a setting).
+  { job: "tenant.remittance_cutoff", localHour: 0 },
 ]);

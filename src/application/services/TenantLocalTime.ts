@@ -3,6 +3,8 @@ export type LocalDateTime = Readonly<{
   date: string;
   /** 0–23 in the tenant's timezone. */
   hour: number;
+  /** 0–59. */
+  minute: number;
 }>;
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -20,10 +22,15 @@ export function localDateTime(instant: Date, timeZone: string): LocalDateTime {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
+      minute: "2-digit",
       hourCycle: "h23",
     });
     formatters.set(timeZone, formatter);
   }
   const parts = Object.fromEntries(formatter.formatToParts(instant).map((p) => [p.type, p.value]));
-  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+  };
 }

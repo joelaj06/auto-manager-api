@@ -262,6 +262,22 @@ export const TYPES = Object.freeze({
   OperationsBoard: Symbol.for("OperationsBoard"),
   RemittanceSettingsService: Symbol.for("RemittanceSettingsService"),
 
+  // Notifications (P2-9)
+  NotificationSettingsStore: Symbol.for("INotificationSettingsStore"),
+  NotificationInbox: Symbol.for("INotificationInbox"),
+  NotificationDeliveries: Symbol.for("INotificationDeliveries"),
+  PushDevices: Symbol.for("IPushDevices"),
+  RecipientDirectory: Symbol.for("IRecipientDirectory"),
+  NotificationQueries: Symbol.for("INotificationQueries"),
+  SmsGateways: Symbol.for("ISmsGateway[]"),
+  PushSender: Symbol.for("IPushSender"),
+  CredentialsSecretBox: Symbol.for("CredentialsSecretBox"),
+  Notifier: Symbol.for("Notifier"),
+  ReminderRules: Symbol.for("ReminderRules"),
+  NotificationCenter: Symbol.for("NotificationCenter"),
+  NotificationSettingsService: Symbol.for("NotificationSettingsService"),
+  NotificationJobHandlers: Symbol.for("NotificationJobHandlers"),
+
   // Dashboards and stats (P2-8)
   VehicleStatsStore: Symbol.for("IVehicleStatsStore"),
   DashboardQueries: Symbol.for("IDashboardQueries"),

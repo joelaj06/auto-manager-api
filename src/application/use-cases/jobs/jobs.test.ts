@@ -267,15 +267,26 @@ describe("RunTenantSchedules", () => {
       clock: { now: () => new Date("2026-10-16T01:59:00Z") },
       logger: silentLogger(),
     }).handle();
-    expect(ledger.enqueueOnce).not.toHaveBeenCalled();
+    // Only the remittance cut-off (from midnight; it waits for its time itself) is due at 01:59.
+    expect(ledger.enqueueOnce.mock.calls.map((call: unknown[]) => call[1])).toEqual([
+      "tenant.remittance_cutoff",
+    ]);
   });
 });
 
 describe("localDateTime", () => {
-  it("gives the date and hour in the timezone", () => {
+  it("gives the date, hour and minute in the timezone", () => {
     const instant = new Date("2026-12-31T23:30:00Z");
-    expect(localDateTime(instant, "Africa/Accra")).toEqual({ date: "2026-12-31", hour: 23 });
-    expect(localDateTime(instant, "Africa/Lagos")).toEqual({ date: "2027-01-01", hour: 0 });
+    expect(localDateTime(instant, "Africa/Accra")).toEqual({
+      date: "2026-12-31",
+      hour: 23,
+      minute: 30,
+    });
+    expect(localDateTime(instant, "Africa/Lagos")).toEqual({
+      date: "2027-01-01",
+      hour: 0,
+      minute: 30,
+    });
     expect(() => localDateTime(instant, "Mars/Base")).toThrow(RangeError);
   });
 });

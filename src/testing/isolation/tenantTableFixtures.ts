@@ -455,6 +455,32 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: `select 1 from role_permissions rp join roles r on r.id = rp.role_id where r.name = $1`,
   },
+  notifications: {
+    insert: (marker) => ({
+      sql: `with u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation') returning id)
+            insert into notifications (user_id, rule, title, body, dedupe_key)
+            select u.id, 'expense_approvals', 'Isolation', 'Fixture', $1 from u`,
+      params: [marker],
+    }),
+    find: "select 1 from notifications where dedupe_key = $1",
+  },
+  notification_deliveries: {
+    insert: (marker) => ({
+      sql: `insert into notification_deliveries (channel, rule, recipient_type, recipient_id, address,
+              body, dedupe_key)
+            values ('sms', 'remittance_due', 'driver', $2, '+233200000000', 'Fixture', $1)`,
+      params: [marker, randomUUID()],
+    }),
+    find: "select 1 from notification_deliveries where dedupe_key = $1",
+  },
+  push_devices: {
+    insert: (marker) => ({
+      sql: `with u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation') returning id)
+            insert into push_devices (user_id, token, platform) select u.id, 'token-' || $1, 'android' from u`,
+      params: [marker],
+    }),
+    find: "select 1 from push_devices where token = 'token-' || $1",
+  },
   users: {
     insert: (marker) => ({
       sql: "insert into users (email, name) values ($1, 'Isolation')",

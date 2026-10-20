@@ -151,6 +151,12 @@ const envSchema = z
      * is refused at startup in production; a real provider is added once chosen.
      */
     SMS_PROVIDER: z.enum(["log"]).default("log"),
+    /**
+     * Push to the staff app. `log` writes pushes to the log (development); `fcm` sends through
+     * Firebase Cloud Messaging with the service account in FCM_SERVICE_ACCOUNT_FILE.
+     */
+    PUSH_PROVIDER: z.enum(["log", "fcm"]).default("log"),
+    FCM_SERVICE_ACCOUNT_FILE: z.string().min(1).optional(),
 
     // --- Object storage (S3-compatible; files service) ---
     // Development defaults match compose.yaml (RustFS). Production sets everything explicitly;
@@ -252,6 +258,12 @@ const envSchema = z
         }
       }
     }
+    if (env.PUSH_PROVIDER === "fcm" && env.FCM_SERVICE_ACCOUNT_FILE === undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["FCM_SERVICE_ACCOUNT_FILE"],
+        message: "must be set when PUSH_PROVIDER=fcm",
+      });
     if (env.NODE_ENV === "production") {
       if (env.MOBILE_CONNECT_KEY_FILE === undefined && env.MOBILE_CONNECT_PRIVATE_KEY === undefined)
         ctx.addIssue({
@@ -422,6 +434,12 @@ export type AppConfig = Readonly<{
   storage: StorageConfig;
   mobile: MobileConfig;
   public: PublicConfig;
+  push: PushConfig;
+}>;
+
+export type PushConfig = Readonly<{
+  provider: "log" | "fcm";
+  serviceAccountFile: string | null;
 }>;
 
 export class ConfigError extends Error {
@@ -536,6 +554,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       }),
     }),
     public: Object.freeze({ webAppUrl: e.WEB_APP_URL, smsProvider: e.SMS_PROVIDER }),
+    push: Object.freeze({
+      provider: e.PUSH_PROVIDER,
+      serviceAccountFile: e.FCM_SERVICE_ACCOUNT_FILE ?? null,
+    }),
     backup: Object.freeze({
       directory: e.BACKUP_DIR,
       publicKeyFile: e.BACKUP_PUBLIC_KEY_FILE,

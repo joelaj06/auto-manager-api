@@ -52,7 +52,7 @@ const definitions = {
   "settings.currency.manage": { description: "Edit currency settings", scopes: ALL },
   "settings.tax.manage": { description: "Edit tax settings", scopes: ALL, sensitive: true },
   "settings.notifications.manage": {
-    description: "Edit SMS/email provider settings",
+    description: "Set up the SMS provider, quiet hours and notification rules",
     scopes: ALL,
     sensitive: true,
   },
@@ -234,6 +234,11 @@ const definitions = {
   "operations.board.view": {
     description: "See the daily operations board",
     scopes: BRANCH_OR_ALL,
+  },
+  // --- notifications (docs/15) ---
+  "notifications.deliveries.view": {
+    description: "See the log of SMS, push and email notifications sent",
+    scopes: ALL,
   },
   // --- dashboards (docs/14) ---
   "dashboards.overview.view": {

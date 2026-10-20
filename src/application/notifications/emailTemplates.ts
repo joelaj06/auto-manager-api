@@ -75,6 +75,13 @@ export type EmailTemplateData = {
     expiresInHours: number;
     trialDays: number;
   }>;
+  /** A business's automation reminder to one of its staff (docs/15 §2). */
+  "tenant.notification": Readonly<{
+    recipientName: string;
+    businessName: string;
+    title: string;
+    body: string;
+  }>;
 };
 
 export type EmailTemplateKey = keyof EmailTemplateData;
@@ -225,6 +232,12 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       `Your account for ${data.businessName} is ready. Your business address is "${data.slug}", and your ${data.trialDays}-day trial starts now.`,
       `Set your password and sign in: ${data.setPasswordUrl}`,
       `The link works once and expires in ${data.expiresInHours} hours. You are the owner and can invite your team after signing in.`,
+    ]),
+  "tenant.notification": (data) =>
+    simple(`${data.title} — ${data.businessName}`, [
+      greeting(data.recipientName),
+      data.body,
+      `You get this reminder as a member of ${data.businessName}; your administrator chooses which reminders go by email.`,
     ]),
   "auth.otp_code": (data) => {
     const action = PURPOSE_TEXT[data.purpose] ?? "continue";

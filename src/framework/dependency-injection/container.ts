@@ -1,3 +1,42 @@
+import { notificationRoutes } from "../../adapters/routes/notificationRoutes.js";
+import type {
+  INotificationDeliveries,
+  INotificationInbox,
+  INotificationQueries,
+  INotificationSettingsStore,
+  IPushDevices,
+  IPushSender,
+  IRecipientDirectory,
+  ISmsGateway,
+} from "../../application/ports/INotifications.js";
+import { NotificationCenter } from "../../application/use-cases/notifications/NotificationCenter.js";
+import {
+  RunNotificationRules,
+  RunRemittanceCutoff,
+  SweepNotifications,
+} from "../../application/use-cases/notifications/NotificationJobs.js";
+import { NotificationSettingsService } from "../../application/use-cases/notifications/NotificationSettingsService.js";
+import { Notifier } from "../../application/use-cases/notifications/Notifier.js";
+import { ReminderRules } from "../../application/use-cases/notifications/ReminderRules.js";
+import { SendNotifications } from "../../application/use-cases/notifications/SendNotifications.js";
+import {
+  PostgresNotificationDeliveries,
+  PostgresNotificationInbox,
+  PostgresNotificationQueries,
+  PostgresNotificationSettingsStore,
+  PostgresPushDevices,
+  PostgresRecipientDirectory,
+} from "../../infrastructure/notifications/PostgresNotifications.js";
+import {
+  FcmPushSender,
+  type FcmServiceAccount,
+} from "../../infrastructure/notifications/push/FcmPushSender.js";
+import { LoggingPushSender } from "../../infrastructure/notifications/push/LoggingPushSender.js";
+import {
+  ArkeselSmsGateway,
+  HubtelSmsGateway,
+  MnotifySmsGateway,
+} from "../../infrastructure/notifications/sms/SmsGateways.js";
 import { dashboardRoutes } from "../../adapters/routes/dashboardRoutes.js";
 import type { IDashboardQueries, IVehicleStatsStore } from "../../application/ports/IReporting.js";
 import { Dashboards } from "../../application/use-cases/reporting/Dashboards.js";
@@ -705,6 +744,7 @@ export function createContainer(
       tenantFiles: FileService,
       platformFiles: FileService,
       tasks: ITenantDailyTask[],
+      notificationHandlers: IJobHandler[],
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -721,6 +761,7 @@ export function createContainer(
       new SendQueuedEmail({ deliveries, sender, clock, logger }),
       new SweepAbandonedFiles({ files: platformFiles, logger }),
       ...provisioningHandlers,
+      ...notificationHandlers,
     ],
     [
       TYPES.UnitOfWork,
@@ -739,6 +780,7 @@ export function createContainer(
       TYPES.TenantFileService,
       TYPES.PlatformFileService,
       TYPES.TenantDailyTasks,
+      TYPES.NotificationJobHandlers,
     ],
   );
 
@@ -3456,6 +3498,193 @@ export function createContainer(
       [TYPES.UnitOfWork, TYPES.RemittanceSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
 
+  // --- Notifications ---
+  tenantRepository<INotificationSettingsStore>(
+    TYPES.NotificationSettingsStore,
+    (tx) => new PostgresNotificationSettingsStore(tx),
+  );
+  tenantRepository<INotificationInbox>(
+    TYPES.NotificationInbox,
+    (tx) => new PostgresNotificationInbox(tx),
+  );
+  container.bind<INotificationDeliveries>(TYPES.NotificationDeliveries).toResolvedValue(
+    (tx: PostgresTransactionContext, tenantContext: ITenantContext, queue: IJobQueue) =>
+      // After commit, ask the worker to send this tenant's new messages.
+      new PostgresNotificationDeliveries(tx, async () => {
+        const tenantId = tenantContext.currentTenantId().value;
+        await queue.enqueue("notifications.send", { tenantId }, { singletonKey: tenantId });
+      }),
+    [TYPES.PostgresTransactionContext, TYPES.TenantContext, TYPES.JobQueue],
+  );
+  tenantRepository<IPushDevices>(TYPES.PushDevices, (tx) => new PostgresPushDevices(tx));
+  tenantRepository<IRecipientDirectory>(
+    TYPES.RecipientDirectory,
+    (tx) => new PostgresRecipientDirectory(tx),
+  );
+  tenantRepository<INotificationQueries>(
+    TYPES.NotificationQueries,
+    (tx) => new PostgresNotificationQueries(tx),
+  );
+  container
+    .bind<ISmsGateway[]>(TYPES.SmsGateways)
+    .toConstantValue([new HubtelSmsGateway(), new ArkeselSmsGateway(), new MnotifySmsGateway()]);
+  container.bind<IPushSender>(TYPES.PushSender).toResolvedValue(
+    (logger: ILogger) => {
+      if (config.push.provider === "log") return new LoggingPushSender(logger);
+      const account = JSON.parse(
+        readFileSync(config.push.serviceAccountFile!, "utf8"),
+      ) as FcmServiceAccount;
+      return new FcmPushSender(account);
+    },
+    [TYPES.Logger],
+  );
+  // Tenants' provider credentials: their own key, derived apart from the MFA secrets'.
+  container
+    .bind<ISecretBox>(TYPES.CredentialsSecretBox)
+    .toResolvedValue(
+      () =>
+        new AesGcmSecretBox(config.auth.mfaEncryptionKey, "autoforce-tenant-provider-credentials"),
+    );
+  container
+    .bind<Notifier>(TYPES.Notifier)
+    .toResolvedValue(
+      (
+        inbox: INotificationInbox,
+        deliveries: INotificationDeliveries,
+        directory: IRecipientDirectory,
+        clock: IClock,
+      ) => new Notifier({ inbox, deliveries, directory, clock }),
+      [
+        TYPES.NotificationInbox,
+        TYPES.NotificationDeliveries,
+        TYPES.RecipientDirectory,
+        TYPES.Clock,
+      ],
+    );
+  container.bind<ReminderRules>(TYPES.ReminderRules).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      settings: INotificationSettingsStore,
+      organisation: IOrganisationSettings,
+      queries: INotificationQueries,
+      notifier: Notifier,
+      expenses: ExpenseAdministration,
+      posting: LedgerPosting,
+      logger: ILogger,
+    ) =>
+      new ReminderRules({
+        unitOfWork,
+        settings,
+        organisation,
+        queries,
+        notifier,
+        expenses,
+        posting,
+        logger,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.NotificationSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.NotificationQueries,
+      TYPES.Notifier,
+      TYPES.ExpenseAdministration,
+      TYPES.LedgerPosting,
+      TYPES.Logger,
+    ],
+  );
+  container
+    .bind<NotificationCenter>(TYPES.NotificationCenter)
+    .toResolvedValue(
+      (unitOfWork: IUnitOfWork, inbox: INotificationInbox, devices: IPushDevices, clock: IClock) =>
+        new NotificationCenter({ unitOfWork, inbox, devices, clock }),
+      [TYPES.UnitOfWork, TYPES.NotificationInbox, TYPES.PushDevices, TYPES.Clock],
+    );
+  container.bind<NotificationSettingsService>(TYPES.NotificationSettingsService).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      settings: INotificationSettingsStore,
+      deliveries: INotificationDeliveries,
+      secrets: ISecretBox,
+      gateways: ISmsGateway[],
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new NotificationSettingsService({
+        unitOfWork,
+        settings,
+        deliveries,
+        secrets,
+        gateways,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.NotificationSettingsStore,
+      TYPES.NotificationDeliveries,
+      TYPES.CredentialsSecretBox,
+      TYPES.SmsGateways,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<IJobHandler[]>(TYPES.NotificationJobHandlers).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      deliveries: INotificationDeliveries,
+      settings: INotificationSettingsStore,
+      organisation: IOrganisationSettings,
+      secrets: ISecretBox,
+      gateways: ISmsGateway[],
+      push: IPushSender,
+      devices: IPushDevices,
+      emails: IEmailDeliveries,
+      queue: IJobQueue,
+      roster: ITenantRoster,
+      rules: ReminderRules,
+      clock: IClock,
+      logger: ILogger,
+    ): IJobHandler[] => [
+      new SendNotifications({
+        unitOfWork,
+        deliveries,
+        settings,
+        organisation,
+        secrets,
+        gateways,
+        push,
+        devices,
+        emails,
+        queue,
+        clock,
+        logger,
+      }),
+      new SweepNotifications({ roster, queue }),
+      new RunNotificationRules(rules),
+      new RunRemittanceCutoff({ unitOfWork, settings, organisation, rules, queue, clock }),
+    ],
+    [
+      TYPES.UnitOfWork,
+      TYPES.NotificationDeliveries,
+      TYPES.NotificationSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.CredentialsSecretBox,
+      TYPES.SmsGateways,
+      TYPES.PushSender,
+      TYPES.PushDevices,
+      TYPES.EmailDeliveries,
+      TYPES.JobQueue,
+      TYPES.TenantRoster,
+      TYPES.ReminderRules,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+
   // --- Dashboards and stats ---
   tenantRepository<IVehicleStatsStore>(
     TYPES.VehicleStatsStore,
@@ -3882,6 +4111,8 @@ export function createContainer(
       operationsBoard: OperationsBoard,
       remittanceSettings: RemittanceSettingsService,
       dashboards: Dashboards,
+      notificationCenter: NotificationCenter,
+      notificationSettings: NotificationSettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -3952,6 +4183,7 @@ export function createContainer(
           settings: remittanceSettings,
         }),
         ...dashboardRoutes({ dashboards }),
+        ...notificationRoutes({ center: notificationCenter, settings: notificationSettings }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -4039,6 +4271,8 @@ export function createContainer(
       TYPES.OperationsBoard,
       TYPES.RemittanceSettingsService,
       TYPES.Dashboards,
+      TYPES.NotificationCenter,
+      TYPES.NotificationSettingsService,
     ],
   );
 

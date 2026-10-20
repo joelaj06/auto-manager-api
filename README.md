@@ -284,6 +284,16 @@ and `groupBy` (`day`, `week` — ISO, Monday–Sunday — or `month`). `GET /api
 is one vehicle's P&L with its trend. Vehicle figures come from `daily_vehicle_stats`, which the
 daily tenant job and each read bring up to date; `POST /api/v1/dashboards/stats/rebuild` forces it.
 
+## Notifications
+
+Each business connects its own SMS account (`PUT /api/v1/settings/notifications/sms` — Hubtel,
+Arkesel or mNotify; `POST …/sms/test` sends a test) and tunes the reminder rules, quiet hours and
+the remittance cut-off time with `PATCH /api/v1/settings/notifications`. Staff read their
+notifications at `GET /api/v1/notifications` (`/unread-count`, `POST /notifications/read`), and the
+staff app registers for push with `POST /api/v1/me/push-devices`. `GET /api/v1/notification-deliveries`
+is the log of SMS, push and email sent. Locally `PUSH_PROVIDER=log` writes pushes to the API log;
+`PUSH_PROVIDER=fcm` with `FCM_SERVICE_ACCOUNT_FILE` sends them through Firebase.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
