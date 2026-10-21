@@ -1,5 +1,12 @@
 import PDFDocument from "pdfkit";
-import type { IPdfRenderer, PdfBlock, PdfDocument } from "../../application/ports/IPdfRenderer.js";
+import QRCode from "qrcode";
+import type {
+  IPdfRenderer,
+  PdfAlign,
+  PdfBlock,
+  PdfDocument,
+  PdfRun,
+} from "../../application/ports/IPdfRenderer.js";
 
 const MARGIN = 50;
 const INK = "#1f2933";
@@ -66,8 +73,12 @@ export class PdfKitRenderer implements IPdfRenderer {
     for (const line of d.issuer.lines) pdf.text(line, textLeft, undefined, { width: 260 });
     const leftBottom = pdf.y;
 
-    pdf.font("Helvetica-Bold").fontSize(20).fillColor(INK);
-    pdf.text(d.title.toUpperCase(), MARGIN, top, { width: this.width, align: "right" });
+    // A template brings its own title: the letterhead then shows only the reference.
+    pdf.y = top;
+    if (d.title !== "") {
+      pdf.font("Helvetica-Bold").fontSize(20).fillColor(INK);
+      pdf.text(d.title.toUpperCase(), MARGIN, top, { width: this.width, align: "right" });
+    }
     if (d.reference !== null) {
       pdf.font("Helvetica").fontSize(10).fillColor(MUTED);
       pdf.text(d.reference, MARGIN, undefined, { width: this.width, align: "right" });
@@ -80,14 +91,108 @@ export class PdfKitRenderer implements IPdfRenderer {
   private block(pdf: PDFKit.PDFDocument, block: PdfBlock) {
     const x = MARGIN;
     switch (block.type) {
-      case "heading":
-        this.room(pdf, 40);
-        pdf.moveDown(0.6);
-        pdf.font("Helvetica-Bold").fontSize(11).fillColor(INK).text(block.text, x, undefined, {
-          width: this.width,
-        });
+      case "heading": {
+        const size = { 1: 16, 2: 12.5, 3: 11 }[block.level ?? 3];
+        // Keep a heading with the first lines of what follows it.
+        this.room(pdf, 80);
+        pdf.moveDown(block.level === 1 ? 0.2 : 0.6);
+        pdf
+          .font("Helvetica-Bold")
+          .fontSize(size)
+          .fillColor(INK)
+          .text(block.text, x, undefined, { width: this.width, align: block.align ?? "left" });
         pdf.moveDown(0.3);
         return;
+      }
+      case "rich":
+        this.room(pdf, 24);
+        this.runs(
+          pdf,
+          block.runs,
+          block.small === true ? 8.5 : 10,
+          block.align ?? "left",
+          x,
+          this.width,
+        );
+        pdf.moveDown(0.5);
+        return;
+      case "list":
+        block.items.forEach((item, i) => {
+          this.room(pdf, 20);
+          const y = pdf.y;
+          pdf
+            .font("Helvetica")
+            .fontSize(10)
+            .fillColor(INK)
+            .text(block.ordered ? `${i + 1}.` : "•", x + 6, y, { width: 18, lineBreak: false });
+          pdf.y = y;
+          this.runs(pdf, item, 10, "left", x + 24, this.width - 24);
+          pdf.moveDown(0.2);
+        });
+        pdf.moveDown(0.4);
+        return;
+      case "rule":
+        pdf.moveDown(0.3);
+        this.rule(pdf);
+        pdf.moveDown(0.6);
+        return;
+      case "pageBreak":
+        pdf.addPage();
+        return;
+      case "signatures": {
+        const per = 2;
+        const gap = 30;
+        const width = (this.width - gap * (per - 1)) / per;
+        for (let i = 0; i < block.signers.length; i += per) {
+          this.room(pdf, 90);
+          const y = pdf.y + 46;
+          block.signers.slice(i, i + per).forEach((signer, j) => {
+            const left = x + j * (width + gap);
+            pdf
+              .moveTo(left, y)
+              .lineTo(left + width, y)
+              .lineWidth(0.8)
+              .stroke(INK);
+            pdf
+              .font("Helvetica-Bold")
+              .fontSize(9)
+              .fillColor(INK)
+              .text(signer.label, left, y + 5, { width });
+            pdf
+              .font("Helvetica")
+              .fontSize(9)
+              .fillColor(MUTED)
+              .text(signer.name, left, undefined, { width });
+            pdf.text("Date: ____________________", left, undefined, { width });
+          });
+          pdf.y = y + 50;
+        }
+        return;
+      }
+      case "verification": {
+        this.room(pdf, 90);
+        pdf.moveDown(0.5);
+        const y = pdf.y;
+        const size = 72;
+        this.qr(pdf, block.url, x, y, size);
+        pdf
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor(INK)
+          .text("Check this document", x + size + 12, y + 8, { width: this.width - size - 12 });
+        pdf
+          .font("Helvetica")
+          .fontSize(8.5)
+          .fillColor(MUTED)
+          .text(`Scan the code or open ${block.url}`, { width: this.width - size - 12 });
+        pdf
+          .font("Helvetica-Bold")
+          .fontSize(11)
+          .fillColor(INK)
+          .text(`Verification code ${block.code}`, { width: this.width - size - 12 });
+        pdf.y = y + size + 10;
+        return;
+      }
       case "paragraph":
         pdf
           .font("Helvetica")
@@ -157,7 +262,7 @@ export class PdfKitRenderer implements IPdfRenderer {
       const height = Math.max(...heights, 10) + 8;
       if (pdf.y + height > pdf.page.height - MARGIN - 20) {
         pdf.addPage();
-        if (!header) {
+        if (!header && t.header !== false) {
           row(
             t.columns.map((c) => c.header.toUpperCase()),
             true,
@@ -186,11 +291,12 @@ export class PdfKitRenderer implements IPdfRenderer {
       }
     };
     this.room(pdf, 40);
-    row(
-      t.columns.map((c) => c.header.toUpperCase()),
-      true,
-      true,
-    );
+    if (t.header !== false)
+      row(
+        t.columns.map((c) => c.header.toUpperCase()),
+        true,
+        true,
+      );
     for (const cells of t.rows) row(cells, false);
     if (t.total !== undefined) row(t.total, true);
     pdf.moveDown(0.8);
@@ -219,6 +325,51 @@ export class PdfKitRenderer implements IPdfRenderer {
         lineBreak: false,
       });
     }
+  }
+
+  /** A paragraph of styled runs (bold, italic, underline) wrapped to `width`. */
+  private runs(
+    pdf: PDFKit.PDFDocument,
+    runs: readonly PdfRun[],
+    size: number,
+    align: PdfAlign,
+    x: number,
+    width: number,
+  ) {
+    pdf.fontSize(size).fillColor(size < 10 ? MUTED : INK);
+    if (runs.length === 0) return;
+    runs.forEach((run, i) => {
+      const font =
+        run.bold === true && run.italic === true
+          ? "Helvetica-BoldOblique"
+          : run.bold === true
+            ? "Helvetica-Bold"
+            : run.italic === true
+              ? "Helvetica-Oblique"
+              : "Helvetica";
+      const options = {
+        width,
+        align,
+        underline: run.underline === true,
+        continued: i < runs.length - 1,
+      };
+      pdf.font(font);
+      if (i === 0) pdf.text(run.text, x, pdf.y, options);
+      else pdf.text(run.text, options);
+    });
+  }
+
+  /** A QR code drawn as squares (vector, sharp when printed). */
+  private qr(pdf: PDFKit.PDFDocument, text: string, x: number, y: number, size: number) {
+    const modules = QRCode.create(text, { errorCorrectionLevel: "M" }).modules;
+    const count = modules.size;
+    const cell = size / count;
+    pdf.save().fillColor("#000000");
+    for (let row = 0; row < count; row += 1)
+      for (let col = 0; col < count; col += 1)
+        if (modules.get(row, col)) pdf.rect(x + col * cell, y + row * cell, cell, cell);
+    pdf.fill();
+    pdf.restore();
   }
 
   private rule(pdf: PDFKit.PDFDocument) {

@@ -303,6 +303,15 @@ uses `/api/v1/me/driver` (home), `/vehicle`, `/ledger` and `/ledger/statement.pd
 Staff handle reported issues at `/api/v1/vehicle-issues` and print receipts
 (`/api/v1/payments/:id/receipt.pdf`) and statements (`/api/v1/drivers/:id/ledger/statement.pdf`).
 
+## Documents and templates
+
+`GET /api/v1/document-types` lists the documents the system issues with their fields and locked
+clauses. Businesses write their own template versions (`/api/v1/document-templates`: drafts,
+`/preview` PDF with sample data, `/:id/activate`); locked clauses must stay unchanged. Documents
+are issued by the modules — `POST /api/v1/assignments/:id/handover-document` for now — rendered to
+an immutable PDF in the background (`/api/v1/documents/:id/download`) and checked by anyone with
+the verification code: `GET /api/v1/public/documents/:code?sha256=…` with `X-Tenant`.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

@@ -213,6 +213,12 @@ const RULES: Readonly<Record<string, Rule>> = {
   VEHICLE_ISSUE_NOT_FOUND: { status: 404 },
   VEHICLE_ISSUE_RULE: { status: 422 },
 
+  // Documents
+  DOCUMENT_NOT_FOUND: { status: 404 },
+  DOCUMENT_TEMPLATE_NOT_FOUND: { status: 404 },
+  DOCUMENT_TEMPLATE: { status: 422 },
+  DOCUMENT_RULE: { status: 422 },
+
   // Notifications
   NOTIFICATION_RULE: { status: 422 },
   SMS_NOT_CONFIGURED: { status: 409 },

@@ -262,6 +262,27 @@ const definitions = {
     description: "See the log of SMS, push and email notifications sent",
     scopes: ALL,
   },
+  // --- documents (docs/24) ---
+  "documents.list": { description: "List issued documents", scopes: BRANCH_OR_ALL },
+  "documents.view": {
+    description: "Open and download issued documents",
+    scopes: BRANCH_OR_ALL,
+  },
+  "documents.issue": {
+    description: "Issue documents (handover notes, agreements …)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "documents.void": {
+    description: "Void issued documents",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "documents.templates.view": { description: "See document templates", scopes: ALL },
+  "documents.templates.manage": {
+    description: "Edit document templates and put versions in use (locked clauses stay)",
+    scopes: ALL,
+    sensitive: true,
+  },
   // --- dashboards (docs/14) ---
   "dashboards.overview.view": {
     description: "See the business overview: revenue, costs and cash collected",

@@ -35,6 +35,13 @@ export const FILE_KINDS = Object.freeze({
     maxBytes: 10 * MB,
     description: "Photo of a vehicle (gallery; one is the primary photo)",
   },
+  issued_document: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: ["application/pdf"],
+    maxBytes: 20 * MB,
+    description: "PDF of an issued document (immutable once stored)",
+  },
   vehicle_issue_photo: {
     scope: "tenant",
     visibility: "private",

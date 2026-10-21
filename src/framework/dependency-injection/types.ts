@@ -262,6 +262,16 @@ export const TYPES = Object.freeze({
   OperationsBoard: Symbol.for("OperationsBoard"),
   RemittanceSettingsService: Symbol.for("RemittanceSettingsService"),
 
+  // Document engine (P3-1)
+  DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),
+  DocumentRepository: Symbol.for("IDocumentRepository"),
+  DocumentEvents: Symbol.for("IDocumentEvents"),
+  DocumentRenderQueue: Symbol.for("IDocumentRenderQueue"),
+  Documents: Symbol.for("Documents"),
+  DocumentTemplates: Symbol.for("DocumentTemplates"),
+  HandoverDocuments: Symbol.for("HandoverDocuments"),
+  DocumentJobHandlers: Symbol.for("DocumentJobHandlers"),
+
   // Driver app, vehicle issues and PDFs (P2-10)
   DriverAppLinks: Symbol.for("IDriverAppLinks"),
   VehicleIssueRepository: Symbol.for("IVehicleIssueRepository"),

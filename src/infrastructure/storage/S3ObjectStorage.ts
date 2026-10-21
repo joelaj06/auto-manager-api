@@ -148,6 +148,30 @@ export class S3ObjectStorage implements IObjectStorage {
     return (await object.Body?.transformToByteArray()) ?? new Uint8Array();
   }
 
+  async put(
+    visibility: FileVisibility,
+    key: string,
+    body: Uint8Array,
+    contentType: string,
+  ): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket(visibility),
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        ContentLength: body.length,
+      }),
+    );
+  }
+
+  async read(visibility: FileVisibility, key: string): Promise<Uint8Array> {
+    const object = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket(visibility), Key: key }),
+    );
+    return (await object.Body?.transformToByteArray()) ?? new Uint8Array();
+  }
+
   async remove(visibility: FileVisibility, key: string): Promise<void> {
     try {
       await this.client.send(

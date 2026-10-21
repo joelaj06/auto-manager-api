@@ -2,8 +2,25 @@
  * A printable document described as content, not layout (docs/24 §3): the renderer owns fonts,
  * page size, letterhead and page numbers, so every PDF the system issues looks the same.
  */
+/** Inline text with its style. */
+export type PdfRun = Readonly<{
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+}>;
+export type PdfAlign = "left" | "center" | "right" | "justify";
+
 export type PdfBlock =
-  | Readonly<{ type: "heading"; text: string }>
+  | Readonly<{ type: "heading"; text: string; level?: 1 | 2 | 3; align?: PdfAlign }>
+  | Readonly<{ type: "rich"; runs: readonly PdfRun[]; align?: PdfAlign; small?: boolean }>
+  | Readonly<{ type: "list"; ordered: boolean; items: readonly (readonly PdfRun[])[] }>
+  | Readonly<{ type: "rule" }>
+  | Readonly<{ type: "pageBreak" }>
+  /** Lines to sign on, with the signer's role and name under each. */
+  | Readonly<{ type: "signatures"; signers: readonly Readonly<{ label: string; name: string }>[] }>
+  /** A QR code of `url` with the verification code beside it. */
+  | Readonly<{ type: "verification"; url: string; code: string }>
   | Readonly<{ type: "paragraph"; text: string; muted?: boolean }>
   /** Label–value pairs in two columns. */
   | Readonly<{ type: "fields"; rows: readonly Readonly<{ label: string; value: string }>[] }>
@@ -18,6 +35,8 @@ export type PdfBlock =
       rows: readonly (readonly string[])[];
       /** A bold last row (totals). */
       total?: readonly string[];
+      /** False: no header row (default true). */
+      header?: boolean;
     }>
   /** A highlighted amount ("Amount received  GHS 250.00"). */
   | Readonly<{ type: "amount"; label: string; value: string }>;

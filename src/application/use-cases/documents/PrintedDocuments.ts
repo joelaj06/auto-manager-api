@@ -1,11 +1,10 @@
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IClock } from "../../ports/IClock.js";
-import type { ILogger } from "../../ports/ILogger.js";
-import type { IObjectStorage } from "../../ports/IObjectStorage.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
 import type { IPdfRenderer, PdfBlock, PdfDocument } from "../../ports/IPdfRenderer.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
+import type { BusinessLogo } from "../../services/BusinessLogo.js";
 import { localDateTime } from "../../services/TenantLocalTime.js";
 import type { PaymentRecording, ReceiptView } from "../finance/PaymentRecording.js";
 import type { DriverLedger, DriverStatement } from "../remittances/DriverLedger.js";
@@ -13,9 +12,6 @@ import type { DriverLedger, DriverStatement } from "../remittances/DriverLedger.
 export type PdfFile = Readonly<{ filename: string; content: Buffer }>;
 
 type DriverRef = Readonly<{ id: string; code: string; firstName: string; lastName: string }>;
-
-/** Logos larger than this are left off (a letterhead does not need more). */
-const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
 const METHODS: Readonly<Record<string, string>> = {
   cash: "Cash",
@@ -41,10 +37,9 @@ export class PrintedDocuments {
       payments: PaymentRecording;
       ledger: DriverLedger;
       organisation: IOrganisationSettings;
-      storage: IObjectStorage;
+      logo: BusinessLogo;
       renderer: IPdfRenderer;
       clock: IClock;
-      logger: ILogger;
     }>,
   ) {}
 
@@ -217,24 +212,10 @@ export class PrintedDocuments {
           ...(organisation.contactPhone === null ? [] : [organisation.contactPhone]),
           ...(organisation.contactEmail === null ? [] : [organisation.contactEmail]),
         ],
-        logo: await this.logo(organisation.logoStorageKey),
+        logo: await deps.logo.bytes(organisation.logoStorageKey),
       },
       footer: `${organisation.name} · generated ${local.date} ${time} with Autoforce Manager`,
       createdAt: now,
     });
-  }
-
-  private async logo(key: string | null): Promise<Uint8Array | null> {
-    if (key === null) return null;
-    try {
-      const stat = await this.deps.storage.stat("public", key);
-      if (stat === null || stat.sizeBytes > MAX_LOGO_BYTES) return null;
-      return await this.deps.storage.readStart("public", key, stat.sizeBytes);
-    } catch (error) {
-      this.deps.logger.warn("Logo left off a document", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
   }
 }

@@ -41,6 +41,13 @@ const EXPENSE = `with b as (insert into branches (code, name) values ($2, $1) re
                          amount_minor, net_minor)
                        select 'draft', c.id, $1, b.id, current_date, 100, 100 from b, c returning id)`;
 
+/** An issued document (number = marker; verification code from the marker). */
+const DOCUMENT = `insert into documents (number, type, language, template_version, template_body,
+                   subject_type, subject_id, data_snapshot, verification_code, issued_at)
+                 values ($1, 'vehicle_handover', 'en', 'system-1', '<p>x</p>', 'vehicle_assignment',
+                   gen_random_uuid(), '{}', lpad((abs(hashtext($1)) % 1000000000000)::text, 12, '0'),
+                   now())`;
+
 /** A driver's assignment and its remittance (number = marker); `$2` = branch code. */
 const REMITTANCE = `${DRIVER},
                  v as (insert into vehicles (code, make, model, status, branch_id)
@@ -326,6 +333,30 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from vehicle_status_history where reason = $1",
   },
+  document_templates: {
+    insert: (marker) => ({
+      sql: `insert into document_templates (type, name, version, body, system_version)
+            values ('vehicle_handover', $1, 1 + abs(hashtext($1)) % 100000, '<p>x</p>', 1)`,
+      params: [marker],
+    }),
+    find: "select 1 from document_templates where name = $1",
+  },
+  documents: {
+    insert: (marker) => ({
+      sql: DOCUMENT,
+      params: [marker],
+    }),
+    find: "select 1 from documents where number = $1",
+  },
+  document_events: {
+    insert: (marker) => ({
+      sql: `with d as (${DOCUMENT} returning id)
+            insert into document_events (document_id, type, actor_type, metadata)
+            select d.id, 'issued', 'system', jsonb_build_object('marker', $1::text) from d`,
+      params: [marker],
+    }),
+    find: "select 1 from document_events where metadata->>'marker' = $1",
+  },
   vehicle_issues: {
     insert: (marker) => ({
       sql: `${VEHICLE}
@@ -555,4 +586,4 @@ export const TENANT_TABLE_EXEMPTIONS: Readonly<Record<string, string>> = {
 };
 
 /** Tables whose rows may never change once written (forbid_mutation trigger). */
-export const APPEND_ONLY_TENANT_TABLES: readonly string[] = ["audit_logs"];
+export const APPEND_ONLY_TENANT_TABLES: readonly string[] = ["audit_logs", "document_events"];

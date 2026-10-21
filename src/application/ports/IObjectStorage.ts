@@ -35,6 +35,15 @@ export interface IObjectStorage {
   stat(visibility: FileVisibility, key: string): Promise<StoredObject | null>;
   /** The first `bytes` bytes of an object (to check its real type). */
   readStart(visibility: FileVisibility, key: string, bytes: number): Promise<Uint8Array>;
+  /** Stores bytes the server produced (generated documents). */
+  put(
+    visibility: FileVisibility,
+    key: string,
+    body: Uint8Array,
+    contentType: string,
+  ): Promise<void>;
+  /** The whole object (generated documents only: they are small). */
+  read(visibility: FileVisibility, key: string): Promise<Uint8Array>;
   /** Removes the object; no error when it does not exist. */
   remove(visibility: FileVisibility, key: string): Promise<void>;
 }

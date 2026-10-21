@@ -149,6 +149,56 @@ export class FileService {
     return this.view(await this.find(fileId));
   }
 
+  /**
+   * Stores a file the server generated (an issued document's PDF): written to storage first,
+   * then recorded as ready — a crash in between leaves only an orphan object, never a record
+   * without bytes.
+   */
+  async storeGenerated(
+    input: Readonly<{
+      kind: FileKind;
+      filename: string;
+      contentType: string;
+      content: Uint8Array;
+      owner?: Readonly<{ type: string; id: string }>;
+      createdBy: string | null;
+    }>,
+  ): Promise<StoredFile> {
+    const { deps } = this;
+    if (fileKindPolicy(input.kind).scope !== deps.scope)
+      throw new FileRejectedError(`Files of kind ${input.kind} cannot be stored here`);
+    const now = deps.clock.now();
+    const file = StoredFile.start({
+      id: deps.ids.next(),
+      kind: input.kind,
+      keyPrefix: deps.keyPrefix(),
+      filename: input.filename,
+      contentType: input.contentType,
+      sizeBytes: input.content.length,
+      ownerType: input.owner?.type ?? null,
+      ownerId: input.owner?.id ?? null,
+      uploadedBy: input.createdBy,
+      now,
+    });
+    await deps.storage.put(file.visibility, file.storageKey, input.content, input.contentType);
+    file.complete(
+      {
+        sizeBytes: input.content.length,
+        sniffedType: sniffContentType(input.content.subarray(0, SNIFF_BYTES)),
+      },
+      now,
+    );
+    await deps.unitOfWork.run(() => deps.files.save(file));
+    return file;
+  }
+
+  /** The bytes of a ready file (generated documents: small). */
+  async read(fileId: string): Promise<Uint8Array> {
+    const file = await this.find(fileId);
+    if (file.status !== "ready") throw new FileNotFoundError();
+    return this.deps.storage.read(file.visibility, file.storageKey);
+  }
+
   async get(
     fileId: string,
     check: (file: StoredFile) => void = () => undefined,

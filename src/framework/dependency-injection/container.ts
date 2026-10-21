@@ -1,6 +1,27 @@
+import { documentRoutes } from "../../adapters/routes/documentRoutes.js";
+import type {
+  IDocumentEvents,
+  IDocumentRenderQueue,
+  IDocumentRepository,
+  IDocumentTemplateRepository,
+} from "../../application/ports/IDocumentRecords.js";
+import { HandoverDocuments } from "../../application/use-cases/assignments/HandoverDocuments.js";
+import {
+  PendingDocumentRenders,
+  RenderDocument,
+} from "../../application/use-cases/documents/DocumentJobs.js";
+import { Documents } from "../../application/use-cases/documents/Documents.js";
+import { DocumentTemplates } from "../../application/use-cases/documents/DocumentTemplates.js";
+import {
+  PostgresDocumentEvents,
+  PostgresDocumentTemplates,
+  PostgresIssuedDocuments,
+} from "../../infrastructure/documents/PostgresDocuments.js";
+import { QueuedDocumentRendering } from "../../infrastructure/documents/QueuedDocumentRendering.js";
 import { driverAppRoutes } from "../../adapters/routes/driverAppRoutes.js";
 import type { IDriverAppLinks } from "../../application/ports/IDriverAppLinks.js";
 import type { IPdfRenderer } from "../../application/ports/IPdfRenderer.js";
+import { BusinessLogo } from "../../application/services/BusinessLogo.js";
 import { PrintedDocuments } from "../../application/use-cases/documents/PrintedDocuments.js";
 import { DriverApp } from "../../application/use-cases/driverapp/DriverApp.js";
 import { DriverAppAccess } from "../../application/use-cases/parties/DriverAppAccess.js";
@@ -759,6 +780,7 @@ export function createContainer(
       platformFiles: FileService,
       tasks: ITenantDailyTask[],
       notificationHandlers: IJobHandler[],
+      documentHandlers: IJobHandler[],
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -776,6 +798,7 @@ export function createContainer(
       new SweepAbandonedFiles({ files: platformFiles, logger }),
       ...provisioningHandlers,
       ...notificationHandlers,
+      ...documentHandlers,
     ],
     [
       TYPES.UnitOfWork,
@@ -795,6 +818,7 @@ export function createContainer(
       TYPES.PlatformFileService,
       TYPES.TenantDailyTasks,
       TYPES.NotificationJobHandlers,
+      TYPES.DocumentJobHandlers,
     ],
   );
 
@@ -3344,10 +3368,20 @@ export function createContainer(
     ],
   );
   container.bind<ITenantDailyTask[]>(TYPES.TenantDailyTasks).toResolvedValue(
-    (recurring: RecurringExpenses, remittances: RemittanceScheduler, stats: VehicleStatsBuilder) =>
-      // Stats last: they read what the other tasks posted.
-      [recurring, remittances, stats],
-    [TYPES.RecurringExpenses, TYPES.RemittanceScheduler, TYPES.VehicleStatsBuilder],
+    (
+      recurring: RecurringExpenses,
+      remittances: RemittanceScheduler,
+      stats: VehicleStatsBuilder,
+      documents: Documents,
+    ) =>
+      // Stats after the money tasks: they read what those posted.
+      [recurring, remittances, stats, new PendingDocumentRenders(documents)],
+    [
+      TYPES.RecurringExpenses,
+      TYPES.RemittanceScheduler,
+      TYPES.VehicleStatsBuilder,
+      TYPES.Documents,
+    ],
   );
 
   // --- Remittances and the driver ledger ---
@@ -3517,6 +3551,156 @@ export function createContainer(
       [TYPES.UnitOfWork, TYPES.RemittanceSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
     );
 
+  // --- Document engine ---
+  tenantRepository<IDocumentTemplateRepository>(
+    TYPES.DocumentTemplateRepository,
+    (tx) => new PostgresDocumentTemplates(tx),
+  );
+  tenantRepository<IDocumentRepository>(
+    TYPES.DocumentRepository,
+    (tx) => new PostgresIssuedDocuments(tx),
+  );
+  tenantRepository<IDocumentEvents>(TYPES.DocumentEvents, (tx) => new PostgresDocumentEvents(tx));
+  container
+    .bind<IDocumentRenderQueue>(TYPES.DocumentRenderQueue)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext, tenantContext: ITenantContext, queue: IJobQueue) =>
+        new QueuedDocumentRendering(tx, tenantContext, queue),
+      [TYPES.PostgresTransactionContext, TYPES.TenantContext, TYPES.JobQueue],
+    );
+  container.bind<Documents>(TYPES.Documents).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      documents: IDocumentRepository,
+      events: IDocumentEvents,
+      templates: IDocumentTemplateRepository,
+      renderQueue: IDocumentRenderQueue,
+      organisation: IOrganisationSettings,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      files: FileService,
+      renderer: IPdfRenderer,
+      storage: IObjectStorage,
+      scope: BranchScope,
+      tenantContext: ITenantContext,
+      directory: ITenantDirectory,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new Documents({
+        unitOfWork,
+        documents,
+        events,
+        templates,
+        renderQueue,
+        organisation,
+        numbering,
+        calendar,
+        files,
+        renderer,
+        logo: new BusinessLogo({ storage, logger }),
+        scope,
+        tenantContext,
+        directory,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        settings: { webAppUrl: config.public.webAppUrl },
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DocumentRepository,
+      TYPES.DocumentEvents,
+      TYPES.DocumentTemplateRepository,
+      TYPES.DocumentRenderQueue,
+      TYPES.OrganisationSettings,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.TenantFileService,
+      TYPES.PdfRenderer,
+      TYPES.ObjectStorage,
+      TYPES.BranchScope,
+      TYPES.TenantContext,
+      TYPES.TenantDirectory,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<DocumentTemplates>(TYPES.DocumentTemplates).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      templates: IDocumentTemplateRepository,
+      renderer: IPdfRenderer,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DocumentTemplates({
+        unitOfWork,
+        templates,
+        renderer,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DocumentTemplateRepository,
+      TYPES.PdfRenderer,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<HandoverDocuments>(TYPES.HandoverDocuments).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      assignments: PostgresAssignmentRepository,
+      vehicles: IVehicleRepository,
+      drivers: PostgresDriverRepository,
+      branches: IBranches,
+      documents: Documents,
+      posting: LedgerPosting,
+      scope: BranchScope,
+    ) =>
+      new HandoverDocuments({
+        unitOfWork,
+        assignments,
+        vehicles,
+        drivers,
+        branches,
+        documents,
+        posting,
+        scope,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.AssignmentRepository,
+      TYPES.VehicleRepository,
+      TYPES.DriverRepository,
+      TYPES.Branches,
+      TYPES.Documents,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+    ],
+  );
+  container
+    .bind<IJobHandler[]>(TYPES.DocumentJobHandlers)
+    .toResolvedValue(
+      (documents: Documents): IJobHandler[] => [new RenderDocument(documents)],
+      [TYPES.Documents],
+    );
+
   // --- Driver app, vehicle issues, PDFs ---
   tenantRepository<IDriverAppLinks>(TYPES.DriverAppLinks, (tx) => new PostgresDriverAppLinks(tx));
   tenantRepository<IVehicleIssueRepository>(
@@ -3540,10 +3724,9 @@ export function createContainer(
         payments,
         ledger,
         organisation,
-        storage,
+        logo: new BusinessLogo({ storage, logger }),
         renderer,
         clock,
-        logger,
       }),
     [
       TYPES.UnitOfWork,
@@ -4341,6 +4524,9 @@ export function createContainer(
       driverAppAccess: DriverAppAccess,
       vehicleIssues: VehicleIssues,
       printedDocuments: PrintedDocuments,
+      documents: Documents,
+      documentTemplates: DocumentTemplates,
+      handoverDocuments: HandoverDocuments,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -4417,6 +4603,11 @@ export function createContainer(
           access: driverAppAccess,
           issues: vehicleIssues,
           printed: printedDocuments,
+        }),
+        ...documentRoutes({
+          documents,
+          templates: documentTemplates,
+          handovers: handoverDocuments,
         }),
         ...identityRoutes({
           signIn: tenantSignIn,
@@ -4511,6 +4702,9 @@ export function createContainer(
       TYPES.DriverAppAccess,
       TYPES.VehicleIssues,
       TYPES.PrintedDocuments,
+      TYPES.Documents,
+      TYPES.DocumentTemplates,
+      TYPES.HandoverDocuments,
     ],
   );
 
