@@ -350,6 +350,65 @@ export class VehicleAssignments {
     return assignment;
   }
 
+  /**
+   * Hands a vehicle to the driver of a Work & Pay agreement as it starts (docs/08 §8): a
+   * `workpay` assignment without a remittance target, the handover odometer and checklist, and
+   * the vehicle on work and pay. Called by the agreement, inside its unit of work.
+   */
+  async startForWorkPay(
+    actor: Principal,
+    agreementId: string,
+    vehicleId: string,
+    input: Readonly<{
+      driverId: string;
+      odometer: number;
+      checklist: ChecklistAnswers;
+      notes?: string | null;
+    }>,
+  ): Promise<AssignmentView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const vehicle = await deps.vehicles.reach(actor, vehicleId, "workpay.activate", true);
+      if (vehicle.status !== "available")
+        throw new AssignmentRuleError(
+          `Only an available vehicle can start a work and pay agreement (this one is ${vehicle.status.replaceAll("_", " ")})`,
+        );
+      const settings = await deps.settings.get();
+      const driver = await deps.drivers.reach(actor, input.driverId, "workpay.activate", true);
+      await this.assertDriverCanTake(driver, vehicle, settings);
+      const now = deps.clock.now();
+      const assignment = VehicleAssignment.start({
+        id: deps.ids.next(),
+        vehicleId: vehicle.id,
+        driverId: driver.id,
+        branchId: vehicle.branchId,
+        type: "workpay",
+        terms: { mode: "none", targetMinor: null, frequency: null, daysOff: [] },
+        startedAt: now,
+        startOdometer: input.odometer,
+        checklist: buildChecklist(settings.handoverItems, input.checklist),
+        startedBy: actor.userId,
+        notes: input.notes ?? null,
+        now,
+      });
+      await this.save(assignment);
+      await deps.odometer.recordFor(
+        vehicle,
+        { value: input.odometer, readAt: now },
+        "assignment",
+        assignment.id,
+        actor.userId,
+      );
+      await deps.registry.moveByModule(vehicle, "on_workpay", {
+        ref: { type: "workpay_agreement", id: agreementId },
+        reason: "Work and pay agreement started",
+        userId: actor.userId,
+      });
+      await this.audit(actor, "vehicle_assignment.started", assignment);
+      return this.view(assignment.id);
+    });
+  }
+
   private async assertDriverCanTake(
     driver: Driver,
     vehicle: Vehicle,

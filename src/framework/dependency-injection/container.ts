@@ -1,3 +1,17 @@
+import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
+import type {
+  IWorkPayAgreementRepository,
+  IWorkPaySchedule,
+  IWorkPaySettingsStore,
+} from "../../application/ports/IWorkPayRecords.js";
+import { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
+import { WorkPayDeposits } from "../../application/use-cases/workpay/WorkPayDeposits.js";
+import { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
+import {
+  PostgresWorkPayAgreements,
+  PostgresWorkPaySchedule,
+  PostgresWorkPaySettingsStore,
+} from "../../infrastructure/workpay/PostgresWorkPay.js";
 import { documentRoutes } from "../../adapters/routes/documentRoutes.js";
 import type {
   IDocumentEvents,
@@ -3039,6 +3053,7 @@ export function createContainer(
       remittanceStore: PostgresRemittances,
       calendarForListeners: TenantCalendar,
       postingForListeners: LedgerPosting,
+      workpayAgreements: IWorkPayAgreementRepository,
     ) =>
       new PaymentRecording({
         unitOfWork,
@@ -3070,9 +3085,11 @@ export function createContainer(
             book: () => container.get<Remittances>(TYPES.Remittances),
             clock,
           }),
+          new WorkPayDeposits({ agreements: workpayAgreements, payments, clock }),
         ],
         purposes: [
           new RemittancePaymentPurpose({ remittances: remittanceStore, records: remittanceStore }),
+          new WorkPayDeposits({ agreements: workpayAgreements, payments, clock }),
         ],
       }),
     [
@@ -3098,6 +3115,7 @@ export function createContainer(
       TYPES.RemittanceStore,
       TYPES.TenantCalendar,
       TYPES.LedgerPosting,
+      TYPES.WorkPayAgreementRepository,
     ],
   );
   container.bind<CashSessions>(TYPES.CashSessions).toResolvedValue(
@@ -4051,8 +4069,10 @@ export function createContainer(
       printed: PrintedDocuments,
       posting: LedgerPosting,
       calendar: TenantCalendar,
+      workpay: WorkPayAgreements,
     ) =>
       new DriverApp({
+        workpay,
         unitOfWork,
         links,
         drivers,
@@ -4081,8 +4101,96 @@ export function createContainer(
       TYPES.PrintedDocuments,
       TYPES.LedgerPosting,
       TYPES.TenantCalendar,
+      TYPES.WorkPayAgreements,
     ],
   );
+
+  // --- Work & Pay ---
+  tenantRepository<IWorkPayAgreementRepository>(
+    TYPES.WorkPayAgreementRepository,
+    (tx) => new PostgresWorkPayAgreements(tx),
+  );
+  tenantRepository<IWorkPaySchedule>(
+    TYPES.WorkPaySchedule,
+    (tx) => new PostgresWorkPaySchedule(tx),
+  );
+  tenantRepository<IWorkPaySettingsStore>(
+    TYPES.WorkPaySettingsStore,
+    (tx) => new PostgresWorkPaySettingsStore(tx),
+  );
+  container.bind<WorkPayAgreements>(TYPES.WorkPayAgreements).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      agreements: IWorkPayAgreementRepository,
+      schedule: IWorkPaySchedule,
+      settings: IWorkPaySettingsStore,
+      documents: Documents,
+      documentRecords: IDocumentRepository,
+      payments: PaymentRecording,
+      assignments: VehicleAssignments,
+      vehicles: VehicleAccess,
+      drivers: DriverAdministration,
+      posting: LedgerPosting,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new WorkPayAgreements({
+        unitOfWork,
+        agreements,
+        schedule,
+        settings,
+        documents,
+        documentRecords,
+        payments,
+        assignments,
+        vehicles,
+        drivers,
+        posting,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.WorkPayAgreementRepository,
+      TYPES.WorkPaySchedule,
+      TYPES.WorkPaySettingsStore,
+      TYPES.Documents,
+      TYPES.DocumentRepository,
+      TYPES.PaymentRecording,
+      TYPES.VehicleAssignments,
+      TYPES.VehicleAccess,
+      TYPES.DriverAdministration,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<WorkPaySettingsService>(TYPES.WorkPaySettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        settings: IWorkPaySettingsStore,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new WorkPaySettingsService({ unitOfWork, settings, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.WorkPaySettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
+    );
 
   // --- Notifications ---
   tenantRepository<INotificationSettingsStore>(
@@ -4708,6 +4816,8 @@ export function createContainer(
       handoverDocuments: HandoverDocuments,
       documentSigning: DocumentSigning,
       documentSettings: DocumentSettingsService,
+      workpayAgreements: WorkPayAgreements,
+      workpaySettings: WorkPaySettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -4791,6 +4901,7 @@ export function createContainer(
           handovers: handoverDocuments,
         }),
         ...signingRoutes({ signing: documentSigning, settings: documentSettings }),
+        ...workpayRoutes({ agreements: workpayAgreements, settings: workpaySettings }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -4889,6 +5000,8 @@ export function createContainer(
       TYPES.HandoverDocuments,
       TYPES.DocumentSigning,
       TYPES.DocumentSettingsService,
+      TYPES.WorkPayAgreements,
+      TYPES.WorkPaySettingsService,
     ],
   );
 

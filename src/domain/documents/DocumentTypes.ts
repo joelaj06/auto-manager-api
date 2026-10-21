@@ -1,7 +1,7 @@
 import { listOf, type FieldSchema } from "./TemplateEngine.js";
 import { TRANSFER_LETTER_V1 } from "./templates/transferLetter.js";
 import { VEHICLE_HANDOVER_V1 } from "./templates/vehicleHandover.js";
-import { WORKPAY_AGREEMENT_V1 } from "./templates/workPayAgreement.js";
+import { WORKPAY_AGREEMENT_V2 } from "./templates/workPayAgreement.js";
 
 export const DOCUMENT_TYPES = ["vehicle_handover", "workpay_agreement", "transfer_letter"] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
@@ -137,11 +137,13 @@ export const DOCUMENT_TYPE_CATALOG: Readonly<Record<DocumentType, DocumentTypeDe
           firstDueOn: "date",
           lastDueOn: "date",
           graceDays: "number",
+          maintenance: "text",
+          insurance: "text",
         },
         schedule: listOf({ number: "number", dueOn: "date", amount: "money" }),
         guarantors: listOf({ name: "text", phone: "text", relationship: "text" }),
       },
-      system: { version: 1, body: WORKPAY_AGREEMENT_V1 },
+      system: { version: 2, body: WORKPAY_AGREEMENT_V2 },
       sample: {
         issuer: SAMPLE_ISSUER,
         document: { number: "WPA-2026-000001", issuedOn: "2026-10-21" },
@@ -159,6 +161,8 @@ export const DOCUMENT_TYPE_CATALOG: Readonly<Record<DocumentType, DocumentTypeDe
           firstDueOn: "2026-11-08",
           lastDueOn: "2027-08-08",
           graceDays: 3,
+          maintenance: "the driver",
+          insurance: "the owner",
         },
         schedule: [
           { number: 1, dueOn: "2026-11-08", amount: money(200_000) },

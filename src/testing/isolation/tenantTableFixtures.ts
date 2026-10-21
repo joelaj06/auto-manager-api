@@ -41,6 +41,19 @@ const EXPENSE = `with b as (insert into branches (code, name) values ($2, $1) re
                          amount_minor, net_minor)
                        select 'draft', c.id, $1, b.id, current_date, 100, 100 from b, c returning id)`;
 
+/** A draft work and pay agreement (number = marker) for a driver and vehicle; `$2` = branch code. */
+const WORKPAY = `${DRIVER},
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $1, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 w as (insert into workpay_agreements (number, vehicle_id, driver_id, branch_id,
+                         vehicle_value_minor, pricing_kind, pricing_value, total_price_minor,
+                         markup_minor, deposit_minor, financed_minor, frequency, periods,
+                         instalment_minor, last_instalment_minor, first_due_on, last_due_on,
+                         maintenance, insurance)
+                       select $1, v.id, d.id, b.id, 100, 'total', '200', 200, 100, 0, 200, 'weekly',
+                              2, 100, 100, current_date, current_date + 7, 'driver', 'owner'
+                         from v, d, b returning id)`;
+
 /** An issued document (number = marker; verification code from the marker). */
 const DOCUMENT = `insert into documents (number, type, language, template_version, template_body,
                    subject_type, subject_id, data_snapshot, verification_code, issued_at)
@@ -332,6 +345,32 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
       params: [marker, `SH${letters(marker).toUpperCase().slice(0, 12)}`],
     }),
     find: "select 1 from vehicle_status_history where reason = $1",
+  },
+  workpay_agreements: {
+    insert: (marker) => ({
+      sql: `${WORKPAY} select 1`,
+      params: [marker, `WP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from workpay_agreements where number = $1",
+  },
+  workpay_guarantors: {
+    insert: (marker) => ({
+      sql: `${WORKPAY}
+            insert into workpay_guarantors (agreement_id, position, name, phone)
+            select w.id, 1, $1, '+233200000001' from w`,
+      params: [marker, `WG${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from workpay_guarantors where name = $1",
+  },
+  workpay_instalments: {
+    insert: (marker) => ({
+      sql: `${WORKPAY}
+            insert into workpay_instalments (agreement_id, number, due_on, amount_minor)
+            select w.id, 1, current_date, 100 from w`,
+      params: [marker, `WI${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from workpay_instalments i join workpay_agreements a on a.id = i.agreement_id
+            where a.number = $1`,
   },
   document_templates: {
     insert: (marker) => ({

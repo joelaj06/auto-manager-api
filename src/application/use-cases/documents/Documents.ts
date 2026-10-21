@@ -421,6 +421,21 @@ export class Documents {
     });
   }
 
+  /**
+   * For modules: voids a document they issued (an agreement withdrawn or cancelled), inside their
+   * unit of work and under their own permission.
+   */
+  async voidFor(userId: string, id: string, reason: string): Promise<void> {
+    const { deps } = this;
+    await deps.unitOfWork.run(async () => {
+      const document = await deps.documents.lockById(id);
+      if (document === null || document.snapshot().status === "void") return;
+      document.void(userId, reason, deps.clock.now());
+      await deps.documents.save(document);
+      await this.event(id, "voided", userId, { reason });
+    });
+  }
+
   /** Public check of a document by its code (docs/24 §6): never its content. */
   async verify(code: string, sha256: string | null): Promise<VerificationResult> {
     const { deps } = this;

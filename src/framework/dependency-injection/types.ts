@@ -262,6 +262,13 @@ export const TYPES = Object.freeze({
   OperationsBoard: Symbol.for("OperationsBoard"),
   RemittanceSettingsService: Symbol.for("RemittanceSettingsService"),
 
+  // Work & Pay (P3-3)
+  WorkPayAgreementRepository: Symbol.for("IWorkPayAgreementRepository"),
+  WorkPaySchedule: Symbol.for("IWorkPaySchedule"),
+  WorkPaySettingsStore: Symbol.for("IWorkPaySettingsStore"),
+  WorkPayAgreements: Symbol.for("WorkPayAgreements"),
+  WorkPaySettingsService: Symbol.for("WorkPaySettingsService"),
+
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),
   DocumentRepository: Symbol.for("IDocumentRepository"),

@@ -1,5 +1,5 @@
-/** System template: work & pay (hire purchase) agreement (version 1). */
-export const WORKPAY_AGREEMENT_V1 = `<h1 class="center">Work and pay agreement</h1>
+/** System template: work & pay (hire purchase) agreement (version 2: guarantors sign). */
+export const WORKPAY_AGREEMENT_V2 = `<h1 class="center">Work and pay agreement</h1>
 <p class="center small">{{document.number}} · {{date document.issuedOn}}</p>
 
 <p>This agreement is made between <strong>{{issuer.name}}</strong>{{#if issuer.tin}} (TIN {{issuer.tin}}){{/if}}, the owner, and <strong>{{driver.name}}</strong>{{#if driver.ghanaCardNumber}} (Ghana Card {{driver.ghanaCardNumber}}){{/if}}, the driver, for the vehicle below.</p>
@@ -36,6 +36,7 @@ export const WORKPAY_AGREEMENT_V1 = `<h1 class="center">Work and pay agreement</
 
 <section data-clause="maintenance_and_insurance" data-title="Maintenance and insurance">
 <p>The driver keeps the vehicle in good repair, services it on time and reports any accident or damage at once. Insurance, road worthiness and registration are kept valid as agreed between the parties.</p>
+<p>Maintenance and repairs are paid by: <strong>{{agreement.maintenance}}</strong>. Insurance is paid by: <strong>{{agreement.insurance}}</strong>.</p>
 </section>
 
 {{#if guarantors}}
@@ -62,5 +63,7 @@ export const WORKPAY_AGREEMENT_V1 = `<h1 class="center">Work and pay agreement</
 <signature-block>
   <signer role="owner" label="Owner" name="{{issuer.name}}"></signer>
   <signer role="driver" label="Driver" name="{{driver.name}}"></signer>
+  {{#each guarantors}}<signer role="guarantor_{{@number}}" label="Guarantor" name="{{name}}"></signer>
+  {{/each}}
 </signature-block>
 `;

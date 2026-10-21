@@ -14,6 +14,7 @@ export const DEFAULT_NUMBERING: Readonly<Record<string, NumberingFormat>> = Obje
   journal: { prefix: "JRN", padding: 6, yearly: true },
   vehicle_issue: { prefix: "ISS", padding: 6, yearly: true },
   handover_document: { prefix: "HND", padding: 6, yearly: true },
+  workpay_agreement: { prefix: "WP", padding: 6, yearly: true },
   workpay_document: { prefix: "WPA", padding: 6, yearly: true },
   transfer_document: { prefix: "TRL", padding: 6, yearly: true },
   vehicle: { prefix: "VEH", padding: 5, yearly: false },

@@ -17,6 +17,7 @@ import type { LedgerPosting } from "../finance/LedgerPosting.js";
 import type { DocumentUploadInput } from "../files/OwnedDocuments.js";
 import type { DriverLedger, DriverStatement } from "../remittances/DriverLedger.js";
 import type { Declaration, RemittanceView, Remittances } from "../remittances/Remittances.js";
+import type { WorkPayAgreements } from "../workpay/WorkPayAgreements.js";
 import type { VehicleDocuments } from "../vehicles/VehicleDocuments.js";
 import type { IssueQuery, VehicleIssues, VehicleIssueView } from "../vehicles/VehicleIssues.js";
 import { RemittanceRuleError } from "../../../domain/remittances/Remittance.js";
@@ -96,6 +97,7 @@ export class DriverApp {
       fuel: FuelLogs;
       issues: VehicleIssues;
       printed: PrintedDocuments;
+      workpay: WorkPayAgreements;
       posting: LedgerPosting;
       calendar: TenantCalendar;
     }>,
@@ -224,6 +226,12 @@ export class DriverApp {
         vehicleId: assignment.vehicleId,
       });
     });
+  }
+
+  /** My work and pay agreements with their schedules. */
+  async workpay(actor: Principal) {
+    const driver = await this.deps.unitOfWork.run(() => this.me(actor));
+    return this.deps.workpay.ofDriver(driver.id);
   }
 
   // --- fuel and issues ---

@@ -266,6 +266,17 @@ export function driverAppRoutes(deps: DriverAppRouteDependencies): ApiRoute[] {
     }),
     defineRoute({
       method: "get",
+      path: "/api/v1/me/driver/workpay",
+      summary: "My work and pay agreements with their schedules",
+      tags: ["driver-app"],
+      access: DRIVER,
+      responses: { 200: { description: "Agreements" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await app.workpay(principalOf(res))));
+      },
+    }),
+    defineRoute({
+      method: "get",
       path: "/api/v1/me/driver/vehicle",
       summary: "The vehicle I drive, with its documents' compliance",
       tags: ["driver-app"],

@@ -262,6 +262,28 @@ const definitions = {
     description: "See the log of SMS, push and email notifications sent",
     scopes: ALL,
   },
+  // --- work & pay (docs/08) ---
+  "workpay.view": {
+    description: "See work and pay agreements, their schedules and guarantors",
+    scopes: BRANCH_OR_ALL,
+  },
+  "workpay.create": {
+    description: "Draft work and pay agreements and send them for signature",
+    scopes: BRANCH_OR_ALL,
+  },
+  "workpay.activate": {
+    description: "Start signed agreements (hand the vehicle over) and cancel unstarted ones",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "workpay.payment.record": {
+    description: "Record work and pay deposits and instalments",
+    scopes: BRANCH_OR_ALL,
+  },
+  "workpay.settings.manage": {
+    description: "Change work and pay defaults (frequency, grace, rounding, deposit rule)",
+    scopes: ALL,
+  },
   // --- documents (docs/24) ---
   "documents.list": { description: "List issued documents", scopes: BRANCH_OR_ALL },
   "documents.view": {

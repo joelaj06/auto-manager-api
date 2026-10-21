@@ -137,6 +137,10 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "documents.issue",
       "documents.attach_paper",
       "documents.templates.view",
+      "workpay.view",
+      "workpay.create",
+      "workpay.activate",
+      "workpay.payment.record",
     ]),
   },
   {
@@ -188,6 +192,8 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "remittances.list",
       "remittances.view",
       "remittances.record",
+      "workpay.view",
+      "workpay.payment.record",
     ]),
   },
   {
@@ -205,6 +211,8 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "drivers.ledger.view",
       "drivers.ledger.adjust",
       "operations.board.view",
+      "workpay.view",
+      "workpay.payment.record",
       ...KEYS.filter((key) => key.startsWith("dashboards.")),
       "documents.list",
       "documents.view",

@@ -321,6 +321,15 @@ and `X-Tenant`. Staff hand out new links (`/documents/:id/signers/:signerId/link
 remind (`/documents/:id/remind`) and record paper signatures by their scan. The signed copy with
 its signature record page downloads with `/documents/:id/download?copy=signed`.
 
+## Work & Pay
+
+`POST /api/v1/workpay/simulate` tries terms (price by multiplier, markup or total; deposit;
+instalments daily, weekly or monthly; the remainder on the last instalment). Agreements are
+drafted at `/api/v1/workpay/agreements`, sent for signature (`/:id/send-for-signature`: the
+agreement document for the owner, driver and guarantors), paid a deposit (`/:id/deposit`) and
+started once signed (`/:id/activate`: the schedule begins and the vehicle is handed over).
+Drivers see their agreement at `/api/v1/me/driver/workpay`.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

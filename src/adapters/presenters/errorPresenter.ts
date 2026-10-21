@@ -213,6 +213,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   VEHICLE_ISSUE_NOT_FOUND: { status: 404 },
   VEHICLE_ISSUE_RULE: { status: 422 },
 
+  // Work & Pay
+  WORKPAY_AGREEMENT_NOT_FOUND: { status: 404 },
+  WORKPAY_RULE: { status: 422 },
+
   // Documents
   DOCUMENT_NOT_FOUND: { status: 404 },
   DOCUMENT_TEMPLATE_NOT_FOUND: { status: 404 },
