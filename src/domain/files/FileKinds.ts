@@ -42,6 +42,20 @@ export const FILE_KINDS = Object.freeze({
     maxBytes: 20 * MB,
     description: "PDF of an issued document (immutable once stored)",
   },
+  signature_image: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: ["image/png"],
+    maxBytes: 512 * 1024,
+    description: "A drawn signature (immutable once it signs a document)",
+  },
+  signed_paper_scan: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: DOCUMENTS,
+    maxBytes: 20 * MB,
+    description: "Scan of a document signed on paper (immutable once attached)",
+  },
   vehicle_issue_photo: {
     scope: "tenant",
     visibility: "private",

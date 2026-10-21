@@ -272,6 +272,10 @@ const definitions = {
     description: "Issue documents (handover notes, agreements …)",
     scopes: BRANCH_OR_ALL,
   },
+  "documents.attach_paper": {
+    description: "Record signatures made on paper by attaching the signed scan",
+    scopes: BRANCH_OR_ALL,
+  },
   "documents.void": {
     description: "Void issued documents",
     scopes: BRANCH_OR_ALL,

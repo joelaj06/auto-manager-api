@@ -3,13 +3,30 @@ import type {
   IDocumentEvents,
   IDocumentRenderQueue,
   IDocumentRepository,
+  IDocumentSettingsStore,
+  IDocumentSigners,
+  IDocumentSigningLinks,
   IDocumentTemplateRepository,
+  ISignerParties,
 } from "../../application/ports/IDocumentRecords.js";
 import { HandoverDocuments } from "../../application/use-cases/assignments/HandoverDocuments.js";
 import {
   PendingDocumentRenders,
   RenderDocument,
+  SealDocument,
+  SigningMaintenance,
 } from "../../application/use-cases/documents/DocumentJobs.js";
+import { signingRoutes } from "../../adapters/routes/signingRoutes.js";
+import { DocumentPdfComposer } from "../../application/use-cases/documents/DocumentPdfComposer.js";
+import { DocumentSettingsService } from "../../application/use-cases/documents/DocumentSettingsService.js";
+import { DocumentSigning } from "../../application/use-cases/documents/DocumentSigning.js";
+import { SignatureRequests } from "../../application/use-cases/documents/SignatureRequests.js";
+import {
+  PostgresDocumentSettingsStore,
+  PostgresDocumentSigners,
+  PostgresDocumentSigningLinks,
+  PostgresSignerParties,
+} from "../../infrastructure/documents/PostgresSignatures.js";
 import { Documents } from "../../application/use-cases/documents/Documents.js";
 import { DocumentTemplates } from "../../application/use-cases/documents/DocumentTemplates.js";
 import {
@@ -3373,14 +3390,22 @@ export function createContainer(
       remittances: RemittanceScheduler,
       stats: VehicleStatsBuilder,
       documents: Documents,
+      signing: DocumentSigning,
     ) =>
       // Stats after the money tasks: they read what those posted.
-      [recurring, remittances, stats, new PendingDocumentRenders(documents)],
+      [
+        recurring,
+        remittances,
+        stats,
+        new PendingDocumentRenders(documents),
+        new SigningMaintenance(signing),
+      ],
     [
       TYPES.RecurringExpenses,
       TYPES.RemittanceScheduler,
       TYPES.VehicleStatsBuilder,
       TYPES.Documents,
+      TYPES.DocumentSigning,
     ],
   );
 
@@ -3568,6 +3593,63 @@ export function createContainer(
         new QueuedDocumentRendering(tx, tenantContext, queue),
       [TYPES.PostgresTransactionContext, TYPES.TenantContext, TYPES.JobQueue],
     );
+  tenantRepository<IDocumentSigners>(
+    TYPES.DocumentSigners,
+    (tx) => new PostgresDocumentSigners(tx),
+  );
+  tenantRepository<IDocumentSigningLinks>(
+    TYPES.DocumentSigningLinks,
+    (tx) => new PostgresDocumentSigningLinks(tx),
+  );
+  tenantRepository<ISignerParties>(TYPES.SignerParties, (tx) => new PostgresSignerParties(tx));
+  tenantRepository<IDocumentSettingsStore>(
+    TYPES.DocumentSettingsStore,
+    (tx) => new PostgresDocumentSettingsStore(tx),
+  );
+  container.bind<DocumentPdfComposer>(TYPES.DocumentPdfComposer).toResolvedValue(
+    (
+      organisation: IOrganisationSettings,
+      renderer: IPdfRenderer,
+      storage: IObjectStorage,
+      logger: ILogger,
+    ) =>
+      new DocumentPdfComposer({
+        organisation,
+        renderer,
+        logo: new BusinessLogo({ storage, logger }),
+      }),
+    [TYPES.OrganisationSettings, TYPES.PdfRenderer, TYPES.ObjectStorage, TYPES.Logger],
+  );
+  container.bind<SignatureRequests>(TYPES.SignatureRequests).toResolvedValue(
+    (
+      links: IDocumentSigningLinks,
+      driverLinks: IDriverAppLinks,
+      notifier: Notifier,
+      notificationSettings: INotificationSettingsStore,
+      documentSettings: IDocumentSettingsStore,
+      organisation: IOrganisationSettings,
+      clock: IClock,
+    ) =>
+      new SignatureRequests({
+        links,
+        driverLinks,
+        notifier,
+        notificationSettings,
+        documentSettings,
+        organisation,
+        clock,
+        settings: { webAppUrl: config.public.webAppUrl },
+      }),
+    [
+      TYPES.DocumentSigningLinks,
+      TYPES.DriverAppLinks,
+      TYPES.Notifier,
+      TYPES.NotificationSettingsStore,
+      TYPES.DocumentSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.Clock,
+    ],
+  );
   container.bind<Documents>(TYPES.Documents).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -3579,8 +3661,11 @@ export function createContainer(
       numbering: DocumentNumbering,
       calendar: TenantCalendar,
       files: FileService,
-      renderer: IPdfRenderer,
-      storage: IObjectStorage,
+      composer: DocumentPdfComposer,
+      signers: IDocumentSigners,
+      parties: ISignerParties,
+      documentSettings: IDocumentSettingsStore,
+      requests: SignatureRequests,
       scope: BranchScope,
       tenantContext: ITenantContext,
       directory: ITenantDirectory,
@@ -3588,7 +3673,6 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
-      logger: ILogger,
     ) =>
       new Documents({
         unitOfWork,
@@ -3600,8 +3684,11 @@ export function createContainer(
         numbering,
         calendar,
         files,
-        renderer,
-        logo: new BusinessLogo({ storage, logger }),
+        composer,
+        signers,
+        parties,
+        documentSettings,
+        requests,
         scope,
         tenantContext,
         directory,
@@ -3621,8 +3708,11 @@ export function createContainer(
       TYPES.DocumentNumbering,
       TYPES.TenantCalendar,
       TYPES.TenantFileService,
-      TYPES.PdfRenderer,
-      TYPES.ObjectStorage,
+      TYPES.DocumentPdfComposer,
+      TYPES.DocumentSigners,
+      TYPES.SignerParties,
+      TYPES.DocumentSettingsStore,
+      TYPES.SignatureRequests,
       TYPES.BranchScope,
       TYPES.TenantContext,
       TYPES.TenantDirectory,
@@ -3630,9 +3720,95 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
-      TYPES.Logger,
     ],
   );
+  container.bind<DocumentSigning>(TYPES.DocumentSigning).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      documents: IDocumentRepository,
+      issued: Documents,
+      signers: IDocumentSigners,
+      links: IDocumentSigningLinks,
+      events: IDocumentEvents,
+      settings: IDocumentSettingsStore,
+      requests: SignatureRequests,
+      composer: DocumentPdfComposer,
+      files: FileService,
+      driverLinks: IDriverAppLinks,
+      issueOtp: IssueOtpChallenge,
+      verifyOtp: VerifyOtpChallenge,
+      deliveries: INotificationDeliveries,
+      notificationSettings: INotificationSettingsStore,
+      emails: NotificationService,
+      organisation: IOrganisationSettings,
+      scope: BranchScope,
+      tenantContext: ITenantContext,
+      requestContext: IRequestContext,
+      clock: IClock,
+      sealQueue: IDocumentRenderQueue,
+    ) =>
+      new DocumentSigning({
+        unitOfWork,
+        documents,
+        issued,
+        signers,
+        links,
+        events,
+        settings,
+        requests,
+        composer,
+        files,
+        scans: new OwnedDocuments(files, "signed_paper_scan", "document", 20),
+        driverLinks,
+        issueOtp,
+        verifyOtp,
+        deliveries,
+        notificationSettings,
+        emails,
+        organisation,
+        qr: new QrcodeSvgRenderer(),
+        scope,
+        tenantContext,
+        requestContext,
+        clock,
+        sealQueue,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DocumentRepository,
+      TYPES.Documents,
+      TYPES.DocumentSigners,
+      TYPES.DocumentSigningLinks,
+      TYPES.DocumentEvents,
+      TYPES.DocumentSettingsStore,
+      TYPES.SignatureRequests,
+      TYPES.DocumentPdfComposer,
+      TYPES.TenantFileService,
+      TYPES.DriverAppLinks,
+      TYPES.IssueOtpChallenge,
+      TYPES.VerifyOtpChallenge,
+      TYPES.NotificationDeliveries,
+      TYPES.NotificationSettingsStore,
+      TYPES.NotificationService,
+      TYPES.OrganisationSettings,
+      TYPES.BranchScope,
+      TYPES.TenantContext,
+      TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.DocumentRenderQueue,
+    ],
+  );
+  container
+    .bind<DocumentSettingsService>(TYPES.DocumentSettingsService)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        settings: IDocumentSettingsStore,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+      ) => new DocumentSettingsService({ unitOfWork, settings, auditTrail, requestContext }),
+      [TYPES.UnitOfWork, TYPES.DocumentSettingsStore, TYPES.AuditTrail, TYPES.RequestContext],
+    );
   container.bind<DocumentTemplates>(TYPES.DocumentTemplates).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -3697,8 +3873,11 @@ export function createContainer(
   container
     .bind<IJobHandler[]>(TYPES.DocumentJobHandlers)
     .toResolvedValue(
-      (documents: Documents): IJobHandler[] => [new RenderDocument(documents)],
-      [TYPES.Documents],
+      (documents: Documents, signing: DocumentSigning): IJobHandler[] => [
+        new RenderDocument(documents),
+        new SealDocument(signing),
+      ],
+      [TYPES.Documents, TYPES.DocumentSigning],
     );
 
   // --- Driver app, vehicle issues, PDFs ---
@@ -4527,6 +4706,8 @@ export function createContainer(
       documents: Documents,
       documentTemplates: DocumentTemplates,
       handoverDocuments: HandoverDocuments,
+      documentSigning: DocumentSigning,
+      documentSettings: DocumentSettingsService,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -4609,6 +4790,7 @@ export function createContainer(
           templates: documentTemplates,
           handovers: handoverDocuments,
         }),
+        ...signingRoutes({ signing: documentSigning, settings: documentSettings }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -4705,6 +4887,8 @@ export function createContainer(
       TYPES.Documents,
       TYPES.DocumentTemplates,
       TYPES.HandoverDocuments,
+      TYPES.DocumentSigning,
+      TYPES.DocumentSettingsService,
     ],
   );
 

@@ -1,6 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { DocumentMarkup } from "../../../domain/documents/DocumentMarkup.js";
 import {
+  DocumentSigner,
+  type DocumentSignerProps,
+} from "../../../domain/documents/DocumentSigner.js";
+import {
   DOCUMENT_TYPE_CATALOG,
   type DocumentType,
   type Language,
@@ -11,6 +15,7 @@ import {
   normaliseVerificationCode,
   verificationCode,
   DocumentRuleError,
+  type DocumentStatus,
   type IssuedDocumentProps,
 } from "../../../domain/documents/IssuedDocument.js";
 import { Template } from "../../../domain/documents/TemplateEngine.js";
@@ -25,23 +30,25 @@ import type {
   IDocumentEvents,
   IDocumentRenderQueue,
   IDocumentRepository,
+  IDocumentSettingsStore,
+  IDocumentSigners,
   IDocumentTemplateRepository,
+  ISignerParties,
 } from "../../ports/IDocumentRecords.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
-import type { IPdfRenderer } from "../../ports/IPdfRenderer.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { ITenantContext } from "../../ports/ITenantContext.js";
 import type { ITenantDirectory } from "../../ports/ITenantDirectory.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import type { BusinessLogo } from "../../services/BusinessLogo.js";
 import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { FileService, FileView } from "../files/FileService.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
-import { toPdfBlocks } from "./documentPdf.js";
+import type { DocumentPdfComposer } from "./DocumentPdfComposer.js";
+import type { SignatureRequests } from "./SignatureRequests.js";
 
 export type IssueRequest = Readonly<{
   type: DocumentType;
@@ -52,7 +59,59 @@ export type IssueRequest = Readonly<{
   language?: Language;
   /** A correction: the document it replaces (voided). */
   replacesId?: string | null;
+  /**
+   * Who signs it in the system, by their place in the template's signature block. Without
+   * signers the document is printed and signed by hand.
+   */
+  signers?: readonly SignerRequest[];
 }>;
+
+export type SignerRequest = Readonly<{
+  role: string;
+  party:
+    | Readonly<{ type: "user" | "driver"; id: string }>
+    | Readonly<{ type: "guest"; name: string; phone?: string | null; email?: string | null }>;
+  /** Default: required, except a witness. */
+  required?: boolean;
+}>;
+
+/** A signer as staff see them (never the evidence's raw IP, device or codes). */
+export type SignerView = Pick<
+  DocumentSignerProps,
+  | "id"
+  | "position"
+  | "role"
+  | "label"
+  | "partyType"
+  | "partyId"
+  | "name"
+  | "required"
+  | "status"
+  | "method"
+  | "signedAt"
+  | "declinedAt"
+  | "declineReason"
+  | "reminders"
+> &
+  Readonly<{ codeConfirmed: boolean }>;
+
+export const signerView = (s: DocumentSignerProps): SignerView => ({
+  id: s.id,
+  position: s.position,
+  role: s.role,
+  label: s.label,
+  partyType: s.partyType,
+  partyId: s.partyId,
+  name: s.name,
+  required: s.required,
+  status: s.status,
+  method: s.method,
+  signedAt: s.signedAt,
+  declinedAt: s.declinedAt,
+  declineReason: s.declineReason,
+  reminders: s.reminders,
+  codeConfirmed: s.otpVerifiedAt !== null,
+});
 
 export type DocumentView = Omit<IssuedDocumentProps, "templateBody" | "data"> &
   Readonly<{
@@ -61,6 +120,7 @@ export type DocumentView = Omit<IssuedDocumentProps, "templateBody" | "data"> &
     code: string;
     verifyUrl: string;
     data?: Readonly<Record<string, unknown>>;
+    signers?: readonly SignerView[];
     events?: readonly DocumentEvent[];
   }>;
 
@@ -74,10 +134,19 @@ export type VerificationResult =
       issuedOn: string;
       issuer: string;
       parties: readonly string[];
-      status: "issued" | "void";
+      status: DocumentStatus;
       voidedAt: Date | null;
+      signatures: readonly Readonly<{
+        name: string;
+        label: string;
+        status: "pending" | "signed" | "declined";
+        signedAt: Date | null;
+      }>[];
+      fullySignedAt: Date | null;
+      /** The document as issued (what was signed) and the signed copy. */
       pdfSha256: string | null;
-      /** Whether a hash the checker computed matches the issued PDF (null: none given). */
+      signedPdfSha256: string | null;
+      /** Whether a copy's hash matches the issued or the signed PDF (null: none given). */
       hashMatches: boolean | null;
     }>;
 
@@ -100,8 +169,11 @@ export class Documents {
       numbering: DocumentNumbering;
       calendar: TenantCalendar;
       files: FileService;
-      renderer: IPdfRenderer;
-      logo: BusinessLogo;
+      composer: DocumentPdfComposer;
+      signers: IDocumentSigners;
+      parties: ISignerParties;
+      documentSettings: IDocumentSettingsStore;
+      requests: SignatureRequests;
       scope: BranchScope;
       tenantContext: ITenantContext;
       directory: ITenantDirectory;
@@ -136,7 +208,17 @@ export class Documents {
       };
       const body = template?.snapshot().body ?? def.system.body;
       // Fail now, not in the background, if the data does not fit the template.
-      DocumentMarkup.parse(Template.compile(body).render(data)).layout();
+      const layout = DocumentMarkup.parse(Template.compile(body).render(data)).layout();
+      const places = layout.flatMap((b) => (b.kind === "signatures" ? b.signers : []));
+      const asked = request.signers ?? [];
+      for (const signer of asked)
+        if (!places.some((p) => p.role === signer.role))
+          throw new DocumentRuleError(
+            `The template has no "${signer.role}" signature (it has ${places.map((p) => p.role).join(", ") || "none"})`,
+          );
+      if (new Set(asked.map((a) => a.role)).size !== asked.length)
+        throw new DocumentRuleError("Each signature place has one signer");
+      const { signingDays } = await deps.documentSettings.get();
 
       if (request.replacesId !== undefined && request.replacesId !== null) {
         const old = await deps.documents.lockById(request.replacesId);
@@ -165,9 +247,43 @@ export class Documents {
         verificationCode: verificationCode(randomBytes(8)),
         issuedBy: userId,
         replacesId: request.replacesId ?? null,
+        signingExpiresAt:
+          asked.length === 0 ? null : new Date(now.getTime() + signingDays * 86_400_000),
         now,
       });
       await deps.documents.save(document);
+      const signers: DocumentSigner[] = [];
+      for (const signer of asked) {
+        const place = places.findIndex((p) => p.role === signer.role);
+        const contact =
+          signer.party.type === "guest"
+            ? {
+                name: signer.party.name.trim(),
+                phone: signer.party.phone ?? null,
+                email: signer.party.email ?? null,
+              }
+            : signer.party.type === "user"
+              ? await deps.parties.user(signer.party.id)
+              : await deps.parties.driver(signer.party.id);
+        if (contact === null)
+          throw new DocumentRuleError(`The ${places[place]!.label} to sign was not found`);
+        const added = DocumentSigner.add({
+          id: deps.ids.next(),
+          documentId: document.id,
+          position: place + 1,
+          role: signer.role,
+          label: places[place]!.label,
+          partyType: signer.party.type,
+          partyId: signer.party.type === "guest" ? null : signer.party.id,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+          required: signer.required ?? signer.role !== "witness",
+          now,
+        });
+        await deps.signers.save(added);
+        signers.push(added);
+      }
       await this.event(document.id, "issued", userId, {
         template: document.snapshot().templateVersion,
       });
@@ -178,8 +294,15 @@ export class Documents {
           entityId: document.id,
           after: { number, type: request.type, subject: request.subject },
         });
+      for (const signer of signers)
+        await this.event(document.id, "signature_requested", userId, {}, signer.id);
+      if (signers.length > 0)
+        await deps.requests.request(document.snapshot(), signers, await this.slug(), userId);
       deps.renderQueue.request(document.id);
-      return this.view(document, false);
+      return {
+        ...(await this.view(document, false)),
+        signers: signers.map((x) => signerView(x.snapshot())),
+      };
     });
   }
 
@@ -193,7 +316,11 @@ export class Documents {
       const document = await deps.documents.lockById(documentId);
       if (document === null || document.isRendered) return;
       const d = document.snapshot();
-      const content = await this.pdf(d);
+      const content = await deps.composer.compose(
+        d,
+        this.verifyUrl(await this.slug(), d.verificationCode),
+        null,
+      );
       const file = await deps.files.storeGenerated({
         kind: "issued_document",
         filename: `${d.number}.pdf`,
@@ -249,19 +376,31 @@ export class Documents {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const document = await this.reach(actor, id, "documents.view");
-      return { ...(await this.view(document, true)), events: await deps.events.list(id) };
+      return {
+        ...(await this.view(document, true)),
+        signers: (await deps.signers.listFor(id)).map((x) => signerView(x.snapshot())),
+        events: await deps.events.list(id),
+      };
     });
   }
 
   /** A short-lived link to the PDF (rendered now if the background job has not run yet). */
-  async download(actor: Principal, id: string): Promise<FileView & Readonly<{ sha256: string }>> {
+  async download(
+    actor: Principal,
+    id: string,
+    copy: "issued" | "signed" = "issued",
+  ): Promise<FileView & Readonly<{ sha256: string }>> {
     const { deps } = this;
     await deps.unitOfWork.run(() => this.reach(actor, id, "documents.view"));
     await this.render(id);
     return deps.unitOfWork.run(async () => {
       const d = (await deps.documents.findById(id))!.snapshot();
-      await this.event(id, "downloaded", actor.userId, {});
-      return { ...(await deps.files.get(d.pdfFileId!)), sha256: d.pdfSha256! };
+      if (copy === "signed" && d.signedPdfFileId === null)
+        throw new DocumentRuleError("There is no signed copy yet");
+      await this.event(id, "downloaded", actor.userId, { copy });
+      return copy === "signed"
+        ? { ...(await deps.files.get(d.signedPdfFileId!)), sha256: d.signedPdfSha256! }
+        : { ...(await deps.files.get(d.pdfFileId!)), sha256: d.pdfSha256! };
     });
   }
 
@@ -298,8 +437,10 @@ export class Documents {
         customer?: { name?: string };
       };
       const hash = sha256?.trim().toLowerCase() ?? null;
+      const signers = await deps.signers.listFor(d.id);
       await deps.events.add({
         documentId: d.id,
+        signerId: null,
         type: "verified",
         actorType: "public",
         actorId: null,
@@ -319,44 +460,18 @@ export class Documents {
         ),
         status: d.status,
         voidedAt: d.voidedAt,
+        signatures: signers.map((x) => {
+          const v = x.snapshot();
+          return { name: v.name, label: v.label, status: v.status, signedAt: v.signedAt };
+        }),
+        fullySignedAt: d.fullySignedAt,
         pdfSha256: d.pdfSha256,
-        hashMatches: hash === null || d.pdfSha256 === null ? null : hash === d.pdfSha256,
+        signedPdfSha256: d.signedPdfSha256,
+        hashMatches:
+          hash === null || d.pdfSha256 === null
+            ? null
+            : hash === d.pdfSha256 || hash === d.signedPdfSha256,
       };
-    });
-  }
-
-  private async pdf(d: IssuedDocumentProps): Promise<Buffer> {
-    const { deps } = this;
-    const html = Template.compile(d.templateBody).render(d.data);
-    const issuer = (d.data.issuer ?? {}) as {
-      name?: string;
-      tin?: string | null;
-      phone?: string | null;
-      email?: string | null;
-      address?: string | null;
-    };
-    const organisation = await deps.organisation.get();
-    const url = this.verifyUrl(await this.slug(), d.verificationCode);
-    const code = groupCode(d.verificationCode);
-    return deps.renderer.render({
-      title: "",
-      reference: d.number,
-      issuer: {
-        name: issuer.name ?? organisation.name,
-        lines: [
-          ...(issuer.tin ? [`TIN ${issuer.tin}`] : []),
-          ...(issuer.phone ? [issuer.phone] : []),
-          ...(issuer.email ? [issuer.email] : []),
-          ...(issuer.address ? [issuer.address] : []),
-        ],
-        logo: await deps.logo.bytes(organisation.logoStorageKey),
-      },
-      blocks: [
-        ...toPdfBlocks(DocumentMarkup.parse(html).layout()),
-        { type: "verification", url, code },
-      ],
-      footer: `${d.number} · verification code ${code}`,
-      createdAt: d.issuedAt,
     });
   }
 
@@ -365,9 +480,11 @@ export class Documents {
     type: DocumentEvent["type"],
     userId: string | null,
     metadata: Readonly<Record<string, unknown>>,
+    signerId: string | null = null,
   ): Promise<void> {
     await this.deps.events.add({
       documentId,
+      signerId,
       type,
       actorType: userId === null ? "system" : "user",
       actorId: userId,
@@ -412,11 +529,11 @@ export class Documents {
     };
   }
 
-  private verifyUrl(slug: string, code: string): string {
+  verifyUrl(slug: string, code: string): string {
     return `${this.deps.settings.webAppUrl.replace(/\/$/, "")}/${slug}/verify/${groupCode(code)}`;
   }
 
-  private async slug(): Promise<string> {
+  async slug(): Promise<string> {
     const tenantId = this.deps.tenantContext.currentTenantId().value;
     return (await this.deps.directory.findById(tenantId))?.slug ?? tenantId;
   }

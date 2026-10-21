@@ -18,7 +18,19 @@ export type PdfBlock =
   | Readonly<{ type: "rule" }>
   | Readonly<{ type: "pageBreak" }>
   /** Lines to sign on, with the signer's role and name under each. */
-  | Readonly<{ type: "signatures"; signers: readonly Readonly<{ label: string; name: string }>[] }>
+  | Readonly<{
+      type: "signatures";
+      signers: readonly Readonly<{
+        label: string;
+        name: string;
+        /** PNG of a drawn signature, placed on the line. */
+        image?: Uint8Array | null;
+        /** Written on the line instead of an image (a typed signature). */
+        typed?: string | null;
+        /** Under the name: how and when it was signed. */
+        note?: string | null;
+      }>[];
+    }>
   /** A QR code of `url` with the verification code beside it. */
   | Readonly<{ type: "verification"; url: string; code: string }>
   | Readonly<{ type: "paragraph"; text: string; muted?: boolean }>

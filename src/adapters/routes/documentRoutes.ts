@@ -155,14 +155,19 @@ export function documentRoutes(deps: DocumentRouteDependencies): ApiRoute[] {
       summary: "Issue the handover document of an assignment (or a correction of it)",
       tags: ["documents"],
       access: access.permission("documents.issue"),
-      request: { params: idParams, body: z.object({ replacesId: uuid.nullable().optional() }) },
+      request: {
+        params: idParams,
+        body: z.object({
+          replacesId: uuid.nullable().optional(),
+          /** False: printed and signed by hand. */
+          signInSystem: z.boolean().optional(),
+          /** Who signs for the business (default: you). */
+          businessSignerId: uuid.nullable().optional(),
+        }),
+      },
       responses: { 201: { description: "Document (its PDF follows shortly)" } },
       handler: async ({ params, body: input }, _req, res) => {
-        res
-          .status(201)
-          .json(
-            envelope(await handovers.issue(principalOf(res), params.id, input.replacesId ?? null)),
-          );
+        res.status(201).json(envelope(await handovers.issue(principalOf(res), params.id, input)));
       },
     }),
     defineRoute({
@@ -209,13 +214,16 @@ export function documentRoutes(deps: DocumentRouteDependencies): ApiRoute[] {
     defineRoute({
       method: "get",
       path: "/api/v1/documents/:id/download",
-      summary: "A short-lived link to the document's PDF, with its SHA-256",
+      summary: "A short-lived link to the document's PDF (or its signed copy), with its SHA-256",
       tags: ["documents"],
       access: access.permission("documents.view"),
-      request: { params: idParams },
+      request: {
+        params: idParams,
+        query: z.object({ copy: z.enum(["issued", "signed"]).default("issued") }),
+      },
       responses: { 200: { description: "File link" } },
-      handler: async ({ params }, _req, res) => {
-        res.json(envelope(await documents.download(principalOf(res), params.id)));
+      handler: async ({ params, query }, _req, res) => {
+        res.json(envelope(await documents.download(principalOf(res), params.id, query.copy)));
       },
     }),
     defineRoute({

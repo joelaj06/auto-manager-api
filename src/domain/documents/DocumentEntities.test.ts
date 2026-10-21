@@ -86,6 +86,7 @@ describe("issued documents", () => {
       verificationCode: "ABCDEFGHJKMN",
       issuedBy: "u1",
       replacesId: null,
+      signingExpiresAt: null,
       now,
     });
 

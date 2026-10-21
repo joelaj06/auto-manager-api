@@ -116,13 +116,13 @@ export interface INotificationInbox {
 
 export type DeliveryChannel = Exclude<Channel, "in_app">;
 export type DeliveryStatus = "queued" | "sent" | "failed" | "skipped";
-export type RecipientType = "user" | "driver";
+export type RecipientType = "user" | "driver" | "signer";
 
 export type Delivery = Readonly<{
   id: string;
   channel: DeliveryChannel;
   /** The rule, or a one-off message ("test", "driver_invitation"). */
-  rule: RuleKey | "test" | "driver_invitation";
+  rule: RuleKey | "test" | "driver_invitation" | "signing_code";
   recipientType: RecipientType;
   recipientId: string;
   /** Phone (E.164) for SMS, email address, or the user id for push. */
@@ -185,6 +185,8 @@ export type StaffRecipient = Readonly<{
 export interface IRecipientDirectory {
   /** Active users holding `permission` for `branchId` (null: business-wide records). */
   staffWith(permission: string, branchId: string | null): Promise<StaffRecipient[]>;
+  /** These users, if active. */
+  users(userIds: readonly string[]): Promise<StaffRecipient[]>;
 }
 
 export type ExpiringVehicleDocument = Readonly<{

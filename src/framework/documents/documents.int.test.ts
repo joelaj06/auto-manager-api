@@ -38,11 +38,12 @@ async function pdfOf(id: string): Promise<{ bytes: Buffer; sha256: string }> {
   return { bytes, sha256: res.body.data.sha256 as string };
 }
 
+// Printed and signed by hand: signing in the system is covered in signing.int.test.
 const handover = async (replacesId?: string) => {
   const res = await api()
     .post(`/api/v1/assignments/${assignment}/handover-document`)
     .set(owner())
-    .send(replacesId === undefined ? {} : { replacesId });
+    .send({ signInSystem: false, ...(replacesId === undefined ? {} : { replacesId }) });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
   return res.body.data as { id: string; number: string; code: string; templateVersion: string };
 };

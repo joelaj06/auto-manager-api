@@ -8,7 +8,16 @@ export class DocumentRuleError extends DomainError {
   }
 }
 
-export type DocumentStatus = "issued" | "void";
+export const DOCUMENT_STATUSES = [
+  "issued",
+  "pending_signatures",
+  "partially_signed",
+  "fully_signed",
+  "declined",
+  "expired",
+  "void",
+] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 export type IssuedDocumentProps = Readonly<{
   id: string;
@@ -34,6 +43,11 @@ export type IssuedDocumentProps = Readonly<{
   voidedAt: Date | null;
   voidReason: string | null;
   replacesId: string | null;
+  /** Signed in the system: all required signatures by then (null: printed and signed by hand). */
+  signingExpiresAt: Date | null;
+  signedPdfFileId: string | null;
+  signedPdfSha256: string | null;
+  fullySignedAt: Date | null;
 }>;
 
 /** Crockford base32 without I, L, O, U: what people can read back from paper. */
@@ -80,13 +94,19 @@ export class IssuedDocument {
       | "voidedAt"
       | "voidReason"
       | "issuedAt"
+      | "signedPdfFileId"
+      | "signedPdfSha256"
+      | "fullySignedAt"
     > &
       Readonly<{ now: Date }>,
   ): IssuedDocument {
     const { now, ...rest } = params;
     return new IssuedDocument({
       ...rest,
-      status: "issued",
+      status: rest.signingExpiresAt === null ? "issued" : "pending_signatures",
+      signedPdfFileId: null,
+      signedPdfSha256: null,
+      fullySignedAt: null,
       pdfFileId: null,
       pdfSha256: null,
       renderedAt: null,
@@ -113,6 +133,52 @@ export class IssuedDocument {
     if (this.props.pdfFileId !== null)
       throw new DocumentRuleError("This document already has its PDF");
     this.props = { ...this.props, pdfFileId: fileId, pdfSha256: sha256, renderedAt: now };
+  }
+
+  get awaitingSignatures(): boolean {
+    return this.props.status === "pending_signatures" || this.props.status === "partially_signed";
+  }
+
+  /** Refuses signing actions unless the document is waiting for signatures and in time. */
+  assertSignable(now: Date): void {
+    if (!this.awaitingSignatures)
+      throw new DocumentRuleError(
+        this.props.status === "fully_signed"
+          ? "This document is already signed"
+          : `This document is ${this.props.status.replace("_", " ")} and can no longer be signed`,
+      );
+    if (this.props.signingExpiresAt !== null && now > this.props.signingExpiresAt)
+      throw new DocumentRuleError("The time to sign this document has run out");
+  }
+
+  /** A signature came in: partially signed, or fully signed when every required one is there. */
+  signatureAdded(allRequiredSigned: boolean, now: Date): void {
+    if (!this.awaitingSignatures) throw new DocumentRuleError("This document is not being signed");
+    this.props = allRequiredSigned
+      ? { ...this.props, status: "fully_signed", fullySignedAt: now }
+      : { ...this.props, status: "partially_signed" };
+  }
+
+  /** A required signer refused: the document will not be completed. */
+  declined(): void {
+    if (!this.awaitingSignatures) throw new DocumentRuleError("This document is not being signed");
+    this.props = { ...this.props, status: "declined" };
+  }
+
+  /** The signing deadline passed without every required signature. */
+  expire(now: Date): boolean {
+    if (!this.awaitingSignatures || this.props.signingExpiresAt === null) return false;
+    if (now <= this.props.signingExpiresAt) return false;
+    this.props = { ...this.props, status: "expired" };
+    return true;
+  }
+
+  signedPdf(fileId: string, sha256: string): void {
+    if (this.props.status !== "fully_signed" && this.props.status !== "void")
+      throw new DocumentRuleError("Only a fully signed document gets its signed PDF");
+    if (this.props.signedPdfFileId !== null)
+      throw new DocumentRuleError("This document already has its signed PDF");
+    this.props = { ...this.props, signedPdfFileId: fileId, signedPdfSha256: sha256 };
   }
 
   void(userId: string, reason: string, now: Date): void {

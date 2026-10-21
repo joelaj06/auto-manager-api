@@ -30,13 +30,23 @@ export type StaffNotice = Readonly<{
 
 export type DriverSms = Readonly<{
   rule: RuleKey;
+  /** A driver (default) or a document signer without an account. */
+  recipientType?: "driver" | "signer";
   driverId: string;
   phone: string;
   dedupeKey: string;
   /** The standard text, used unless the business wrote its own for the rule. */
   standardText: string;
   values: Readonly<Record<string, string>>;
+  /** Carries a one-time link: hidden in the log, erased once sent. */
+  sensitive?: boolean;
+  /** Something the person is waiting for now (a signing link): not held for quiet hours. */
+  immediate?: boolean;
 }>;
+
+/** A notice to particular users (a signer's own request), on the rule's staff channels. */
+export type UserNotice = Omit<StaffNotice, "permission" | "branchId"> &
+  Readonly<{ userIds: readonly string[] }>;
 
 /**
  * Turns a rule's finding into messages on the channels the business chose for that rule
@@ -62,46 +72,99 @@ export class Notifier {
     const channels = new Set(rule.channels);
     const now = deps.clock.now();
     let told = 0;
-    for (const person of await deps.directory.staffWith(notice.permission, notice.branchId)) {
-      let fresh = true;
-      if (channels.has("in_app"))
-        fresh = await deps.inbox.add({
-          userId: person.userId,
-          rule: notice.rule,
-          title: notice.title,
-          body: notice.body,
-          severity: notice.severity,
-          data: notice.data,
-          dedupeKey: notice.dedupeKey,
-        });
-      const base = {
+    for (const person of await deps.directory.staffWith(notice.permission, notice.branchId))
+      if (await this.tell(person, channels, notice, now)) told += 1;
+    return told;
+  }
+
+  /** Tells particular users (inbox, push, email as the rule says); returns how many were new. */
+  async users(settings: NotificationSettings, notice: UserNotice): Promise<number> {
+    const rule = settings.rules[notice.rule];
+    if (!rule.enabled || notice.userIds.length === 0) return 0;
+    const channels = new Set(rule.channels);
+    const now = this.deps.clock.now();
+    let told = 0;
+    for (const person of await this.deps.directory.users(notice.userIds))
+      if (await this.tell(person, channels, notice, now)) told += 1;
+    return told;
+  }
+
+  /** An email to someone without an account (a guest signer), if the rule sends email. */
+  async guestEmail(
+    settings: NotificationSettings,
+    message: Readonly<{
+      rule: RuleKey;
+      recipientId: string;
+      name: string;
+      email: string;
+      dedupeKey: string;
+      title: string;
+      body: string;
+      sensitive?: boolean;
+    }>,
+  ): Promise<boolean> {
+    const rule = settings.rules[message.rule];
+    if (!rule.enabled || !rule.channels.includes("email")) return false;
+    const id = await this.deps.deliveries.queue({
+      channel: "email",
+      rule: message.rule,
+      recipientType: "signer",
+      recipientId: message.recipientId,
+      address: message.email,
+      title: message.title,
+      body: message.body,
+      data: { recipientName: message.name },
+      dedupeKey: message.dedupeKey,
+      sendAfter: this.deps.clock.now(),
+      ...(message.sensitive === true ? { sensitive: true } : {}),
+    });
+    return id !== null;
+  }
+
+  private async tell(
+    person: Readonly<{ userId: string; name: string; email: string | null }>,
+    channels: ReadonlySet<string>,
+    notice: Omit<StaffNotice, "permission" | "branchId">,
+    now: Date,
+  ): Promise<boolean> {
+    const { deps } = this;
+    let fresh = true;
+    if (channels.has("in_app"))
+      fresh = await deps.inbox.add({
+        userId: person.userId,
         rule: notice.rule,
-        recipientType: "user" as const,
-        recipientId: person.userId,
         title: notice.title,
         body: notice.body,
+        severity: notice.severity,
+        data: notice.data,
         dedupeKey: notice.dedupeKey,
-        sendAfter: now,
-      };
-      if (channels.has("push"))
-        fresh =
-          (await deps.deliveries.queue({
-            ...base,
-            channel: "push",
-            address: person.userId,
-            data: { ...notice.data, rule: notice.rule },
-          })) !== null || fresh;
-      if (channels.has("email") && person.email !== null)
-        fresh =
-          (await deps.deliveries.queue({
-            ...base,
-            channel: "email",
-            address: person.email,
-            data: { recipientName: person.name },
-          })) !== null || fresh;
-      if (fresh) told += 1;
-    }
-    return told;
+      });
+    const base = {
+      rule: notice.rule,
+      recipientType: "user" as const,
+      recipientId: person.userId,
+      title: notice.title,
+      body: notice.body,
+      dedupeKey: notice.dedupeKey,
+      sendAfter: now,
+    };
+    if (channels.has("push"))
+      fresh =
+        (await deps.deliveries.queue({
+          ...base,
+          channel: "push",
+          address: person.userId,
+          data: { ...notice.data, rule: notice.rule },
+        })) !== null || fresh;
+    if (channels.has("email") && person.email !== null)
+      fresh =
+        (await deps.deliveries.queue({
+          ...base,
+          channel: "email",
+          address: person.email,
+          data: { recipientName: person.name },
+        })) !== null || fresh;
+    return fresh;
   }
 
   /** Queues the SMS; false when the rule does not send SMS, no provider is set up, or it was sent. */
@@ -114,11 +177,14 @@ export class Notifier {
     if (!rule.enabled || !rule.channels.includes("sms") || settings.sms === null) return false;
     const now = this.deps.clock.now();
     const local = localDateTime(now, timezone);
-    const wait = quietDelay(local.hour * 60 + local.minute, settings.quietHours);
+    const wait =
+      message.immediate === true
+        ? 0
+        : quietDelay(local.hour * 60 + local.minute, settings.quietHours);
     const id = await this.deps.deliveries.queue({
       channel: "sms",
       rule: message.rule,
-      recipientType: "driver",
+      recipientType: message.recipientType ?? "driver",
       recipientId: message.driverId,
       address: message.phone,
       title: null,
@@ -126,6 +192,7 @@ export class Notifier {
       data: {},
       dedupeKey: message.dedupeKey,
       sendAfter: new Date(now.getTime() + wait * 60_000),
+      ...(message.sensitive === true ? { sensitive: true } : {}),
     });
     return id !== null;
   }

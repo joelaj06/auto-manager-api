@@ -148,6 +148,19 @@ export class PdfKitRenderer implements IPdfRenderer {
           const y = pdf.y + 46;
           block.signers.slice(i, i + per).forEach((signer, j) => {
             const left = x + j * (width + gap);
+            if (signer.image !== undefined && signer.image !== null) {
+              try {
+                pdf.image(Buffer.from(signer.image), left, y - 42, { fit: [width * 0.7, 40] });
+              } catch {
+                // An unreadable image leaves the line empty; the audit page still records it.
+              }
+            } else if (signer.typed !== undefined && signer.typed !== null) {
+              pdf
+                .font("Helvetica-Oblique")
+                .fontSize(16)
+                .fillColor(INK)
+                .text(signer.typed, left, y - 22, { width, lineBreak: false });
+            }
             pdf
               .moveTo(left, y)
               .lineTo(left + width, y)
@@ -163,7 +176,13 @@ export class PdfKitRenderer implements IPdfRenderer {
               .fontSize(9)
               .fillColor(MUTED)
               .text(signer.name, left, undefined, { width });
-            pdf.text("Date: ____________________", left, undefined, { width });
+            if (signer.note !== undefined && signer.note !== null)
+              pdf
+                .font("Helvetica")
+                .fontSize(8)
+                .fillColor(MUTED)
+                .text(signer.note, left, undefined, { width });
+            else pdf.text("Date: ____________________", left, undefined, { width });
           });
           pdf.y = y + 50;
         }

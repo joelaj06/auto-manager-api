@@ -161,6 +161,10 @@ type DocumentRow = {
   voided_at: Date | null;
   void_reason: string | null;
   replaces_id: string | null;
+  signing_expires_at: Date | null;
+  signed_pdf_file_id: string | null;
+  signed_pdf_sha256: string | null;
+  fully_signed_at: Date | null;
 };
 
 const toDocument = (r: DocumentRow) =>
@@ -187,6 +191,10 @@ const toDocument = (r: DocumentRow) =>
     voidedAt: r.voided_at,
     voidReason: r.void_reason,
     replacesId: r.replaces_id,
+    signingExpiresAt: r.signing_expires_at,
+    signedPdfFileId: r.signed_pdf_file_id,
+    signedPdfSha256: r.signed_pdf_sha256,
+    fullySignedAt: r.fully_signed_at,
   });
 
 export class PostgresIssuedDocuments implements IDocumentRepository {
@@ -219,13 +227,15 @@ export class PostgresIssuedDocuments implements IDocumentRepository {
       `insert into documents (id, number, type, language, template_id, template_version,
          template_body, subject_type, subject_id, branch_id, data_snapshot, verification_code,
          status, pdf_file_id, pdf_sha256, rendered_at, issued_by, issued_at, voided_by, voided_at,
-         void_reason, replaces_id)
+         void_reason, replaces_id, signing_expires_at, signed_pdf_file_id, signed_pdf_sha256,
+         fully_signed_at)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-               $19, $20, $21, $22)
+               $19, $20, $21, $22, $23, $24, $25, $26)
        on conflict (id) do update set status = excluded.status, pdf_file_id = excluded.pdf_file_id,
          pdf_sha256 = excluded.pdf_sha256, rendered_at = excluded.rendered_at,
          voided_by = excluded.voided_by, voided_at = excluded.voided_at,
-         void_reason = excluded.void_reason`,
+         void_reason = excluded.void_reason, signed_pdf_file_id = excluded.signed_pdf_file_id,
+         signed_pdf_sha256 = excluded.signed_pdf_sha256, fully_signed_at = excluded.fully_signed_at`,
       [
         p.id,
         p.number,
@@ -249,6 +259,10 @@ export class PostgresIssuedDocuments implements IDocumentRepository {
         p.voidedAt,
         p.voidReason,
         p.replacesId,
+        p.signingExpiresAt,
+        p.signedPdfFileId,
+        p.signedPdfSha256,
+        p.fullySignedAt,
       ],
     );
   }
@@ -278,6 +292,25 @@ export class PostgresIssuedDocuments implements IDocumentRepository {
     return rows.map(toDocument);
   }
 
+  async unsealed(limit: number): Promise<string[]> {
+    const { rows } = await this.tx.query<{ id: string }>(
+      `select id from documents
+        where status = 'fully_signed' and signed_pdf_file_id is null order by id limit $1`,
+      [limit],
+    );
+    return rows.map((r) => r.id);
+  }
+
+  async overdueForSigning(now: Date, limit: number): Promise<string[]> {
+    const { rows } = await this.tx.query<{ id: string }>(
+      `select id from documents
+        where status in ('pending_signatures', 'partially_signed') and signing_expires_at < $1
+        order by id limit $2`,
+      [now, limit],
+    );
+    return rows.map((r) => r.id);
+  }
+
   async unrendered(limit: number): Promise<string[]> {
     const { rows } = await this.tx.query<{ id: string }>(
       "select id from documents where pdf_file_id is null order by id limit $1",
@@ -292,10 +325,12 @@ export class PostgresDocumentEvents implements IDocumentEvents {
 
   async add(event: Parameters<IDocumentEvents["add"]>[0]): Promise<void> {
     await this.transactions.current().query(
-      `insert into document_events (document_id, type, actor_type, actor_id, ip, metadata, at)
-       values ($1, $2, $3, $4, $5, $6, $7)`,
+      `insert into document_events (document_id, signer_id, type, actor_type, actor_id, ip,
+         metadata, at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         event.documentId,
+        event.signerId,
         event.type,
         event.actorType,
         event.actorId,
@@ -310,6 +345,7 @@ export class PostgresDocumentEvents implements IDocumentEvents {
     const { rows } = await this.transactions.current().query<{
       id: string;
       document_id: string;
+      signer_id: string | null;
       type: DocumentEvent["type"];
       actor_type: DocumentEvent["actorType"];
       actor_id: string | null;
@@ -320,6 +356,7 @@ export class PostgresDocumentEvents implements IDocumentEvents {
     return rows.map((r) => ({
       id: r.id,
       documentId: r.document_id,
+      signerId: r.signer_id,
       type: r.type,
       actorType: r.actor_type,
       actorId: r.actor_id,

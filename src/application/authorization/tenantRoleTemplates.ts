@@ -135,6 +135,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "documents.list",
       "documents.view",
       "documents.issue",
+      "documents.attach_paper",
       "documents.templates.view",
     ]),
   },

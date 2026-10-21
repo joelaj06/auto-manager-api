@@ -271,6 +271,14 @@ export const TYPES = Object.freeze({
   DocumentTemplates: Symbol.for("DocumentTemplates"),
   HandoverDocuments: Symbol.for("HandoverDocuments"),
   DocumentJobHandlers: Symbol.for("DocumentJobHandlers"),
+  DocumentSigners: Symbol.for("IDocumentSigners"),
+  DocumentSigningLinks: Symbol.for("IDocumentSigningLinks"),
+  SignerParties: Symbol.for("ISignerParties"),
+  DocumentSettingsStore: Symbol.for("IDocumentSettingsStore"),
+  DocumentPdfComposer: Symbol.for("DocumentPdfComposer"),
+  SignatureRequests: Symbol.for("SignatureRequests"),
+  DocumentSigning: Symbol.for("DocumentSigning"),
+  DocumentSettingsService: Symbol.for("DocumentSettingsService"),
 
   // Driver app, vehicle issues and PDFs (P2-10)
   DriverAppLinks: Symbol.for("IDriverAppLinks"),

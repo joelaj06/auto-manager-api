@@ -375,6 +375,16 @@ export class PostgresRecipientDirectory implements IRecipientDirectory {
     );
     return rows.map((r) => ({ userId: r.id, name: r.name, email: r.email }));
   }
+
+  async users(userIds: readonly string[]): Promise<StaffRecipient[]> {
+    if (userIds.length === 0) return [];
+    const { rows } = await this.transactions.current().query<{
+      id: string;
+      name: string;
+      email: string | null;
+    }>("select id, name, email::text as email from users where id = any($1::uuid[]) and status = 'active' order by name, id", [userIds]);
+    return rows.map((r) => ({ userId: r.id, name: r.name, email: r.email }));
+  }
 }
 
 /** What the notification rules look for. */

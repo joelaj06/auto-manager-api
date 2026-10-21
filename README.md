@@ -312,6 +312,15 @@ are issued by the modules — `POST /api/v1/assignments/:id/handover-document` f
 an immutable PDF in the background (`/api/v1/documents/:id/download`) and checked by anyone with
 the verification code: `GET /api/v1/public/documents/:code?sha256=…` with `X-Tenant`.
 
+## Signing documents
+
+Documents issued with signers wait for their signatures. Anyone signed in sees theirs at
+`GET /api/v1/me/signatures` and signs with `POST …/:signerId/code` then `…/sign` (code, drawn PNG,
+consent); guests use their link's token with `POST /api/v1/public/signing/{open,code,sign,decline}`
+and `X-Tenant`. Staff hand out new links (`/documents/:id/signers/:signerId/link`, with QR),
+remind (`/documents/:id/remind`) and record paper signatures by their scan. The signed copy with
+its signature record page downloads with `/documents/:id/download?copy=signed`.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

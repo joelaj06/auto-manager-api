@@ -47,6 +47,8 @@ export type JobPayloads = {
   "tenant.notification_rules": Readonly<{ tenantId: string; localDate: string }>;
   /** Render and store the PDF of an issued document. */
   "documents.render": Readonly<{ tenantId: string; documentId: string }>;
+  /** Render and store the signed copy of a fully signed document. */
+  "documents.seal": Readonly<{ tenantId: string; documentId: string }>;
   /** Remittance cut-off check (waits until the tenant's cut-off time). */
   "tenant.remittance_cutoff": Readonly<{ tenantId: string; localDate: string }>;
 };
@@ -208,6 +210,15 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
   },
   "documents.render": {
     description: "Render and store the PDF of an issued document",
+    tenantScoped: true,
+    policy: "standard",
+    retryLimit: 5,
+    retryDelaySeconds: 30,
+    retryBackoff: true,
+    expireInSeconds: 300,
+  },
+  "documents.seal": {
+    description: "Render and store the signed copy of a fully signed document",
     tenantScoped: true,
     policy: "standard",
     retryLimit: 5,

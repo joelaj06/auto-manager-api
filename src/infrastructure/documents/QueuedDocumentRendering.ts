@@ -17,4 +17,11 @@ export class QueuedDocumentRendering implements IDocumentRenderQueue {
       await this.queue.enqueue("documents.render", { tenantId, documentId });
     });
   }
+
+  requestSeal(documentId: string): void {
+    const tenantId = this.tenantContext.currentTenantId().value;
+    this.transactions.afterCommit(`documents.seal:${documentId}`, async () => {
+      await this.queue.enqueue("documents.seal", { tenantId, documentId });
+    });
+  }
 }

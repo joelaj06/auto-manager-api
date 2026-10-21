@@ -348,6 +348,26 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from documents where number = $1",
   },
+  document_signers: {
+    insert: (marker) => ({
+      sql: `with d as (${DOCUMENT} returning id)
+            insert into document_signers (document_id, position, role, label, party_type, name)
+            select d.id, 1, 'owner', 'Owner', 'guest', $1 from d`,
+      params: [marker],
+    }),
+    find: "select 1 from document_signers where name = $1",
+  },
+  document_signing_links: {
+    insert: (marker) => ({
+      sql: `with d as (${DOCUMENT} returning id),
+                 s as (insert into document_signers (document_id, position, role, label, party_type, name)
+                       select d.id, 1, 'owner', 'Owner', 'guest', 'Isolation' from d returning id)
+            insert into document_signing_links (signer_id, token_hash, expires_at)
+            select s.id, $1, now() + interval '1 day' from s`,
+      params: [marker],
+    }),
+    find: "select 1 from document_signing_links where token_hash = $1",
+  },
   document_events: {
     insert: (marker) => ({
       sql: `with d as (${DOCUMENT} returning id)

@@ -41,10 +41,18 @@ export class HandoverDocuments {
     }>,
   ) {}
 
+  /**
+   * Issues it for signing in the system by the business (`businessSignerId`, default the
+   * caller) and the driver — or, with `signInSystem` false, for printing and signing by hand.
+   */
   async issue(
     actor: Principal,
     assignmentId: string,
-    replacesId: string | null,
+    options: Readonly<{
+      replacesId?: string | null;
+      signInSystem?: boolean;
+      businessSignerId?: string | null;
+    }> = {},
   ): Promise<DocumentView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
@@ -64,7 +72,17 @@ export class HandoverDocuments {
         type: "vehicle_handover",
         subject: { type: "vehicle_assignment", id: a.id },
         branchId: a.branchId,
-        replacesId,
+        replacesId: options.replacesId ?? null,
+        signers:
+          options.signInSystem === false
+            ? []
+            : [
+                {
+                  role: "business",
+                  party: { type: "user", id: options.businessSignerId ?? actor.userId },
+                },
+                { role: "driver", party: { type: "driver", id: a.driverId } },
+              ],
         data: {
           vehicle: {
             code: vehicle.code,

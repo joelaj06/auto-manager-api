@@ -19,6 +19,7 @@ export const RULE_KEYS = [
   "budget_threshold",
   "expense_approvals",
   "vehicle_issue_reported",
+  "signature_requests",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -82,6 +83,13 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     description: "Morning digest of expenses waiting for approval to the approvers of the branch",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app"] },
+  },
+  signature_requests: {
+    description:
+      "A document waits for someone's signature (and reminders): staff in the app, drivers and guests by SMS or email",
+    channels: [...STAFF, "sms"],
+    defaults: { enabled: true, channels: ["in_app", "push", "email", "sms"] },
+    placeholders: ["signerName", "documentName", "number", "businessName", "link"],
   },
   vehicle_issue_reported: {
     description:
