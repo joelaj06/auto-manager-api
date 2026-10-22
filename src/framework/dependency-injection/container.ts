@@ -4,12 +4,14 @@ import type {
   IWorkPayLifecycleRecords,
   IWorkPaySchedule,
   IWorkPaySettingsStore,
+  IWorkPayTransfers,
 } from "../../application/ports/IWorkPayRecords.js";
 import { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
 import { WorkPayArrears } from "../../application/use-cases/workpay/WorkPayArrears.js";
 import { WorkPayCollections } from "../../application/use-cases/workpay/WorkPayCollections.js";
 import { WorkPayDriverCosts } from "../../application/use-cases/workpay/WorkPayDriverCosts.js";
 import { WorkPayLifecycle } from "../../application/use-cases/workpay/WorkPayLifecycle.js";
+import { WorkPayTransfers } from "../../application/use-cases/workpay/WorkPayTransfers.js";
 import { WorkPayDeposits } from "../../application/use-cases/workpay/WorkPayDeposits.js";
 import { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
 import {
@@ -17,6 +19,7 @@ import {
   PostgresWorkPayLifecycle,
   PostgresWorkPaySchedule,
   PostgresWorkPaySettingsStore,
+  PostgresWorkPayTransfers,
 } from "../../infrastructure/workpay/PostgresWorkPay.js";
 import { documentRoutes } from "../../adapters/routes/documentRoutes.js";
 import type {
@@ -3817,6 +3820,14 @@ export function createContainer(
         requestContext,
         clock,
         sealQueue,
+        // Work & Pay issues through documents: resolved when a letter is fully signed.
+        signedListeners: [
+          {
+            documentType: "transfer_letter",
+            fullySigned: (document) =>
+              container.get<WorkPayTransfers>(TYPES.WorkPayTransfers).fullySigned(document),
+          },
+        ],
       }),
     [
       TYPES.UnitOfWork,
@@ -4097,9 +4108,11 @@ export function createContainer(
       posting: LedgerPosting,
       calendar: TenantCalendar,
       workpay: WorkPayAgreements,
+      transfers: WorkPayTransfers,
     ) =>
       new DriverApp({
         workpay,
+        transfers,
         unitOfWork,
         links,
         drivers,
@@ -4129,10 +4142,80 @@ export function createContainer(
       TYPES.LedgerPosting,
       TYPES.TenantCalendar,
       TYPES.WorkPayAgreements,
+      TYPES.WorkPayTransfers,
     ],
   );
 
   // --- Work & Pay ---
+  tenantRepository<IWorkPayTransfers>(
+    TYPES.WorkPayTransferStore,
+    (tx) => new PostgresWorkPayTransfers(tx),
+  );
+  container.bind<WorkPayTransfers>(TYPES.WorkPayTransfers).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      agreements: IWorkPayAgreementRepository,
+      schedule: IWorkPaySchedule,
+      transfers: IWorkPayTransfers,
+      settings: IWorkPaySettingsStore,
+      documents: Documents,
+      documentRecords: IDocumentRepository,
+      signers: IDocumentSigners,
+      vehicles: IVehicleRepository,
+      drivers: PostgresDriverRepository,
+      assignments: VehicleAssignments,
+      files: FileService,
+      posting: LedgerPosting,
+      scope: BranchScope,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new WorkPayTransfers({
+        unitOfWork,
+        agreements,
+        schedule,
+        transfers,
+        settings,
+        documents,
+        documentRecords,
+        signers,
+        vehicles,
+        drivers,
+        assignments,
+        papers: new OwnedDocuments(files, "workpay_transfer_paper", "workpay_transfer", 10),
+        posting,
+        scope,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.WorkPayAgreementRepository,
+      TYPES.WorkPaySchedule,
+      TYPES.WorkPayTransferStore,
+      TYPES.WorkPaySettingsStore,
+      TYPES.Documents,
+      TYPES.DocumentRepository,
+      TYPES.DocumentSigners,
+      TYPES.VehicleRepository,
+      TYPES.DriverRepository,
+      TYPES.VehicleAssignments,
+      TYPES.TenantFileService,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
   tenantRepository<IWorkPayAgreementRepository>(
     TYPES.WorkPayAgreementRepository,
     (tx) => new PostgresWorkPayAgreements(tx),
@@ -4152,6 +4235,7 @@ export function createContainer(
       schedule: IWorkPaySchedule,
       settings: IWorkPaySettingsStore,
       documents: Documents,
+      transfers: IWorkPayTransfers,
       documentRecords: IDocumentRepository,
       payments: PaymentRecording,
       assignments: VehicleAssignments,
@@ -4171,6 +4255,7 @@ export function createContainer(
         agreements,
         schedule,
         settings,
+        transfers,
         documents,
         documentRecords,
         payments,
@@ -4192,6 +4277,7 @@ export function createContainer(
       TYPES.WorkPaySchedule,
       TYPES.WorkPaySettingsStore,
       TYPES.Documents,
+      TYPES.WorkPayTransferStore,
       TYPES.DocumentRepository,
       TYPES.PaymentRecording,
       TYPES.VehicleAssignments,
@@ -4221,12 +4307,14 @@ export function createContainer(
       requestContext: IRequestContext,
       clock: IClock,
       lifecycle: IWorkPayLifecycleRecords,
+      completion: WorkPayTransfers,
     ) =>
       new WorkPayCollections({
         unitOfWork,
         agreements,
         schedule,
         lifecycle,
+        completion,
         settings,
         payments,
         posting,
@@ -4249,6 +4337,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.Clock,
       TYPES.WorkPayLifecycleRecords,
+      TYPES.WorkPayTransfers,
     ],
   );
   tenantRepository<IWorkPayLifecycleRecords>(
@@ -4977,6 +5066,7 @@ export function createContainer(
       workpaySettings: WorkPaySettingsService,
       workpayCollections: WorkPayCollections,
       workpayLifecycle: WorkPayLifecycle,
+      workpayTransfers: WorkPayTransfers,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -5064,6 +5154,7 @@ export function createContainer(
           agreements: workpayAgreements,
           collections: workpayCollections,
           lifecycle: workpayLifecycle,
+          transfers: workpayTransfers,
           settings: workpaySettings,
         }),
         ...identityRoutes({
@@ -5168,6 +5259,7 @@ export function createContainer(
       TYPES.WorkPaySettingsService,
       TYPES.WorkPayCollections,
       TYPES.WorkPayLifecycle,
+      TYPES.WorkPayTransfers,
     ],
   );
 

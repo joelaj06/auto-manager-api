@@ -1,3 +1,4 @@
+import type { IDocumentSignedListener } from "../../ports/IDocumentSignedListener.js";
 import { createHash } from "node:crypto";
 import type { DocumentSigner } from "../../../domain/documents/DocumentSigner.js";
 import { DOCUMENT_TYPE_CATALOG } from "../../../domain/documents/DocumentTypes.js";
@@ -123,6 +124,8 @@ export class DocumentSigning {
       requestContext: IRequestContext;
       clock: IClock;
       sealQueue: IDocumentRenderQueue;
+      /** Modules told when their documents are signed by everyone. */
+      signedListeners?: readonly IDocumentSignedListener[];
     }>,
   ) {}
 
@@ -520,6 +523,9 @@ export class DocumentSigning {
         at: now,
       });
       deps.sealQueue.requestSeal(document.id);
+      const d = document.snapshot();
+      for (const listener of deps.signedListeners ?? [])
+        if (listener.documentType === d.type) await listener.fullySigned(d);
     }
     return done;
   }

@@ -32,6 +32,7 @@ import type {
   IWorkPayAgreementRepository,
   IWorkPaySchedule,
   IWorkPaySettingsStore,
+  IWorkPayTransfers,
 } from "../../ports/IWorkPayRecords.js";
 import type { BranchScope } from "../../services/BranchScope.js";
 import { PageCursor } from "../../services/PageCursor.js";
@@ -124,6 +125,12 @@ export type AgreementView = Omit<WorkPayAgreementProps, "terms" | "depositPaidMi
     depositPaid: MoneyJson;
     depositOutstanding: MoneyJson;
     document: Readonly<{ id: string; number: string; status: string }> | null;
+    /** Paid in full: the transfer letter and whether ownership has passed. */
+    transfer: Readonly<{
+      status: "awaiting_signatures" | "transferred";
+      documentId: string;
+      transferredAt: Date | null;
+    }> | null;
     schedule?: readonly InstalmentView[];
   }>;
 
@@ -170,6 +177,7 @@ export class WorkPayAgreements {
       agreements: IWorkPayAgreementRepository;
       schedule: IWorkPaySchedule;
       settings: IWorkPaySettingsStore;
+      transfers: IWorkPayTransfers;
       documents: Documents;
       documentRecords: IDocumentRepository;
       payments: PaymentRecording;
@@ -712,8 +720,20 @@ export class WorkPayAgreements {
         document === undefined || document === null
           ? null
           : { id: document.id, number: document.number, status: document.status },
+      transfer: await this.transferOf(rest.id),
       ...(schedule === undefined ? {} : { schedule }),
     };
+  }
+
+  private async transferOf(agreementId: string): Promise<AgreementView["transfer"]> {
+    const t = await this.deps.transfers.forAgreement(agreementId);
+    return t === null
+      ? null
+      : {
+          status: t.transferredAt === null ? "awaiting_signatures" : "transferred",
+          documentId: t.documentId,
+          transferredAt: t.transferredAt,
+        };
   }
 
   private async audit(

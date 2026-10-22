@@ -277,6 +277,18 @@ export function driverAppRoutes(deps: DriverAppRouteDependencies): ApiRoute[] {
     }),
     defineRoute({
       method: "get",
+      path: "/api/v1/me/driver/workpay/:id/transfer-letter",
+      summary: "My transfer letter: a short-lived link to the PDF (signed once both signed)",
+      tags: ["driver-app"],
+      access: DRIVER,
+      request: { params: z.object({ id: z.uuid() }) },
+      responses: { 200: { description: "File link" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await app.transferLetter(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
       path: "/api/v1/me/driver/vehicle",
       summary: "The vehicle I drive, with its documents' compliance",
       tags: ["driver-app"],

@@ -18,6 +18,7 @@ import type { DocumentUploadInput } from "../files/OwnedDocuments.js";
 import type { DriverLedger, DriverStatement } from "../remittances/DriverLedger.js";
 import type { Declaration, RemittanceView, Remittances } from "../remittances/Remittances.js";
 import type { WorkPayAgreements } from "../workpay/WorkPayAgreements.js";
+import type { WorkPayTransfers } from "../workpay/WorkPayTransfers.js";
 import type { VehicleDocuments } from "../vehicles/VehicleDocuments.js";
 import type { IssueQuery, VehicleIssues, VehicleIssueView } from "../vehicles/VehicleIssues.js";
 import { RemittanceRuleError } from "../../../domain/remittances/Remittance.js";
@@ -98,6 +99,7 @@ export class DriverApp {
       issues: VehicleIssues;
       printed: PrintedDocuments;
       workpay: WorkPayAgreements;
+      transfers: WorkPayTransfers;
       posting: LedgerPosting;
       calendar: TenantCalendar;
     }>,
@@ -232,6 +234,12 @@ export class DriverApp {
   async workpay(actor: Principal) {
     const driver = await this.deps.unitOfWork.run(() => this.me(actor));
     return this.deps.workpay.ofDriver(driver.id);
+  }
+
+  /** My transfer letter (the signed copy once both of us signed). */
+  async transferLetter(actor: Principal, agreementId: string) {
+    const driver = await this.deps.unitOfWork.run(() => this.me(actor));
+    return this.deps.transfers.letterForDriver(driver.id, agreementId);
   }
 
   // --- fuel and issues ---

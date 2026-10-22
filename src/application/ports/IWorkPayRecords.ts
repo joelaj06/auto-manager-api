@@ -161,6 +161,39 @@ export interface IWorkPayLifecycleRecords {
   downtimes(agreementId: string): Promise<DowntimeRecord[]>;
 }
 
+export type HandedOverItem = Readonly<{ item: string; included: boolean }>;
+
+export type DvlaStatus = "not_started" | "submitted" | "completed";
+
+export type TransferRecord = Readonly<{
+  id: string;
+  agreementId: string;
+  documentId: string;
+  odometer: number;
+  condition: string | null;
+  handedOver: readonly HandedOverItem[];
+  ownerSignerId: string;
+  issuedBy: string | null;
+  issuedAt: Date;
+  transferredAt: Date | null;
+  dvla: Readonly<{
+    status: DvlaStatus;
+    submittedOn: string | null;
+    completedOn: string | null;
+    reference: string | null;
+    notes: string | null;
+  }>;
+}>;
+
+/** Transfer letters and ownership transfers of completed agreements (tenant unit of work). */
+export interface IWorkPayTransfers {
+  forAgreement(agreementId: string, lock?: boolean): Promise<TransferRecord | null>;
+  forDocument(documentId: string, lock?: boolean): Promise<TransferRecord | null>;
+  /** Inserts or replaces the agreement's transfer (a corrected letter). */
+  save(transfer: TransferRecord): Promise<void>;
+  remove(agreementId: string): Promise<void>;
+}
+
 export type WorkPaySettings = Readonly<{
   defaultFrequency: WorkPayFrequency;
   defaultGraceDays: number;
@@ -189,6 +222,8 @@ export type WorkPaySettings = Readonly<{
    * paid with the instalments.
    */
   driverExpenses: "driver_ledger" | "agreement";
+  /** What the transfer letter lists as handed over to the driver. */
+  transferItems: readonly string[];
 }>;
 
 export const DEFAULT_WORKPAY_SETTINGS = Object.freeze<WorkPaySettings>({
@@ -206,6 +241,12 @@ export const DEFAULT_WORKPAY_SETTINGS = Object.freeze<WorkPaySettings>({
   quoteValidDays: 7,
   repossessionRefundPercent: "0",
   driverExpenses: "driver_ledger",
+  transferItems: [
+    "Vehicle registration documents",
+    "Insurance certificate",
+    "Roadworthy certificate",
+    "Keys (all sets)",
+  ],
 });
 
 export interface IWorkPaySettingsStore {

@@ -77,6 +77,13 @@ export const FILE_KINDS = Object.freeze({
     maxBytes: 10 * MB,
     description: "Receipt or supplier invoice of an expense",
   },
+  workpay_transfer_paper: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: DOCUMENTS,
+    maxBytes: 10 * MB,
+    description: "DVLA change-of-ownership form or receipt of a work and pay transfer",
+  },
   party_document: {
     scope: "tenant",
     visibility: "private",

@@ -346,6 +346,12 @@ road and back through `…/:id/downtime` and `…/:id/downtime/end`. With the `d
 setting on `agreement`, costs the driver bears (maintenance, tyres, insurance by the agreement)
 are added to the agreement.
 
+When an agreement is paid in full its transfer letter goes out for the owner and the driver to
+sign (`GET …/:id/transfer`; corrections with `POST …/:id/transfer-letter`). Once both signed, the
+vehicle is transferred to the driver. The DVLA change of ownership is tracked at
+`PATCH …/:id/transfer/dvla`, with papers attached at `…/:id/transfer/papers`; the driver
+downloads the letter at `/api/v1/me/driver/workpay/:id/transfer-letter`.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

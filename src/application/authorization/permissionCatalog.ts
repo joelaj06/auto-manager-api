@@ -296,6 +296,11 @@ const definitions = {
     scopes: BRANCH_OR_ALL,
     sensitive: true,
   },
+  "workpay.transfer.manage": {
+    description:
+      "Correct transfer letters of paid-up agreements and track the DVLA change of ownership",
+    scopes: BRANCH_OR_ALL,
+  },
   "workpay.settings.manage": {
     description: "Change work and pay defaults (frequency, grace, rounding, deposit rule)",
     scopes: ALL,

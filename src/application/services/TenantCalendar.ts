@@ -13,6 +13,12 @@ export class TenantCalendar {
     return localDateTime(this.deps.clock.now(), timezone).date;
   }
 
+  /** The tenant's local date of an instant. */
+  async dateOf(instant: Date): Promise<string> {
+    const { timezone } = await this.deps.organisation.get();
+    return localDateTime(instant, timezone).date;
+  }
+
   /** `days` after a YYYY-MM-DD date. */
   static addDays(date: string, days: number): string {
     const d = new Date(`${date}T00:00:00Z`);

@@ -606,7 +606,7 @@ export class WorkPayLifecycle {
       await deps.posting.accounts(),
     );
     if (entry !== null) await deps.posting.post(entry, actor.userId);
-    await deps.collections.settle(agreement, today);
+    await deps.collections.settle(agreement, today, actor.userId);
   }
 
   private quoteStatus(q: SettlementQuoteRecord, today: string): QuoteView["status"] {

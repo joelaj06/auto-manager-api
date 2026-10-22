@@ -456,6 +456,20 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from workpay_downtimes where reason = $1",
   },
+  workpay_transfers: {
+    insert: (marker) => ({
+      sql: `${WORKPAY},
+                 doc as (${DOCUMENT} returning id),
+                 u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation')
+                       returning id)
+            insert into workpay_transfers (agreement_id, document_id, odometer, owner_signer_id,
+              issued_at)
+            select w.id, doc.id, 1, u.id, now() from w, doc, u`,
+      params: [marker, `WT${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from workpay_transfers t join workpay_agreements a on a.id = t.agreement_id
+            where a.number = $1`,
+  },
   document_templates: {
     insert: (marker) => ({
       sql: `insert into document_templates (type, name, version, body, system_version)

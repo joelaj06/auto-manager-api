@@ -404,6 +404,28 @@ export class Documents {
     });
   }
 
+  /**
+   * A short-lived link for a party of the document (the caller checked they are one, e.g. the
+   * driver of an agreement).
+   */
+  async downloadForParty(
+    id: string,
+    copy: "issued" | "signed",
+    userId: string | null,
+  ): Promise<FileView & Readonly<{ sha256: string }>> {
+    const { deps } = this;
+    await this.render(id);
+    return deps.unitOfWork.run(async () => {
+      const d = (await deps.documents.findById(id))!.snapshot();
+      if (copy === "signed" && d.signedPdfFileId === null)
+        throw new DocumentRuleError("There is no signed copy yet");
+      await this.event(id, "downloaded", userId, { copy });
+      return copy === "signed"
+        ? { ...(await deps.files.get(d.signedPdfFileId!)), sha256: d.signedPdfSha256! }
+        : { ...(await deps.files.get(d.pdfFileId!)), sha256: d.pdfSha256! };
+    });
+  }
+
   async void(actor: Principal, id: string, reason: string): Promise<DocumentView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {

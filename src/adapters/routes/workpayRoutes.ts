@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
 import type { WorkPayCollections } from "../../application/use-cases/workpay/WorkPayCollections.js";
 import type { WorkPayLifecycle } from "../../application/use-cases/workpay/WorkPayLifecycle.js";
+import type { WorkPayTransfers } from "../../application/use-cases/workpay/WorkPayTransfers.js";
+import { FILE_KINDS } from "../../domain/files/FileKinds.js";
 import type { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
 import { PAYMENT_METHODS } from "../../domain/finance/Payment.js";
 import { AGREEMENT_STATUSES, TERMINATION_REASONS } from "../../domain/workpay/WorkPayAgreement.js";
@@ -95,6 +97,7 @@ export type WorkPayRouteDependencies = Readonly<{
   agreements: WorkPayAgreements;
   collections: WorkPayCollections;
   lifecycle: WorkPayLifecycle;
+  transfers: WorkPayTransfers;
   settings: WorkPaySettingsService;
 }>;
 
@@ -104,7 +107,7 @@ export type WorkPayRouteDependencies = Readonly<{
  * restructures, early settlement, termination, repossession and vehicle downtime.
  */
 export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
-  const { agreements, collections, lifecycle, settings } = deps;
+  const { agreements, collections, lifecycle, transfers, settings } = deps;
   return [
     defineRoute({
       method: "get",
@@ -139,6 +142,7 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
           quoteValidDays: z.number().int().min(1).max(60).optional(),
           repossessionRefundPercent: z.string().max(6).optional(),
           driverExpenses: z.enum(["driver_ledger", "agreement"]).optional(),
+          transferItems: z.array(z.string().trim().min(1).max(120)).max(30).optional(),
         }),
       },
       responses: { 200: { description: "Settings" } },
@@ -559,6 +563,97 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
       responses: { 200: { description: "Downtime with the suggested holiday" } },
       handler: async ({ params }, _req, res) => {
         res.json(envelope(await lifecycle.endDowntime(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/transfer",
+      summary: "The transfer of a paid-up agreement: letter, signatures, ownership, DVLA",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Transfer" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await transfers.get(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/transfer-letter",
+      summary: "Issue the transfer letter again with corrections (until both have signed)",
+      tags: ["workpay"],
+      access: access.permission("workpay.transfer.manage"),
+      request: {
+        params: idParams,
+        body: z.object({
+          odometer: odometer.optional(),
+          condition: z.string().trim().max(500).nullable().optional(),
+          handedOver: z
+            .array(z.object({ item: z.string().trim().min(1).max(120), included: z.boolean() }))
+            .max(30)
+            .optional(),
+          ownerSignerId: uuid.optional(),
+        }),
+      },
+      responses: { 201: { description: "Transfer with the new letter" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.status(201).json(envelope(await transfers.reissue(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "patch",
+      path: "/api/v1/workpay/agreements/:id/transfer/dvla",
+      summary: "Track the DVLA change of ownership (after the transfer)",
+      tags: ["workpay"],
+      access: access.permission("workpay.transfer.manage"),
+      request: {
+        params: idParams,
+        body: z.object({
+          status: z.enum(["not_started", "submitted", "completed"]),
+          submittedOn: z.iso.date().nullable().optional(),
+          completedOn: z.iso.date().nullable().optional(),
+          reference: z.string().trim().max(100).nullable().optional(),
+          notes: z.string().trim().max(2_000).nullable().optional(),
+        }),
+      },
+      responses: { 200: { description: "Transfer" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await transfers.updateDvla(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/transfer/papers",
+      summary: "Attach a DVLA form or receipt",
+      tags: ["workpay"],
+      access: access.permission("workpay.transfer.manage"),
+      request: {
+        params: idParams,
+        body: z.object({
+          filename: z.string().trim().min(1).max(200),
+          contentType: z.string().trim().min(3).max(100),
+          sizeBytes: z.number().int().min(1).max(FILE_KINDS.workpay_transfer_paper.maxBytes),
+        }),
+      },
+      responses: { 201: { description: "Upload URL" } },
+      handler: async ({ params, body }, _req, res) => {
+        res
+          .status(201)
+          .json(envelope(await transfers.startPaper(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/transfer/papers/:fileId/complete",
+      summary: "Confirm a DVLA paper upload",
+      tags: ["workpay"],
+      access: access.permission("workpay.transfer.manage"),
+      request: { params: z.object({ id: uuid, fileId: uuid }) },
+      responses: { 200: { description: "File" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(
+          envelope(await transfers.completePaper(principalOf(res), params.id, params.fileId)),
+        );
       },
     }),
   ];

@@ -272,6 +272,8 @@ describe("work and pay lifecycle", () => {
       expect(receipt.body.data.appliedTo[0].description).toMatch(
         /settled early: instalments 22–25/,
       );
+      const transfer = await api().get(`/api/v1/workpay/agreements/${a.id}/transfer`).set(owner());
+      expect(transfer.body.data.status).toBe("awaiting_signatures");
       expect(await trialBalanced()).toBe(true);
     });
 
@@ -285,6 +287,9 @@ describe("work and pay lifecycle", () => {
         status: "active",
         outstanding: { amountMinor: 800_000 },
       });
+      // The transfer letter issued at completion is withdrawn.
+      const transfer = await api().get(`/api/v1/workpay/agreements/${a.id}/transfer`).set(owner());
+      expect(transfer.body.error.message).toMatch(/once the agreement is paid in full/);
       expect(await trialBalanced()).toBe(true);
     });
   });

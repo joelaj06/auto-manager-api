@@ -113,6 +113,13 @@ export type AgreementPaymentView = Readonly<{
   allocations: readonly AllocationView[];
 }>;
 
+/** What follows an agreement being paid in full (inside its unit of work). */
+export type AgreementCompletion = Readonly<{
+  agreementCompleted(agreement: WorkPayAgreement, userId: string | null): Promise<void>;
+  /** May refuse (the vehicle was transferred already). */
+  agreementReopened(agreement: WorkPayAgreement, userId: string | null): Promise<void>;
+}>;
+
 /** What is owed on an agreement, row by row (locked when asked). */
 export type Ledger = Readonly<{
   instalments: InstalmentState[];
@@ -153,6 +160,8 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
       clock: IClock;
+      /** Told when an agreement becomes paid in full, or stops being (the transfer letter). */
+      completion?: AgreementCompletion;
     }>,
   ) {}
 
@@ -224,7 +233,7 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
       await deps.posting.accounts(),
     );
     if (entry !== null) await deps.posting.post(entry, actor.userId);
-    const after = await this.settle(agreement, today);
+    const after = await this.settle(agreement, today, actor.userId);
     await recordUserAction(deps, actor.userId, {
       action: "workpay.payment_recorded",
       entityType: "workpay_agreement",
@@ -478,12 +487,20 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
   }
 
   /** The agreement follows its schedule (status, arrears); returns where it stands. */
-  async settle(agreement: WorkPayAgreement, today: string): Promise<AgreementPosition> {
+  async settle(
+    agreement: WorkPayAgreement,
+    today: string,
+    userId: string | null = null,
+  ): Promise<AgreementPosition> {
     const { deps } = this;
     const { position: p } = await this.positionOf(agreement, today);
     const before = agreement.snapshot().status;
+    if (before === "completed" && p.status !== "completed")
+      await deps.completion?.agreementReopened(agreement, userId);
     const changed = agreement.settle(p, deps.clock.now());
     await deps.agreements.save(agreement);
+    if (changed && agreement.status === "completed")
+      await deps.completion?.agreementCompleted(agreement, userId);
     if (changed) {
       const a = agreement.snapshot();
       await deps.auditTrail.record({
@@ -670,7 +687,7 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
         ),
         actor.userId,
       );
-      await this.settle(agreement, today);
+      await this.settle(agreement, today, actor.userId);
       await recordUserAction(deps, actor.userId, {
         action: picked.kind === "penalty" ? "workpay.penalty_waived" : "workpay.instalment_waived",
         entityType: "workpay_agreement",

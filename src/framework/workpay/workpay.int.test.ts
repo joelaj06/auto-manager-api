@@ -46,6 +46,7 @@ let driverToken: string;
 let ownerToken: string;
 let vehicle: string;
 let checklist: { items: { key: string; ok: boolean }[] };
+const driverPhone = `+23324${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`;
 const guarantorPhone = `+23320${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`;
 
 const api = () => request(app);
@@ -97,7 +98,7 @@ beforeAll(async () => {
       .send({
         firstName: "Kojo",
         lastName: "Antwi",
-        phone: `+23324${digits(7)}`,
+        phone: driverPhone,
         ghanaCardNumber: `GHA-${digits(9)}-1`,
         licenceNumber: `DL-${randomUUID().slice(0, 6)}`,
         licenceClass: "B",
@@ -390,6 +391,12 @@ describe("work and pay", () => {
       .set("X-Tenant", t.slug)
       .send({ identifier: t.ownerEmail, password: OWNER_PASSWORD });
     ownerToken = login.body.data.accessToken as string;
+    const driverLogin = await api()
+      .post("/api/v1/auth/login")
+      .set("X-Tenant", t.slug)
+      .send({ identifier: driverPhone, password: OWNER_PASSWORD });
+    expect(driverLogin.status, JSON.stringify(driverLogin.body)).toBe(200);
+    driverToken = driverLogin.body.data.accessToken as string;
   }
   let reversible: string;
 
@@ -549,5 +556,110 @@ describe("work and pay", () => {
       )?.balance.amountMinor ?? 0;
     expect(byCode("1210")).toBe(0); // nothing left receivable
     expect(byCode("2300")).toBe(0); // everything earned or waived
+  });
+
+  // --- completion and transfer (P3-6) ---
+
+  const transfer = async () =>
+    (await api().get(`/api/v1/workpay/agreements/${agreement}/transfer`).set(owner())).body as {
+      data: { status: string; document: { id: string } } & Record<string, unknown>;
+    };
+  let letter: string;
+
+  it("issues the transfer letter for the owner and the driver once paid in full", async () => {
+    const res = await transfer();
+    expect(res.data, JSON.stringify(res)).toMatchObject({
+      status: "awaiting_signatures",
+      document: { number: expect.stringMatching(/^TRL-/), status: "pending_signatures" },
+      handedOver: expect.arrayContaining([{ item: "Insurance certificate", included: true }]),
+      transferredAt: null,
+      dvla: { status: "not_started" },
+    });
+    letter = res.data.document.id;
+    const view = await api().get(`/api/v1/workpay/agreements/${agreement}`).set(owner());
+    expect(view.body.data.transfer).toMatchObject({ status: "awaiting_signatures" });
+    const car = await api().get(`/api/v1/vehicles/${vehicle}`).set(owner());
+    expect(car.body.data.status).toBe("on_workpay");
+    const early = await api()
+      .patch(`/api/v1/workpay/agreements/${agreement}/transfer/dvla`)
+      .set(owner())
+      .send({ status: "submitted" });
+    expect(early.body.error.message).toMatch(/follows the signed transfer/);
+  });
+
+  it("corrects the letter before it is signed, voiding the first one", async () => {
+    const res = await api()
+      .post(`/api/v1/workpay/agreements/${agreement}/transfer-letter`)
+      .set(owner())
+      .send({ odometer: 61_500, condition: "Good, small dent on the rear door" });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body.data).toMatchObject({
+      odometer: 61_500,
+      condition: expect.stringMatching(/dent/),
+    });
+    const old = await api().get(`/api/v1/documents/${letter}`).set(owner());
+    expect(old.body.data.status).toBe("void");
+    letter = res.body.data.document.id as string;
+  });
+
+  it("transfers ownership to the driver once both signed", async () => {
+    const sign = async (as: Record<string, string>) => {
+      const tasks = (await api().get("/api/v1/me/signatures").set(as)).body.data as {
+        signer: { id: string };
+        document: { id: string };
+      }[];
+      const task = tasks.find((x) => x.document.id === letter)!;
+      const signed = await api()
+        .post(`/api/v1/me/signatures/${task.signer.id}/sign`)
+        .set(as)
+        .send({ signature: drawn, consent: true });
+      expect(signed.status, JSON.stringify(signed.body)).toBe(200);
+    };
+    await sign(owner());
+    expect((await transfer()).data.status).toBe("awaiting_signatures");
+    await sign(asDriver()); // the driver signs last: no staff permission needed
+    expect((await transfer()).data).toMatchObject({
+      status: "transferred",
+      transferredAt: expect.any(String),
+      document: { status: "fully_signed" },
+    });
+    const car = await api().get(`/api/v1/vehicles/${vehicle}`).set(owner());
+    expect(car.body.data).toMatchObject({ status: "transferred", ownershipType: "driver_owned" });
+    const mine = await api()
+      .get(`/api/v1/me/driver/workpay/${agreement}/transfer-letter`)
+      .set(asDriver());
+    expect(mine.status, JSON.stringify(mine.body)).toBe(200);
+    expect(mine.body.data.url).toEqual(expect.any(String));
+  });
+
+  it("refuses to reopen a transferred agreement and tracks the DVLA change of ownership", async () => {
+    const paid = await api().get(`/api/v1/workpay/agreements/${agreement}/payments`).set(owner());
+    const last = (paid.body.data as { paymentId: string; reversed: boolean }[]).find(
+      (p) => !p.reversed,
+    )!;
+    const reverse = await api()
+      .post(`/api/v1/payments/${last.paymentId}/reverse`)
+      .set(owner())
+      .send({ reason: "Mistake" });
+    expect(reverse.body.error.message).toMatch(/transferred to the driver/);
+    const submitted = await api()
+      .patch(`/api/v1/workpay/agreements/${agreement}/transfer/dvla`)
+      .set(owner())
+      .send({ status: "submitted", reference: "DVLA-12345" });
+    expect(submitted.body.data.dvla).toMatchObject({
+      status: "submitted",
+      submittedOn: day(0),
+      reference: "DVLA-12345",
+    });
+    const done = await api()
+      .patch(`/api/v1/workpay/agreements/${agreement}/transfer/dvla`)
+      .set(owner())
+      .send({ status: "completed" });
+    expect(done.body.data.dvla).toMatchObject({ status: "completed", completedOn: day(0) });
+    const paper = await api()
+      .post(`/api/v1/workpay/agreements/${agreement}/transfer/papers`)
+      .set(owner())
+      .send({ filename: "dvla-form.pdf", contentType: "application/pdf", sizeBytes: 20_000 });
+    expect(paper.status, JSON.stringify(paper.body)).toBe(201);
   });
 });

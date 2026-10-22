@@ -3,6 +3,10 @@ import {
   type AgreementListFilter,
   type AllocationRecord,
   type DowntimeRecord,
+  type DvlaStatus,
+  type HandedOverItem,
+  type IWorkPayTransfers,
+  type TransferRecord,
   type IWorkPayLifecycleRecords,
   type RescheduleRecord,
   type SettlementQuoteRecord,
@@ -794,6 +798,110 @@ export class PostgresWorkPayLifecycle implements IWorkPayLifecycleRecords {
       [agreementId],
     );
     return rows.map(toDowntime);
+  }
+}
+
+type TransferRow = {
+  id: string;
+  agreement_id: string;
+  document_id: string;
+  odometer: number;
+  condition: string | null;
+  handed_over: HandedOverItem[];
+  owner_signer_id: string;
+  issued_by: string | null;
+  issued_at: Date;
+  transferred_at: Date | null;
+  dvla_status: DvlaStatus;
+  dvla_submitted_on: string | null;
+  dvla_completed_on: string | null;
+  dvla_reference: string | null;
+  dvla_notes: string | null;
+};
+
+const TRANSFER = `select *, dvla_submitted_on::text as dvla_submitted_on,
+                         dvla_completed_on::text as dvla_completed_on
+                    from workpay_transfers`;
+
+const toTransfer = (r: TransferRow): TransferRecord => ({
+  id: r.id,
+  agreementId: r.agreement_id,
+  documentId: r.document_id,
+  odometer: r.odometer,
+  condition: r.condition,
+  handedOver: r.handed_over,
+  ownerSignerId: r.owner_signer_id,
+  issuedBy: r.issued_by,
+  issuedAt: r.issued_at,
+  transferredAt: r.transferred_at,
+  dvla: {
+    status: r.dvla_status,
+    submittedOn: r.dvla_submitted_on,
+    completedOn: r.dvla_completed_on,
+    reference: r.dvla_reference,
+    notes: r.dvla_notes,
+  },
+});
+
+export class PostgresWorkPayTransfers implements IWorkPayTransfers {
+  constructor(private readonly transactions: PostgresTransactionContext) {}
+
+  private get tx() {
+    return this.transactions.current();
+  }
+
+  private async one(where: string, id: string, lock: boolean) {
+    const { rows } = await this.tx.query<TransferRow>(
+      `${TRANSFER} where ${where} = $1${lock ? " for update" : ""}`,
+      [id],
+    );
+    return rows[0] === undefined ? null : toTransfer(rows[0]);
+  }
+
+  forAgreement(agreementId: string, lock = false) {
+    return this.one("agreement_id", agreementId, lock);
+  }
+
+  forDocument(documentId: string, lock = false) {
+    return this.one("document_id", documentId, lock);
+  }
+
+  async save(t: TransferRecord): Promise<void> {
+    await this.tx.query(
+      `insert into workpay_transfers (id, agreement_id, document_id, odometer, condition,
+         handed_over, owner_signer_id, issued_by, issued_at, transferred_at, dvla_status,
+         dvla_submitted_on, dvla_completed_on, dvla_reference, dvla_notes, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now())
+       on conflict (agreement_id) do update set
+         document_id = excluded.document_id, odometer = excluded.odometer,
+         condition = excluded.condition, handed_over = excluded.handed_over,
+         owner_signer_id = excluded.owner_signer_id, issued_by = excluded.issued_by,
+         issued_at = excluded.issued_at, transferred_at = excluded.transferred_at,
+         dvla_status = excluded.dvla_status, dvla_submitted_on = excluded.dvla_submitted_on,
+         dvla_completed_on = excluded.dvla_completed_on, dvla_reference = excluded.dvla_reference,
+         dvla_notes = excluded.dvla_notes, updated_at = now()`,
+      [
+        t.id,
+        t.agreementId,
+        t.documentId,
+        t.odometer,
+        t.condition,
+        JSON.stringify(t.handedOver),
+        t.ownerSignerId,
+        t.issuedBy,
+        t.issuedAt,
+        t.transferredAt,
+        t.dvla.status,
+        t.dvla.submittedOn,
+        t.dvla.completedOn,
+        t.dvla.reference,
+        t.dvla.notes,
+      ],
+    );
+  }
+
+  async remove(agreementId: string): Promise<void> {
+    await this.tx.query("delete from workpay_transfers where agreement_id = $1", [agreementId]);
   }
 }
 

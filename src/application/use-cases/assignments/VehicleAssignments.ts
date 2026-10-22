@@ -464,6 +464,65 @@ export class VehicleAssignments {
     });
   }
 
+  /**
+   * Ownership passed to the driver (the transfer letter is signed by both parties): the
+   * `workpay` assignment ends at the transfer odometer and the vehicle (locked by the caller)
+   * becomes transferred. No permission check: the signed letter is the authority.
+   */
+  async endForTransfer(
+    agreementId: string,
+    vehicle: Vehicle,
+    input: Readonly<{ odometer: number; reason: string; userId: string }>,
+  ): Promise<void> {
+    const { deps } = this;
+    await deps.unitOfWork.run(async () => {
+      const assignment = await this.current(vehicle.id, true);
+      const settings = await deps.settings.get();
+      const now = deps.clock.now();
+      const odometer = Math.max(input.odometer, assignment.snapshot().startOdometer);
+      assignment.end({
+        endedAt: now,
+        endOdometer: odometer,
+        checklist: buildChecklist(settings.handoverItems, {
+          items: settings.handoverItems.map((d) => ({
+            key: d.key,
+            ok: true,
+            note: "Kept by the driver (ownership transferred)",
+          })),
+        }),
+        reason: input.reason,
+        endedBy: input.userId,
+        now,
+      });
+      await this.save(assignment);
+      await deps.odometer.recordFor(
+        vehicle,
+        { value: odometer, readAt: now },
+        "assignment",
+        assignment.id,
+        input.userId,
+      );
+      // Back from the workshop or an incident first: only work and pay leads to transferred.
+      if (vehicle.status !== "on_workpay")
+        await deps.registry.moveByModule(vehicle, "on_workpay", {
+          ref: { type: "workpay_agreement", id: agreementId },
+          reason: input.reason,
+          userId: input.userId,
+        });
+      await deps.registry.moveByModule(vehicle, "transferred", {
+        ref: { type: "workpay_agreement", id: agreementId },
+        reason: input.reason,
+        userId: input.userId,
+      });
+      await recordUserAction(deps, input.userId, {
+        action: "vehicle_assignment.ended",
+        entityType: "vehicle",
+        entityId: vehicle.id,
+        after: { assignmentId: assignment.id, endedAt: now, reason: input.reason },
+      });
+    });
+  }
+
   private async assertDriverCanTake(
     driver: Driver,
     vehicle: Vehicle,
