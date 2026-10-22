@@ -39,6 +39,9 @@
 | 29 | [Reseller / partner program](29_reseller_partner_program.md) | Reseller console accounts, referral attribution, per-reseller commission terms (Super Admin), commission ledger and payouts, what resellers can see |
 | 30 | [Implementation plan (phased)](30_implementation_plan.md) | **Authoritative build plan**: phases 0–9, work packages, milestones M0–M6, exit criteria, risks, what is needed before Phase 0 |
 | 31 | [Backup & restore runbooks](31_backup_restore_runbooks.md) | Backup keys, taking backups, the automated restore test, restoring one tenant / the platform / a whole server, validation queries |
+| 32 | [Security review](32_security_review.md) | Internal penetration test against the OWASP Top 10 before the private beta, dependency audit, findings |
+| 33 | [Operations runbooks](33_operations_runbooks.md) | Start/upgrade, daily checks, books out of balance, tenant support, incidents, secrets, load figures |
+| 34 | [Beta onboarding guide](34_beta_onboarding_guide.md) | Taking a trusted business from application to its first work and pay agreement |
 
 ## Legend used across docs
 

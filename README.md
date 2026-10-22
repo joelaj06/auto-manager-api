@@ -67,6 +67,7 @@ database, the template and every tenant database.
 | `yarn test` / `yarn test:watch`       | Unit tests (Vitest)                                                                                                                                               |
 | `yarn test:integration`               | Integration tests (`*.int.test.ts`) in throw-away PostgreSQL + Mailpit containers (needs Docker); `TEST_INFRA=external` uses the running compose services instead |
 | `yarn load:health` / `yarn load:auth` | k6 load scripts against a running API (`PROFILE=smoke\|load\|stress`, `BASE_URL=…`); uses a local `k6` or the k6 Docker image                                     |
+| `yarn load:seed` / `yarn load:tenant` | A seeded tenant on a local database, then k6 back-office reads and payments as its owner (start the API with a high `RATE_LIMIT_MAX`); figures in docs/33 §7      |
 | `yarn verify`                         | Typecheck, lint, format check and tests — run before every commit                                                                                                 |
 
 ## HTTP API
@@ -256,6 +257,9 @@ business's tax codes — Ghana businesses start with VAT 15% + NHIL 2.5% + GETFu
 2026-01-01, editable at `/api/v1/tax-codes`) and voids invoices. `/api/v1/payments` records
 money in (to the payer's credit, allocated to invoices) and out (refunds, expenses), with
 receipts at `/payments/:id/receipt`. Cash goes through `/api/v1/cash-sessions`.
+`GET /api/v1/ledger/integrity` checks the books (entries balanced, allocations adding up, the
+work and pay sub-ledgers agreeing with their accounts); every backup restore test runs the same
+checks (docs/31 §4).
 
 ## Expenses
 
@@ -399,6 +403,8 @@ Without PostgreSQL client tools installed, set `BACKUP_PG_TOOLS=docker` (uses `p
 | Tenant isolation  | `src/testing/isolation`                           | Generated over **every table** of the tenant schema: a row written by tenant A is invisible to tenant B; the app role owns nothing and cannot truncate, add triggers or create objects; append-only tables reject changes; tenant A's token is rejected on tenant B through the real app. A new table fails this suite until it gets a fixture in `tenantTableFixtures.ts` |
 | Audit regressions | `src/framework/security/auditRegressions.test.ts` | One block per v1 audit finding C1–C7 (docs/01)                                                                                                                                                                                                                                                                                                                             |
 | Load              | `load/k6`                                         | Health probes and bad-token rejection under load, with latency thresholds                                                                                                                                                                                                                                                                                                  |
+| End to end        | `src/framework/e2e`                               | Money through every beta module (remittances, invoices, a work and pay agreement to ownership transfer) with the integrity checks after every step, then a backup restored and verified                                                                                                                                                                                    |
+| OWASP             | `src/framework/security/owasp.int.test.ts`        | The automatable OWASP Top 10 checks: access control across branches and drivers, tokens, enumeration, injection, mass assignment, headers, CORS, limits, uploads, brute force (review: docs/32)                                                                                                                                                                            |
 
 `src/testing/fixtures/TenantFixtures.ts` creates real tenants (database + platform row) for
 integration tests, with helpers to run SQL as the tenant and issue its access tokens.

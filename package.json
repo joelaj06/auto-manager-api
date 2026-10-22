@@ -28,6 +28,8 @@
     "mobile:keygen": "tsx src/framework/cli/mobileKeygen.ts",
     "load:health": "load/run.sh health",
     "load:auth": "load/run.sh auth-rejection",
+    "load:tenant": "load/run.sh tenant-api",
+    "load:seed": "tsx --env-file-if-exists=.env src/framework/cli/loadSeed.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -78,5 +80,8 @@
     "typescript-eslint": "^8.71.2",
     "vite": "^8",
     "vitest": "^5.0.4"
+  },
+  "resolutions": {
+    "handlebars": "^4.7.10"
   }
 }

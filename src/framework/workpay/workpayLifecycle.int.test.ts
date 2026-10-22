@@ -141,8 +141,14 @@ const balanceOf = async (id: string) =>
     unknown
   > & { outstanding: { amountMinor: number } };
 
-const trialBalanced = async () =>
-  (await api().get("/api/v1/ledger/trial-balance").set(owner())).body.data.balanced as boolean;
+/** The trial balance balances and every integrity check passes (sub-ledgers agree). */
+const trialBalanced = async () => {
+  const integrity = await api().get("/api/v1/ledger/integrity").set(owner());
+  const failed = (integrity.body.data.checks as { passed: boolean }[]).filter((c) => !c.passed);
+  expect(failed, JSON.stringify(failed)).toEqual([]);
+  return (await api().get("/api/v1/ledger/trial-balance").set(owner())).body.data
+    .balanced as boolean;
+};
 
 beforeAll(async () => {
   container = await createTestContainer({ AUTH_RATE_LIMIT_MAX: "10000", RATE_LIMIT_MAX: "100000" });

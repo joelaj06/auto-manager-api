@@ -1,3 +1,4 @@
+import { PostgresIntegrityChecks } from "../integrity/PostgresIntegrityChecks.js";
 import { randomBytes, type KeyObject } from "node:crypto";
 import pg from "pg";
 import { pipeline } from "node:stream/promises";
@@ -52,7 +53,8 @@ const SCRATCH_DATABASE = /^rv_[0-9a-f]{12}$/;
  * version.
  *
  * Verification restores into a throw-away `rv_…` database and compares: file checksum, schema
- * version, tenant identity, every table's row count, and that all foreign keys are valid.
+ * version, tenant identity, every table's row count, that all foreign keys are valid and, for a
+ * tenant, that its books are intact (ledger balanced, allocations and sub-ledgers agree).
  */
 export class DatabaseBackupService {
   private readonly log: (message: string) => void;
@@ -264,6 +266,15 @@ export class DatabaseBackupService {
         "select count(*) as invalid from pg_constraint where contype = 'f' and not convalidated",
       );
       checks.push({ name: "foreign keys valid", passed: Number(fks[0]?.invalid) === 0 });
+
+      // The tenant's money still adds up (docs/26 §7).
+      if (record.kind === "tenant")
+        for (const check of await new PostgresIntegrityChecks(() => client).run())
+          checks.push({
+            name: `integrity: ${check.name}`,
+            passed: check.passed,
+            ...(check.detail === null ? {} : { detail: check.detail }),
+          });
     } finally {
       await client.end();
     }

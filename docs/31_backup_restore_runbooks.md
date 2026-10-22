@@ -60,8 +60,22 @@ Each backup is restored into a throw-away database `rv_<random>` (dropped afterw
 | tenant identity | `tenant_info.tenant_id` is the backup's tenant (tenant backups) |
 | row counts | Every table has exactly the rows counted in the dump's snapshot |
 | foreign keys valid | No unvalidated foreign key after restore |
+| integrity: … (tenants) | The books still add up — the same checks as `GET /api/v1/ledger/integrity` (below) |
 
-The result is stored on the catalogue row (`verification`, `verified_at` when passed). Module-specific checks (ledger balanced, allocation sums — doc 26 §7) are added with those modules. **Target cadence:** weekly, scheduled with hosting; until then run it manually after notable changes.
+The tenant integrity checks (P3-8, `infrastructure/integrity/PostgresIntegrityChecks.ts`):
+
+| Check | Invariant |
+|---|---|
+| journal entries balanced | Every entry has ≥ 2 lines and equal debits and credits |
+| trial balance | All debits equal all credits |
+| payment allocations | A payment's allocated amount is the sum of its open invoice allocations |
+| invoice payments | An invoice's paid amount is the sum of its open allocations |
+| work and pay allocations | A work and pay payment applies at most its amount; a reversed one applies nothing |
+| work and pay rows | No instalment, late fee or charge is paid, waived or moved beyond its amount |
+| work and pay receivables | The receivables account (1210) equals what running and completed agreements still owe |
+| work and pay unearned income | Unearned income (2300) equals the instalments they still owe |
+
+The result is stored on the catalogue row (`verification`, `verified_at` when passed). **Target cadence:** weekly, scheduled with hosting; until then run it manually after notable changes.
 
 ## 5. Restore one tenant (data corruption / user error)
 
@@ -111,7 +125,18 @@ select count(*) from pgboss.job where state in ('created', 'retry');
 
 Compare counts with the `row_counts` of the catalogue row (`yarn backup list`, or `select row_counts from backups where id = …`).
 
-## 9. Still to build with hosting
+## 9. Drill log
+
+| Date | What | Data | Result | Time |
+|---|---|---|---|---|
+| 2026-10-22 | Key pair generated for the drill; `yarn backup run` (platform + all tenants) | Platform DB; 2 tenants, the larger with 8,979 payments / journal entries after the load test | 3 files, 0 failed | ≈ 3 s |
+| 2026-10-22 | `yarn backup verify --sample 2` (restore test) | Platform + both tenants | 3 of 3 passed, every integrity check green | ≈ 5 s |
+| 2026-10-22 | §5 restore of one tenant, then **switch databases** (live → `…_before_20261022`, restored → live), `yarn db:migrate`, API started on the restored database | Load tenant | Tenant id, schema 0025, counts (8,979 payments, 8,979 entries, 9,089 audit rows) identical; ledger nets to 0; API: integrity passed, 40 vehicles, a new payment took `RCT-2026-008980` (numbering continued) | ≈ 3 s restore; < 2 min end to end by hand |
+| every CI run | `src/framework/e2e/moneyFlows.int.test.ts` backs up a tenant with a full work and pay life cycle and restores it through the restore test | Remittances, invoice payment and reversal, agreement to ownership transfer | All checks green | – |
+
+Local only (decision 63): the timings say nothing yet about restores across a network or of large tenants; repeat the drill on the hosted cluster with a production-sized tenant before the RTO in doc 26 §1 is claimed.
+
+## 10. Still to build with hosting
 
 - Off-site, write-only, versioned object storage (replaces `BACKUP_DIR`; same keys).
 - L1: pgBackRest or WAL-G with continuous WAL archiving; monthly PITR drill.

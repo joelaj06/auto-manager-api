@@ -102,6 +102,14 @@ describe("tenant backups", () => {
       "tenant identity",
       "row counts",
       "foreign keys valid",
+      "integrity: journal entries balanced",
+      "integrity: trial balance",
+      "integrity: payment allocations",
+      "integrity: invoice payments",
+      "integrity: work and pay allocations",
+      "integrity: work and pay rows",
+      "integrity: work and pay receivables",
+      "integrity: work and pay unearned income",
     ]);
     expect((await catalog.find(backupId))?.verifiedAt).toBeInstanceOf(Date);
     expect(await scratchDatabases()).toEqual([]);

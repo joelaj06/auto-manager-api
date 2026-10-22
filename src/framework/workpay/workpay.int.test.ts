@@ -408,6 +408,8 @@ describe("work and pay", () => {
   it("posts the price as a receivable when the agreement starts, the books balanced", async () => {
     const tb = await api().get("/api/v1/ledger/trial-balance").set(owner());
     expect(tb.body.data.balanced).toBe(true);
+    const integrity = await api().get("/api/v1/ledger/integrity").set(owner());
+    expect(integrity.body.data.passed, JSON.stringify(integrity.body.data.checks)).toBe(true);
     const byCode = (code: string) =>
       (tb.body.data.accounts as { code: string; balance: { amountMinor: number } }[]).find(
         (a) => a.code === code,
@@ -643,6 +645,8 @@ describe("work and pay", () => {
 
     const tb = await api().get("/api/v1/ledger/trial-balance").set(owner());
     expect(tb.body.data.balanced).toBe(true);
+    const integrity = await api().get("/api/v1/ledger/integrity").set(owner());
+    expect(integrity.body.data.passed, JSON.stringify(integrity.body.data.checks)).toBe(true);
     const byCode = (code: string) =>
       (tb.body.data.accounts as { code: string; balance: { amountMinor: number } }[]).find(
         (a) => a.code === code,

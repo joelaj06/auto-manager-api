@@ -462,6 +462,18 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
     }),
     defineRoute({
       method: "get",
+      path: "/api/v1/ledger/integrity",
+      summary:
+        "Check the books: entries balanced, allocations add up, work and pay sub-ledgers agree with the ledger",
+      tags: ["finance"],
+      access: access.permission("finance.ledger.view"),
+      responses: { 200: { description: "Each check, with the first offenders" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await ledger.integrity()));
+      },
+    }),
+    defineRoute({
+      method: "get",
       path: "/api/v1/ledger/lines",
       summary: "Ledger lines by account, party, vehicle, branch or period, newest first",
       tags: ["finance"],

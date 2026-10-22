@@ -1,4 +1,6 @@
 import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
+import type { IIntegrityChecks } from "../../application/ports/IIntegrityChecks.js";
+import { PostgresIntegrityChecks } from "../../infrastructure/integrity/PostgresIntegrityChecks.js";
 import type {
   IWorkPayAgreementRepository,
   IWorkPayLifecycleRecords,
@@ -3184,6 +3186,10 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  tenantRepository<IIntegrityChecks>(
+    TYPES.IntegrityChecks,
+    (tx) => new PostgresIntegrityChecks(() => tx.current()),
+  );
   container.bind<LedgerViews>(TYPES.LedgerViews).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -3194,6 +3200,7 @@ export function createContainer(
       auditTrail: IAuditTrail,
       requestContext: IRequestContext,
       ids: IIdGenerator,
+      integrity: IIntegrityChecks,
     ) =>
       new LedgerViews({
         unitOfWork,
@@ -3204,6 +3211,7 @@ export function createContainer(
         auditTrail,
         requestContext,
         ids,
+        integrity,
       }),
     [
       TYPES.UnitOfWork,
@@ -3214,6 +3222,7 @@ export function createContainer(
       TYPES.AuditTrail,
       TYPES.RequestContext,
       TYPES.IdGenerator,
+      TYPES.IntegrityChecks,
     ],
   );
   container

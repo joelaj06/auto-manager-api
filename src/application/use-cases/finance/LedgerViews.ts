@@ -1,3 +1,4 @@
+import type { IIntegrityChecks, IntegrityCheck } from "../../ports/IIntegrityChecks.js";
 import {
   FinanceRuleError,
   type AccountType,
@@ -62,8 +63,19 @@ export class LedgerViews {
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
       ids: IIdGenerator;
+      integrity: IIntegrityChecks;
     }>,
   ) {}
+
+  /** The invariants of the books (docs/26 §7): run any time, and after every restore. */
+  async integrity(): Promise<
+    Readonly<{ checkedAt: Date; passed: boolean; checks: readonly IntegrityCheck[] }>
+  > {
+    return this.deps.unitOfWork.run(async () => {
+      const checks = await this.deps.integrity.run();
+      return { checkedAt: new Date(), passed: checks.every((c) => c.passed), checks };
+    });
+  }
 
   async accounts(): Promise<readonly AccountBalanceView[]> {
     return (await this.trialBalance(null)).accounts;
