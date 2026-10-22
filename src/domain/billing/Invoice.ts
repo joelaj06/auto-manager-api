@@ -1,7 +1,8 @@
 import { DomainError } from "../errors/DomainError.js";
 import type { BillingDate } from "./Subscription.js";
 
-export type InvoiceLineKind = "branch_rate" | "size_adjustment" | "setup" | "other" | "discount";
+export type InvoiceLineKind =
+  "branch_rate" | "size_adjustment" | "setup" | "other" | "discount" | "proration";
 
 export type InvoiceLine = Readonly<{
   kind: InvoiceLineKind;
@@ -16,6 +17,24 @@ export type InvoiceLine = Readonly<{
 
 export type InvoiceStatus = "open" | "paid" | "void";
 
+/** A levy on the invoice (VAT, NHIL, GETFund …) with the rate applied. */
+export type InvoiceTaxLine = Readonly<{
+  key: string;
+  name: string;
+  rate: string;
+  amountMinor: number;
+}>;
+
+/** Seller or buyer as printed on the invoice when it was issued. */
+export type InvoiceParty = Readonly<{
+  name: string;
+  address: string | null;
+  tin: string | null;
+  vatNumber?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}>;
+
 export type InvoiceProps = Readonly<{
   id: string;
   code: string;
@@ -25,9 +44,12 @@ export type InvoiceProps = Readonly<{
   periodEnd: BillingDate;
   lines: readonly InvoiceLine[];
   subtotalMinor: number;
+  taxLines: readonly InvoiceTaxLine[];
   taxMinor: number;
   totalMinor: number;
   paidMinor: number;
+  seller: InvoiceParty | null;
+  buyer: InvoiceParty | null;
   currency: string;
   status: InvoiceStatus;
   issuedAt: Date;
@@ -45,10 +67,15 @@ export class InvoiceRuleError extends DomainError {
   }
 }
 
+export const invoiceSubtotal = (lines: readonly InvoiceLine[]) =>
+  lines.reduce((sum, line) => sum + line.amountMinor, 0);
+
 /** A line with its amount computed (quantity × unit price). */
 export function invoiceLine(params: Omit<InvoiceLine, "amountMinor">): InvoiceLine {
   if (!Number.isInteger(params.quantity) || params.quantity < 1)
     throw new InvoiceRuleError("Quantities are whole numbers of at least 1");
+  if (params.description.trim().length === 0 || params.description.length > 300)
+    throw new InvoiceRuleError("A line needs a description (up to 300 characters)");
   if (!Number.isInteger(params.unitMinor))
     throw new InvoiceRuleError("Amounts are whole minor units (pesewas)");
   if ((params.kind === "discount") !== params.unitMinor < 0)
@@ -75,14 +102,19 @@ export class Invoice {
     subscriptionId: string;
     period: Readonly<{ start: BillingDate; end: BillingDate }>;
     lines: readonly InvoiceLine[];
+    /** Computed on the subtotal (`billingTax`); empty when we charge no VAT. */
+    taxLines: readonly InvoiceTaxLine[];
+    seller: InvoiceParty | null;
+    buyer: InvoiceParty | null;
     currency: string;
     now: Date;
     dueAt: Date;
     createdBy: string | null;
   }): Invoice {
     if (params.lines.length === 0) throw new InvoiceRuleError("An invoice needs at least one line");
-    const subtotal = params.lines.reduce((sum, line) => sum + line.amountMinor, 0);
+    const subtotal = invoiceSubtotal(params.lines);
     if (subtotal <= 0) throw new InvoiceRuleError("The invoice total must be more than zero");
+    const tax = params.taxLines.reduce((sum, t) => sum + t.amountMinor, 0);
     return new Invoice({
       id: params.id,
       code: params.code,
@@ -92,10 +124,12 @@ export class Invoice {
       periodEnd: params.period.end,
       lines: params.lines,
       subtotalMinor: subtotal,
-      // VAT on the subscription fee awaits the accountant's confirmation (docs/25 §3).
-      taxMinor: 0,
-      totalMinor: subtotal,
+      taxLines: params.taxLines,
+      taxMinor: tax,
+      totalMinor: subtotal + tax,
       paidMinor: 0,
+      seller: params.seller,
+      buyer: params.buyer,
       currency: params.currency,
       status: "open",
       issuedAt: params.now,

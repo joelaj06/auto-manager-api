@@ -1,4 +1,6 @@
+import type { BillingSettings } from "../billing/BillingSettings.js";
 import type { Invoice, InvoiceStatus } from "../billing/Invoice.js";
+import type { Proration } from "../billing/Proration.js";
 import type { Plan, Subscription } from "../billing/Subscription.js";
 
 export type PaymentMethod = "bank_transfer" | "momo" | "cash" | "cheque" | "other";
@@ -14,6 +16,51 @@ export type PaymentRecord = Readonly<{
   receivedAt: Date;
   notes: string | null;
   recordedBy: string;
+  /** AF-RCT-2026-000001. */
+  receiptNumber: string | null;
+  createdAt: Date;
+}>;
+
+/** The tenant as the buyer on our invoices. */
+export type BillingProfile = Readonly<{
+  tenantId: string;
+  legalName: string;
+  tin: string | null;
+  address: string | null;
+  updatedAt: Date;
+}>;
+
+export type BillingContact = Readonly<{
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+  receivesNotices: boolean;
+}>;
+
+/** A charge waiting for the next invoice (a branch added during a paid period). */
+export type BillingAdjustment = Proration &
+  Readonly<{
+    id: string;
+    subscriptionId: string;
+    tenantId: string;
+    kind: "proration";
+    description: string;
+    invoiceId: string | null;
+    createdAt: Date;
+  }>;
+
+/** A saved card or MoMo number (created by the payment gateway). */
+export type SavedPaymentMethod = Readonly<{
+  id: string;
+  tenantId: string;
+  provider: string;
+  type: "card" | "momo";
+  label: string;
+  sealedAuthorization: string | null;
+  isDefault: boolean;
+  expiresOn: string | null;
   createdAt: Date;
 }>;
 
@@ -68,4 +115,37 @@ export interface IBillingRepository {
   paymentReferenceUsed(method: PaymentMethod, reference: string): Promise<boolean>;
 
   summary(now: Date): Promise<BillingSummary>;
+
+  settings(): Promise<BillingSettings>;
+  saveSettings(settings: BillingSettings, staffId: string): Promise<void>;
+
+  /** Billing details and primary contact from the tenant's application, when it has none. */
+  seedBillingDetails(tenantId: string): Promise<void>;
+  /** The tenant's name in the registry (an invoice without a billing profile). */
+  tenantName(tenantId: string): Promise<string>;
+  profile(tenantId: string): Promise<BillingProfile | null>;
+  saveProfile(profile: Omit<BillingProfile, "updatedAt">, userId: string | null): Promise<void>;
+  contacts(tenantId: string): Promise<BillingContact[]>;
+  /** Replaces the tenant's contacts (ids kept where given). */
+  replaceContacts(tenantId: string, contacts: readonly BillingContact[]): Promise<void>;
+
+  addAdjustment(adjustment: Omit<BillingAdjustment, "invoiceId" | "createdAt">): Promise<void>;
+  /** Charges not on an invoice yet (locked when asked). */
+  pendingAdjustments(subscriptionId: string, lock?: boolean): Promise<BillingAdjustment[]>;
+  adjustments(
+    filter: Readonly<{ tenantId?: string; invoiceId?: string }>,
+  ): Promise<BillingAdjustment[]>;
+  markInvoiced(adjustmentIds: readonly string[], invoiceId: string): Promise<void>;
+  /** A voided invoice gives its adjustments back to the next one. */
+  releaseAdjustments(invoiceId: string): Promise<void>;
+
+  /** The next receipt number for `year`, e.g. AF-RCT-2026-000042. */
+  nextReceiptCode(year: number): Promise<string>;
+  payment(id: string): Promise<PaymentRecord | null>;
+
+  paymentMethods(tenantId: string): Promise<SavedPaymentMethod[]>;
+  savePaymentMethod(method: SavedPaymentMethod): Promise<void>;
+  /** The tenant's default method becomes `id` (only one default). */
+  setDefaultPaymentMethod(tenantId: string, id: string): Promise<void>;
+  removePaymentMethod(tenantId: string, id: string, now: Date): Promise<boolean>;
 }

@@ -1,12 +1,18 @@
-import { resolveEntitlements, type Subscription } from "../../../domain/billing/Subscription.js";
+import {
+  resolveEntitlements,
+  type Plan,
+  type Subscription,
+} from "../../../domain/billing/Subscription.js";
 import type { IBillingRepository } from "../../../domain/repositories/IBillingRepository.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IClock } from "../../ports/IClock.js";
+import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import {
   SubscriptionNotFoundError,
   type SubscriptionAdministration,
 } from "./SubscriptionAdministration.js";
+import { chargeAddedBranches } from "./prorations.js";
 
 /** Activating one more branch is beyond the subscription (409, docs/25 §7). */
 export class BranchLimitError extends ApplicationError {
@@ -33,7 +39,8 @@ export class BranchLimitError extends ApplicationError {
  * - trial: up to the plan's trial limit; the billed count follows the active branches, so the
  *   first invoice covers what the tenant uses;
  * - paying: the billed count is the limit; one more branch needs the tenant's confirmation of
- *   the extra charge (raises the count, billed from the next invoice);
+ *   the extra charge (raises the count; the rest of the paid period is prorated onto the next
+ *   invoice, which then bills the new count);
  * - deactivating a branch lowers the count to the active branches (the saving applies from the
  *   next invoice; reactivating it later needs confirmation again).
  */
@@ -43,6 +50,7 @@ export class BranchEntitlements {
       billing: IBillingRepository;
       subscriptions: SubscriptionAdministration;
       unitOfWork: IPlatformUnitOfWork;
+      ids: IIdGenerator;
       clock: IClock;
     }>,
   ) {}
@@ -71,7 +79,7 @@ export class BranchEntitlements {
           plan.branchPriceMinor,
           plan.currency,
         );
-      await this.setCount(subscription, wanted, "branch_added", options.userId, true);
+      await this.setCount(subscription, wanted, "branch_added", options.userId, true, "user", plan);
     });
   }
 
@@ -98,9 +106,12 @@ export class BranchEntitlements {
     actorId: string,
     confirmedByTenant: boolean,
     actorType: "user" | "platform_staff" = "user",
+    plan: Plan | null = null,
   ): Promise<void> {
     const before = subscription.branchCount;
     subscription.setBranchCount(count);
+    if (plan !== null)
+      await chargeAddedBranches(this.deps, subscription, plan, { type: actorType, id: actorId });
     await this.deps.billing.saveSubscription(subscription);
     await this.deps.billing.appendEvent(subscription.id, {
       type,

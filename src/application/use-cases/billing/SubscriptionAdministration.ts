@@ -1,3 +1,4 @@
+import { billingSettings, type BillingSettings } from "../../../domain/billing/BillingSettings.js";
 import {
   resolveEntitlements,
   Subscription,
@@ -18,6 +19,7 @@ import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import { recordStaffAction } from "../console/consoleAudit.js";
+import { chargeAddedBranches } from "./prorations.js";
 
 export class SubscriptionNotFoundError extends ApplicationError {
   readonly code = "SUBSCRIPTION_NOT_FOUND";
@@ -69,10 +71,14 @@ export class SubscriptionAdministration {
     }>,
   ) {}
 
-  /** Provisioning: the trial subscription on the standard plan. Idempotent. */
+  /**
+   * Provisioning: the trial subscription on the standard plan, and the billing details and
+   * primary contact from the application. Idempotent.
+   */
   async startTrial(tenantId: string, trialEndsAt: Date): Promise<void> {
     const { billing } = this.deps;
     await this.deps.unitOfWork.run(async () => {
+      await billing.seedBillingDetails(tenantId);
       if ((await billing.subscriptionOf(tenantId, true)) !== null) return;
       const plan = await this.plan("standard");
       const subscription = Subscription.startTrial({
@@ -135,6 +141,39 @@ export class SubscriptionAdministration {
     });
   }
 
+  async billingSettings(): Promise<BillingSettings> {
+    return this.deps.billing.settings();
+  }
+
+  /** Who we are on invoices and the VAT we charge (from the next invoice on). */
+  async updateBillingSettings(
+    input: BillingSettings,
+    reason: string,
+    actor: PlatformPrincipal,
+  ): Promise<BillingSettings> {
+    const { billing } = this.deps;
+    return this.deps.unitOfWork.run(async () => {
+      const before = await billing.settings();
+      const after = billingSettings(input);
+      await billing.saveSettings(after, actor.userId);
+      await recordStaffAction(this.deps, actor, {
+        action: "billing.settings_changed",
+        entityType: "billing_settings",
+        entityId: "platform",
+        reason,
+        before,
+        after,
+      });
+      return after;
+    });
+  }
+
+  /** A tenant's billing details and contacts (console). */
+  async billingDetails(tenantId: string) {
+    const { billing } = this.deps;
+    return { profile: await billing.profile(tenantId), contacts: await billing.contacts(tenantId) };
+  }
+
   async setLicenceType(
     tenantId: string,
     type: LicenceType,
@@ -167,10 +206,17 @@ export class SubscriptionAdministration {
     reason: string,
     actor: PlatformPrincipal,
   ): Promise<SubscriptionView> {
-    return this.change(tenantId, actor, reason, "branch_count_set", (s) => {
+    return this.change(tenantId, actor, reason, "branch_count_set", async (s) => {
       const before = s.branchCount;
       s.setBranchCount(branchCount);
-      return Promise.resolve({ before, after: branchCount });
+      // More branches during a paid period are prorated, as when the tenant adds them.
+      const prorationMinor = await chargeAddedBranches(
+        this.deps,
+        s,
+        await this.plan(s.licenceType),
+        { type: "platform_staff", id: actor.userId },
+      );
+      return { before, after: branchCount, prorationMinor };
     });
   }
 
@@ -212,7 +258,9 @@ export class SubscriptionAdministration {
     actor: PlatformPrincipal,
     reason: string,
     type: string,
-    apply: (subscription: Subscription) => Promise<{ before: unknown; after: unknown }>,
+    apply: (
+      subscription: Subscription,
+    ) => Promise<{ before: unknown; after: unknown; prorationMinor?: number }>,
   ): Promise<SubscriptionView> {
     const { billing } = this.deps;
     const subscription = await this.deps.unitOfWork.run(async () => {

@@ -1,4 +1,5 @@
 import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
+import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IIntegrityChecks } from "../../application/ports/IIntegrityChecks.js";
 import { PostgresIntegrityChecks } from "../../infrastructure/integrity/PostgresIntegrityChecks.js";
 import type {
@@ -2209,6 +2210,7 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      renderer: IPdfRenderer,
     ) =>
       new ManualBilling({
         billing,
@@ -2219,6 +2221,7 @@ export function createContainer(
         requestContext,
         ids,
         clock,
+        documents: new BillingDocuments({ renderer, clock }),
       }),
     [
       TYPES.BillingRepository,
@@ -2229,6 +2232,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.PdfRenderer,
     ],
   );
   container
@@ -2238,25 +2242,49 @@ export function createContainer(
         billing: IBillingRepository,
         subscriptions: SubscriptionAdministration,
         unitOfWork: IPlatformUnitOfWork,
+        ids: IIdGenerator,
         clock: IClock,
-      ) => new BranchEntitlements({ billing, subscriptions, unitOfWork, clock }),
+      ) => new BranchEntitlements({ billing, subscriptions, unitOfWork, ids, clock }),
       [
         TYPES.BillingRepository,
         TYPES.SubscriptionAdministration,
         TYPES.PlatformUnitOfWork,
+        TYPES.IdGenerator,
         TYPES.Clock,
       ],
     );
-  container
-    .bind<TenantBilling>(TYPES.TenantBilling)
-    .toResolvedValue(
-      (
-        subscriptions: SubscriptionAdministration,
-        billing: ManualBilling,
-        tenantContext: ITenantContext,
-      ) => new TenantBilling({ subscriptions, billing, tenantContext }),
-      [TYPES.SubscriptionAdministration, TYPES.ManualBilling, TYPES.TenantContext],
-    );
+  container.bind<TenantBilling>(TYPES.TenantBilling).toResolvedValue(
+    (
+      subscriptions: SubscriptionAdministration,
+      billing: ManualBilling,
+      records: IBillingRepository,
+      unitOfWork: IPlatformUnitOfWork,
+      tenantContext: ITenantContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      renderer: IPdfRenderer,
+    ) =>
+      new TenantBilling({
+        subscriptions,
+        billing,
+        records,
+        documents: new BillingDocuments({ renderer, clock }),
+        unitOfWork,
+        tenantContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.SubscriptionAdministration,
+      TYPES.ManualBilling,
+      TYPES.BillingRepository,
+      TYPES.PlatformUnitOfWork,
+      TYPES.TenantContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.PdfRenderer,
+    ],
+  );
 
   // --- Reference data and settings (currencies, tax, FX, expense categories, vehicles) ---
   platformRepository<IReferenceData>(TYPES.ReferenceData, (p) => new PostgresReferenceData(p));

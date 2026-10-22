@@ -362,14 +362,20 @@ Statements: `GET …/:id/statement` (and `statement.pdf`), for drivers at
 the forecast; `/api/v1/dashboards/workpay/arrears` lists who is behind. Due, overdue, guarantor,
 default, payment and milestone messages are rules in `/settings/notifications` (`workpay_*`).
 
-## Subscriptions and billing (manual for now)
+## Subscriptions and billing (manual payments for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
-branch (`PUT /api/platform/v1/billing/plans/standard/price`, step-up), issue each period's invoice
-(`POST /api/platform/v1/tenants/:id/invoices`) and record payments received
-(`POST /api/platform/v1/billing/invoices/:id/payments`). A fully paid invoice activates the
-subscription and the tenant. Tenants read their Billing tab at `/api/v1/billing/*`. Branches
-beyond the subscription are refused with `ENTITLEMENT_BRANCH_LIMIT` (or added with
+branch (`PUT /api/platform/v1/billing/plans/standard/price`, step-up) and the billing settings —
+Autoforce as the seller, VAT registration and levies, payment instructions
+(`PUT /api/platform/v1/billing/settings`; VAT is off until registered). They issue each period's
+invoice (`POST /api/platform/v1/tenants/:id/invoices`: billed branches, prorations of branches
+added during the paid period, VAT) and record payments received
+(`POST /api/platform/v1/billing/invoices/:id/payments`; each gets a receipt number). A fully paid
+invoice activates the subscription and the tenant. Tenants' Billing tab (`/api/v1/billing/*`):
+`subscription`, `upcoming` (the next invoice as it stands), `invoices[/:id[/pdf]]`,
+`transactions` (history with running balance), `receipts[/:id[/pdf]]`, `details` and `contacts`
+(who they are on invoices, who receives them), `payment-methods`. Branches beyond the
+subscription are refused with `ENTITLEMENT_BRANCH_LIMIT` (or added with
 `confirmBranchPurchase: true` once paying). Amounts are in pesewas (minor units).
 
 ## Mobile app connect

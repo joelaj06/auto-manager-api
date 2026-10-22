@@ -105,6 +105,9 @@ describe("Invoice", () => {
       tenantId: "t1",
       subscriptionId: "s1",
       period: { start: "2026-11-01", end: "2026-12-01" },
+      taxLines: [],
+      seller: null,
+      buyer: null,
       lines: [
         invoiceLine({
           kind: "branch_rate",

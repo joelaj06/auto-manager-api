@@ -2,7 +2,8 @@ import { z } from "zod";
 import type { ManualBilling } from "../../application/use-cases/billing/ManualBilling.js";
 import type { SubscriptionAdministration } from "../../application/use-cases/billing/SubscriptionAdministration.js";
 import type { TenantBilling } from "../../application/use-cases/billing/TenantBilling.js";
-import { staffOf } from "../middleware/AccessGuard.js";
+import { principalOf, staffOf } from "../middleware/AccessGuard.js";
+import { sendPdf } from "../presenters/pdfResponse.js";
 import { envelope } from "../presenters/responseEnvelope.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
 import { access } from "./RouteAccess.js";
@@ -23,9 +24,10 @@ export type BillingRouteDependencies = Readonly<{
 }>;
 
 /**
- * Subscriptions and manual billing (docs/25): the tenant's Billing tab (read) and the console
- * (plans, licence type, trial extension, billed branches, invoices and recorded payments).
- * Amounts are minor units (pesewas).
+ * Subscriptions and billing (docs/25): the tenant's Billing tab (subscription, the next invoice,
+ * invoices and receipts with PDFs, the transaction history, billing details and contacts,
+ * payment methods) and the console (plans, billing settings and VAT, licence type, trial
+ * extension, billed branches, invoices and recorded payments). Amounts are minor units.
  */
 export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
   const { tenantBilling, subscriptions, billing } = deps;
@@ -69,13 +71,226 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
     }),
     defineRoute({
       method: "get",
-      path: "/api/v1/billing/transactions",
-      summary: "Your payment history",
+      path: "/api/v1/billing/invoices/:id/pdf",
+      summary: "One of your invoices as a PDF",
       tags: ["billing"],
       access: access.permission("billing.view"),
-      responses: { 200: { description: "Payments, newest first" } },
+      request: { params: tenantParams },
+      responses: { 200: { description: "application/pdf" } },
+      handler: async ({ params }, _req, res) => {
+        sendPdf(res, await tenantBilling.invoicePdf(params.id));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/upcoming",
+      summary: "Your next invoice as it stands today: branches, prorations, VAT",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      responses: { 200: { description: "Invoice preview" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await tenantBilling.upcoming()));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/transactions",
+      summary: "Your billing history: invoices, cancellations and payments with the balance",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      responses: { 200: { description: "Transactions, oldest first, and what is owed now" } },
       handler: async (_input, _req, res) => {
         res.json(envelope(await tenantBilling.transactions()));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/receipts",
+      summary: "Receipts of your payments (newest first)",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      responses: { 200: { description: "Receipts" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await tenantBilling.receipts()));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/receipts/:id",
+      summary: "One receipt",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "Receipt" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await tenantBilling.receipt(params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/receipts/:id/pdf",
+      summary: "A receipt as a PDF",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "application/pdf" } },
+      handler: async ({ params }, _req, res) => {
+        sendPdf(res, await tenantBilling.receiptPdf(params.id));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/details",
+      summary: "Your billing details (as printed on invoices) and billing contacts",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      responses: { 200: { description: "Billing details" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await tenantBilling.profile()));
+      },
+    }),
+    defineRoute({
+      method: "put",
+      path: "/api/v1/billing/details",
+      summary: "Change your legal name, TIN and address on invoices (from the next invoice)",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: {
+        body: z.object({
+          legalName: z.string().trim().min(2).max(160),
+          tin: z.string().trim().max(40).nullish(),
+          address: z.string().trim().max(500).nullish(),
+        }),
+      },
+      responses: { 200: { description: "Billing details" } },
+      handler: async ({ body }, _req, res) => {
+        res.json(envelope(await tenantBilling.updateProfile(body, principalOf(res).userId)));
+      },
+    }),
+    defineRoute({
+      method: "put",
+      path: "/api/v1/billing/contacts",
+      summary: "Who receives invoices, receipts and billing notices (1–5, one primary)",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: {
+        body: z.object({
+          contacts: z
+            .array(
+              z.object({
+                name: z.string().trim().min(2).max(120),
+                email: z.string().trim().max(200).nullish(),
+                phone: z.string().trim().max(20).nullish(),
+                isPrimary: z.boolean().optional(),
+                receivesNotices: z.boolean().optional(),
+              }),
+            )
+            .min(1)
+            .max(5),
+        }),
+      },
+      responses: { 200: { description: "Contacts" } },
+      handler: async ({ body }, _req, res) => {
+        res.json(envelope(await tenantBilling.replaceContacts(body.contacts)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/payment-methods",
+      summary: "Saved cards and MoMo numbers (default first)",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      responses: { 200: { description: "Payment methods" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await tenantBilling.paymentMethods()));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/billing/payment-methods/:id/default",
+      summary: "Make a saved payment method the default",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "Payment methods" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await tenantBilling.setDefaultPaymentMethod(params.id)));
+      },
+    }),
+    defineRoute({
+      method: "delete",
+      path: "/api/v1/billing/payment-methods/:id",
+      summary: "Forget a saved payment method",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: { params: tenantParams },
+      responses: { 204: { description: "Removed" } },
+      handler: async ({ params }, _req, res) => {
+        await tenantBilling.removePaymentMethod(params.id);
+        res.status(204).end();
+      },
+    }),
+
+    // --- console: billing settings ---
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/settings`,
+      summary: "Autoforce as the seller on invoices, VAT and payment instructions",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      responses: { 200: { description: "Billing settings" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await subscriptions.billingSettings()));
+      },
+    }),
+    defineRoute({
+      method: "put",
+      path: `${CONSOLE}/billing/settings`,
+      summary: "Change the seller details, VAT registration and rates (applies to new invoices)",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.prices.manage"),
+      request: {
+        body: z.object({
+          sellerName: z.string().trim().min(2).max(160),
+          sellerAddress: z.string().trim().max(500).nullable(),
+          sellerTin: z.string().trim().max(40).nullable(),
+          sellerEmail: z.string().trim().max(200).nullable(),
+          sellerPhone: z.string().trim().max(40).nullable(),
+          vatRegistered: z.boolean(),
+          vatNumber: z.string().trim().max(40).nullable(),
+          taxComponents: z
+            .array(
+              z.object({
+                key: z.string().max(30),
+                name: z.string().trim().min(1).max(60),
+                rate: z.string().regex(/^\d{1,3}(\.\d{1,4})?$/),
+                base: z.enum(["net", "net_plus_previous"]),
+                effectiveFrom: z.iso.date(),
+                effectiveTo: z.iso.date().nullable(),
+              }),
+            )
+            .max(10),
+          paymentInstructions: z.string().trim().max(1_000).nullable(),
+          invoiceDueDays: z.number().int().min(0).max(60),
+          reason,
+        }),
+      },
+      responses: { 200: { description: "Billing settings" } },
+      handler: async ({ body }, _req, res) => {
+        const { reason: why, ...settings } = body;
+        res.json(envelope(await subscriptions.updateBillingSettings(settings, why, staffOf(res))));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/tenants/:id/billing-details`,
+      summary: "A tenant's billing details and contacts",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "Billing details" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await subscriptions.billingDetails(params.id)));
       },
     }),
 
@@ -259,6 +474,30 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
       responses: { 200: { description: "Invoice" } },
       handler: async ({ params }, _req, res) => {
         res.json(envelope(await billing.invoice(params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/invoices/:id/pdf`,
+      summary: "An invoice as a PDF",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "application/pdf" } },
+      handler: async ({ params }, _req, res) => {
+        sendPdf(res, await billing.invoicePdf(params.id));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/payments/:id/receipt/pdf`,
+      summary: "The receipt of a payment as a PDF",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "application/pdf" } },
+      handler: async ({ params }, _req, res) => {
+        sendPdf(res, await billing.receiptPdf(params.id));
       },
     }),
     defineRoute({

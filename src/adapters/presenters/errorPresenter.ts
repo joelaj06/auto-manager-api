@@ -158,6 +158,8 @@ const RULES: Readonly<Record<string, Rule>> = {
   PERIOD_INVOICED: { status: 409 },
   LICENCE_TYPE_LOCKED: { status: 409 },
   ENTITLEMENT_BRANCH_LIMIT: { status: 409 },
+  RECEIPT_NOT_FOUND: { status: 404 },
+  PAYMENT_METHOD_NOT_FOUND: { status: 404 },
 
   // Vehicles
   VEHICLE_NOT_FOUND: { status: 404 },

@@ -30,6 +30,8 @@ export type SubscriptionProps = Readonly<{
   trialEndsAt: Date | null;
   currentPeriodStart: BillingDate | null;
   currentPeriodEnd: BillingDate | null;
+  /** Branches charged for the current paid period (its invoice plus prorations). */
+  periodBranchCount: number | null;
   licenceLockedAt: Date | null;
   version: number;
 }>;
@@ -76,6 +78,7 @@ export class Subscription {
       trialEndsAt: params.trialEndsAt,
       currentPeriodStart: null,
       currentPeriodEnd: null,
+      periodBranchCount: null,
       licenceLockedAt: null,
       version: 1,
     });
@@ -138,8 +141,15 @@ export class Subscription {
     return { start, end: addMonths(start, 1) };
   }
 
-  /** A paid invoice: the subscription is active for its period; the licence type is fixed. */
-  applyPaidPeriod(period: Readonly<{ start: BillingDate; end: BillingDate }>, now: Date): void {
+  /**
+   * A paid invoice: the subscription is active for its period (covering `branches`); the
+   * licence type is fixed.
+   */
+  applyPaidPeriod(
+    period: Readonly<{ start: BillingDate; end: BillingDate }>,
+    now: Date,
+    branches: number = this.props.branchCount,
+  ): void {
     const extends_ =
       this.props.currentPeriodEnd === null || period.end > this.props.currentPeriodEnd;
     this.props = {
@@ -147,8 +157,28 @@ export class Subscription {
       status: "active",
       currentPeriodStart: extends_ ? period.start : this.props.currentPeriodStart,
       currentPeriodEnd: extends_ ? period.end : this.props.currentPeriodEnd,
+      periodBranchCount: extends_ ? branches : this.props.periodBranchCount,
       licenceLockedAt: this.props.licenceLockedAt ?? now,
     };
+  }
+
+  /**
+   * More branches billed during a paid period: how many the period has not been charged for
+   * yet (a branch removed and added again in the same period is not charged twice), and the
+   * period to prorate. Records them as charged. Null outside a paid period or when covered.
+   */
+  chargeAddedBranches(today: BillingDate): Readonly<{
+    branches: number;
+    period: Readonly<{ start: BillingDate; end: BillingDate }>;
+  }> | null {
+    const { currentPeriodStart: start, currentPeriodEnd: end, periodBranchCount } = this.props;
+    if (this.props.status === "trialing" || start === null || end === null) return null;
+    if (today >= end || today < start) return null;
+    const charged = periodBranchCount ?? this.props.branchCount;
+    const extra = this.props.branchCount - charged;
+    if (extra <= 0) return null;
+    this.props = { ...this.props, periodBranchCount: this.props.branchCount };
+    return { branches: extra, period: { start, end } };
   }
 
   snapshot(): SubscriptionProps {

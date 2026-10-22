@@ -173,9 +173,13 @@ describe("manual billing", () => {
     expect([locked.status, locked.body.error.code]).toEqual([409, "LICENCE_TYPE_LOCKED"]);
 
     const history = await api().get("/api/v1/billing/transactions").set(as(t.ownerAccessToken));
-    expect(history.body.data).toHaveLength(2);
-    expect(history.body.data[0]).not.toHaveProperty("recordedBy");
-    expect(history.body.data[0]).not.toHaveProperty("notes");
+    const paid = (history.body.data.transactions as { type: string }[]).filter(
+      (e) => e.type === "payment",
+    );
+    expect(paid).toHaveLength(2);
+    expect(history.body.data.balanceMinor).toBe(0);
+    expect(paid[0]).not.toHaveProperty("recordedBy");
+    expect(paid[0]).not.toHaveProperty("notes");
 
     // Paying tenants may add a branch by confirming the extra charge.
     const blocked = await addBranch(t);
@@ -288,5 +292,234 @@ describe("manual billing", () => {
     expect(branches.body.data.branchCount).toBe(5);
     const notStaff = await api().get(`/api/v1/billing/subscription`).set(staff());
     expect(notStaff.status).toBe(401);
+  });
+});
+
+describe("billing core", () => {
+  const owner = (t: ProvisionedTenant) => as(t.ownerAccessToken);
+  const settingsBody = (vatRegistered: boolean) => ({
+    sellerName: "Autoforce Technologies Ltd",
+    sellerAddress: "12 Liberation Road, Accra",
+    sellerTin: "C0009998887",
+    sellerEmail: "billing@autoforce.example",
+    sellerPhone: "+233302000000",
+    vatRegistered,
+    vatNumber: vatRegistered ? "V0012345678" : null,
+    taxComponents: [
+      {
+        key: "vat",
+        name: "VAT",
+        rate: "15",
+        base: "net",
+        effectiveFrom: "2026-01-01",
+        effectiveTo: null,
+      },
+      {
+        key: "nhil",
+        name: "NHIL",
+        rate: "2.5",
+        base: "net",
+        effectiveFrom: "2026-01-01",
+        effectiveTo: null,
+      },
+      {
+        key: "getfund",
+        name: "GETFund Levy",
+        rate: "2.5",
+        base: "net",
+        effectiveFrom: "2026-01-01",
+        effectiveTo: null,
+      },
+    ],
+    paymentInstructions: "GCB Bank, account 1234567890, Autoforce Technologies Ltd",
+    invoiceDueDays: 10,
+    reason: "Accountant confirmed VAT registration",
+  });
+
+  /** A paying tenant whose paid period includes today (its trial ended yesterday). */
+  async function payingTenant() {
+    const t = await tenants.create();
+    await platform.query(
+      "update subscriptions set trial_ends_at = now() - interval '1 day' where tenant_id = $1",
+      [t.tenantId],
+    );
+    await api()
+      .put(`${CONSOLE}/billing/plans/standard/price`)
+      .set(staff())
+      .send({ branchPriceMinor: PRICE, reason: "Price list" })
+      .expect(200);
+    const first = await issue(t);
+    await pay(first.id, first.totalMinor).expect(200);
+    return { t, first };
+  }
+
+  it("keeps the tenant's billing details and contacts, seeded from the application", async () => {
+    const t = await tenants.create();
+    const details = await api().get("/api/v1/billing/details").set(owner(t));
+    expect(details.body.data.profile.legalName).toMatch(/^Test Fleet /);
+    expect(details.body.data.contacts).toEqual([
+      expect.objectContaining({ isPrimary: true, email: t.ownerEmail }),
+    ]);
+    const updated = await api()
+      .put("/api/v1/billing/details")
+      .set(owner(t))
+      .send({ legalName: "Kumasi Cabs Ltd", tin: "C0004445556", address: "Adum, Kumasi" });
+    expect(updated.body.data).toMatchObject({ legalName: "Kumasi Cabs Ltd", tin: "C0004445556" });
+    const noPrimary = await api()
+      .put("/api/v1/billing/contacts")
+      .set(owner(t))
+      .send({ contacts: [{ name: "Accounts", email: "accounts@kumasicabs.example" }] });
+    expect(noPrimary.body.error.message).toMatch(/exactly one primary/);
+    const contacts = await api()
+      .put("/api/v1/billing/contacts")
+      .set(owner(t))
+      .send({
+        contacts: [
+          { name: "Ama Owner", email: t.ownerEmail, isPrimary: true },
+          { name: "Accounts", email: "accounts@kumasicabs.example", phone: "+233244000111" },
+        ],
+      });
+    expect(contacts.body.data).toHaveLength(2);
+    const console_ = await api()
+      .get(`${CONSOLE}/tenants/${t.tenantId}/billing-details`)
+      .set(staff());
+    expect(console_.body.data.profile.legalName).toBe("Kumasi Cabs Ltd");
+  });
+
+  it("prorates a branch added during the paid period onto the next invoice, with VAT", async () => {
+    const { t, first } = await payingTenant();
+    expect(first.totalMinor).toBe(PRICE);
+    expect((await addBranch(t, true)).status).toBe(201);
+
+    const upcoming = await api().get("/api/v1/billing/upcoming").set(owner(t));
+    expect(upcoming.status, JSON.stringify(upcoming.body)).toBe(200);
+    const proration = (upcoming.body.data.lines as { kind: string; amountMinor: number }[]).find(
+      (l) => l.kind === "proration",
+    );
+    // Added on the first day of the period: the whole month for the new branch.
+    expect(proration).toMatchObject({ amountMinor: PRICE });
+    expect(upcoming.body.data).toMatchObject({ subtotalMinor: 3 * PRICE, taxLines: [] });
+
+    const vat = await api()
+      .put(`${CONSOLE}/billing/settings`)
+      .set(staff())
+      .send(settingsBody(true));
+    expect(vat.status, JSON.stringify(vat.body)).toBe(200);
+    try {
+      const next = await issue(t);
+      const full = await api().get(`/api/v1/billing/invoices/${next.id}`).set(owner(t));
+      expect(full.body.data).toMatchObject({
+        subtotalMinor: 3 * PRICE,
+        taxMinor: Math.round(3 * PRICE * 0.2),
+        totalMinor: 3 * PRICE + Math.round(3 * PRICE * 0.2),
+        seller: { name: "Autoforce Technologies Ltd", vatNumber: "V0012345678" },
+        buyer: { name: expect.stringMatching(/^Test Fleet /), email: t.ownerEmail },
+      });
+      expect(full.body.data.taxLines.map((l: { key: string }) => l.key)).toEqual([
+        "vat",
+        "nhil",
+        "getfund",
+      ]);
+      expect(full.body.data.lines.map((l: { kind: string }) => l.kind)).toEqual([
+        "branch_rate",
+        "proration",
+      ]);
+      // The proration is charged once: the next preview has none left.
+      const after = await api().get("/api/v1/billing/upcoming").set(owner(t));
+      expect(after.body.data.lines.map((l: { kind: string }) => l.kind)).toEqual(["branch_rate"]);
+      const events = await api().get(`${CONSOLE}/tenants/${t.tenantId}/subscription`).set(staff());
+      expect(events.body.data.events.map((e: { type: string }) => e.type)).toContain(
+        "proration_charged",
+      );
+
+      // Voiding the invoice gives the proration back to the next one.
+      await api()
+        .post(`${CONSOLE}/billing/invoices/${next.id}/void`)
+        .set(staff())
+        .send({ reason: "Wrong VAT test" })
+        .expect(200);
+      const back = await api().get("/api/v1/billing/upcoming").set(owner(t));
+      expect(back.body.data.lines.map((l: { kind: string }) => l.kind)).toEqual([
+        "branch_rate",
+        "proration",
+      ]);
+    } finally {
+      await api().put(`${CONSOLE}/billing/settings`).set(staff()).send(settingsBody(false));
+    }
+  });
+
+  it("numbers receipts, prints invoices and receipts, and keeps the full history", async () => {
+    const { t, first } = await payingTenant();
+    const receipts = await api().get("/api/v1/billing/receipts").set(owner(t));
+    expect(receipts.body.data[0]).toMatchObject({
+      invoiceId: first.id,
+      receiptNumber: expect.stringMatching(/^AF-RCT-\d{4}-\d{6}$/),
+    });
+    const receiptId = receipts.body.data[0].id as string;
+    for (const path of [
+      `/api/v1/billing/invoices/${first.id}/pdf`,
+      `/api/v1/billing/receipts/${receiptId}/pdf`,
+    ]) {
+      const pdf = await api().get(path).set(owner(t));
+      expect(pdf.status, path).toBe(200);
+      expect(pdf.headers["content-type"]).toMatch(/application\/pdf/);
+    }
+    for (const path of [
+      `${CONSOLE}/billing/invoices/${first.id}/pdf`,
+      `${CONSOLE}/billing/payments/${receiptId}/receipt/pdf`,
+    ])
+      expect((await api().get(path).set(staff())).status, path).toBe(200);
+    const other = await tenants.create();
+    expect(
+      (await api().get(`/api/v1/billing/receipts/${receiptId}`).set(owner(other))).status,
+    ).toBe(404);
+
+    await addBranch(t, true);
+    const open = await issue(t);
+    const history = await api().get("/api/v1/billing/transactions").set(owner(t));
+    expect(history.body.data).toMatchObject({ currency: "GHS", balanceMinor: open.totalMinor });
+    expect(
+      (history.body.data.transactions as { type: string; balanceMinor: number }[]).map((e) => [
+        e.type,
+        e.balanceMinor,
+      ]),
+    ).toEqual([
+      ["invoice", PRICE],
+      ["payment", 0],
+      ["invoice", open.totalMinor],
+    ]);
+  });
+
+  it("lists, defaults and forgets saved payment methods without exposing authorizations", async () => {
+    const t = await tenants.create();
+    for (const [label, isDefault] of [
+      ["Visa •• 4081", true],
+      ["MTN MoMo •• 5521", false],
+    ] as const)
+      await platform.query(
+        `insert into payment_methods (tenant_id, provider, type, label, sealed_authorization, is_default)
+         values ($1, 'paystack', $2, $3, 'sealed:secret', $4)`,
+        [t.tenantId, label.startsWith("Visa") ? "card" : "momo", label, isDefault],
+      );
+    const listed = await api().get("/api/v1/billing/payment-methods").set(owner(t));
+    expect(listed.body.data.map((m: { label: string }) => m.label)).toEqual([
+      "Visa •• 4081",
+      "MTN MoMo •• 5521",
+    ]);
+    expect(JSON.stringify(listed.body)).not.toContain("sealed");
+    const momo = listed.body.data[1].id as string;
+    const defaulted = await api()
+      .post(`/api/v1/billing/payment-methods/${momo}/default`)
+      .set(owner(t));
+    expect(defaulted.body.data[0]).toMatchObject({ id: momo, isDefault: true });
+    await api().delete(`/api/v1/billing/payment-methods/${momo}`).set(owner(t)).expect(204);
+    expect(
+      (await api().delete(`/api/v1/billing/payment-methods/${momo}`).set(owner(t))).status,
+    ).toBe(404);
+    const { rows } = await platform.query<{ sealed_authorization: string | null }>(
+      "select sealed_authorization from payment_methods where id = $1",
+      [momo],
+    );
+    expect(rows[0]?.sealed_authorization).toBeNull();
   });
 });
