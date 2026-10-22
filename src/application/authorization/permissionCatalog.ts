@@ -347,6 +347,11 @@ const definitions = {
     description: "See the expense dashboard",
     scopes: BRANCH_OR_ALL,
   },
+  "dashboards.workpay.view": {
+    description:
+      "See the work and pay portfolio: collections, arrears (PAR), ageing and the collections forecast",
+    scopes: BRANCH_OR_ALL,
+  },
   "dashboards.stats.rebuild": {
     description: "Rebuild the vehicle statistics behind the dashboards",
     scopes: ALL,

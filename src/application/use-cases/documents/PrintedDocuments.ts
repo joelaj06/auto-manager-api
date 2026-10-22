@@ -8,6 +8,7 @@ import type { BusinessLogo } from "../../services/BusinessLogo.js";
 import { localDateTime } from "../../services/TenantLocalTime.js";
 import type { PaymentRecording, ReceiptView } from "../finance/PaymentRecording.js";
 import type { DriverLedger, DriverStatement } from "../remittances/DriverLedger.js";
+import type { WorkPayStatement } from "../workpay/WorkPayReports.js";
 
 export type PdfFile = Readonly<{ filename: string; content: Buffer }>;
 
@@ -66,6 +67,130 @@ export class PrintedDocuments {
     period: Readonly<{ from?: string; to?: string }>,
   ): Promise<PdfFile> {
     return this.statementPdf(await this.deps.ledger.statementOf(driver, period));
+  }
+
+  /** A work and pay agreement statement (docs/08 §6). */
+  async workpayStatement(s: WorkPayStatement): Promise<PdfFile> {
+    const t = s.totals;
+    const label = (status: string) => status.replaceAll("_", " ");
+    const blocks: PdfBlock[] = [
+      {
+        type: "fields",
+        rows: [
+          { label: "Agreement", value: `${s.agreement.number} (${label(s.agreement.status)})` },
+          { label: "Driver", value: `${s.driver.name} (${s.driver.code})` },
+          {
+            label: "Vehicle",
+            value: `${s.vehicle.plateNumber ?? s.vehicle.code}, ${s.vehicle.make} ${s.vehicle.model}`,
+          },
+          { label: "Started", value: s.agreement.startedOn ?? "not started" },
+          { label: "Price", value: ascii(s.terms.totalPrice) },
+          { label: "Deposit", value: ascii(s.terms.deposit) },
+          { label: "Paid to date", value: ascii(t.paidToDate) },
+          { label: "Complete", value: `${t.percentComplete}%` },
+          { label: "Outstanding", value: ascii(t.outstanding) },
+          { label: "Overdue", value: ascii(t.overdue) },
+          { label: "Late fees owed", value: ascii(t.penaltiesOutstanding) },
+          { label: "Charges owed", value: ascii(t.chargesOutstanding) },
+          {
+            label: "Next instalment",
+            value:
+              t.nextDue === null
+                ? "none"
+                : `${ascii(t.nextDue.outstanding)} due ${t.nextDue.dueOn} (no. ${t.nextDue.number})`,
+          },
+          ...(t.daysInArrears > 0
+            ? [{ label: "Days in arrears", value: String(t.daysInArrears) }]
+            : []),
+        ],
+      },
+      {
+        type: "amount",
+        label: "Still to pay",
+        value: ascii({
+          ...t.outstanding,
+          amountMinor:
+            t.outstanding.amountMinor +
+            t.penaltiesOutstanding.amountMinor +
+            t.chargesOutstanding.amountMinor,
+        }),
+      },
+      { type: "heading", text: "Payments" },
+      {
+        type: "table",
+        columns: [
+          { header: "Date", width: 0.16 },
+          { header: "Receipt", width: 0.22 },
+          { header: "For", width: 0.2 },
+          { header: "Method", width: 0.22 },
+          { header: "Amount", width: 0.2, align: "right" },
+        ],
+        rows: s.payments.map((p) => [
+          p.paidOn,
+          p.number,
+          p.reversed ? `${p.kind} (reversed)` : p.kind,
+          METHODS[p.method] ?? p.method,
+          ascii(p.amount),
+        ]),
+        total: ["", "", "", "Paid to date", ascii(t.paidToDate)],
+      },
+      { type: "heading", text: "Instalments" },
+      {
+        type: "table",
+        columns: [
+          { header: "No.", width: 0.08 },
+          { header: "Due", width: 0.16 },
+          { header: "Amount", width: 0.19, align: "right" },
+          { header: "Paid", width: 0.19, align: "right" },
+          { header: "Waived / moved", width: 0.19, align: "right" },
+          { header: "Status", width: 0.19 },
+        ],
+        rows: s.schedule.map((i) => [
+          String(i.number),
+          i.dueOn,
+          ascii(i.amount),
+          ascii(i.paid),
+          ascii({ ...i.waived, amountMinor: i.waived.amountMinor + i.rescheduled.amountMinor }),
+          label(i.status),
+        ]),
+      },
+      ...(s.penalties.length + s.charges.length === 0
+        ? []
+        : ([
+            { type: "heading", text: "Late fees and charges" },
+            {
+              type: "table",
+              columns: [
+                { header: "Date", width: 0.16 },
+                { header: "What", width: 0.44 },
+                { header: "Amount", width: 0.2, align: "right" },
+                { header: "Paid", width: 0.2, align: "right" },
+              ],
+              rows: [
+                ...s.penalties.map((p) => [
+                  p.chargedOn,
+                  `Late fee, instalment ${p.instalmentNumber}`,
+                  ascii(p.amount),
+                  ascii(p.paid),
+                ]),
+                ...s.charges.map((c) => [
+                  c.chargedOn,
+                  c.description,
+                  ascii(c.amount),
+                  ascii(c.paid),
+                ]),
+              ],
+            },
+          ] satisfies PdfBlock[])),
+    ];
+    return {
+      filename: `workpay-statement-${s.agreement.number}-${s.asOf}.pdf`,
+      content: await this.render({
+        title: "Work and pay statement",
+        reference: `${s.agreement.number} · ${s.asOf}`,
+        blocks,
+      }),
+    };
   }
 
   private async receiptPdf(r: ReceiptView): Promise<PdfFile> {

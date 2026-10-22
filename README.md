@@ -352,6 +352,12 @@ vehicle is transferred to the driver. The DVLA change of ownership is tracked at
 `PATCH …/:id/transfer/dvla`, with papers attached at `…/:id/transfer/papers`; the driver
 downloads the letter at `/api/v1/me/driver/workpay/:id/transfer-letter`.
 
+Statements: `GET …/:id/statement` (and `statement.pdf`), for drivers at
+`/api/v1/me/driver/workpay/:id/statement(.pdf)`. The portfolio dashboard
+(`/api/v1/dashboards/workpay`) shows collections, PAR 7/30/60/90, ageing, the collection rate and
+the forecast; `/api/v1/dashboards/workpay/arrears` lists who is behind. Due, overdue, guarantor,
+default, payment and milestone messages are rules in `/settings/notifications` (`workpay_*`).
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

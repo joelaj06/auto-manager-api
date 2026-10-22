@@ -224,6 +224,8 @@ export type WorkPaySettings = Readonly<{
   driverExpenses: "driver_ledger" | "agreement";
   /** What the transfer letter lists as handed over to the driver. */
   transferItems: readonly string[];
+  /** Guarantors are told (if that rule is on) this many days into arrears. */
+  guarantorAlertAfterDays: number;
 }>;
 
 export const DEFAULT_WORKPAY_SETTINGS = Object.freeze<WorkPaySettings>({
@@ -247,6 +249,7 @@ export const DEFAULT_WORKPAY_SETTINGS = Object.freeze<WorkPaySettings>({
     "Roadworthy certificate",
     "Keys (all sets)",
   ],
+  guarantorAlertAfterDays: 3,
 });
 
 export interface IWorkPaySettingsStore {

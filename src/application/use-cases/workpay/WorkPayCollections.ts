@@ -35,6 +35,7 @@ import type { LedgerPosting } from "../finance/LedgerPosting.js";
 import type { PaymentRecording, PaymentView } from "../finance/PaymentRecording.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import { AgreementNotFoundError } from "./WorkPayAgreements.js";
+import type { WorkPayNotifications } from "./WorkPayNotifications.js";
 
 export class InstalmentNotFoundError extends ApplicationError {
   readonly code = "WORKPAY_INSTALMENT_NOT_FOUND";
@@ -162,6 +163,7 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
       clock: IClock;
       /** Told when an agreement becomes paid in full, or stops being (the transfer letter). */
       completion?: AgreementCompletion;
+      notifications?: WorkPayNotifications;
     }>,
   ) {}
 
@@ -195,6 +197,7 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
     agreement: WorkPayAgreement,
     money: PaymentMoney,
     purpose: string,
+    options: Readonly<{ notify?: boolean }> = {},
   ): Promise<Omit<CollectionView, "balance">> {
     const { deps } = this;
     const a = agreement.snapshot();
@@ -233,6 +236,26 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
       await deps.posting.accounts(),
     );
     if (entry !== null) await deps.posting.post(entry, actor.userId);
+    // The receipt goes out before a paid-in-full message that settling may send.
+    if (options.notify !== false && deps.notifications !== undefined) {
+      const { position: after } = await this.positionOf(agreement, today);
+      await deps.notifications.paymentReceived(agreement, {
+        paymentId: payment.id,
+        amountMinor: payment.amountBase.amountMinor,
+        balanceMinor:
+          after.outstandingMinor + after.penaltiesOutstandingMinor + after.chargesOutstandingMinor,
+        nextDueOn: after.nextDue?.dueOn ?? null,
+      });
+      // Half the instalments paid with this payment.
+      const total = ledger.instalments.reduce(
+        (sum, i) => sum + i.amountMinor - i.rescheduledMinor,
+        0,
+      );
+      const before = ledger.instalments.reduce((sum, i) => sum + i.paidMinor, 0);
+      const now = before + split.instalmentsMinor;
+      if (before * 2 < total && now * 2 >= total && now < total)
+        await deps.notifications.milestone(agreement, "half_paid");
+    }
     const after = await this.settle(agreement, today, actor.userId);
     await recordUserAction(deps, actor.userId, {
       action: "workpay.payment_recorded",
@@ -289,10 +312,7 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
   async balanceOfOwn(driverId: string, id: string): Promise<BalanceView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
-      const agreement = await deps.agreements.findById(id);
-      if (agreement === null || agreement.snapshot().driverId !== driverId)
-        throw new AgreementNotFoundError();
-      return this.balanceOf(agreement, await deps.calendar.today());
+      return this.balanceOf(await this.reachOwn(driverId, id), await deps.calendar.today());
     });
   }
 
@@ -580,6 +600,14 @@ export class WorkPayCollections implements IPaymentPurpose, IPaymentReversalList
       agreement.snapshot().branchId,
       () => new AgreementNotFoundError(),
     );
+    return agreement;
+  }
+
+  /** The driver's own agreement (driver app); not found for anyone else's. */
+  async reachOwn(driverId: string, id: string): Promise<WorkPayAgreement> {
+    const agreement = await this.deps.agreements.findById(id);
+    if (agreement === null || agreement.snapshot().driverId !== driverId)
+      throw new AgreementNotFoundError();
     return agreement;
   }
 

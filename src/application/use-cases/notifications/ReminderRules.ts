@@ -14,6 +14,7 @@ import type {
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { ExpenseAdministration } from "../expenses/ExpenseAdministration.js";
 import type { LedgerPosting } from "../finance/LedgerPosting.js";
+import type { WorkPayNotifications } from "../workpay/WorkPayNotifications.js";
 import type { Notifier } from "./Notifier.js";
 
 const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
@@ -60,6 +61,8 @@ export class ReminderRules {
       expenses: ExpenseAdministration;
       posting: LedgerPosting;
       logger: ILogger;
+      /** Work & Pay due, overdue, guarantor and default rules. */
+      workpay?: WorkPayNotifications;
     }>,
   ) {}
 
@@ -71,6 +74,7 @@ export class ReminderRules {
       ["remittance_due", () => this.remittancesDue(today)],
       ["budget_threshold", () => this.budgets(today)],
       ["expense_approvals", () => this.approvals(today)],
+      ["workpay", () => this.deps.workpay?.morning(today) ?? Promise.resolve()],
     ]);
   }
 

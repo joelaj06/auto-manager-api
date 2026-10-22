@@ -30,6 +30,7 @@ import type { LedgerPosting } from "../finance/LedgerPosting.js";
 import type { DocumentUploadInput, OwnedDocuments } from "../files/OwnedDocuments.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import { AgreementNotFoundError } from "./WorkPayAgreements.js";
+import type { WorkPayNotifications } from "./WorkPayNotifications.js";
 
 export type TransferRequest = Readonly<{
   /** Default: the vehicle's last odometer reading. */
@@ -79,6 +80,7 @@ export class WorkPayTransfers implements IDocumentSignedListener {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
+      notifications?: WorkPayNotifications;
     }>,
   ) {}
 
@@ -88,6 +90,7 @@ export class WorkPayTransfers implements IDocumentSignedListener {
   async agreementCompleted(agreement: WorkPayAgreement, userId: string | null): Promise<void> {
     if ((await this.deps.transfers.forAgreement(agreement.id, true)) !== null) return;
     await this.issue(agreement, {}, userId, null);
+    await this.deps.notifications?.milestone(agreement, "paid_in_full");
   }
 
   /** Not fully paid any more (a payment reversed): the letter is withdrawn. */
@@ -246,6 +249,7 @@ export class WorkPayTransfers implements IDocumentSignedListener {
     );
     await deps.vehicles.save(vehicle);
     await deps.transfers.save({ ...transfer, transferredAt: now });
+    await deps.notifications?.milestone(agreement, "transferred");
     await deps.auditTrail.record({
       action: "workpay.ownership_transferred",
       entityType: "workpay_agreement",

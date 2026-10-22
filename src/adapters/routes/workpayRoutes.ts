@@ -2,7 +2,9 @@ import { z } from "zod";
 import type { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
 import type { WorkPayCollections } from "../../application/use-cases/workpay/WorkPayCollections.js";
 import type { WorkPayLifecycle } from "../../application/use-cases/workpay/WorkPayLifecycle.js";
+import type { WorkPayReports } from "../../application/use-cases/workpay/WorkPayReports.js";
 import type { WorkPayTransfers } from "../../application/use-cases/workpay/WorkPayTransfers.js";
+import { sendPdf } from "../presenters/pdfResponse.js";
 import { FILE_KINDS } from "../../domain/files/FileKinds.js";
 import type { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
 import { PAYMENT_METHODS } from "../../domain/finance/Payment.js";
@@ -98,6 +100,7 @@ export type WorkPayRouteDependencies = Readonly<{
   collections: WorkPayCollections;
   lifecycle: WorkPayLifecycle;
   transfers: WorkPayTransfers;
+  reports: WorkPayReports;
   settings: WorkPaySettingsService;
 }>;
 
@@ -107,7 +110,7 @@ export type WorkPayRouteDependencies = Readonly<{
  * restructures, early settlement, termination, repossession and vehicle downtime.
  */
 export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
-  const { agreements, collections, lifecycle, transfers, settings } = deps;
+  const { agreements, collections, lifecycle, transfers, reports, settings } = deps;
   return [
     defineRoute({
       method: "get",
@@ -143,6 +146,7 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
           repossessionRefundPercent: z.string().max(6).optional(),
           driverExpenses: z.enum(["driver_ledger", "agreement"]).optional(),
           transferItems: z.array(z.string().trim().min(1).max(120)).max(30).optional(),
+          guarantorAlertAfterDays: z.number().int().min(1).max(90).optional(),
         }),
       },
       responses: { 200: { description: "Settings" } },
@@ -654,6 +658,60 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
         res.json(
           envelope(await transfers.completePaper(principalOf(res), params.id, params.fileId)),
         );
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/statement",
+      summary: "The agreement statement: paid to date, outstanding, overdue, schedule, payments",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Statement" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await reports.statement(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/statement.pdf",
+      summary: "The agreement statement as a PDF",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "application/pdf" } },
+      handler: async ({ params }, _req, res) => {
+        sendPdf(res, await reports.statementPdf(principalOf(res), params.id));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/dashboards/workpay",
+      summary:
+        "Work and pay portfolio: financed, collected, outstanding, PAR 7/30/60/90, ageing, collection rate, forecast",
+      tags: ["dashboards"],
+      access: access.permission("dashboards.workpay.view"),
+      request: { query: z.object({ branchId: uuid.optional() }) },
+      responses: { 200: { description: "Portfolio" } },
+      handler: async ({ query }, _req, res) => {
+        res.json(envelope(await reports.portfolio(principalOf(res), query)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/dashboards/workpay/arrears",
+      summary: "Agreements in arrears, longest first, with what each driver is behind",
+      tags: ["dashboards"],
+      access: access.permission("dashboards.workpay.view"),
+      request: {
+        query: z.object({
+          branchId: uuid.optional(),
+          limit: z.coerce.number().int().min(1).max(200).default(50),
+        }),
+      },
+      responses: { 200: { description: "Arrears" } },
+      handler: async ({ query }, _req, res) => {
+        res.json(envelope(await reports.arrears(principalOf(res), query)));
       },
     }),
   ];

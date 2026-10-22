@@ -31,7 +31,7 @@ export type StaffNotice = Readonly<{
 export type DriverSms = Readonly<{
   rule: RuleKey;
   /** A driver (default) or a document signer without an account. */
-  recipientType?: "driver" | "signer";
+  recipientType?: "driver" | "signer" | "guarantor";
   driverId: string;
   phone: string;
   dedupeKey: string;

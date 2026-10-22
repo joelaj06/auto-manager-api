@@ -18,6 +18,7 @@ import type { DocumentUploadInput } from "../files/OwnedDocuments.js";
 import type { DriverLedger, DriverStatement } from "../remittances/DriverLedger.js";
 import type { Declaration, RemittanceView, Remittances } from "../remittances/Remittances.js";
 import type { WorkPayAgreements } from "../workpay/WorkPayAgreements.js";
+import type { WorkPayReports } from "../workpay/WorkPayReports.js";
 import type { WorkPayTransfers } from "../workpay/WorkPayTransfers.js";
 import type { VehicleDocuments } from "../vehicles/VehicleDocuments.js";
 import type { IssueQuery, VehicleIssues, VehicleIssueView } from "../vehicles/VehicleIssues.js";
@@ -100,6 +101,7 @@ export class DriverApp {
       printed: PrintedDocuments;
       workpay: WorkPayAgreements;
       transfers: WorkPayTransfers;
+      workpayReports: WorkPayReports;
       posting: LedgerPosting;
       calendar: TenantCalendar;
     }>,
@@ -234,6 +236,17 @@ export class DriverApp {
   async workpay(actor: Principal) {
     const driver = await this.deps.unitOfWork.run(() => this.me(actor));
     return this.deps.workpay.ofDriver(driver.id);
+  }
+
+  /** My agreement's statement: paid, outstanding, schedule and payments. */
+  async workpayStatement(actor: Principal, agreementId: string) {
+    const driver = await this.deps.unitOfWork.run(() => this.me(actor));
+    return this.deps.workpayReports.statementOfOwn(driver.id, agreementId);
+  }
+
+  async workpayStatementPdf(actor: Principal, agreementId: string): Promise<PdfFile> {
+    const driver = await this.deps.unitOfWork.run(() => this.me(actor));
+    return this.deps.workpayReports.statementPdfOfOwn(driver.id, agreementId);
   }
 
   /** My transfer letter (the signed copy once both of us signed). */

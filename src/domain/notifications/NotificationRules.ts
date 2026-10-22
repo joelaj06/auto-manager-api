@@ -20,6 +20,12 @@ export const RULE_KEYS = [
   "expense_approvals",
   "vehicle_issue_reported",
   "signature_requests",
+  "workpay_due",
+  "workpay_overdue",
+  "workpay_guarantor_alert",
+  "workpay_defaulted",
+  "workpay_payment_received",
+  "workpay_milestones",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -90,6 +96,45 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     channels: [...STAFF, "sms"],
     defaults: { enabled: true, channels: ["in_app", "push", "email", "sms"] },
     placeholders: ["signerName", "documentName", "number", "businessName", "link"],
+  },
+  workpay_due: {
+    description:
+      "A work and pay instalment comes due: SMS the driver the days before (default the day before)",
+    channels: ["sms"],
+    defaults: { enabled: true, channels: ["sms"], daysBefore: [1] },
+    placeholders: ["driverName", "amount", "number", "dueOn", "businessName"],
+    usesDays: true,
+  },
+  workpay_overdue: {
+    description:
+      "A work and pay instalment falls overdue after the grace days: SMS the driver once, and a daily list to the branch's collectors",
+    channels: [...STAFF, "sms"],
+    defaults: { enabled: true, channels: ["in_app", "sms"] },
+    placeholders: ["driverName", "amount", "number", "dueOn", "businessName"],
+  },
+  workpay_guarantor_alert: {
+    description:
+      "An agreement some days in arrears (work and pay settings): SMS its guarantors once (opt-in)",
+    channels: ["sms"],
+    defaults: { enabled: false, channels: ["sms"] },
+    placeholders: ["guarantorName", "driverName", "amount", "number", "businessName"],
+  },
+  workpay_defaulted: {
+    description: "A work and pay agreement defaults: tell the branch's managers",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  workpay_payment_received: {
+    description: "A work and pay payment is recorded: SMS the driver the amount and new balance",
+    channels: ["sms"],
+    defaults: { enabled: true, channels: ["sms"] },
+    placeholders: ["driverName", "amount", "number", "balance", "nextDue", "businessName"],
+  },
+  workpay_milestones: {
+    description:
+      "Half the agreement paid, paid in full, and the vehicle the driver's: SMS the driver (standard texts)",
+    channels: ["sms"],
+    defaults: { enabled: true, channels: ["sms"] },
   },
   vehicle_issue_reported: {
     description:

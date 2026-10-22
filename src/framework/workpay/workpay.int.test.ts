@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { IJobHandler } from "../../application/jobs/IJobHandler.js";
 import type { ITenantDailyTask } from "../../application/jobs/ITenantDailyTask.js";
 import type { IClock } from "../../application/ports/IClock.js";
+import type { WorkPayNotifications } from "../../application/use-cases/workpay/WorkPayNotifications.js";
 import type { ISmsGateway } from "../../application/ports/INotifications.js";
 import {
   OWNER_PASSWORD,
@@ -383,6 +384,10 @@ describe("work and pay", () => {
         .find((task) => task.name === "workpay_arrears")!
         .run(day(0)),
     );
+  const morning = (today: string) =>
+    t.tenant.run(() =>
+      container.get<WorkPayNotifications>(TYPES.WorkPayNotifications).morning(today),
+    );
   /** Moves the clock and signs the owner in again (their token was issued before the move). */
   async function travel(days: number) {
     clock.advanceDays(days);
@@ -429,6 +434,16 @@ describe("work and pay", () => {
     });
     const tooMuch = await pay("200000.00");
     expect(tooMuch.body.error.message).toMatch(/more than the .* still owed/);
+    expect(await smsTo(driverPhone)).toMatch(
+      /we received GHS 500\.00 for WP-.*Balance: GHS 114,500\.00\. Next due: \d{4}-\d{2}-\d{2}/,
+    );
+  });
+
+  it("reminds the driver the day before an instalment is due", async () => {
+    await morning(day(6));
+    expect(await smsTo(driverPhone)).toMatch(
+      new RegExp(`instalment of GHS 605\\.00 \\(WP-.*\\) is due on ${day(7)}`),
+    );
   });
 
   it("falls into arrears after the grace days and charges the late fee once", async () => {
@@ -451,6 +466,81 @@ describe("work and pay", () => {
     expect(b.penalties).toHaveLength(1);
     const listed = await api().get("/api/v1/workpay/agreements?status=in_arrears").set(owner());
     expect((listed.body.data as { id: string }[]).map((a) => a.id)).toContain(agreement);
+  });
+
+  it("tells the driver an instalment is overdue, and the guarantor when the business opts in", async () => {
+    await api()
+      .patch("/api/v1/settings/notifications")
+      .set(owner())
+      .send({ rules: { workpay_guarantor_alert: { enabled: true, channels: ["sms"] } } });
+    await api().patch("/api/v1/settings/workpay").set(owner()).send({ guarantorAlertAfterDays: 1 });
+    await morning(day(0));
+    expect(await smsTo(driverPhone)).toMatch(
+      /instalment of GHS 605\.00 \(WP-.*\) due .* is overdue/,
+    );
+    expect(await smsTo(guarantorPhone)).toMatch(
+      /Hello Akua Mensah, Kojo Antwi, whose work and pay agreement WP-.* you guarantee, is behind by GHS 605\.00/,
+    );
+    const inbox = await api().get("/api/v1/notifications").set(owner());
+    expect(JSON.stringify(inbox.body.data)).toMatch(/work and pay agreement is behind/);
+  });
+
+  it("states the agreement for staff and the driver, as JSON and PDF", async () => {
+    const res = await api().get(`/api/v1/workpay/agreements/${agreement}/statement`).set(owner());
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.data).toMatchObject({
+      driver: { name: "Kojo Antwi" },
+      totals: {
+        paidToDate: { amountMinor: 550_000 },
+        overdue: { amountMinor: 60_500 },
+        penaltiesOutstanding: { amountMinor: 5_000 },
+        daysInArrears: 1,
+      },
+    });
+    expect(res.body.data.schedule).toHaveLength(104);
+    expect((res.body.data.payments as { kind: string }[]).map((p) => p.kind)).toEqual([
+      "deposit",
+      "instalments",
+    ]);
+    const pdf = await api()
+      .get(`/api/v1/workpay/agreements/${agreement}/statement.pdf`)
+      .set(owner());
+    expect(pdf.headers["content-type"]).toMatch(/application\/pdf/);
+    const mine = await api()
+      .get(`/api/v1/me/driver/workpay/${agreement}/statement`)
+      .set(asDriver());
+    expect(mine.body.data.totals.percentComplete).toBeCloseTo(0.4, 1);
+    const minePdf = await api()
+      .get(`/api/v1/me/driver/workpay/${agreement}/statement.pdf`)
+      .set(asDriver());
+    expect(minePdf.status).toBe(200);
+  });
+
+  it("shows the portfolio: arrears, ageing, collection rate and forecast", async () => {
+    const res = await api().get("/api/v1/dashboards/workpay").set(owner());
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.data).toMatchObject({
+      agreements: { running: 1, byStatus: { in_arrears: 1 } },
+      outstanding: { amountMinor: 11_450_000 },
+      overdue: { amountMinor: 60_500 },
+      penaltiesOutstanding: { amountMinor: 5_000 },
+      ageing: { "1-7": { amountMinor: 60_500 }, "8-30": { amountMinor: 0 } },
+      collectionRate: {
+        due: { amountMinor: 110_500 },
+        paid: { amountMinor: 50_000 },
+        percent: 45.2,
+      },
+      forecast: { next7: { amountMinor: 110_500 } },
+    });
+    expect(res.body.data.par[0]).toMatchObject({ days: 7, agreements: 0 });
+    expect(res.body.data.forecast.weeks).toHaveLength(13);
+    const arrears = await api().get("/api/v1/dashboards/workpay/arrears").set(owner());
+    expect(arrears.body.data[0]).toMatchObject({
+      agreementId: agreement,
+      daysInArrears: 1,
+      driver: { name: "Kojo Antwi", phone: driverPhone },
+      overdue: { amountMinor: 60_500 },
+    });
   });
 
   it("applies a payment to the late fee, then the overdue instalment, then the next one", async () => {
@@ -547,6 +637,9 @@ describe("work and pay", () => {
       ),
     ).toBe(true);
     expect((await pay("10.00")).body.error.message).toMatch(/fully paid/);
+    expect(await smsTo(driverPhone)).toMatch(
+      /Congratulations Kojo Antwi! Agreement WP-.* is paid in full/,
+    );
 
     const tb = await api().get("/api/v1/ledger/trial-balance").set(owner());
     expect(tb.body.data.balanced).toBe(true);
@@ -618,6 +711,9 @@ describe("work and pay", () => {
     await sign(owner());
     expect((await transfer()).data.status).toBe("awaiting_signatures");
     await sign(asDriver()); // the driver signs last: no staff permission needed
+    expect(await smsTo(driverPhone)).toMatch(
+      /Congratulations Kojo Antwi! GR \d{4}-26 is now yours/,
+    );
     expect((await transfer()).data).toMatchObject({
       status: "transferred",
       transferredAt: expect.any(String),

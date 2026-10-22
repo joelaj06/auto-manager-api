@@ -302,7 +302,16 @@ export class WorkPayLifecycle {
         throw new WorkPayRuleError(
           `Settling today takes ${Money.ofMinor(due, base).toJSON().formatted} (the quote's discount applied)`,
         );
-      const collected = await deps.collections.collect(actor, agreement, money, "Early settlement");
+      // The paid-in-full message follows; no balance message on the way.
+      const collected = await deps.collections.collect(
+        actor,
+        agreement,
+        money,
+        "Early settlement",
+        {
+          notify: false,
+        },
+      );
       await deps.records.markQuoteUsed(quote.id, collected.payment.id, deps.clock.now());
       await this.waiveDiscount(actor, agreement, quote, today);
       await this.audit(actor, "workpay.settled_early", agreement, {

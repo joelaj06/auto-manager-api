@@ -289,6 +289,30 @@ export function driverAppRoutes(deps: DriverAppRouteDependencies): ApiRoute[] {
     }),
     defineRoute({
       method: "get",
+      path: "/api/v1/me/driver/workpay/:id/statement",
+      summary: "My agreement statement: paid to date, outstanding, overdue, schedule, payments",
+      tags: ["driver-app"],
+      access: DRIVER,
+      request: { params: z.object({ id: z.uuid() }) },
+      responses: { 200: { description: "Statement" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await app.workpayStatement(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/me/driver/workpay/:id/statement.pdf",
+      summary: "My agreement statement as a PDF to share",
+      tags: ["driver-app"],
+      access: DRIVER,
+      request: { params: z.object({ id: z.uuid() }) },
+      responses: { 200: { description: "application/pdf" } },
+      handler: async ({ params }, _req, res) => {
+        sendPdf(res, await app.workpayStatementPdf(principalOf(res), params.id));
+      },
+    }),
+    defineRoute({
+      method: "get",
       path: "/api/v1/me/driver/vehicle",
       summary: "The vehicle I drive, with its documents' compliance",
       tags: ["driver-app"],
