@@ -153,4 +153,62 @@ describe("work and pay agreements", () => {
     ).toThrow(/\+233/);
     expect(() => draft().revise({ graceDays: 90 }, now)).toThrow(/0 to 60/);
   });
+
+  it("close early: terminated while running, repossessed only in arrears or defaulted", () => {
+    const started = () => {
+      const a = draft();
+      a.sentForSignature("doc1", now);
+      a.depositReceived(500_000, now);
+      activate(a);
+      return a;
+    };
+    const closure = {
+      reason: "mutual" as const,
+      on: "2026-12-01",
+      notes: null,
+      outstandingMinor: 1_000,
+      owedMinor: 0,
+      refundMinor: 0,
+      by: "u1",
+    };
+    const a = started();
+    expect(() => a.close("repossessed", { ...closure, reason: "repossession" }, now)).toThrow(
+      /in arrears or defaulted/,
+    );
+    expect(() => a.close("terminated", { ...closure, reason: "other" }, now)).toThrow(/Say why/);
+    expect(() =>
+      a.close("terminated", { ...closure, owedMinor: 10, refundMinor: 10 }, now),
+    ).toThrow(/either/);
+    a.close("terminated", closure, now);
+    expect(a.snapshot()).toMatchObject({ status: "terminated", closure: { reason: "mutual" } });
+    expect(() => a.assertCollecting()).toThrow();
+    expect(() => a.assertReschedulable()).toThrow(/running/);
+
+    const late = started();
+    late.settle(
+      {
+        status: "defaulted",
+        outstandingMinor: 1,
+        overdueMinor: 1,
+        overdueCount: 4,
+        penaltiesOutstandingMinor: 0,
+        chargesOutstandingMinor: 0,
+        arrearsSince: "2026-11-05",
+        nextDue: null,
+      },
+      now,
+    );
+    late.close("repossessed", { ...closure, reason: "repossession" }, now);
+    expect(late.snapshot()).toMatchObject({ status: "repossessed", arrearsSince: null });
+  });
+
+  it("follow a restructured frequency from then on", () => {
+    const a = draft();
+    a.sentForSignature("doc1", now);
+    a.depositReceived(500_000, now);
+    activate(a);
+    expect(a.scheduleBasis).toEqual({ frequency: "weekly", daysOff: [] });
+    a.rescheduled({ frequency: "monthly", daysOff: [] }, now);
+    expect(a.scheduleBasis.frequency).toBe("monthly");
+  });
 });

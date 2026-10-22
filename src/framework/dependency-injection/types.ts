@@ -270,6 +270,9 @@ export const TYPES = Object.freeze({
   WorkPaySettingsService: Symbol.for("WorkPaySettingsService"),
   WorkPayCollections: Symbol.for("WorkPayCollections"),
   WorkPayArrears: Symbol.for("WorkPayArrears"),
+  WorkPayLifecycleRecords: Symbol.for("IWorkPayLifecycleRecords"),
+  WorkPayLifecycle: Symbol.for("WorkPayLifecycle"),
+  WorkPayDriverCosts: Symbol.for("WorkPayDriverCosts"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

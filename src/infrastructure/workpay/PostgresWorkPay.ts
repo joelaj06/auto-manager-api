@@ -2,6 +2,10 @@ import {
   DEFAULT_WORKPAY_SETTINGS,
   type AgreementListFilter,
   type AllocationRecord,
+  type DowntimeRecord,
+  type IWorkPayLifecycleRecords,
+  type RescheduleRecord,
+  type SettlementQuoteRecord,
   type InstalmentRecord,
   type IWorkPayAgreementRepository,
   type IWorkPaySchedule,
@@ -10,10 +14,12 @@ import {
 } from "../../application/ports/IWorkPayRecords.js";
 import {
   WorkPayAgreement,
+  type Closure,
   type Guarantor,
   type WorkPayAgreementProps,
 } from "../../domain/workpay/WorkPayAgreement.js";
 import type {
+  ChargeState,
   InstalmentState,
   PenaltyRule,
   PenaltyState,
@@ -52,6 +58,15 @@ type Row = {
   penalty_cap_minor: string | null;
   arrears_since: string | null;
   completed_at: Date | null;
+  rescheduled_frequency: WorkPayAgreementProps["terms"]["frequency"] | null;
+  rescheduled_days_off: number[] | null;
+  close_reason: Closure["reason"] | null;
+  closed_on: string | null;
+  close_notes: string | null;
+  outstanding_at_close_minor: string | null;
+  settlement_owed_minor: string;
+  settlement_refund_minor: string;
+  closed_by: string | null;
   notes: string | null;
   document_id: string | null;
   assignment_id: string | null;
@@ -68,6 +83,7 @@ type Row = {
 
 const SELECT = `select a.*, a.first_due_on::text as first_due_on, a.last_due_on::text as last_due_on,
        a.started_on::text as started_on, a.arrears_since::text as arrears_since,
+       a.closed_on::text as closed_on,
        (select coalesce(json_agg(json_build_object('name', g.name, 'phone', g.phone,
           'ghanaCardNumber', g.ghana_card_number, 'relationship', g.relationship,
           'address', g.address, 'signs', g.signs) order by g.position), '[]'::json)
@@ -105,6 +121,22 @@ const toAgreement = (r: Row) =>
     penalty: penaltyOf(r),
     arrearsSince: r.arrears_since,
     completedAt: r.completed_at,
+    rescheduledBasis:
+      r.rescheduled_frequency === null
+        ? null
+        : { frequency: r.rescheduled_frequency, daysOff: r.rescheduled_days_off ?? [] },
+    closure:
+      r.closed_on === null
+        ? null
+        : {
+            reason: r.close_reason!,
+            on: r.closed_on,
+            notes: r.close_notes,
+            outstandingMinor: n(r.outstanding_at_close_minor ?? "0"),
+            owedMinor: n(r.settlement_owed_minor),
+            refundMinor: n(r.settlement_refund_minor),
+            by: r.closed_by!,
+          },
     maintenance: r.maintenance,
     insurance: r.insurance,
     depositPaidMinor: n(r.deposit_paid_minor),
@@ -194,10 +226,12 @@ export class PostgresWorkPayAgreements implements IWorkPayAgreementRepository {
          first_due_on, last_due_on, days_off, round_to_minor, grace_days, maintenance, insurance,
          deposit_paid_minor, notes, document_id, assignment_id, started_on, activated_by,
          activated_at, cancelled_at, cancel_reason, created_by, created_at, updated_at,
-         penalty_kind, penalty_value, penalty_cap_minor, arrears_since, completed_at)
+         penalty_kind, penalty_value, penalty_cap_minor, arrears_since, completed_at,
+         rescheduled_frequency, rescheduled_days_off, close_reason, closed_on, close_notes,
+         outstanding_at_close_minor, settlement_owed_minor, settlement_refund_minor, closed_by)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
                $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34,
-               $35, $36, $37, $38, $39, $40, $41)
+               $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50)
        on conflict (id) do update set status = excluded.status,
          vehicle_value_minor = excluded.vehicle_value_minor, pricing_kind = excluded.pricing_kind,
          pricing_value = excluded.pricing_value, total_price_minor = excluded.total_price_minor,
@@ -215,7 +249,15 @@ export class PostgresWorkPayAgreements implements IWorkPayAgreementRepository {
          cancelled_at = excluded.cancelled_at, cancel_reason = excluded.cancel_reason,
          updated_at = excluded.updated_at, penalty_kind = excluded.penalty_kind,
          penalty_value = excluded.penalty_value, penalty_cap_minor = excluded.penalty_cap_minor,
-         arrears_since = excluded.arrears_since, completed_at = excluded.completed_at`,
+         arrears_since = excluded.arrears_since, completed_at = excluded.completed_at,
+         rescheduled_frequency = excluded.rescheduled_frequency,
+         rescheduled_days_off = excluded.rescheduled_days_off,
+         close_reason = excluded.close_reason, closed_on = excluded.closed_on,
+         close_notes = excluded.close_notes,
+         outstanding_at_close_minor = excluded.outstanding_at_close_minor,
+         settlement_owed_minor = excluded.settlement_owed_minor,
+         settlement_refund_minor = excluded.settlement_refund_minor,
+         closed_by = excluded.closed_by`,
       [
         p.id,
         p.number,
@@ -256,6 +298,15 @@ export class PostgresWorkPayAgreements implements IWorkPayAgreementRepository {
         ...penaltyColumns(p.penalty),
         p.arrearsSince,
         p.completedAt,
+        p.rescheduledBasis?.frequency ?? null,
+        p.rescheduledBasis?.daysOff ?? null,
+        p.closure?.reason ?? null,
+        p.closure?.on ?? null,
+        p.closure?.notes ?? null,
+        p.closure?.outstandingMinor ?? null,
+        p.closure?.owedMinor ?? 0,
+        p.closure?.refundMinor ?? 0,
+        p.closure?.by ?? null,
       ],
     );
     await this.tx.query("delete from workpay_guarantors where agreement_id = $1", [p.id]);
@@ -308,6 +359,7 @@ type InstalmentRow = {
   amount_minor: string;
   paid_minor: string;
   waived_minor: string;
+  rescheduled_minor: string;
   status: InstalmentRecord["status"];
 };
 type PenaltyRow = {
@@ -324,10 +376,30 @@ type AllocationRow = {
   payment_id: string;
   instalment_id: string | null;
   penalty_id: string | null;
+  charge_id: string | null;
   amount_minor: string;
   released_at: Date | null;
   created_at: Date;
 };
+
+type ChargeRow = {
+  id: string;
+  agreement_id: string;
+  description: string;
+  charged_on: string;
+  amount_minor: string;
+  paid_minor: string;
+  waived_minor: string;
+};
+
+const toCharge = (r: ChargeRow): ChargeState => ({
+  id: r.id,
+  chargedOn: r.charged_on,
+  description: r.description,
+  amountMinor: Number(r.amount_minor),
+  paidMinor: Number(r.paid_minor),
+  waivedMinor: Number(r.waived_minor),
+});
 
 const toAllocation = (r: AllocationRow): AllocationRecord => ({
   id: r.id,
@@ -335,6 +407,7 @@ const toAllocation = (r: AllocationRow): AllocationRecord => ({
   paymentId: r.payment_id,
   instalmentId: r.instalment_id,
   penaltyId: r.penalty_id,
+  chargeId: r.charge_id,
   amountMinor: Number(r.amount_minor),
   releasedAt: r.released_at,
   createdAt: r.created_at,
@@ -364,7 +437,7 @@ export class PostgresWorkPaySchedule implements IWorkPaySchedule {
   async list(agreementId: string, lock = false): Promise<InstalmentRecord[]> {
     const { rows } = await this.tx.query<InstalmentRow>(
       `select id, agreement_id, number, due_on::text as due_on, amount_minor, paid_minor,
-              waived_minor, status
+              waived_minor, rescheduled_minor, status
          from workpay_instalments where agreement_id = $1 order by number${lock ? " for update" : ""}`,
       [agreementId],
     );
@@ -376,14 +449,16 @@ export class PostgresWorkPaySchedule implements IWorkPaySchedule {
       amountMinor: Number(r.amount_minor),
       paidMinor: Number(r.paid_minor),
       waivedMinor: Number(r.waived_minor),
+      rescheduledMinor: Number(r.rescheduled_minor),
       status: r.status,
     }));
   }
 
   async saveInstalment(i: InstalmentState): Promise<void> {
     await this.tx.query(
-      "update workpay_instalments set paid_minor = $2, waived_minor = $3, status = $4 where id = $1",
-      [i.id, i.paidMinor, i.waivedMinor, i.status],
+      `update workpay_instalments set paid_minor = $2, waived_minor = $3, rescheduled_minor = $4,
+         status = $5 where id = $1`,
+      [i.id, i.paidMinor, i.waivedMinor, i.rescheduledMinor, i.status],
     );
   }
 
@@ -425,9 +500,9 @@ export class PostgresWorkPaySchedule implements IWorkPaySchedule {
   async addAllocation(a: Parameters<IWorkPaySchedule["addAllocation"]>[0]): Promise<void> {
     await this.tx.query(
       `insert into workpay_allocations (agreement_id, payment_id, instalment_id, penalty_id,
-         amount_minor)
-       values ($1, $2, $3, $4, $5)`,
-      [a.agreementId, a.paymentId, a.instalmentId, a.penaltyId, a.amountMinor],
+         charge_id, amount_minor)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [a.agreementId, a.paymentId, a.instalmentId, a.penaltyId, a.chargeId, a.amountMinor],
     );
   }
 
@@ -455,12 +530,270 @@ export class PostgresWorkPaySchedule implements IWorkPaySchedule {
   async addWaiver(w: Parameters<IWorkPaySchedule["addWaiver"]>[0]): Promise<string> {
     const { rows } = await this.tx.query<{ id: string }>(
       `insert into workpay_waivers (agreement_id, instalment_id, penalty_id, amount_minor, reason,
-         waived_by)
-       values ($1, $2, $3, $4, $5, $6)
+         waived_by, quote_id)
+       values ($1, $2, $3, $4, $5, $6, $7)
        returning id`,
-      [w.agreementId, w.instalmentId, w.penaltyId, w.amountMinor, w.reason, w.waivedBy],
+      [
+        w.agreementId,
+        w.instalmentId,
+        w.penaltyId,
+        w.amountMinor,
+        w.reason,
+        w.waivedBy,
+        w.quoteId ?? null,
+      ],
     );
     return rows[0]!.id;
+  }
+
+  async reverseQuoteWaivers(quoteId: string, now: Date) {
+    const { rows } = await this.tx.query<{ instalment_id: string; amount_minor: string }>(
+      `update workpay_waivers set reversed_at = $2
+        where quote_id = $1 and reversed_at is null
+        returning instalment_id, amount_minor`,
+      [quoteId, now],
+    );
+    return rows.map((r) => ({
+      instalmentId: r.instalment_id,
+      amountMinor: Number(r.amount_minor),
+    }));
+  }
+
+  async charges(agreementId: string, lock = false): Promise<ChargeState[]> {
+    const { rows } = await this.tx.query<ChargeRow>(
+      `select id, agreement_id, description, charged_on::text as charged_on, amount_minor,
+              paid_minor, waived_minor
+         from workpay_charges where agreement_id = $1
+        order by charged_on, id${lock ? " for update" : ""}`,
+      [agreementId],
+    );
+    return rows.map(toCharge);
+  }
+
+  async addCharge(c: Parameters<IWorkPaySchedule["addCharge"]>[0]): Promise<string> {
+    const { rows } = await this.tx.query<{ id: string }>(
+      `insert into workpay_charges (agreement_id, expense_id, description, charged_on, amount_minor)
+       values ($1, $2, $3, $4, $5)
+       returning id`,
+      [c.agreementId, c.expenseId, c.description, c.chargedOn, c.amountMinor],
+    );
+    return rows[0]!.id;
+  }
+
+  async chargeForExpense(expenseId: string) {
+    const { rows } = await this.tx.query<ChargeRow>(
+      `select id, agreement_id, description, charged_on::text as charged_on, amount_minor,
+              paid_minor, waived_minor
+         from workpay_charges where expense_id = $1 for update`,
+      [expenseId],
+    );
+    return rows[0] === undefined
+      ? null
+      : { ...toCharge(rows[0]), agreementId: rows[0].agreement_id };
+  }
+
+  async saveCharge(c: ChargeState): Promise<void> {
+    await this.tx.query(
+      "update workpay_charges set paid_minor = $2, waived_minor = $3 where id = $1",
+      [c.id, c.paidMinor, c.waivedMinor],
+    );
+  }
+}
+
+type QuoteRow = {
+  id: string;
+  agreement_id: string;
+  quoted_on: string;
+  valid_until: string;
+  instalments_minor: string;
+  penalties_minor: string;
+  charges_minor: string;
+  discount_percent: string;
+  discount_minor: string;
+  payoff_minor: string;
+  payment_id: string | null;
+  used_at: Date | null;
+  created_by: string | null;
+  created_at: Date;
+};
+
+const QUOTE = `select *, quoted_on::text as quoted_on, valid_until::text as valid_until
+                 from workpay_settlement_quotes`;
+
+const toQuote = (r: QuoteRow): SettlementQuoteRecord => ({
+  id: r.id,
+  agreementId: r.agreement_id,
+  quotedOn: r.quoted_on,
+  validUntil: r.valid_until,
+  instalmentsMinor: Number(r.instalments_minor),
+  penaltiesMinor: Number(r.penalties_minor),
+  chargesMinor: Number(r.charges_minor),
+  discountPercent: r.discount_percent,
+  discountMinor: Number(r.discount_minor),
+  payoffMinor: Number(r.payoff_minor),
+  paymentId: r.payment_id,
+  usedAt: r.used_at,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+});
+
+type DowntimeRow = {
+  id: string;
+  agreement_id: string;
+  reason: string;
+  owner_fault: boolean;
+  started_on: string;
+  ended_on: string | null;
+  started_by: string | null;
+  ended_by: string | null;
+};
+
+const DOWNTIME = `select id, agreement_id, reason, owner_fault, started_on::text as started_on,
+                         ended_on::text as ended_on, started_by, ended_by
+                    from workpay_downtimes`;
+
+const toDowntime = (r: DowntimeRow): DowntimeRecord => ({
+  id: r.id,
+  agreementId: r.agreement_id,
+  reason: r.reason,
+  ownerFault: r.owner_fault,
+  startedOn: r.started_on,
+  endedOn: r.ended_on,
+  startedBy: r.started_by,
+  endedBy: r.ended_by,
+});
+
+export class PostgresWorkPayLifecycle implements IWorkPayLifecycleRecords {
+  constructor(private readonly transactions: PostgresTransactionContext) {}
+
+  private get tx() {
+    return this.transactions.current();
+  }
+
+  async addReschedule(r: Omit<RescheduleRecord, "id" | "createdAt">): Promise<string> {
+    const { rows } = await this.tx.query<{ id: string }>(
+      `insert into workpay_reschedules (agreement_id, kind, reason, params, moved_minor,
+         moved_numbers, created_numbers, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       returning id`,
+      [
+        r.agreementId,
+        r.kind,
+        r.reason,
+        JSON.stringify(r.params),
+        r.movedMinor,
+        r.movedNumbers,
+        r.createdNumbers,
+        r.createdBy,
+      ],
+    );
+    return rows[0]!.id;
+  }
+
+  async reschedules(agreementId: string): Promise<RescheduleRecord[]> {
+    const { rows } = await this.tx.query<{
+      id: string;
+      agreement_id: string;
+      kind: RescheduleRecord["kind"];
+      reason: string;
+      params: Record<string, unknown>;
+      moved_minor: string;
+      moved_numbers: number[];
+      created_numbers: number[];
+      created_by: string | null;
+      created_at: Date;
+    }>("select * from workpay_reschedules where agreement_id = $1 order by id desc", [agreementId]);
+    return rows.map((r) => ({
+      id: r.id,
+      agreementId: r.agreement_id,
+      kind: r.kind,
+      reason: r.reason,
+      params: r.params,
+      movedMinor: Number(r.moved_minor),
+      movedNumbers: r.moved_numbers,
+      createdNumbers: r.created_numbers,
+      createdBy: r.created_by,
+      createdAt: r.created_at,
+    }));
+  }
+
+  async addQuote(
+    q: Omit<SettlementQuoteRecord, "id" | "paymentId" | "usedAt" | "createdAt">,
+  ): Promise<string> {
+    const { rows } = await this.tx.query<{ id: string }>(
+      `insert into workpay_settlement_quotes (agreement_id, quoted_on, valid_until,
+         instalments_minor, penalties_minor, charges_minor, discount_percent, discount_minor,
+         payoff_minor, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       returning id`,
+      [
+        q.agreementId,
+        q.quotedOn,
+        q.validUntil,
+        q.instalmentsMinor,
+        q.penaltiesMinor,
+        q.chargesMinor,
+        q.discountPercent,
+        q.discountMinor,
+        q.payoffMinor,
+        q.createdBy,
+      ],
+    );
+    return rows[0]!.id;
+  }
+
+  async quote(id: string, lock = false): Promise<SettlementQuoteRecord | null> {
+    const { rows } = await this.tx.query<QuoteRow>(
+      `${QUOTE} where id = $1${lock ? " for update" : ""}`,
+      [id],
+    );
+    return rows[0] === undefined ? null : toQuote(rows[0]);
+  }
+
+  async quoteForPayment(paymentId: string): Promise<SettlementQuoteRecord | null> {
+    const { rows } = await this.tx.query<QuoteRow>(`${QUOTE} where payment_id = $1`, [paymentId]);
+    return rows[0] === undefined ? null : toQuote(rows[0]);
+  }
+
+  async markQuoteUsed(id: string, paymentId: string | null, now: Date | null): Promise<void> {
+    await this.tx.query(
+      "update workpay_settlement_quotes set payment_id = $2, used_at = $3 where id = $1",
+      [id, paymentId, now],
+    );
+  }
+
+  async openDowntime(agreementId: string): Promise<DowntimeRecord | null> {
+    const { rows } = await this.tx.query<DowntimeRow>(
+      `${DOWNTIME} where agreement_id = $1 and ended_on is null for update`,
+      [agreementId],
+    );
+    return rows[0] === undefined ? null : toDowntime(rows[0]);
+  }
+
+  async addDowntime(d: Omit<DowntimeRecord, "id" | "endedOn" | "endedBy">): Promise<string> {
+    const { rows } = await this.tx.query<{ id: string }>(
+      `insert into workpay_downtimes (agreement_id, reason, owner_fault, started_on, started_by)
+       values ($1, $2, $3, $4, $5)
+       returning id`,
+      [d.agreementId, d.reason, d.ownerFault, d.startedOn, d.startedBy],
+    );
+    return rows[0]!.id;
+  }
+
+  async endDowntime(id: string, endedOn: string, endedBy: string): Promise<void> {
+    await this.tx.query("update workpay_downtimes set ended_on = $2, ended_by = $3 where id = $1", [
+      id,
+      endedOn,
+      endedBy,
+    ]);
+  }
+
+  async downtimes(agreementId: string): Promise<DowntimeRecord[]> {
+    const { rows } = await this.tx.query<DowntimeRow>(
+      `${DOWNTIME} where agreement_id = $1 order by started_on desc, id desc`,
+      [agreementId],
+    );
+    return rows.map(toDowntime);
   }
 }
 

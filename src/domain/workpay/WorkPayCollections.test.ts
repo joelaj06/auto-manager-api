@@ -22,6 +22,7 @@ const schedule = (count: number, paid: Record<number, number> = {}): InstalmentS
     amountMinor: 100_000,
     paidMinor: paid[k + 1] ?? 0,
     waivedMinor: 0,
+    rescheduledMinor: 0,
     status: "upcoming",
   }));
 

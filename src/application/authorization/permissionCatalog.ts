@@ -285,6 +285,17 @@ const definitions = {
     scopes: BRANCH_OR_ALL,
     sensitive: true,
   },
+  "workpay.restructure": {
+    description:
+      "Give payment holidays, restructure schedules, take the vehicle off the road and quote special settlement discounts",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "workpay.terminate": {
+    description: "Terminate agreements and repossess vehicles, with the settlement figures",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
   "workpay.settings.manage": {
     description: "Change work and pay defaults (frequency, grace, rounding, deposit rule)",
     scopes: ALL,

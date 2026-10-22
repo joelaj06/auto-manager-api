@@ -53,6 +53,9 @@ export const OFF_FLEET_STATUSES: ReadonlySet<VehicleStatus> = new Set<VehicleSta
   "written_off",
 ]);
 
+/** Module states a vehicle leaves by hand once the module is done with it (back in stock). */
+const RELEASED_STATUSES: ReadonlySet<VehicleStatus> = new Set<VehicleStatus>(["repossessed"]);
+
 /** Reachable from any state that is not final (docs/06 §3: "any → accident / impounded / stolen"). */
 const INCIDENTS: readonly VehicleStatus[] = ["accident", "impounded", "stolen"];
 
@@ -71,18 +74,26 @@ const TRANSITIONS: Readonly<Record<VehicleStatus, readonly VehicleStatus[]>> = {
     "retired",
   ],
   assigned: ["available", "in_maintenance", "on_workpay"],
-  in_maintenance: ["available", "reconditioning", "for_sale", "written_off", "retired"],
+  in_maintenance: [
+    "available",
+    "reconditioning",
+    "for_sale",
+    "written_off",
+    "retired",
+    "on_workpay",
+    "repossessed",
+  ],
   for_sale: ["available", "reserved", "sold", "in_maintenance", "reconditioning", "retired"],
   reserved: ["for_sale", "sold"],
   sold: [],
   reserved_rental: ["available", "on_rent"],
   on_rent: ["available", "in_maintenance"],
-  on_workpay: ["transferred", "repossessed", "available"],
+  on_workpay: ["transferred", "repossessed", "available", "in_maintenance"],
   transferred: [],
   repossessed: ["reconditioning", "available", "in_maintenance", "for_sale"],
-  accident: ["in_maintenance", "available", "written_off"],
-  impounded: ["available", "in_maintenance", "written_off"],
-  stolen: ["available", "in_maintenance", "written_off"],
+  accident: ["in_maintenance", "available", "written_off", "on_workpay", "repossessed"],
+  impounded: ["available", "in_maintenance", "written_off", "on_workpay", "repossessed"],
+  stolen: ["available", "in_maintenance", "written_off", "on_workpay"],
   written_off: ["for_sale", "scrapped"],
   retired: ["available", "for_sale", "scrapped"],
   scrapped: [],
@@ -112,7 +123,9 @@ export function nextStatuses(from: VehicleStatus): VehicleStatus[] {
  */
 export function manualNextStatuses(from: VehicleStatus): VehicleStatus[] {
   return nextStatuses(from).filter(
-    (to) => INCIDENTS.includes(to) || (!MODULE_STATUSES.has(to) && !MODULE_STATUSES.has(from)),
+    (to) =>
+      INCIDENTS.includes(to) ||
+      (!MODULE_STATUSES.has(to) && (!MODULE_STATUSES.has(from) || RELEASED_STATUSES.has(from))),
   );
 }
 

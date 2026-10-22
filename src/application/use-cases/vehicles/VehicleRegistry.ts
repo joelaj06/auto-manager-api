@@ -1,3 +1,4 @@
+import type { IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
 import { Money } from "../../../domain/money/Money.js";
 import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRepository.js";
 import { validateCustomFields } from "../../../domain/vehicles/CustomFields.js";
@@ -13,7 +14,7 @@ import {
   type VehicleFinancials,
 } from "../../../domain/vehicles/Vehicle.js";
 import { InvalidVehicleError } from "../../../domain/vehicles/VehicleIdentifiers.js";
-import type { VehicleStatus } from "../../../domain/vehicles/VehicleStatus.js";
+import { VehicleStatusError, type VehicleStatus } from "../../../domain/vehicles/VehicleStatus.js";
 import { PermissionDeniedError } from "../../errors/AuthErrors.js";
 import type { Page } from "../../dto/Page.js";
 import type { Principal } from "../../authorization/Principal.js";
@@ -141,6 +142,8 @@ export class VehicleRegistry {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
+      /** Open assignments: a work and pay vehicle comes back through its agreement. */
+      assignments?: IAssignmentQueries;
     }>,
   ) {}
 
@@ -379,6 +382,13 @@ export class VehicleRegistry {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const vehicle = await deps.access.reach(actor, id, "vehicles.change_status", true);
+      if (
+        input.status === "available" &&
+        (await deps.assignments?.openForVehicle(id))?.type === "workpay"
+      )
+        throw new VehicleStatusError(
+          "This vehicle is on a work and pay agreement: bring it back on the road through the agreement",
+        );
       const now = deps.clock.now();
       const change = vehicle.changeStatus(input.status, {
         manual: true,

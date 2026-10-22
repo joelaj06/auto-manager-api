@@ -1,3 +1,4 @@
+import type { IExpenseDriverCosts } from "../../ports/IExpenseDriverCosts.js";
 import {
   Expense,
   ExpenseRuleError,
@@ -147,6 +148,8 @@ export class Expenses {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
+      /** Who bears expenses by default and what follows their approval (work and pay). */
+      driverCosts?: IExpenseDriverCosts;
     }>,
   ) {}
 
@@ -375,13 +378,15 @@ export class Expenses {
       const expense = await this.reach(actor, id, "expenses.void", true);
       const wasApproved = expense.status === "approved";
       expense.void(actor.userId, reason, deps.clock.now());
-      if (wasApproved)
+      if (wasApproved) {
         await deps.posting.reverse(
           { type: "expense", id },
           await deps.calendar.today(),
           `Expense ${expense.snapshot().number ?? ""} voided: ${reason}`,
           actor.userId,
         );
+        await deps.driverCosts?.voided(expense.snapshot(), actor.userId);
+      }
       await deps.expenses.save(expense);
       await this.audit(actor, "expense.voided", expense, { reason });
       return expenseView(expense.snapshot(), await this.base());
@@ -419,16 +424,17 @@ export class Expenses {
       category?.ledgerAccountId ??
       accounts(p.lines.some((l) => l.vehicleId !== null) ? "vehicle_expenses" : "other_expenses");
     const tax = await deps.organisation.taxSettings();
+    const recoverTax = tax.scheme !== "not_registered";
     await deps.posting.post(
-      Postings.expenseApproved(
-        expense,
-        expenseAccount,
-        tax.scheme !== "not_registered",
-        accounts,
-        p.expenseDate,
-      ),
+      Postings.expenseApproved(expense, expenseAccount, recoverTax, accounts, p.expenseDate),
       userId,
     );
+    if (p.chargeToDriver)
+      await deps.driverCosts?.approved(
+        p,
+        p.lines.reduce((sum, l) => sum + (recoverTax ? l.netMinor : l.amountMinor), 0),
+        userId,
+      );
   }
 
   /** The expense within the caller's reach for `permission` (own: only what they entered). */
@@ -465,7 +471,25 @@ export class Expenses {
         : null;
     if (payee !== null && (await deps.parties.find(payee.type, payee.id)) === null)
       throw new ExpenseRuleError(`That ${payee.type} does not exist`);
-    const driverId = request.driverId ?? null;
+    let driverId = request.driverId ?? null;
+    let chargeToDriver = request.chargeToDriver ?? false;
+    if (request.chargeToDriver === undefined && deps.driverCosts !== undefined) {
+      // A driver whose agreement makes them responsible for this cost bears it.
+      const vehicleIds = [
+        ...new Set([
+          ...(request.vehicleIds ?? []),
+          ...(request.split ?? []).map((x) => x.vehicleId),
+        ]),
+      ];
+      const bearer = await deps.driverCosts.defaultBearer({
+        categoryCode: category.code,
+        vehicleIds,
+      });
+      if (bearer !== null && (driverId === null || driverId === bearer)) {
+        driverId = bearer;
+        chargeToDriver = true;
+      }
+    }
     if (driverId !== null && (await deps.parties.find("driver", driverId)) === null)
       throw new ExpenseRuleError("That driver does not exist");
 
@@ -506,7 +530,7 @@ export class Expenses {
           ? (request.payeeName ?? null)
           : ((await deps.parties.find(payee.type, payee.id))?.name ?? null),
       driverId,
-      chargeToDriver: request.chargeToDriver ?? false,
+      chargeToDriver,
       reference: request.reference ?? null,
       notes: request.notes ?? null,
     };

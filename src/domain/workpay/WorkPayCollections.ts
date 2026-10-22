@@ -1,7 +1,7 @@
 import { WorkPayRuleError } from "./WorkPayTerms.js";
 
 export type InstalmentStatus =
-  "upcoming" | "due" | "partially_paid" | "paid" | "overdue" | "waived";
+  "upcoming" | "due" | "partially_paid" | "paid" | "overdue" | "waived" | "rescheduled";
 
 export type InstalmentState = Readonly<{
   id: string;
@@ -10,6 +10,8 @@ export type InstalmentState = Readonly<{
   amountMinor: number;
   paidMinor: number;
   waivedMinor: number;
+  /** Moved to later instalments by a payment holiday or restructure. */
+  rescheduledMinor: number;
   status: InstalmentStatus;
 }>;
 
@@ -22,6 +24,17 @@ export type PenaltyState = Readonly<{
   waivedMinor: number;
 }>;
 
+/** A cost the driver bears added to the agreement (an expense charged to them). */
+export type ChargeState = Readonly<{
+  id: string;
+  chargedOn: string;
+  description: string;
+  amountMinor: number;
+  paidMinor: number;
+  /** Cancelled (the expense was voided). */
+  waivedMinor: number;
+}>;
+
 /** Late payment (docs/08 §2): none, a flat fee or a percentage once, or a daily fee (capped). */
 export type PenaltyRule =
   | Readonly<{ kind: "none" }>
@@ -30,7 +43,7 @@ export type PenaltyRule =
   | Readonly<{ kind: "daily"; amountMinor: number; capMinor: number | null }>;
 
 export type AllocationLine = Readonly<{
-  kind: "penalty" | "instalment";
+  kind: "penalty" | "charge" | "instalment";
   id: string;
   amountMinor: number;
 }>;
@@ -39,6 +52,7 @@ export type Allocation = Readonly<{
   lines: readonly AllocationLine[];
   instalmentsMinor: number;
   penaltiesMinor: number;
+  chargesMinor: number;
   /** What no instalment or penalty needed: stays the driver's credit. */
   unallocatedMinor: number;
 }>;
@@ -57,6 +71,7 @@ export type AgreementPosition = Readonly<{
   overdueMinor: number;
   overdueCount: number;
   penaltiesOutstandingMinor: number;
+  chargesOutstandingMinor: number;
   /** The day the oldest unpaid instalment fell overdue. */
   arrearsSince: string | null;
   nextDue: Readonly<{ number: number; dueOn: string; outstandingMinor: number }> | null;
@@ -69,8 +84,13 @@ const daysBetween = (from: string, to: string) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 
 export const outstanding = (
-  x: Readonly<{ amountMinor: number; paidMinor: number; waivedMinor: number }>,
-) => x.amountMinor - x.paidMinor - x.waivedMinor;
+  x: Readonly<{
+    amountMinor: number;
+    paidMinor: number;
+    waivedMinor: number;
+    rescheduledMinor?: number;
+  }>,
+) => x.amountMinor - x.paidMinor - x.waivedMinor - (x.rescheduledMinor ?? 0);
 
 /** The first day an instalment counts as overdue: after its due date and the grace days. */
 export const overdueFrom = (dueOn: string, graceDays: number) => addDays(dueOn, graceDays + 1);
@@ -81,7 +101,12 @@ export function instalmentStatus(
   today: string,
   graceDays: number,
 ): InstalmentStatus {
-  if (outstanding(i) === 0) return i.paidMinor === 0 && i.waivedMinor > 0 ? "waived" : "paid";
+  if (outstanding(i) === 0)
+    return i.rescheduledMinor > 0
+      ? "rescheduled"
+      : i.paidMinor === 0 && i.waivedMinor > 0
+        ? "waived"
+        : "paid";
   if (i.dueOn > today) return "upcoming";
   if (today >= overdueFrom(i.dueOn, graceDays)) return "overdue";
   return i.paidMinor > 0 ? "partially_paid" : "due";
@@ -89,13 +114,14 @@ export function instalmentStatus(
 
 /**
  * Splits a payment by the allocation policy (docs/08 §4): unpaid penalties first (oldest
- * first), then instalments in order — overdue, then due, then future ones (an advance
+ * first), then costs charged to the agreement, then instalments in order — overdue, then due, then future ones (an advance
  * payment). Whatever is left stays the driver's credit.
  */
 export function allocate(
   amountMinor: number,
   instalments: readonly InstalmentState[],
   penalties: readonly PenaltyState[],
+  charges: readonly ChargeState[] = [],
 ): Allocation {
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0)
     throw new WorkPayRuleError("A payment must be above zero");
@@ -113,10 +139,15 @@ export function allocate(
     (a, b) => a.chargedOn.localeCompare(b.chargedOn) || a.id.localeCompare(b.id),
   ))
     penaltiesMinor += take("penalty", p.id, outstanding(p));
+  let chargesMinor = 0;
+  for (const c of [...charges].sort(
+    (a, b) => a.chargedOn.localeCompare(b.chargedOn) || a.id.localeCompare(b.id),
+  ))
+    chargesMinor += take("charge", c.id, outstanding(c));
   let instalmentsMinor = 0;
   for (const i of [...instalments].sort((a, b) => a.number - b.number))
     instalmentsMinor += take("instalment", i.id, outstanding(i));
-  return { lines, instalmentsMinor, penaltiesMinor, unallocatedMinor: left };
+  return { lines, instalmentsMinor, penaltiesMinor, chargesMinor, unallocatedMinor: left };
 }
 
 /**
@@ -168,6 +199,7 @@ export function position(
   penalties: readonly PenaltyState[],
   today: string,
   policy: ArrearsPolicy,
+  charges: readonly ChargeState[] = [],
 ): AgreementPosition {
   const sorted = [...instalments].sort((a, b) => a.number - b.number);
   const overdue = sorted.filter(
@@ -175,12 +207,16 @@ export function position(
   );
   const outstandingMinor = sorted.reduce((sum, i) => sum + outstanding(i), 0);
   const penaltiesOutstandingMinor = penalties.reduce((sum, p) => sum + outstanding(p), 0);
+  const chargesOutstandingMinor = charges.reduce((sum, c) => sum + outstanding(c), 0);
   const overdueMinor = overdue.reduce((sum, i) => sum + outstanding(i), 0);
   const arrearsSince =
     overdue[0] === undefined ? null : overdueFrom(overdue[0].dueOn, policy.graceDays);
   const next = sorted.find((i) => outstanding(i) > 0);
   const status: AgreementPosition["status"] =
-    outstandingMinor === 0 && penaltiesOutstandingMinor === 0 && sorted.length > 0
+    outstandingMinor === 0 &&
+    penaltiesOutstandingMinor === 0 &&
+    chargesOutstandingMinor === 0 &&
+    sorted.length > 0
       ? "completed"
       : overdue.length === 0
         ? "active"
@@ -194,6 +230,7 @@ export function position(
     overdueMinor,
     overdueCount: overdue.length,
     penaltiesOutstandingMinor,
+    chargesOutstandingMinor,
     arrearsSince,
     nextDue:
       next === undefined

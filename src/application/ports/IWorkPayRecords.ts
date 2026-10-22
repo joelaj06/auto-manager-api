@@ -1,5 +1,6 @@
 import type { AgreementStatus, WorkPayAgreement } from "../../domain/workpay/WorkPayAgreement.js";
 import type {
+  ChargeState,
   InstalmentState,
   PenaltyRule,
   PenaltyState,
@@ -41,6 +42,7 @@ export type AllocationRecord = Readonly<{
   paymentId: string;
   instalmentId: string | null;
   penaltyId: string | null;
+  chargeId: string | null;
   amountMinor: number;
   releasedAt: Date | null;
   createdAt: Date;
@@ -78,8 +80,85 @@ export interface IWorkPaySchedule {
       amountMinor: number;
       reason: string;
       waivedBy: string;
+      quoteId?: string | null;
     }>,
   ): Promise<string>;
+  /** Marks a settlement's discount waivers reversed and returns them. */
+  reverseQuoteWaivers(
+    quoteId: string,
+    now: Date,
+  ): Promise<readonly Readonly<{ instalmentId: string; amountMinor: number }>[]>;
+  charges(agreementId: string, lock?: boolean): Promise<ChargeState[]>;
+  addCharge(
+    charge: Readonly<{
+      agreementId: string;
+      expenseId: string;
+      description: string;
+      chargedOn: string;
+      amountMinor: number;
+    }>,
+  ): Promise<string>;
+  /** The charge an expense became (locked). */
+  chargeForExpense(expenseId: string): Promise<(ChargeState & { agreementId: string }) | null>;
+  saveCharge(charge: ChargeState): Promise<void>;
+}
+
+export type RescheduleRecord = Readonly<{
+  id: string;
+  agreementId: string;
+  kind: "holiday" | "restructure";
+  reason: string;
+  params: Readonly<Record<string, unknown>>;
+  movedMinor: number;
+  movedNumbers: readonly number[];
+  createdNumbers: readonly number[];
+  createdBy: string | null;
+  createdAt: Date;
+}>;
+
+export type SettlementQuoteRecord = Readonly<{
+  id: string;
+  agreementId: string;
+  quotedOn: string;
+  validUntil: string;
+  instalmentsMinor: number;
+  penaltiesMinor: number;
+  chargesMinor: number;
+  discountPercent: string;
+  discountMinor: number;
+  payoffMinor: number;
+  paymentId: string | null;
+  usedAt: Date | null;
+  createdBy: string | null;
+  createdAt: Date;
+}>;
+
+export type DowntimeRecord = Readonly<{
+  id: string;
+  agreementId: string;
+  reason: string;
+  ownerFault: boolean;
+  startedOn: string;
+  endedOn: string | null;
+  startedBy: string | null;
+  endedBy: string | null;
+}>;
+
+/** Holidays, restructures, settlement quotes and downtime of agreements (tenant unit of work). */
+export interface IWorkPayLifecycleRecords {
+  addReschedule(record: Omit<RescheduleRecord, "id" | "createdAt">): Promise<string>;
+  reschedules(agreementId: string): Promise<RescheduleRecord[]>;
+  addQuote(
+    quote: Omit<SettlementQuoteRecord, "id" | "paymentId" | "usedAt" | "createdAt">,
+  ): Promise<string>;
+  quote(id: string, lock?: boolean): Promise<SettlementQuoteRecord | null>;
+  quoteForPayment(paymentId: string): Promise<SettlementQuoteRecord | null>;
+  /** Payment null: the settlement payment was reversed. */
+  markQuoteUsed(id: string, paymentId: string | null, now: Date | null): Promise<void>;
+  openDowntime(agreementId: string): Promise<DowntimeRecord | null>;
+  addDowntime(record: Omit<DowntimeRecord, "id" | "endedOn" | "endedBy">): Promise<string>;
+  endDowntime(id: string, endedOn: string, endedBy: string): Promise<void>;
+  downtimes(agreementId: string): Promise<DowntimeRecord[]>;
 }
 
 export type WorkPaySettings = Readonly<{
@@ -99,6 +178,17 @@ export type WorkPaySettings = Readonly<{
   defaultAfterOverdue: number;
   /** … or this many days in arrears. */
   defaultAfterDays: number;
+  /** An early settlement saves this share of the markup still in the instalments ("0"–"100"). */
+  settlementDiscountPercent: string;
+  /** Days a settlement quote holds. */
+  quoteValidDays: number;
+  /** Suggested refund on repossession: this share of the instalments paid. */
+  repossessionRefundPercent: string;
+  /**
+   * Costs a work and pay driver bears: on their driver ledger, or added to the agreement and
+   * paid with the instalments.
+   */
+  driverExpenses: "driver_ledger" | "agreement";
 }>;
 
 export const DEFAULT_WORKPAY_SETTINGS = Object.freeze<WorkPaySettings>({
@@ -112,6 +202,10 @@ export const DEFAULT_WORKPAY_SETTINGS = Object.freeze<WorkPaySettings>({
   defaultPenalty: { kind: "none" },
   defaultAfterOverdue: 4,
   defaultAfterDays: 30,
+  settlementDiscountPercent: "0",
+  quoteValidDays: 7,
+  repossessionRefundPercent: "0",
+  driverExpenses: "driver_ledger",
 });
 
 export interface IWorkPaySettingsStore {

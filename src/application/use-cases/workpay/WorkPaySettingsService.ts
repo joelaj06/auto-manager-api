@@ -57,6 +57,18 @@ export class WorkPaySettingsService {
         after.defaultAfterDays > 365
       )
         throw new WorkPayRuleError("Default after 1 to 365 days in arrears");
+      for (const [name, value] of [
+        ["settlement discount", after.settlementDiscountPercent],
+        ["repossession refund", after.repossessionRefundPercent],
+      ] as const)
+        if (!/^\d{1,3}(\.\d{1,2})?$/.test(value) || Number(value) > 100)
+          throw new WorkPayRuleError(`The ${name} is a percentage from 0 to 100`);
+      if (
+        !Number.isInteger(after.quoteValidDays) ||
+        after.quoteValidDays < 1 ||
+        after.quoteValidDays > 60
+      )
+        throw new WorkPayRuleError("A settlement quote holds 1 to 60 days");
       await deps.settings.set(after);
       await recordUserAction(deps, actor.userId, {
         action: "settings.workpay_updated",

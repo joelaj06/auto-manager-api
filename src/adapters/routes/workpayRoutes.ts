@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
 import type { WorkPayCollections } from "../../application/use-cases/workpay/WorkPayCollections.js";
+import type { WorkPayLifecycle } from "../../application/use-cases/workpay/WorkPayLifecycle.js";
 import type { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
 import { PAYMENT_METHODS } from "../../domain/finance/Payment.js";
-import { AGREEMENT_STATUSES } from "../../domain/workpay/WorkPayAgreement.js";
+import { AGREEMENT_STATUSES, TERMINATION_REASONS } from "../../domain/workpay/WorkPayAgreement.js";
 import { FREQUENCIES } from "../../domain/workpay/WorkPayTerms.js";
 import { principalOf } from "../middleware/AccessGuard.js";
 import { envelope } from "../presenters/responseEnvelope.js";
@@ -65,6 +66,20 @@ const money = z.object({
   reference: z.string().trim().max(100).nullable().optional(),
 });
 const waiver = z.object({ amount: amount.optional(), reason });
+const checklist = z.object({
+  items: z.array(
+    z.object({
+      key: z.string().max(60),
+      ok: z.boolean(),
+      note: z.string().trim().max(300).nullable().optional(),
+    }),
+  ),
+});
+const odometer = z.number().int().min(0).max(5_000_000);
+const settlement = {
+  owedByDriver: amount.optional(),
+  refundToDriver: amount.optional(),
+};
 
 const agreementFields = {
   terms,
@@ -79,15 +94,17 @@ const agreementFields = {
 export type WorkPayRouteDependencies = Readonly<{
   agreements: WorkPayAgreements;
   collections: WorkPayCollections;
+  lifecycle: WorkPayLifecycle;
   settings: WorkPaySettingsService;
 }>;
 
 /**
  * Work & Pay agreements (docs/08 §9): simulator, drafts, signing, deposit, start, then
- * instalment payments, balances, late fees and waivers.
+ * instalment payments, balances, late fees and waivers, and the lifecycle — holidays,
+ * restructures, early settlement, termination, repossession and vehicle downtime.
  */
 export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
-  const { agreements, collections, settings } = deps;
+  const { agreements, collections, lifecycle, settings } = deps;
   return [
     defineRoute({
       method: "get",
@@ -118,6 +135,10 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
           defaultPenalty: penaltyRule.optional(),
           defaultAfterOverdue: z.number().int().optional(),
           defaultAfterDays: z.number().int().optional(),
+          settlementDiscountPercent: z.string().max(6).optional(),
+          quoteValidDays: z.number().int().min(1).max(60).optional(),
+          repossessionRefundPercent: z.string().max(6).optional(),
+          driverExpenses: z.enum(["driver_ledger", "agreement"]).optional(),
         }),
       },
       responses: { 200: { description: "Settings" } },
@@ -257,16 +278,8 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
       request: {
         params: idParams,
         body: z.object({
-          odometer: z.number().int().min(0).max(5_000_000),
-          checklist: z.object({
-            items: z.array(
-              z.object({
-                key: z.string().max(60),
-                ok: z.boolean(),
-                note: z.string().trim().max(300).nullable().optional(),
-              }),
-            ),
-          }),
+          odometer,
+          checklist,
           notes: z.string().trim().max(2_000).nullable().optional(),
         }),
       },
@@ -356,6 +369,196 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
             await collections.waivePenalty(principalOf(res), params.id, params.penaltyId, body),
           ),
         );
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/payment-holiday",
+      summary: "Move the instalments due from a date some periods later (the term gets longer)",
+      tags: ["workpay"],
+      access: access.permission("workpay.restructure"),
+      request: {
+        params: idParams,
+        body: z.object({ from: z.iso.date(), periods: z.number().int().min(1).max(60), reason }),
+      },
+      responses: { 200: { description: "Balance" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await lifecycle.holiday(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/restructure",
+      summary: "Spread what is left of the instalments, arrears included, over a new schedule",
+      tags: ["workpay"],
+      access: access.permission("workpay.restructure"),
+      request: {
+        params: idParams,
+        body: z.object({
+          frequency: z.enum(FREQUENCIES).optional(),
+          periods: z.number().int().min(1).max(2_000),
+          firstDueOn: z.iso.date(),
+          daysOff: z.array(z.number().int().min(0).max(6)).max(6).optional(),
+          reason,
+        }),
+      },
+      responses: { 200: { description: "Balance" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await lifecycle.restructure(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/reschedules",
+      summary: "Payment holidays and restructures of an agreement, newest first",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Reschedules" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await lifecycle.reschedules(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/closing-figures",
+      summary:
+        "What settles the agreement today, what was paid, and the suggested repossession refund",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Closing figures" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await lifecycle.closingFigures(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/settlement-quotes",
+      summary: "Quote the early settlement payoff (valid for the business's days)",
+      tags: ["workpay"],
+      access: access.permission("workpay.payment.record"),
+      request: {
+        params: idParams,
+        body: z.object({
+          discountPercent: z
+            .string()
+            .regex(/^\d{1,3}(\.\d{1,2})?$/)
+            .optional(),
+        }),
+      },
+      responses: { 201: { description: "Quote" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.status(201).json(envelope(await lifecycle.quote(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/settle",
+      summary: "Pay the agreement off with a settlement quote (the discount is waived)",
+      tags: ["workpay"],
+      access: access.permission("workpay.payment.record"),
+      request: {
+        params: idParams,
+        body: money.extend({ quoteId: uuid, paidOn: z.iso.date().optional() }),
+      },
+      responses: { 201: { description: "The payment, what it paid and the new balance" } },
+      handler: async ({ params, body }, _req, res) => {
+        const { quoteId, ...payment } = body;
+        res
+          .status(201)
+          .json(
+            envelope(await lifecycle.settleEarly(principalOf(res), params.id, quoteId, payment)),
+          );
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/terminate",
+      summary: "End a running agreement early (mutual, death, write-off …) with its settlement",
+      tags: ["workpay"],
+      access: access.permission("workpay.terminate"),
+      request: {
+        params: idParams,
+        body: z.object({
+          reason: z.enum(TERMINATION_REASONS),
+          notes: z.string().trim().max(2_000).nullable().optional(),
+          ...settlement,
+          handback: z
+            .object({
+              odometer,
+              checklist,
+              vehicleStatus: z.enum(["available", "in_maintenance"]).optional(),
+            })
+            .nullable()
+            .optional(),
+        }),
+      },
+      responses: { 200: { description: "Balance of the terminated agreement" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await lifecycle.terminate(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/repossess",
+      summary: "Take the vehicle back from an agreement in arrears or defaulted",
+      tags: ["workpay"],
+      access: access.permission("workpay.terminate"),
+      request: {
+        params: idParams,
+        body: z.object({
+          odometer,
+          checklist,
+          condition: z.string().trim().max(2_000).nullable().optional(),
+          ...settlement,
+        }),
+      },
+      responses: { 200: { description: "Balance of the repossessed agreement" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await lifecycle.repossess(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/downtime",
+      summary: "Times the vehicle was off the road, with the payment holiday each suggests",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Downtimes" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await lifecycle.downtimes(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/downtime",
+      summary: "Take the vehicle off the road (workshop, accident …)",
+      tags: ["workpay"],
+      access: access.permission("workpay.restructure"),
+      request: {
+        params: idParams,
+        body: z.object({ reason, ownerFault: z.boolean().optional() }),
+      },
+      responses: { 201: { description: "Downtime" } },
+      handler: async ({ params, body }, _req, res) => {
+        res
+          .status(201)
+          .json(envelope(await lifecycle.startDowntime(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/downtime/end",
+      summary:
+        "The vehicle is back on the road (a holiday is suggested when the owner was at fault)",
+      tags: ["workpay"],
+      access: access.permission("workpay.restructure"),
+      request: { params: idParams, body: z.object({}) },
+      responses: { 200: { description: "Downtime with the suggested holiday" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await lifecycle.endDowntime(principalOf(res), params.id)));
       },
     }),
   ];

@@ -410,6 +410,52 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from workpay_waivers where reason = $1",
   },
+  workpay_charges: {
+    insert: (marker) => ({
+      sql: `${WORKPAY},
+                 c as (insert into expense_categories (code, name) values ('wc' || $3, 'Isolation')
+                       returning id),
+                 e as (insert into expenses (status, category_id, description, branch_id,
+                         expense_date, amount_minor, net_minor)
+                       select 'draft', c.id, $1, b.id, current_date, 100, 100 from b, c returning id)
+            insert into workpay_charges (agreement_id, expense_id, description, charged_on,
+              amount_minor)
+            select w.id, e.id, $1, current_date, 100 from w, e`,
+      params: [marker, `WC${letters(marker).toUpperCase().slice(0, 12)}`, letters(marker)],
+    }),
+    find: "select 1 from workpay_charges where description = $1",
+  },
+  workpay_reschedules: {
+    insert: (marker) => ({
+      sql: `${WORKPAY}
+            insert into workpay_reschedules (agreement_id, kind, reason, params, moved_minor,
+              moved_numbers, created_numbers)
+            select w.id, 'holiday', $1, '{}', 100, '{1}', '{2}' from w`,
+      params: [marker, `WR${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from workpay_reschedules where reason = $1",
+  },
+  workpay_settlement_quotes: {
+    insert: (marker) => ({
+      sql: `${WORKPAY}
+            insert into workpay_settlement_quotes (agreement_id, quoted_on, valid_until,
+              instalments_minor, penalties_minor, charges_minor, discount_percent, discount_minor,
+              payoff_minor)
+            select w.id, current_date, current_date, 100, 0, 0, '0', 0, 100 from w`,
+      params: [marker, `WQ${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from workpay_settlement_quotes q join workpay_agreements a on a.id = q.agreement_id
+            where a.number = $1`,
+  },
+  workpay_downtimes: {
+    insert: (marker) => ({
+      sql: `${WORKPAY}
+            insert into workpay_downtimes (agreement_id, reason, owner_fault, started_on)
+            select w.id, $1, true, current_date from w`,
+      params: [marker, `WD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from workpay_downtimes where reason = $1",
+  },
   document_templates: {
     insert: (marker) => ({
       sql: `insert into document_templates (type, name, version, body, system_version)

@@ -380,7 +380,8 @@ export const Postings = {
 
   /**
    * A payment applied to an agreement: the driver's credit settles the receivable; the part
-   * that paid instalments is earned (penalties were earned when charged).
+   * that paid instalments is earned (penalties were earned when charged, charges are costs the
+   * driver bears).
    */
   workpayCollected(
     a: WorkPayRef,
@@ -388,11 +389,12 @@ export const Postings = {
       paymentId: string;
       instalmentsMinor: number;
       penaltiesMinor: number;
+      chargesMinor?: number;
       date: string;
     }>,
     accounts: AccountResolver,
   ): JournalDraft | null {
-    const total = params.instalmentsMinor + params.penaltiesMinor;
+    const total = params.instalmentsMinor + params.penaltiesMinor + (params.chargesMinor ?? 0);
     if (total === 0) return null;
     const driver = { type: "driver" as const, id: a.driverId };
     const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
@@ -463,6 +465,116 @@ export const Postings = {
           party: driver,
         }),
       ],
+    });
+  },
+
+  /**
+   * A cost the driver bears (an approved expense charged to them) moves from their ledger into
+   * the agreement, to be paid with the instalments — or back out when it is cancelled.
+   */
+  workpayCharge(
+    a: WorkPayRef,
+    params: Readonly<{
+      chargeId: string;
+      direction: "added" | "cancelled";
+      amountMinor: number;
+      description: string;
+      date: string;
+    }>,
+    accounts: AccountResolver,
+  ): JournalDraft {
+    const driver = { type: "driver" as const, id: a.driverId };
+    const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
+    const into = params.direction === "added";
+    return journal({
+      date: params.date,
+      description: `Work and pay ${a.number}: ${params.description} ${into ? "charged" : "cancelled"}`,
+      source: {
+        type: into ? "workpay_charge" : "workpay_charge_cancel",
+        id: params.chargeId,
+      },
+      reversesId: null,
+      lines: [
+        debit(params.amountMinor, {
+          accountId: accounts(into ? "workpay_receivables" : "driver_receivables"),
+          ...tags,
+          party: driver,
+        }),
+        credit(params.amountMinor, {
+          accountId: accounts(into ? "driver_receivables" : "workpay_receivables"),
+          ...tags,
+          party: driver,
+        }),
+      ],
+    });
+  },
+
+  /** The discount of an early settlement: instalments never earned. */
+  workpaySettlementDiscount(
+    a: WorkPayRef,
+    params: Readonly<{ quoteId: string; amountMinor: number; date: string }>,
+    accounts: AccountResolver,
+  ): JournalDraft | null {
+    if (params.amountMinor === 0) return null;
+    const driver = { type: "driver" as const, id: a.driverId };
+    const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
+    return journal({
+      date: params.date,
+      description: `Work and pay ${a.number}: early settlement discount`,
+      source: { type: "workpay_settlement", id: params.quoteId },
+      reversesId: null,
+      lines: [
+        debit(params.amountMinor, { accountId: accounts("workpay_unearned"), ...tags }),
+        credit(params.amountMinor, {
+          accountId: accounts("workpay_receivables"),
+          ...tags,
+          party: driver,
+        }),
+      ],
+    });
+  },
+
+  /**
+   * An agreement closed early (terminated or repossessed): instalments never earned and late
+   * fees taken back come off the receivable, charges go back to the driver's ledger; an agreed
+   * amount the driver still owes is earned and on their ledger, a refund is owed to them.
+   */
+  workpayClosed(
+    a: WorkPayRef,
+    params: Readonly<{
+      kind: "terminated" | "repossessed";
+      instalmentsMinor: number;
+      penaltiesMinor: number;
+      chargesMinor: number;
+      owedMinor: number;
+      refundMinor: number;
+      date: string;
+    }>,
+    accounts: AccountResolver,
+  ): JournalDraft | null {
+    const driver = { type: "driver" as const, id: a.driverId };
+    const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
+    const receivable = { accountId: accounts("workpay_receivables"), ...tags, party: driver };
+    const driverLedger = { accountId: accounts("driver_receivables"), ...tags, party: driver };
+    const lines = [
+      debit(params.instalmentsMinor, { accountId: accounts("workpay_unearned"), ...tags }),
+      credit(params.instalmentsMinor, receivable),
+      debit(params.penaltiesMinor, { accountId: accounts("workpay_penalties"), ...tags }),
+      credit(params.penaltiesMinor, receivable),
+      debit(params.chargesMinor, driverLedger),
+      credit(params.chargesMinor, receivable),
+      debit(params.owedMinor, driverLedger),
+      credit(params.owedMinor, { accountId: accounts("workpay_income"), ...tags }),
+      debit(params.refundMinor, { accountId: accounts("workpay_income"), ...tags }),
+      credit(params.refundMinor, { accountId: accounts("party_credit"), ...tags, party: driver }),
+    ];
+    if (lines.every((l) => l.debitMinor + l.creditMinor === 0)) return null;
+    return journal({
+      date: params.date,
+      description: `Work and pay ${a.number} ${params.kind}`,
+      source: { type: "workpay_closure", id: a.id },
+      reversesId: null,
+      lines,
     });
   },
 };

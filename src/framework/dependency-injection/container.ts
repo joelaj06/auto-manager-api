@@ -1,16 +1,20 @@
 import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
 import type {
   IWorkPayAgreementRepository,
+  IWorkPayLifecycleRecords,
   IWorkPaySchedule,
   IWorkPaySettingsStore,
 } from "../../application/ports/IWorkPayRecords.js";
 import { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
 import { WorkPayArrears } from "../../application/use-cases/workpay/WorkPayArrears.js";
 import { WorkPayCollections } from "../../application/use-cases/workpay/WorkPayCollections.js";
+import { WorkPayDriverCosts } from "../../application/use-cases/workpay/WorkPayDriverCosts.js";
+import { WorkPayLifecycle } from "../../application/use-cases/workpay/WorkPayLifecycle.js";
 import { WorkPayDeposits } from "../../application/use-cases/workpay/WorkPayDeposits.js";
 import { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
 import {
   PostgresWorkPayAgreements,
+  PostgresWorkPayLifecycle,
   PostgresWorkPaySchedule,
   PostgresWorkPaySettingsStore,
 } from "../../infrastructure/workpay/PostgresWorkPay.js";
@@ -2373,6 +2377,7 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      assignments: PostgresAssignmentRepository,
     ) =>
       new VehicleRegistry({
         unitOfWork,
@@ -2389,6 +2394,7 @@ export function createContainer(
         requestContext,
         ids,
         clock,
+        assignments,
       }),
     [
       TYPES.UnitOfWork,
@@ -2404,6 +2410,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.AssignmentRepository,
     ],
   );
   container.bind<VehicleDocuments>(TYPES.VehicleDocuments).toResolvedValue(
@@ -3251,6 +3258,7 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      driverCosts: WorkPayDriverCosts,
     ) =>
       new Expenses({
         unitOfWork,
@@ -3273,6 +3281,7 @@ export function createContainer(
         requestContext,
         ids,
         clock,
+        driverCosts,
       }),
     [
       TYPES.UnitOfWork,
@@ -3294,6 +3303,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.WorkPayDriverCosts,
     ],
   );
   container.bind<FuelLogs>(TYPES.FuelLogs).toResolvedValue(
@@ -4210,11 +4220,13 @@ export function createContainer(
       auditTrail: IAuditTrail,
       requestContext: IRequestContext,
       clock: IClock,
+      lifecycle: IWorkPayLifecycleRecords,
     ) =>
       new WorkPayCollections({
         unitOfWork,
         agreements,
         schedule,
+        lifecycle,
         settings,
         payments,
         posting,
@@ -4236,8 +4248,84 @@ export function createContainer(
       TYPES.AuditTrail,
       TYPES.RequestContext,
       TYPES.Clock,
+      TYPES.WorkPayLifecycleRecords,
     ],
   );
+  tenantRepository<IWorkPayLifecycleRecords>(
+    TYPES.WorkPayLifecycleRecords,
+    (tx) => new PostgresWorkPayLifecycle(tx),
+  );
+  container.bind<WorkPayLifecycle>(TYPES.WorkPayLifecycle).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      agreements: IWorkPayAgreementRepository,
+      schedule: IWorkPaySchedule,
+      records: IWorkPayLifecycleRecords,
+      settings: IWorkPaySettingsStore,
+      collections: WorkPayCollections,
+      assignments: VehicleAssignments,
+      vehicles: IVehicleRepository,
+      registry: VehicleRegistry,
+      posting: LedgerPosting,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new WorkPayLifecycle({
+        unitOfWork,
+        agreements,
+        schedule,
+        records,
+        settings,
+        collections,
+        assignments,
+        vehicles,
+        registry,
+        posting,
+        calendar,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.WorkPayAgreementRepository,
+      TYPES.WorkPaySchedule,
+      TYPES.WorkPayLifecycleRecords,
+      TYPES.WorkPaySettingsStore,
+      TYPES.WorkPayCollections,
+      TYPES.VehicleAssignments,
+      TYPES.VehicleRepository,
+      TYPES.VehicleRegistry,
+      TYPES.LedgerPosting,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<WorkPayDriverCosts>(TYPES.WorkPayDriverCosts)
+    .toResolvedValue(
+      (
+        agreements: IWorkPayAgreementRepository,
+        schedule: IWorkPaySchedule,
+        settings: IWorkPaySettingsStore,
+        collections: WorkPayCollections,
+        posting: LedgerPosting,
+        calendar: TenantCalendar,
+      ) =>
+        new WorkPayDriverCosts({ agreements, schedule, settings, collections, posting, calendar }),
+      [
+        TYPES.WorkPayAgreementRepository,
+        TYPES.WorkPaySchedule,
+        TYPES.WorkPaySettingsStore,
+        TYPES.WorkPayCollections,
+        TYPES.LedgerPosting,
+        TYPES.TenantCalendar,
+      ],
+    );
   container
     .bind<WorkPayArrears>(TYPES.WorkPayArrears)
     .toResolvedValue(
@@ -4888,6 +4976,7 @@ export function createContainer(
       workpayAgreements: WorkPayAgreements,
       workpaySettings: WorkPaySettingsService,
       workpayCollections: WorkPayCollections,
+      workpayLifecycle: WorkPayLifecycle,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -4974,6 +5063,7 @@ export function createContainer(
         ...workpayRoutes({
           agreements: workpayAgreements,
           collections: workpayCollections,
+          lifecycle: workpayLifecycle,
           settings: workpaySettings,
         }),
         ...identityRoutes({
@@ -5077,6 +5167,7 @@ export function createContainer(
       TYPES.WorkPayAgreements,
       TYPES.WorkPaySettingsService,
       TYPES.WorkPayCollections,
+      TYPES.WorkPayLifecycle,
     ],
   );
 

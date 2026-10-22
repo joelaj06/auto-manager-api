@@ -338,6 +338,14 @@ agreement to in arrears, defaulted or completed (`?status=in_arrears,defaulted` 
 Instalments and late fees are waived with a reason at `…/instalments/:number/waive` and
 `…/penalties/:penaltyId/waive`. Reversing a payment in finance puts what it paid back as owed.
 
+A running agreement can get a payment holiday (`…/:id/payment-holiday`) or be restructured
+(`…/:id/restructure`); `…/:id/reschedules` keeps the history. `GET …/:id/closing-figures` shows
+the payoff; `POST …/:id/settlement-quotes` quotes it and `POST …/:id/settle` pays it off.
+Agreements are ended with `…/:id/terminate` or `…/:id/repossess`, and the vehicle goes off the
+road and back through `…/:id/downtime` and `…/:id/downtime/end`. With the `driverExpenses`
+setting on `agreement`, costs the driver bears (maintenance, tyres, insurance by the agreement)
+are added to the agreement.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

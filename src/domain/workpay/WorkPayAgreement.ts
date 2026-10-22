@@ -41,6 +41,27 @@ export type Guarantor = Readonly<{
   signs: boolean;
 }>;
 
+/** Why a running agreement ended early (docs/08 §5). */
+export const TERMINATION_REASONS = ["mutual", "death", "write_off", "other"] as const;
+export type TerminationReason = (typeof TERMINATION_REASONS)[number];
+
+/** How the agreement was closed before completion, with the settlement figures. */
+export type Closure = Readonly<{
+  reason: TerminationReason | "repossession";
+  on: string;
+  notes: string | null;
+  /** Instalments, late fees and charges still owed when it closed. */
+  outstandingMinor: number;
+  /** Agreed: what the driver still pays (to their ledger) … */
+  owedMinor: number;
+  /** … or what the business gives back. */
+  refundMinor: number;
+  by: string;
+}>;
+
+/** The schedule's frequency once a restructure changed it. */
+export type ScheduleBasis = Readonly<{ frequency: WorkPayFrequency; daysOff: readonly number[] }>;
+
 export type AgreementTerms = Omit<WorkPayTerms, "schedule" | "pricing"> &
   Readonly<{ pricingKind: Pricing["kind"]; pricingValue: string }>;
 
@@ -60,6 +81,9 @@ export type WorkPayAgreementProps = Readonly<{
   /** The day the oldest unpaid instalment fell overdue (null: up to date). */
   arrearsSince: string | null;
   completedAt: Date | null;
+  /** Null: the signed terms' frequency and days off. */
+  rescheduledBasis: ScheduleBasis | null;
+  closure: Closure | null;
   guarantors: readonly Guarantor[];
   notes: string | null;
   documentId: string | null;
@@ -141,6 +165,8 @@ export class WorkPayAgreement {
       depositPaidMinor: 0,
       arrearsSince: null,
       completedAt: null,
+      rescheduledBasis: null,
+      closure: null,
       guarantors: params.guarantors,
       notes: params.notes?.trim() || null,
       documentId: null,
@@ -300,6 +326,63 @@ export class WorkPayAgreement {
 
   get isRunning(): boolean {
     return ["active", "in_arrears", "defaulted", "completed"].includes(this.props.status);
+  }
+
+  /** The frequency and days off instalments follow now. */
+  get scheduleBasis(): ScheduleBasis {
+    return (
+      this.props.rescheduledBasis ?? {
+        frequency: this.props.terms.frequency,
+        daysOff: this.props.terms.daysOff,
+      }
+    );
+  }
+
+  /** Holidays and restructures change a running agreement that is not fully paid. */
+  assertReschedulable(): void {
+    if (!["active", "in_arrears", "defaulted"].includes(this.props.status))
+      throw new WorkPayRuleError(
+        "Only a running agreement that is not fully paid can be rescheduled",
+      );
+  }
+
+  /** A restructure changed the instalments (and perhaps their frequency). */
+  rescheduled(basis: ScheduleBasis | null, now: Date): void {
+    this.assertReschedulable();
+    this.props = {
+      ...this.props,
+      ...(basis === null ? {} : { rescheduledBasis: basis }),
+      updatedAt: now,
+    };
+  }
+
+  /**
+   * Ends a running agreement early (docs/08 §5): terminated (mutual, death, accident write-off …)
+   * from any running state, repossessed only once in arrears or defaulted.
+   */
+  close(kind: "terminated" | "repossessed", closure: Closure, now: Date): void {
+    const allowed =
+      kind === "repossessed" ? ["in_arrears", "defaulted"] : ["active", "in_arrears", "defaulted"];
+    if (!allowed.includes(this.props.status))
+      throw new WorkPayRuleError(
+        kind === "repossessed"
+          ? "A vehicle is repossessed only when the agreement is in arrears or defaulted"
+          : "Only a running agreement that is not fully paid can be terminated",
+      );
+    if (closure.owedMinor > 0 && closure.refundMinor > 0)
+      throw new WorkPayRuleError("Give either what the driver owes or what is refunded, not both");
+    if (closure.owedMinor < 0 || closure.refundMinor < 0)
+      throw new WorkPayRuleError("Settlement amounts cannot be negative");
+    const notes = closure.notes?.trim() || null;
+    if (closure.reason === "other" && (notes === null || notes.length < 3))
+      throw new WorkPayRuleError("Say why the agreement is terminated");
+    this.props = {
+      ...this.props,
+      status: kind,
+      closure: { ...closure, notes },
+      arrearsSince: null,
+      updatedAt: now,
+    };
   }
 
   /** Payments are taken while the agreement runs (and corrected after it completes). */

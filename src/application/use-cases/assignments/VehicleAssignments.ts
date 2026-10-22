@@ -409,6 +409,61 @@ export class VehicleAssignments {
     });
   }
 
+  /**
+   * Ends the `workpay` assignment of an agreement that closed (terminated, repossessed …): with the
+   * odometer and checklist when the vehicle came back (it then moves to `vehicleStatus`),
+   * otherwise noted as not returned and the vehicle stays where it is (stolen, written off …).
+   */
+  async endForWorkPay(
+    actor: Principal,
+    agreementId: string,
+    vehicleId: string,
+    input: Readonly<{
+      reason: string;
+      handback: Readonly<{ odometer: number; checklist: ChecklistAnswers }> | null;
+      vehicleStatus: "available" | "in_maintenance" | "repossessed";
+    }>,
+  ): Promise<void> {
+    const { deps } = this;
+    await deps.unitOfWork.run(async () => {
+      const vehicle = await deps.vehicles.reach(actor, vehicleId, "workpay.view", true);
+      const assignment = await this.current(vehicleId, true);
+      const settings = await deps.settings.get();
+      const now = deps.clock.now();
+      const a = assignment.snapshot();
+      const notReturned = {
+        items: settings.handoverItems.map((d) => ({ key: d.key, ok: false, note: "Not returned" })),
+      };
+      const odometer =
+        input.handback?.odometer ??
+        Math.max(vehicle.snapshot().currentOdometer ?? 0, a.startOdometer);
+      assignment.end({
+        endedAt: now,
+        endOdometer: odometer,
+        checklist: buildChecklist(settings.handoverItems, input.handback?.checklist ?? notReturned),
+        reason: input.reason,
+        endedBy: actor.userId,
+        now,
+      });
+      await this.save(assignment);
+      if (input.handback !== null)
+        await deps.odometer.recordFor(
+          vehicle,
+          { value: input.handback.odometer, readAt: now },
+          "assignment",
+          assignment.id,
+          actor.userId,
+        );
+      if (input.handback !== null && vehicle.status !== input.vehicleStatus)
+        await deps.registry.moveByModule(vehicle, input.vehicleStatus, {
+          ref: { type: "workpay_agreement", id: agreementId },
+          reason: input.reason,
+          userId: actor.userId,
+        });
+      await this.audit(actor, "vehicle_assignment.ended", assignment);
+    });
+  }
+
   private async assertDriverCanTake(
     driver: Driver,
     vehicle: Vehicle,
@@ -467,9 +522,13 @@ export class VehicleAssignments {
     };
   }
 
-  private async current(vehicleId: string): Promise<VehicleAssignment> {
+  private async current(vehicleId: string, byAgreement = false): Promise<VehicleAssignment> {
     const assignment = await this.deps.assignments.lockOpenForVehicle(vehicleId);
     if (assignment === null) throw new AssignmentNotFoundError("No driver has this vehicle");
+    if (!byAgreement && assignment.snapshot().type === "workpay")
+      throw new AssignmentRuleError(
+        "This vehicle is on a work and pay agreement: change it through the agreement",
+      );
     return assignment;
   }
 
