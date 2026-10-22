@@ -178,6 +178,20 @@ export class Invoice {
     return settled;
   }
 
+  /**
+   * Money given back on this invoice: it is owed again (open) unless the staff then void it; the
+   * subscription period it paid stays as it was.
+   */
+  refund(amountMinor: number): void {
+    if (this.props.status === "void") throw new InvoiceRuleError("This invoice is void");
+    if (!Number.isInteger(amountMinor) || amountMinor <= 0)
+      throw new InvoiceRuleError("A refund is a positive whole amount in minor units");
+    if (amountMinor > this.props.paidMinor)
+      throw new InvoiceRuleError(`At most the ${this.props.paidMinor} paid can be refunded`);
+    const paidMinor = this.props.paidMinor - amountMinor;
+    this.props = { ...this.props, paidMinor, status: "open", paidAt: null };
+  }
+
   void(reason: string, now: Date): void {
     if (this.props.status !== "open")
       throw new InvoiceRuleError(`A ${this.props.status} invoice cannot be voided`);

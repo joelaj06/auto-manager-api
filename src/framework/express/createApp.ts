@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
+import type { RawBodyRequest } from "../../adapters/middleware/rawBody.js";
 import type { AccessGuard } from "../../adapters/middleware/AccessGuard.js";
 import { corsPolicy } from "../../adapters/middleware/cors.js";
 import { errorHandler, notFoundHandler } from "../../adapters/middleware/errorHandler.js";
@@ -36,7 +37,15 @@ export function createApp(deps: AppDependencies): Express {
   app.use(requestLogger(deps.logger));
   app.use(helmet());
   app.use(corsPolicy(deps.http.corsAllowedOrigins));
-  app.use(express.json({ limit: `${deps.http.bodyLimitKb}kb` }));
+  app.use(
+    express.json({
+      limit: `${deps.http.bodyLimitKb}kb`,
+      // Webhook signatures are computed over the exact bytes received.
+      verify: (req, _res, buf) => {
+        if (req.url?.startsWith("/api/v1/webhooks/")) (req as RawBodyRequest).rawBody = buf;
+      },
+    }),
+  );
   app.use("/api", rateLimiter(deps.http.rateLimit));
   // Credential endpoints: a much tighter budget per client (brute force, credential stuffing).
   const credentialLimiter = rateLimiter({ windowMs: 15 * 60_000, max: deps.http.authRateLimitMax });

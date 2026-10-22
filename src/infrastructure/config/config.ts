@@ -158,6 +158,19 @@ const envSchema = z
     PUSH_PROVIDER: z.enum(["log", "fcm"]).default("log"),
     FCM_SERVICE_ACCOUNT_FILE: z.string().min(1).optional(),
 
+    // --- Platform billing gateway (tenants paying Autoforce, docs/25 §4) ---
+    /**
+     * `paystack` charges through Paystack (PAYSTACK_SECRET_KEY); `fake` is an in-process
+     * gateway for development and tests (refused in production) whose webhooks are signed with
+     * BILLING_FAKE_WEBHOOK_SECRET.
+     */
+    BILLING_GATEWAY: z.enum(["fake", "paystack"]).default("fake"),
+    PAYSTACK_SECRET_KEY: z.string().min(10).optional(),
+    PAYSTACK_BASE_URL: z.url().default("https://api.paystack.co"),
+    BILLING_FAKE_WEBHOOK_SECRET: z.string().min(16).default("fake-gateway-webhook-secret"),
+    /** Where the gateway sends the payer back after checkout (the portal's Billing page). */
+    BILLING_RETURN_URL: z.url().optional(),
+
     // --- Object storage (S3-compatible; files service) ---
     // Development defaults match compose.yaml (RustFS). Production sets everything explicitly;
     // without STORAGE_ENDPOINT it talks to AWS S3 in STORAGE_REGION.
@@ -258,6 +271,18 @@ const envSchema = z
         }
       }
     }
+    if (env.BILLING_GATEWAY === "paystack" && env.PAYSTACK_SECRET_KEY === undefined)
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYSTACK_SECRET_KEY"],
+        message: "must be set when BILLING_GATEWAY=paystack",
+      });
+    if (env.NODE_ENV === "production" && env.BILLING_GATEWAY === "fake")
+      ctx.addIssue({
+        code: "custom",
+        path: ["BILLING_GATEWAY"],
+        message: "the fake gateway is refused in production (use paystack)",
+      });
     if (env.PUSH_PROVIDER === "fcm" && env.FCM_SERVICE_ACCOUNT_FILE === undefined)
       ctx.addIssue({
         code: "custom",
@@ -435,6 +460,15 @@ export type AppConfig = Readonly<{
   mobile: MobileConfig;
   public: PublicConfig;
   push: PushConfig;
+  billing: BillingGatewayConfig;
+}>;
+
+export type BillingGatewayConfig = Readonly<{
+  gateway: "fake" | "paystack";
+  paystackSecretKey: string | null;
+  paystackBaseUrl: string;
+  fakeWebhookSecret: string;
+  returnUrl: string;
 }>;
 
 export type PushConfig = Readonly<{
@@ -554,6 +588,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       }),
     }),
     public: Object.freeze({ webAppUrl: e.WEB_APP_URL, smsProvider: e.SMS_PROVIDER }),
+    billing: Object.freeze({
+      gateway: e.BILLING_GATEWAY,
+      paystackSecretKey: e.PAYSTACK_SECRET_KEY ?? null,
+      paystackBaseUrl: e.PAYSTACK_BASE_URL,
+      fakeWebhookSecret: e.BILLING_FAKE_WEBHOOK_SECRET,
+      returnUrl: e.BILLING_RETURN_URL ?? `${e.WEB_APP_URL}/billing/return`,
+    }),
     push: Object.freeze({
       provider: e.PUSH_PROVIDER,
       serviceAccountFile: e.FCM_SERVICE_ACCOUNT_FILE ?? null,

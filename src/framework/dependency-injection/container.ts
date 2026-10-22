@@ -1,5 +1,12 @@
 import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
+import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
+import { GatewayBilling } from "../../application/use-cases/billing/GatewayBilling.js";
+import { GatewayReconciliation } from "../../application/use-cases/billing/GatewayReconciliation.js";
+import type { IGatewayRepository } from "../../domain/repositories/IGatewayRepository.js";
+import { FakePaymentGateway } from "../../infrastructure/billing/FakePaymentGateway.js";
+import { PaystackGateway } from "../../infrastructure/billing/PaystackGateway.js";
+import { PostgresGatewayRepository } from "../../infrastructure/billing/PostgresGatewayRepository.js";
 import type { IIntegrityChecks } from "../../application/ports/IIntegrityChecks.js";
 import { PostgresIntegrityChecks } from "../../infrastructure/integrity/PostgresIntegrityChecks.js";
 import type {
@@ -828,6 +835,7 @@ export function createContainer(
       tasks: ITenantDailyTask[],
       notificationHandlers: IJobHandler[],
       documentHandlers: IJobHandler[],
+      reconciliation: GatewayReconciliation,
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -846,6 +854,7 @@ export function createContainer(
       ...provisioningHandlers,
       ...notificationHandlers,
       ...documentHandlers,
+      reconciliation,
     ],
     [
       TYPES.UnitOfWork,
@@ -866,6 +875,7 @@ export function createContainer(
       TYPES.TenantDailyTasks,
       TYPES.NotificationJobHandlers,
       TYPES.DocumentJobHandlers,
+      TYPES.GatewayReconciliation,
     ],
   );
 
@@ -2283,6 +2293,103 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.PdfRenderer,
+    ],
+  );
+
+  // --- Payment gateway (P4-2) ---
+  container.bind<IPaymentGateway>(TYPES.PaymentGateway).toResolvedValue(() =>
+    config.billing.gateway === "paystack"
+      ? new PaystackGateway({
+          secretKey: config.billing.paystackSecretKey!,
+          baseUrl: config.billing.paystackBaseUrl,
+        })
+      : new FakePaymentGateway({
+          webhookSecret: config.billing.fakeWebhookSecret,
+          checkoutBaseUrl: config.billing.returnUrl,
+        }),
+  );
+  platformRepository<IGatewayRepository>(
+    TYPES.GatewayRepository,
+    (p) => new PostgresGatewayRepository(p),
+  );
+  container.bind<GatewayBilling>(TYPES.GatewayBilling).toResolvedValue(
+    (
+      provider: IPaymentGateway,
+      gateway: IGatewayRepository,
+      records: IBillingRepository,
+      billing: ManualBilling,
+      lifecycle: TenantLifecycleService,
+      secrets: ISecretBox,
+      unitOfWork: IPlatformUnitOfWork,
+      tenantContext: ITenantContext,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new GatewayBilling({
+        provider,
+        gateway,
+        records,
+        billing,
+        lifecycle,
+        secrets,
+        unitOfWork,
+        tenantContext,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        logger,
+        returnUrl: config.billing.returnUrl,
+      }),
+    [
+      TYPES.PaymentGateway,
+      TYPES.GatewayRepository,
+      TYPES.BillingRepository,
+      TYPES.ManualBilling,
+      TYPES.TenantLifecycleService,
+      TYPES.SecretBox,
+      TYPES.PlatformUnitOfWork,
+      TYPES.TenantContext,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<GatewayReconciliation>(TYPES.GatewayReconciliation).toResolvedValue(
+    (
+      provider: IPaymentGateway,
+      gateway: IGatewayRepository,
+      payments: GatewayBilling,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new GatewayReconciliation({
+        provider,
+        gateway,
+        payments,
+        unitOfWork,
+        audit,
+        requestContext,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.PaymentGateway,
+      TYPES.GatewayRepository,
+      TYPES.GatewayBilling,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.Logger,
     ],
   );
 
@@ -5198,6 +5305,9 @@ export function createContainer(
       workpayLifecycle: WorkPayLifecycle,
       workpayTransfers: WorkPayTransfers,
       workpayReports: WorkPayReports,
+      gatewayBilling: GatewayBilling,
+      reconciliation: GatewayReconciliation,
+      paymentGateway: IPaymentGateway,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -5221,6 +5331,20 @@ export function createContainer(
           tenantBilling,
           subscriptions: subscriptionAdministration,
           billing: manualBilling,
+          gateway: gatewayBilling,
+          reconciliation,
+          ...(paymentGateway instanceof FakePaymentGateway && !config.isProduction
+            ? {
+                completeFakePayment: async (reference: string) => {
+                  const { body, signature } = paymentGateway.complete(reference);
+                  return gatewayBilling.receiveWebhook(
+                    Buffer.from(body),
+                    signature,
+                    JSON.parse(body) as unknown,
+                  );
+                },
+              }
+            : {}),
         }),
         ...referenceRoutes({
           currencies: currencySettings,
@@ -5393,6 +5517,9 @@ export function createContainer(
       TYPES.WorkPayLifecycle,
       TYPES.WorkPayTransfers,
       TYPES.WorkPayReports,
+      TYPES.GatewayBilling,
+      TYPES.GatewayReconciliation,
+      TYPES.PaymentGateway,
     ],
   );
 

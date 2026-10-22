@@ -378,6 +378,16 @@ invoice activates the subscription and the tenant. Tenants' Billing tab (`/api/v
 subscription are refused with `ENTITLEMENT_BRANCH_LIMIT` (or added with
 `confirmBranchPurchase: true` once paying). Amounts are in pesewas (minor units).
 
+**Paying online** (`BILLING_GATEWAY=paystack` with `PAYSTACK_SECRET_KEY`, or `fake` locally):
+`POST /api/v1/billing/invoices/:id/checkout` (hosted page; `saveCard`), `…/pay`
+(`paymentMethodId`: saved card or MoMo number), `…/momo` (`phone`, `network`: mtn, telecel, at),
+`GET /api/v1/billing/payments/:reference` (status, verified with the provider while pending) and
+`…/otp`. The provider calls `POST /api/v1/webhooks/billing` (signed); nothing is credited until the
+payment is verified with the provider for the exact amount. Console: `billing/gateway-transactions`
+(failed / review queues), `billing/webhooks` (inspector, `…/replay`), `billing/payments/:id/refunds`,
+`billing/reconciliations` (daily job, rerun a day). With the fake gateway,
+`POST /api/v1/billing/fake-gateway/:reference/complete` plays the payer.
+
 ## Mobile app connect
 
 `GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)

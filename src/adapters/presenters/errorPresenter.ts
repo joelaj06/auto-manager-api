@@ -160,6 +160,12 @@ const RULES: Readonly<Record<string, Rule>> = {
   ENTITLEMENT_BRANCH_LIMIT: { status: 409 },
   RECEIPT_NOT_FOUND: { status: 404 },
   PAYMENT_METHOD_NOT_FOUND: { status: 404 },
+  PAYMENT_GATEWAY_ERROR: { status: 502 },
+  INVOICE_NOT_PAYABLE: { status: 409 },
+  BILLING_EMAIL_REQUIRED: { status: 409 },
+  REFUND_NOT_POSSIBLE: { status: 409 },
+  PAYMENT_ATTEMPT_NOT_FOUND: { status: 404 },
+  WEBHOOK_NOT_FOUND: { status: 404 },
 
   // Vehicles
   VEHICLE_NOT_FOUND: { status: 404 },

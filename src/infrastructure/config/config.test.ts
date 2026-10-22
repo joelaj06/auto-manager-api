@@ -23,6 +23,8 @@ const productionEmail = {
   MOBILE_API_BASE_URL: "https://api.example.com",
   MOBILE_LINK_BASE_URL: "https://go.example.com",
   MOBILE_ALLOWED_API_HOSTS: "api.example.com",
+  BILLING_GATEWAY: "paystack",
+  PAYSTACK_SECRET_KEY: "sk_live_example_0123456789",
   MOBILE_CONNECT_PRIVATE_KEY: String(
     generateKeyPairSync("ed25519").privateKey.export({ format: "pem", type: "pkcs8" }),
   ),
@@ -252,6 +254,7 @@ describe("loadConfig", () => {
       expect.stringMatching(/^FILES_PUBLIC_BASE_URL:/),
       expect.stringMatching(/^MOBILE_API_BASE_URL:/),
       expect.stringMatching(/^MOBILE_LINK_BASE_URL:/),
+      expect.stringMatching(/^BILLING_GATEWAY:/),
       expect.stringMatching(/^MOBILE_CONNECT_KEY_FILE:/),
       expect.stringMatching(/^MOBILE_ALLOWED_API_HOSTS:/),
     ]);
@@ -305,5 +308,21 @@ describe("loadConfig", () => {
   it("rejects out-of-range ports", () => {
     expect(() => loadConfig({ ...requiredSecrets, PORT: "70000" })).toThrow(ConfigError);
     expect(() => loadConfig({ ...requiredSecrets, DATABASE_PORT: "0" })).toThrow(ConfigError);
+  });
+
+  it("uses the fake gateway outside production and needs Paystack's key to use Paystack", () => {
+    expect(loadConfig(requiredSecrets).billing).toMatchObject({
+      gateway: "fake",
+      returnUrl: "http://localhost:5174/billing/return",
+    });
+    const issues = issuesOf(() => loadConfig({ ...requiredSecrets, BILLING_GATEWAY: "paystack" }));
+    expect(issues).toEqual([expect.stringMatching(/^PAYSTACK_SECRET_KEY:/)]);
+    expect(
+      loadConfig({
+        ...requiredSecrets,
+        BILLING_GATEWAY: "paystack",
+        PAYSTACK_SECRET_KEY: "sk_test_0123456789",
+      }).billing,
+    ).toMatchObject({ gateway: "paystack", paystackBaseUrl: "https://api.paystack.co" });
   });
 });

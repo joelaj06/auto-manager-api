@@ -49,6 +49,8 @@ export type JobPayloads = {
   "documents.render": Readonly<{ tenantId: string; documentId: string }>;
   /** Render and store the signed copy of a fully signed document. */
   "documents.seal": Readonly<{ tenantId: string; documentId: string }>;
+  /** Compare yesterday's gateway payments with the provider's transactions. */
+  "billing.reconcile": Readonly<Record<string, never>>;
   /** Remittance cut-off check (waits until the tenant's cut-off time). */
   "tenant.remittance_cutoff": Readonly<{ tenantId: string; localDate: string }>;
 };
@@ -169,6 +171,16 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryBackoff: false,
     expireInSeconds: 900,
     cron: "23 * * * *",
+  },
+  "billing.reconcile": {
+    description: "Reconcile yesterday's gateway payments with the payment provider",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 3,
+    retryDelaySeconds: 900,
+    retryBackoff: true,
+    expireInSeconds: 1_800,
+    cron: "17 5 * * *",
   },
   "files.sweep": {
     description: "Remove platform uploads that were started but never completed",

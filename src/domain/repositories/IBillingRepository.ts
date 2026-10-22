@@ -3,7 +3,7 @@ import type { Invoice, InvoiceStatus } from "../billing/Invoice.js";
 import type { Proration } from "../billing/Proration.js";
 import type { Plan, Subscription } from "../billing/Subscription.js";
 
-export type PaymentMethod = "bank_transfer" | "momo" | "cash" | "cheque" | "other";
+export type PaymentMethod = "bank_transfer" | "momo" | "cash" | "cheque" | "card" | "other";
 
 export type PaymentRecord = Readonly<{
   id: string;
@@ -15,9 +15,14 @@ export type PaymentRecord = Readonly<{
   currency: string;
   receivedAt: Date;
   notes: string | null;
-  recordedBy: string;
+  /** The staff member who recorded it; null for a gateway payment. */
+  recordedBy: string | null;
   /** AF-RCT-2026-000001. */
   receiptNumber: string | null;
+  /** Gateway payments: the provider, the attempt and the provider's fees. */
+  provider?: string | null;
+  gatewayTransactionId?: string | null;
+  feesMinor?: number | null;
   createdAt: Date;
 }>;
 

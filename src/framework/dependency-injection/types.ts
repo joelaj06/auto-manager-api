@@ -279,6 +279,10 @@ export const TYPES = Object.freeze({
   WorkPayNotifications: Symbol.for("WorkPayNotifications"),
   WorkPayReports: Symbol.for("WorkPayReports"),
   IntegrityChecks: Symbol.for("IIntegrityChecks"),
+  PaymentGateway: Symbol.for("IPaymentGateway"),
+  GatewayRepository: Symbol.for("IGatewayRepository"),
+  GatewayBilling: Symbol.for("GatewayBilling"),
+  GatewayReconciliation: Symbol.for("GatewayReconciliation"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

@@ -1,8 +1,11 @@
 import { z } from "zod";
+import type { GatewayBilling } from "../../application/use-cases/billing/GatewayBilling.js";
+import type { GatewayReconciliation } from "../../application/use-cases/billing/GatewayReconciliation.js";
 import type { ManualBilling } from "../../application/use-cases/billing/ManualBilling.js";
 import type { SubscriptionAdministration } from "../../application/use-cases/billing/SubscriptionAdministration.js";
 import type { TenantBilling } from "../../application/use-cases/billing/TenantBilling.js";
 import { principalOf, staffOf } from "../middleware/AccessGuard.js";
+import type { RawBodyRequest } from "../middleware/rawBody.js";
 import { sendPdf } from "../presenters/pdfResponse.js";
 import { envelope } from "../presenters/responseEnvelope.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
@@ -21,6 +24,10 @@ export type BillingRouteDependencies = Readonly<{
   tenantBilling: TenantBilling;
   subscriptions: SubscriptionAdministration;
   billing: ManualBilling;
+  gateway: GatewayBilling;
+  reconciliation: GatewayReconciliation;
+  /** Development only: complete a fake-gateway payment as the payer would. */
+  completeFakePayment?: (reference: string) => Promise<number>;
 }>;
 
 /**
@@ -30,7 +37,8 @@ export type BillingRouteDependencies = Readonly<{
  * extension, billed branches, invoices and recorded payments). Amounts are minor units.
  */
 export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
-  const { tenantBilling, subscriptions, billing } = deps;
+  const { tenantBilling, subscriptions, billing, gateway, reconciliation } = deps;
+  const reference = z.string().regex(/^[A-Za-z0-9._=-]{6,100}$/);
   return [
     // --- tenant: Billing tab ---
     defineRoute({
@@ -228,6 +236,254 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
       handler: async ({ params }, _req, res) => {
         await tenantBilling.removePaymentMethod(params.id);
         res.status(204).end();
+      },
+    }),
+
+    // --- tenant: paying through the gateway ---
+    defineRoute({
+      method: "post",
+      path: "/api/v1/billing/invoices/:id/checkout",
+      summary: "Pay an invoice on the provider's hosted page (card, MoMo, bank transfer)",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: { params: tenantParams, body: z.object({ saveCard: z.boolean().optional() }) },
+      responses: { 201: { description: "The payment with its checkout URL" } },
+      handler: async ({ params, body }, _req, res) => {
+        res
+          .status(201)
+          .json(envelope(await gateway.checkout(params.id, body, principalOf(res).userId)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/billing/invoices/:id/pay",
+      summary: "Pay an invoice with a saved card or MoMo number",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: { params: tenantParams, body: z.object({ paymentMethodId: uuid }) },
+      responses: { 201: { description: "The payment" } },
+      handler: async ({ params, body }, _req, res) => {
+        res
+          .status(201)
+          .json(
+            envelope(
+              await gateway.payWithSavedMethod(
+                params.id,
+                body.paymentMethodId,
+                principalOf(res).userId,
+              ),
+            ),
+          );
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/billing/invoices/:id/momo",
+      summary: "Pay an invoice by mobile money: a prompt on the phone (or a code to enter)",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: {
+        params: tenantParams,
+        body: z.object({
+          phone: z.string().trim().min(9).max(20),
+          network: z.enum(["mtn", "telecel", "at"]),
+          save: z.boolean().optional(),
+        }),
+      },
+      responses: { 201: { description: "The payment and what to do next" } },
+      handler: async ({ params, body }, _req, res) => {
+        res
+          .status(201)
+          .json(envelope(await gateway.payWithMomo(params.id, body, principalOf(res).userId)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/invoices/:id/payment-attempts",
+      summary: "Payments started on an invoice through the gateway",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "Attempts" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await gateway.invoiceAttempts(params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/billing/payments/:reference",
+      summary: "Where a payment stands (the return page asks the provider while it is pending)",
+      tags: ["billing"],
+      access: access.permission("billing.view"),
+      request: { params: z.object({ reference }) },
+      responses: { 200: { description: "The payment" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await gateway.status(params.reference)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/billing/payments/:reference/otp",
+      summary: "Enter the code or voucher the mobile network sent",
+      tags: ["billing"],
+      access: access.permission("billing.manage"),
+      request: {
+        params: z.object({ reference }),
+        body: z.object({ otp: z.string().trim().min(3).max(12) }),
+      },
+      responses: { 200: { description: "The payment" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await gateway.submitOtp(params.reference, body.otp)));
+      },
+    }),
+    ...(deps.completeFakePayment === undefined
+      ? []
+      : [
+          defineRoute({
+            method: "post",
+            path: "/api/v1/billing/fake-gateway/:reference/complete",
+            summary: "Development only: pay a fake-gateway payment as the payer would",
+            tags: ["billing"],
+            access: access.permission("billing.manage"),
+            request: { params: z.object({ reference }) },
+            responses: { 204: { description: "Paid (the webhook was delivered)" } },
+            handler: async ({ params }, _req, res) => {
+              res
+                .status((await deps.completeFakePayment!(params.reference)) === 200 ? 204 : 500)
+                .end();
+            },
+          }),
+        ]),
+
+    // --- the provider ---
+    defineRoute({
+      method: "post",
+      path: "/api/v1/webhooks/billing",
+      summary:
+        "Payment provider webhook (signed; verified with the provider before anything is credited)",
+      tags: ["billing"],
+      access: access.public(),
+      request: { body: z.record(z.string(), z.unknown()) },
+      responses: { 200: { description: "Received" }, 401: { description: "Bad signature" } },
+      handler: async ({ body }, req, res) => {
+        const raw = (req as unknown as RawBodyRequest).rawBody ?? Buffer.from(JSON.stringify(body));
+        const signature = req.header("x-paystack-signature") ?? req.header("x-gateway-signature");
+        res.status(await gateway.receiveWebhook(raw, signature, body)).end();
+      },
+    }),
+
+    // --- console: gateway ---
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/gateway-transactions`,
+      summary:
+        "Gateway payments (status=failed: the failed-payments queue; review: needs a person)",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: {
+        query: z.object({
+          status: z.enum(["pending", "succeeded", "failed", "abandoned", "review"]).optional(),
+          tenantId: uuid.optional(),
+          limit,
+        }),
+      },
+      responses: { 200: { description: "Attempts" } },
+      handler: async ({ query }, _req, res) => {
+        res.json(envelope(await gateway.attempts(query)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/webhooks`,
+      summary: "Webhook inspector: what the provider sent and what we did with it",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: {
+        query: z.object({
+          outcome: z.enum(["applied", "ignored", "failed", "rejected"]).optional(),
+          before: uuid.optional(),
+          limit,
+        }),
+      },
+      responses: { 200: { description: "Webhook events" } },
+      handler: async ({ query }, _req, res) => {
+        const events = await gateway.webhooks(query);
+        res.json(envelope(events, { nextBefore: nextBefore(events, query.limit) }));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/webhooks/:id`,
+      summary: "One webhook event with its payload",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "Webhook event" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await gateway.webhook(params.id)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: `${CONSOLE}/billing/webhooks/:id/replay`,
+      summary: "Process a signed webhook again (idempotent)",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.manage"),
+      request: { params: tenantParams, body: z.object({}) },
+      responses: { 200: { description: "Webhook event after the replay" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await gateway.replayWebhook(params.id, staffOf(res))));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: `${CONSOLE}/billing/payments/:id/refunds`,
+      summary: "Refund a payment (through the gateway, or recorded as paid back outside)",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.refunds.issue"),
+      request: {
+        params: tenantParams,
+        body: z.object({ amountMinor: minor.min(1), reason }),
+      },
+      responses: { 201: { description: "Refund" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.status(201).json(envelope(await gateway.refund(params.id, body, staffOf(res))));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/payments/:id/refunds`,
+      summary: "Refunds of a payment",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: { params: tenantParams },
+      responses: { 200: { description: "Refunds" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await gateway.refunds(params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/reconciliations`,
+      summary: "Daily reconciliations with the payment provider (newest first)",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: { query: z.object({ limit }) },
+      responses: { 200: { description: "Reconciliations" } },
+      handler: async ({ query }, _req, res) => {
+        res.json(envelope(await reconciliation.list(query.limit)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: `${CONSOLE}/billing/reconciliations`,
+      summary: "Reconcile one day again",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.manage"),
+      request: { body: z.object({ day: z.iso.date() }) },
+      responses: { 200: { description: "Reconciliation" } },
+      handler: async ({ body }, _req, res) => {
+        res.json(envelope(await reconciliation.runFor(body.day, staffOf(res))));
       },
     }),
 

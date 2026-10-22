@@ -89,13 +89,17 @@ type PaymentRow = {
   currency: string;
   received_at: Date;
   notes: string | null;
-  recorded_by: string;
+  recorded_by: string | null;
   receipt_number: string | null;
+  provider: string | null;
+  gateway_transaction_id: string | null;
+  fees_minor: string | null;
   created_at: Date;
 };
 
 const PAYMENT_COLUMNS = `id, invoice_id, tenant_id, method, reference, amount_minor, currency,
-  received_at, notes, recorded_by, receipt_number, created_at`;
+  received_at, notes, recorded_by, receipt_number, provider, gateway_transaction_id, fees_minor,
+  created_at`;
 
 const toPayment = (r: PaymentRow): PaymentRecord => ({
   id: r.id,
@@ -109,6 +113,9 @@ const toPayment = (r: PaymentRow): PaymentRecord => ({
   notes: r.notes,
   recordedBy: r.recorded_by,
   receiptNumber: r.receipt_number,
+  provider: r.provider,
+  gatewayTransactionId: r.gateway_transaction_id,
+  feesMinor: r.fees_minor === null ? null : Number(r.fees_minor),
   createdAt: r.created_at,
 });
 
@@ -414,8 +421,8 @@ export class PostgresBillingRepository implements IBillingRepository {
     await this.db.query(
       `insert into billing_payments
          (id, invoice_id, tenant_id, method, reference, amount_minor, currency, received_at,
-          notes, recorded_by, receipt_number)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          notes, recorded_by, receipt_number, provider, gateway_transaction_id, fees_minor)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         payment.id,
         payment.invoiceId,
@@ -428,6 +435,9 @@ export class PostgresBillingRepository implements IBillingRepository {
         payment.notes,
         payment.recordedBy,
         payment.receiptNumber,
+        payment.provider ?? null,
+        payment.gatewayTransactionId ?? null,
+        payment.feesMinor ?? null,
       ],
     );
   }

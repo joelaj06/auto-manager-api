@@ -7,6 +7,7 @@ import {
   type BillingSettings,
 } from "./BillingSettings.js";
 import { Invoice, invoiceLine } from "./Invoice.js";
+import { PaymentAttempt } from "./PaymentAttempt.js";
 import { prorate } from "./Proration.js";
 import { Subscription, type Plan } from "./Subscription.js";
 
@@ -167,5 +168,85 @@ describe("proration", () => {
     expect(s.chargeAddedBranches("2026-11-20")).toBeNull();
     s.setBranchCount(4);
     expect(s.chargeAddedBranches("2026-12-01")).toBeNull(); // the period is over
+  });
+});
+
+describe("gateway payment attempts", () => {
+  const attempt = () =>
+    PaymentAttempt.start({
+      id: "a",
+      reference: "AF-INV-2026-000001-abc",
+      tenantId: "t",
+      invoiceId: "i",
+      provider: "paystack",
+      kind: "checkout",
+      amountMinor: 30_000,
+      currency: "GHS",
+      paymentMethodId: null,
+      saveMethod: false,
+      momoPhone: null,
+      momoNetwork: null,
+      initiatedByType: "user",
+      initiatedBy: "u",
+      createdAt: new Date("2026-11-01T08:00:00Z"),
+    });
+  const result = { channel: "card", providerTransactionId: "1", feesMinor: 585 };
+
+  it("accepts only exactly the amount and currency asked, once", () => {
+    const ok = attempt();
+    expect(ok.succeeded({ ...result, amountMinor: 30_000, currency: "GHS" }, new Date())).toBe(
+      true,
+    );
+    expect(ok.status).toBe("succeeded");
+    expect(ok.succeeded({ ...result, amountMinor: 30_000, currency: "GHS" }, new Date())).toBe(
+      false,
+    );
+    ok.failed("late", new Date());
+    expect(ok.status).toBe("succeeded");
+
+    const short = attempt();
+    expect(short.succeeded({ ...result, amountMinor: 100, currency: "GHS" }, new Date())).toBe(
+      false,
+    );
+    expect(short.snapshot()).toMatchObject({
+      status: "review",
+      failureReason: expect.stringMatching(/expected/),
+    });
+    expect(() => PaymentAttempt.start({ ...attempt().snapshot(), amountMinor: 0 })).toThrow(
+      /Nothing is left/,
+    );
+  });
+});
+
+describe("invoice refunds", () => {
+  it("reopen the invoice for what was given back", () => {
+    const invoice = Invoice.issue({
+      id: "i",
+      code: "AF-INV-2026-000002",
+      tenantId: "t",
+      subscriptionId: "s",
+      period: { start: "2026-11-01", end: "2026-12-01" },
+      lines: [
+        invoiceLine({
+          kind: "branch_rate",
+          description: "1 branch",
+          quantity: 1,
+          unitMinor: 30_000,
+          countsAsLicence: true,
+        }),
+      ],
+      taxLines: [],
+      seller: null,
+      buyer: null,
+      currency: "GHS",
+      now: new Date(),
+      dueAt: new Date(),
+      createdBy: null,
+    });
+    invoice.recordPayment(30_000, "GHS", new Date());
+    expect(() => invoice.refund(40_000)).toThrow(/At most/);
+    invoice.refund(10_000);
+    expect(invoice.snapshot()).toMatchObject({ status: "open", paidMinor: 20_000, paidAt: null });
+    expect(invoice.outstandingMinor).toBe(10_000);
   });
 });

@@ -95,7 +95,8 @@ export class TenantLifecycleService {
    * A licence payment was recorded (docs/25 §5.3): a trial or overdue tenant becomes active and
    * a billing deactivation (not a manual one) is lifted. Safe to call more than once.
    */
-  async applyLicencePayment(tenantId: string, actor: PlatformPrincipal): Promise<void> {
+  /** A paid licence invoice (staff recorded it, or null: it came through the gateway). */
+  async applyLicencePayment(tenantId: string, actor: PlatformPrincipal | null): Promise<void> {
     const before = (await this.deps.directory.findById(tenantId))?.status;
     const tenant = await this.transition(
       tenantId,
@@ -127,7 +128,7 @@ export class TenantLifecycleService {
 
   private async transition(
     tenantId: string,
-    actor: PlatformPrincipal,
+    actor: PlatformPrincipal | null,
     reason: string,
     action: string,
     change: (tenant: TenantLifecycle, now: Date) => StatusTransition | null,
@@ -143,13 +144,13 @@ export class TenantLifecycleService {
         tenantId,
         transition,
         reason,
-        actorType: "platform_staff",
-        actorId: actor.userId,
+        actorType: actor === null ? "system" : "platform_staff",
+        actorId: actor?.userId ?? null,
       });
       const request = deps.requestContext.current();
       await deps.audit.record({
-        actorType: "platform_staff",
-        actorId: actor.userId,
+        actorType: actor === null ? "system" : "platform_staff",
+        actorId: actor?.userId ?? null,
         action,
         entityType: "tenant",
         entityId: tenantId,

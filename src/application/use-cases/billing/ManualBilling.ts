@@ -197,39 +197,18 @@ export class ManualBilling {
           "A payment with this method and reference was already recorded",
         );
       const i = invoice.snapshot();
-      const now = deps.clock.now();
-      const settled = invoice.recordPayment(input.amountMinor, i.currency, now);
-      await deps.billing.saveInvoice(invoice);
-      await deps.billing.insertPayment({
-        id: deps.ids.next(),
-        invoiceId,
-        tenantId: i.tenantId,
-        method: input.method,
-        reference: input.reference.trim(),
-        amountMinor: input.amountMinor,
-        currency: i.currency,
-        receivedAt: input.receivedAt,
-        notes: input.notes?.trim() || null,
-        recordedBy: actor.userId,
-        receiptNumber: await deps.billing.nextReceiptCode(now.getUTCFullYear()),
-      });
-      if (settled) {
-        const subscription = await deps.billing.subscriptionOf(i.tenantId, true);
-        if (subscription === null) throw new SubscriptionNotFoundError();
-        const branchLine = i.lines.find((l) => l.kind === "branch_rate");
-        subscription.applyPaidPeriod(
-          { start: i.periodStart, end: i.periodEnd },
-          now,
-          branchLine?.quantity ?? subscription.branchCount,
-        );
-        await deps.billing.saveSubscription(subscription);
-        await deps.billing.appendEvent(subscription.id, {
-          type: "invoice_paid",
-          details: { invoiceId, code: i.code, period: { start: i.periodStart, end: i.periodEnd } },
-          actorType: "platform_staff",
-          actorId: actor.userId,
-        });
-      }
+      const settled = await this.applyPayment(
+        invoice,
+        {
+          method: input.method,
+          reference: input.reference.trim(),
+          amountMinor: input.amountMinor,
+          receivedAt: input.receivedAt,
+          notes: input.notes?.trim() || null,
+          recordedBy: actor.userId,
+        },
+        { type: "platform_staff", id: actor.userId },
+      );
       await recordStaffAction(deps, actor, {
         action: "billing.payment_recorded",
         entityType: "billing_invoice",
@@ -247,6 +226,56 @@ export class ManualBilling {
     if (result.settled)
       await deps.lifecycle.applyLicencePayment(result.invoice.snapshot().tenantId, actor);
     return this.view(result.invoice, true);
+  }
+
+  /**
+   * A payment received on a locked invoice (inside the caller's unit of work): the payment with
+   * its receipt number, the invoice, and — when it is now paid — the subscription's period.
+   * Returns whether the invoice is settled (the caller then restores the tenant after commit).
+   */
+  async applyPayment(
+    invoice: Invoice,
+    payment: Omit<
+      PaymentRecord,
+      "id" | "invoiceId" | "tenantId" | "currency" | "receiptNumber" | "createdAt"
+    >,
+    actor: Readonly<{ type: "platform_staff" | "system"; id: string | null }>,
+  ): Promise<boolean> {
+    const { deps } = this;
+    const i = invoice.snapshot();
+    const now = deps.clock.now();
+    const settled = invoice.recordPayment(payment.amountMinor, i.currency, now);
+    await deps.billing.saveInvoice(invoice);
+    await deps.billing.insertPayment({
+      ...payment,
+      id: deps.ids.next(),
+      invoiceId: i.id,
+      tenantId: i.tenantId,
+      currency: i.currency,
+      receiptNumber: await deps.billing.nextReceiptCode(now.getUTCFullYear()),
+    });
+    if (settled) {
+      const subscription = await deps.billing.subscriptionOf(i.tenantId, true);
+      if (subscription === null) throw new SubscriptionNotFoundError();
+      const branchLine = i.lines.find((l) => l.kind === "branch_rate");
+      subscription.applyPaidPeriod(
+        { start: i.periodStart, end: i.periodEnd },
+        now,
+        branchLine?.quantity ?? subscription.branchCount,
+      );
+      await deps.billing.saveSubscription(subscription);
+      await deps.billing.appendEvent(subscription.id, {
+        type: "invoice_paid",
+        details: {
+          invoiceId: i.id,
+          code: i.code,
+          period: { start: i.periodStart, end: i.periodEnd },
+        },
+        actorType: actor.type,
+        actorId: actor.id,
+      });
+    }
+    return settled;
   }
 
   async void(invoiceId: string, reason: string, actor: PlatformPrincipal): Promise<InvoiceView> {
