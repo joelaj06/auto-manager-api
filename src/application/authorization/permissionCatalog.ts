@@ -280,6 +280,11 @@ const definitions = {
     description: "Record work and pay deposits and instalments",
     scopes: BRANCH_OR_ALL,
   },
+  "workpay.penalty.waive": {
+    description: "Waive work and pay late fees and instalments",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
   "workpay.settings.manage": {
     description: "Change work and pay defaults (frequency, grace, rounding, deposit rule)",
     scopes: ALL,

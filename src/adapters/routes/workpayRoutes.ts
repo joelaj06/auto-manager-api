@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
+import type { WorkPayCollections } from "../../application/use-cases/workpay/WorkPayCollections.js";
 import type { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
 import { PAYMENT_METHODS } from "../../domain/finance/Payment.js";
 import { AGREEMENT_STATUSES } from "../../domain/workpay/WorkPayAgreement.js";
@@ -43,9 +44,32 @@ const guarantor = z.object({
   address: z.string().trim().max(300).nullable().default(null),
   signs: z.boolean().default(false),
 });
+const percent = z.string().regex(/^\d{1,2}(\.\d{1,2})?$/, 'A percentage as text, e.g. "5"');
+const penalty = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  z.object({ kind: z.literal("flat"), amount }),
+  z.object({ kind: z.literal("percent"), percent }),
+  z.object({ kind: z.literal("daily"), amount, cap: amount.nullable().optional() }),
+]);
+const minor = z.number().int().min(1).max(10_000_000_000);
+const penaltyRule = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  z.object({ kind: z.literal("flat"), amountMinor: minor }),
+  z.object({ kind: z.literal("percent"), percent }),
+  z.object({ kind: z.literal("daily"), amountMinor: minor, capMinor: minor.nullable() }),
+]);
+const money = z.object({
+  amount,
+  method: z.enum(PAYMENT_METHODS),
+  momoNetwork: z.enum(["mtn", "telecel", "at"]).nullable().optional(),
+  reference: z.string().trim().max(100).nullable().optional(),
+});
+const waiver = z.object({ amount: amount.optional(), reason });
+
 const agreementFields = {
   terms,
   graceDays: z.number().int().min(0).max(60).optional(),
+  penalty: penalty.optional(),
   maintenance: responsibility.optional(),
   insurance: responsibility.optional(),
   guarantors: z.array(guarantor).max(5).optional(),
@@ -54,12 +78,16 @@ const agreementFields = {
 
 export type WorkPayRouteDependencies = Readonly<{
   agreements: WorkPayAgreements;
+  collections: WorkPayCollections;
   settings: WorkPaySettingsService;
 }>;
 
-/** Work & Pay agreements (docs/08 §9): simulator, drafts, signing, deposit, start. */
+/**
+ * Work & Pay agreements (docs/08 §9): simulator, drafts, signing, deposit, start, then
+ * instalment payments, balances, late fees and waivers.
+ */
 export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
-  const { agreements, settings } = deps;
+  const { agreements, collections, settings } = deps;
   return [
     defineRoute({
       method: "get",
@@ -87,6 +115,9 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
           requireDeposit: z.boolean().optional(),
           defaultMaintenance: responsibility.optional(),
           defaultInsurance: responsibility.optional(),
+          defaultPenalty: penaltyRule.optional(),
+          defaultAfterOverdue: z.number().int().optional(),
+          defaultAfterDays: z.number().int().optional(),
         }),
       },
       responses: { 200: { description: "Settings" } },
@@ -210,12 +241,7 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
       access: access.permission("workpay.payment.record"),
       request: {
         params: idParams,
-        body: z.object({
-          amount,
-          method: z.enum(PAYMENT_METHODS),
-          momoNetwork: z.enum(["mtn", "telecel", "at"]).nullable().optional(),
-          reference: z.string().trim().max(100).nullable().optional(),
-        }),
+        body: money,
       },
       responses: { 200: { description: "Agreement" } },
       handler: async ({ params, body }, _req, res) => {
@@ -259,6 +285,77 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
       responses: { 200: { description: "Agreement" } },
       handler: async ({ params, body }, _req, res) => {
         res.json(envelope(await agreements.cancel(principalOf(res), params.id, body.reason)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/payments",
+      summary: "Record an instalment payment: late fees first, then the oldest instalments",
+      tags: ["workpay"],
+      access: access.permission("workpay.payment.record"),
+      request: { params: idParams, body: money.extend({ paidOn: z.iso.date().optional() }) },
+      responses: { 201: { description: "The payment, what it paid and the new balance" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.status(201).json(envelope(await collections.pay(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/payments",
+      summary: "Payments on an agreement and what each one paid, newest first",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Payments" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await collections.paymentsOf(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/workpay/agreements/:id/balance",
+      summary: "Outstanding, overdue, late fees, days in arrears and the next instalment",
+      tags: ["workpay"],
+      access: access.permission("workpay.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Balance" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await collections.balance(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/instalments/:number/waive",
+      summary: "Waive what is left of an instalment, or part of it",
+      tags: ["workpay"],
+      access: access.permission("workpay.penalty.waive"),
+      request: {
+        params: z.object({ id: uuid, number: z.coerce.number().int().min(1) }),
+        body: waiver,
+      },
+      responses: { 200: { description: "Balance" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(
+          envelope(
+            await collections.waiveInstalment(principalOf(res), params.id, params.number, body),
+          ),
+        );
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/workpay/agreements/:id/penalties/:penaltyId/waive",
+      summary: "Waive a late fee, or part of it",
+      tags: ["workpay"],
+      access: access.permission("workpay.penalty.waive"),
+      request: { params: z.object({ id: uuid, penaltyId: uuid }), body: waiver },
+      responses: { 200: { description: "Balance" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(
+          envelope(
+            await collections.waivePenalty(principalOf(res), params.id, params.penaltyId, body),
+          ),
+        );
       },
     }),
   ];

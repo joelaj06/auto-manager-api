@@ -1,4 +1,6 @@
+import { Postings } from "../../../domain/finance/Postings.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
+import type { PenaltyRule } from "../../../domain/workpay/WorkPayCollections.js";
 import {
   LIVE_STATUSES,
   pricingOf,
@@ -70,11 +72,20 @@ export type TermsRequest = Readonly<{
   roundTo?: string;
 }>;
 
+/** The late-payment rule as the API takes it: amounts as text in the base currency. */
+export type PenaltyRequest =
+  | Readonly<{ kind: "none" }>
+  | Readonly<{ kind: "flat"; amount: string }>
+  | Readonly<{ kind: "percent"; percent: string }>
+  | Readonly<{ kind: "daily"; amount: string; cap?: string | null }>;
+
 export type AgreementRequest = Readonly<{
   vehicleId: string;
   driverId: string;
   terms: TermsRequest;
   graceDays?: number;
+  /** Default: the settings' rule. */
+  penalty?: PenaltyRequest;
   maintenance?: Responsibility;
   insurance?: Responsibility;
   guarantors?: readonly Guarantor[];
@@ -108,6 +119,8 @@ export type TermsView = Readonly<{
 export type AgreementView = Omit<WorkPayAgreementProps, "terms" | "depositPaidMinor"> &
   Readonly<{
     terms: TermsView;
+    /** The penalty rule in words. */
+    lateFee: string;
     depositPaid: MoneyJson;
     depositOutstanding: MoneyJson;
     document: Readonly<{ id: string; number: string; status: string }> | null;
@@ -124,6 +137,24 @@ const EVERY: Readonly<Record<WorkPayFrequency, string>> = {
   weekly: "every week",
   monthly: "every month",
 };
+
+const show = (j: MoneyJson) => j.formatted;
+
+/** The late-payment rule in the words the agreement uses. */
+export function lateFee(rule: PenaltyRule, m: (minor: number) => MoneyJson): string {
+  switch (rule.kind) {
+    case "none":
+      return "No late fee is charged";
+    case "flat":
+      return `A late fee of ${show(m(rule.amountMinor))} is charged once on each overdue instalment`;
+    case "percent":
+      return `A late fee of ${rule.percent}% of the overdue amount is charged once on each overdue instalment`;
+    case "daily":
+      return `A late fee of ${show(m(rule.amountMinor))} is charged for every day an instalment is overdue${
+        rule.capMinor === null ? "" : `, up to ${show(m(rule.capMinor))} per instalment`
+      }`;
+  }
+}
 
 /**
  * Work & Pay agreements (docs/08 §2–3, §5): simulate terms, draft an agreement with its
@@ -202,6 +233,10 @@ export class WorkPayAgreements {
         branchId: vehicle.branchId,
         terms: await this.terms(request.terms, vehicle),
         graceDays: request.graceDays ?? settings.defaultGraceDays,
+        penalty:
+          request.penalty === undefined
+            ? settings.defaultPenalty
+            : await this.penaltyRule(request.penalty),
         maintenance: request.maintenance ?? settings.defaultMaintenance,
         insurance: request.insurance ?? settings.defaultInsurance,
         guarantors: request.guarantors ?? [],
@@ -234,6 +269,9 @@ export class WorkPayAgreements {
             ? {}
             : { terms: await this.terms(changes.terms, vehicle) }),
           ...(changes.graceDays === undefined ? {} : { graceDays: changes.graceDays }),
+          ...(changes.penalty === undefined
+            ? {}
+            : { penalty: await this.penaltyRule(changes.penalty) }),
           ...(changes.maintenance === undefined ? {} : { maintenance: changes.maintenance }),
           ...(changes.insurance === undefined ? {} : { insurance: changes.insurance }),
           ...(changes.guarantors === undefined ? {} : { guarantors: changes.guarantors }),
@@ -300,6 +338,7 @@ export class WorkPayAgreements {
             firstDueOn: a.terms.firstDueOn,
             lastDueOn: a.terms.lastDueOn,
             graceDays: a.graceDays,
+            lateFee: lateFee(a.penalty, m),
             maintenance: RESPONSIBLE[a.maintenance],
             insurance: RESPONSIBLE[a.insurance],
           },
@@ -423,6 +462,19 @@ export class WorkPayAgreements {
       });
       await deps.agreements.save(agreement);
       await deps.schedule.create(a.id, this.schedule(a).schedule);
+      const started = agreement.snapshot();
+      await deps.posting.post(
+        Postings.workpayStarted(
+          started,
+          {
+            priceMinor: a.terms.totalPriceMinor,
+            depositMinor: started.depositPaidMinor,
+            date: started.startedOn!,
+          },
+          await deps.posting.accounts(),
+        ),
+        actor.userId,
+      );
       await this.audit(actor, "workpay.agreement_activated", agreement);
       return this.view(agreement, true);
     });
@@ -531,6 +583,24 @@ export class WorkPayAgreements {
     });
   }
 
+  private async penaltyRule(request: PenaltyRequest): Promise<PenaltyRule> {
+    const base = await this.deps.posting.baseCurrency();
+    const minor = (amount: string) => Money.parse(amount, base).amountMinor;
+    switch (request.kind) {
+      case "none":
+      case "percent":
+        return request;
+      case "flat":
+        return { kind: "flat", amountMinor: minor(request.amount) };
+      case "daily":
+        return {
+          kind: "daily",
+          amountMinor: minor(request.amount),
+          capMinor: request.cap === undefined || request.cap === null ? null : minor(request.cap),
+        };
+    }
+  }
+
   /** The schedule the stored terms give (the same the signed document shows). */
   private schedule(a: WorkPayAgreementProps): WorkPayTerms {
     return workPayTerms({
@@ -635,6 +705,7 @@ export class WorkPayAgreements {
     return {
       ...rest,
       terms: this.termsView(computed, m),
+      lateFee: lateFee(rest.penalty, m),
       depositPaid: m(depositPaidMinor),
       depositOutstanding: m(terms.depositMinor - depositPaidMinor),
       document:

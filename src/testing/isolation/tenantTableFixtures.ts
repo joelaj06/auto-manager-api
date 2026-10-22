@@ -54,6 +54,11 @@ const WORKPAY = `${DRIVER},
                               2, 100, 100, current_date, current_date + 7, 'driver', 'owner'
                          from v, d, b returning id)`;
 
+/** The agreement above with its first instalment. */
+const WORKPAY_INSTALMENT = `${WORKPAY},
+                 i as (insert into workpay_instalments (agreement_id, number, due_on, amount_minor)
+                       select w.id, 1, current_date, 100 from w returning id)`;
+
 /** An issued document (number = marker; verification code from the marker). */
 const DOCUMENT = `insert into documents (number, type, language, template_version, template_body,
                    subject_type, subject_id, data_snapshot, verification_code, issued_at)
@@ -371,6 +376,39 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: `select 1 from workpay_instalments i join workpay_agreements a on a.id = i.agreement_id
             where a.number = $1`,
+  },
+  workpay_penalties: {
+    insert: (marker) => ({
+      sql: `${WORKPAY_INSTALMENT}
+            insert into workpay_penalties (agreement_id, instalment_id, charged_on, amount_minor)
+            select w.id, i.id, current_date, 100 from w, i`,
+      params: [marker, `WN${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from workpay_penalties p join workpay_agreements a on a.id = p.agreement_id
+            where a.number = $1`,
+  },
+  workpay_allocations: {
+    insert: (marker) => ({
+      sql: `${WORKPAY_INSTALMENT},
+                 p as (insert into payments (number, direction, method, status, party_type, party_id,
+                         party_name, branch_id, paid_on, currency, fx_rate, amount_minor, amount_base_minor)
+                       select $1, 'in', 'cash', 'recorded', 'driver', d.id, 'Isolation', b.id,
+                              current_date, 'GHS', 1, 100, 100 from d, b returning id)
+            insert into workpay_allocations (agreement_id, payment_id, instalment_id, amount_minor)
+            select w.id, p.id, i.id, 100 from w, p, i`,
+      params: [marker, `WL${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from workpay_allocations l join workpay_agreements a on a.id = l.agreement_id
+            where a.number = $1`,
+  },
+  workpay_waivers: {
+    insert: (marker) => ({
+      sql: `${WORKPAY_INSTALMENT}
+            insert into workpay_waivers (agreement_id, instalment_id, amount_minor, reason)
+            select w.id, i.id, 100, $1 from w, i`,
+      params: [marker, `WV${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from workpay_waivers where reason = $1",
   },
   document_templates: {
     insert: (marker) => ({

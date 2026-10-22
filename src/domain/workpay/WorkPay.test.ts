@@ -88,6 +88,7 @@ describe("work and pay agreements", () => {
       branchId: "b1",
       terms: weekly({ depositMinor: 500_000 }),
       graceDays: 3,
+      penalty: { kind: "none" },
       maintenance: "driver",
       insurance: "owner",
       guarantors: [

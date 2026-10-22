@@ -4,6 +4,8 @@ import type { Container } from "inversify";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { IJobHandler } from "../../application/jobs/IJobHandler.js";
+import type { ITenantDailyTask } from "../../application/jobs/ITenantDailyTask.js";
+import type { IClock } from "../../application/ports/IClock.js";
 import type { ISmsGateway } from "../../application/ports/INotifications.js";
 import {
   OWNER_PASSWORD,
@@ -25,22 +27,33 @@ class FakeSms implements ISmsGateway {
   }
 }
 
+/** Moved forward to let instalments fall overdue (tokens are issued again after a move). */
+class TestClock implements IClock {
+  private offsetMs = 0;
+  now = () => new Date(Date.now() + this.offsetMs);
+  advanceDays(days: number) {
+    this.offsetMs += days * 86_400_000;
+  }
+}
+
+const clock = new TestClock();
 let container: Container;
 let app: Express;
 let t: ProvisionedTenant;
 const sms = new FakeSms();
 let driver: string;
 let driverToken: string;
+let ownerToken: string;
 let vehicle: string;
 let checklist: { items: { key: string; ok: boolean }[] };
 const guarantorPhone = `+23320${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`;
 
 const api = () => request(app);
-const owner = () => ({ Authorization: `Bearer ${t.ownerAccessToken}` });
+const owner = () => ({ Authorization: `Bearer ${ownerToken}` });
 const asDriver = () => ({ Authorization: `Bearer ${driverToken}` });
 const digits = (n: number) => String(Math.floor(Math.random() * 10 ** n)).padStart(n, "0");
 const day = (offset: number) =>
-  new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  new Date(clock.now().getTime() + offset * 86_400_000).toISOString().slice(0, 10);
 const drawn = { type: "drawn", png: signaturePng() };
 
 async function smsTo(phone: string): Promise<string> {
@@ -64,9 +77,11 @@ const terms = {
 beforeAll(async () => {
   container = await createTestContainer({ AUTH_RATE_LIMIT_MAX: "10000", RATE_LIMIT_MAX: "100000" });
   container.rebind<ISmsGateway[]>(TYPES.SmsGateways).toConstantValue([sms]);
+  container.rebind<IClock>(TYPES.Clock).toConstantValue(clock);
   app = container.get<Express>(TYPES.HttpApp);
   const staff = await new StaffFixtures(container).create(["super_admin"]);
   t = await new ProvisionedTenants(container, app, staff).create();
+  ownerToken = t.ownerAccessToken;
   await api()
     .put("/api/v1/settings/notifications/sms")
     .set(owner())
@@ -158,6 +173,7 @@ describe("work and pay", () => {
         vehicleId: vehicle,
         driverId: driver,
         terms,
+        penalty: { kind: "flat", amount: "50.00" },
         guarantors: [
           { name: "Akua Mensah", phone: guarantorPhone, relationship: "Sister", signs: true },
         ],
@@ -169,6 +185,8 @@ describe("work and pay", () => {
       terms: { totalPrice: { amountMinor: 12_000_000 }, instalment: { amountMinor: 110_500 } },
       depositOutstanding: { amountMinor: 500_000 },
       graceDays: 3,
+      penalty: { kind: "flat", amountMinor: 5_000 },
+      lateFee: "A late fee of ₵50.00 is charged once on each overdue instalment",
       maintenance: "driver",
       insurance: "owner",
     });
@@ -341,5 +359,195 @@ describe("work and pay", () => {
       status: "void",
       voidReason: "Agreement withdrawn: Price to change",
     });
+  });
+
+  // --- collections (P3-4): grace is 2 days, the late fee ₵50.00 flat, instalments 1,105.00 ---
+
+  type Balance = Record<string, unknown> & {
+    outstanding: { amountMinor: number };
+    penalties: { id: string }[];
+  };
+  const balance = async () =>
+    (await api().get(`/api/v1/workpay/agreements/${agreement}/balance`).set(owner())).body
+      .data as Balance;
+  const pay = (amount: string) =>
+    api()
+      .post(`/api/v1/workpay/agreements/${agreement}/payments`)
+      .set(owner())
+      .send({ amount, method: "momo", momoNetwork: "mtn", reference: `WP-${digits(6)}` });
+  const arrearsJob = () =>
+    t.tenant.run(() =>
+      container
+        .get<ITenantDailyTask[]>(TYPES.TenantDailyTasks)
+        .find((task) => task.name === "workpay_arrears")!
+        .run(day(0)),
+    );
+  /** Moves the clock and signs the owner in again (their token was issued before the move). */
+  async function travel(days: number) {
+    clock.advanceDays(days);
+    const login = await api()
+      .post("/api/v1/auth/login")
+      .set("X-Tenant", t.slug)
+      .send({ identifier: t.ownerEmail, password: OWNER_PASSWORD });
+    ownerToken = login.body.data.accessToken as string;
+  }
+  let reversible: string;
+
+  it("posts the price as a receivable when the agreement starts, the books balanced", async () => {
+    const tb = await api().get("/api/v1/ledger/trial-balance").set(owner());
+    expect(tb.body.data.balanced).toBe(true);
+    const byCode = (code: string) =>
+      (tb.body.data.accounts as { code: string; balance: { amountMinor: number } }[]).find(
+        (a) => a.code === code,
+      )?.balance.amountMinor;
+    expect(Math.abs(byCode("1210")!)).toBe(11_500_000);
+    expect(Math.abs(byCode("4200")!)).toBe(500_000);
+  });
+
+  it("takes a payment ahead of the due date against the first instalment", async () => {
+    const res = await pay("500.00");
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body.data.allocations).toEqual([
+      {
+        kind: "instalment",
+        instalmentNumber: 1,
+        amount: expect.objectContaining({ amountMinor: 50_000 }),
+      },
+    ]);
+    expect(res.body.data.balance).toMatchObject({
+      status: "active",
+      outstanding: { amountMinor: 11_450_000 },
+      dueNow: { amountMinor: 0 },
+      nextDue: { number: 1, outstanding: { amountMinor: 60_500 } },
+    });
+    const tooMuch = await pay("200000.00");
+    expect(tooMuch.body.error.message).toMatch(/more than the .* still owed/);
+  });
+
+  it("falls into arrears after the grace days and charges the late fee once", async () => {
+    await travel(9); // due on day 7, grace 2: overdue from day 10
+    await arrearsJob();
+    expect(await balance()).toMatchObject({ status: "active", overdueCount: 0 });
+    await travel(1);
+    await arrearsJob();
+    await arrearsJob(); // a second run charges nothing more
+    const b = await balance();
+    expect(b).toMatchObject({
+      status: "in_arrears",
+      overdueCount: 1,
+      overdue: { amountMinor: 60_500 },
+      penaltiesOutstanding: { amountMinor: 5_000 },
+      dueNow: { amountMinor: 65_500 },
+      arrearsSince: day(0),
+      daysInArrears: 1,
+    });
+    expect(b.penalties).toHaveLength(1);
+    const listed = await api().get("/api/v1/workpay/agreements?status=in_arrears").set(owner());
+    expect((listed.body.data as { id: string }[]).map((a) => a.id)).toContain(agreement);
+  });
+
+  it("applies a payment to the late fee, then the overdue instalment, then the next one", async () => {
+    const res = await pay("1000.00");
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(
+      (
+        res.body.data.allocations as {
+          kind: string;
+          instalmentNumber: number;
+          amount: { amountMinor: number };
+        }[]
+      ).map((l) => [l.kind, l.instalmentNumber, l.amount.amountMinor]),
+    ).toEqual([
+      ["penalty", 1, 5_000],
+      ["instalment", 1, 60_500],
+      ["instalment", 2, 34_500],
+    ]);
+    expect(res.body.data.balance).toMatchObject({ status: "active", arrearsSince: null });
+    reversible = res.body.data.payment.id as string;
+    const receipt = await api().get(`/api/v1/payments/${reversible}/receipt`).set(owner());
+    expect(receipt.body.data.appliedTo[0]).toMatchObject({
+      description: expect.stringMatching(
+        /^Work and pay agreement WP-.*: instalments 1–2 and late fees$/,
+      ),
+      amount: { amountMinor: 100_000 },
+    });
+    const listed = await api().get(`/api/v1/workpay/agreements/${agreement}/payments`).set(owner());
+    expect(listed.body.data).toHaveLength(2);
+  });
+
+  it("puts the agreement back in arrears when a payment is reversed", async () => {
+    const res = await api()
+      .post(`/api/v1/payments/${reversible}/reverse`)
+      .set(owner())
+      .send({ reason: "Cheque bounced" });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(await balance()).toMatchObject({
+      status: "in_arrears",
+      overdue: { amountMinor: 60_500 },
+      penaltiesOutstanding: { amountMinor: 5_000 },
+    });
+    const listed = await api().get(`/api/v1/workpay/agreements/${agreement}/payments`).set(owner());
+    expect(
+      listed.body.data.find((p: { paymentId: string }) => p.paymentId === reversible),
+    ).toMatchObject({
+      reversed: true,
+    });
+  });
+
+  it("waives a late fee and an instalment, with a reason", async () => {
+    const { penalties } = await balance();
+    const noReason = await api()
+      .post(`/api/v1/workpay/agreements/${agreement}/penalties/${penalties[0]!.id}/waive`)
+      .set(owner())
+      .send({ reason: "" });
+    expect(noReason.status).toBe(400);
+    const fee = await api()
+      .post(`/api/v1/workpay/agreements/${agreement}/penalties/${penalties[0]!.id}/waive`)
+      .set(owner())
+      .send({ reason: "First time late" });
+    expect(fee.status, JSON.stringify(fee.body)).toBe(200);
+    expect(fee.body.data).toMatchObject({
+      status: "in_arrears",
+      penaltiesOutstanding: { amountMinor: 0 },
+    });
+    const instalment = await api()
+      .post(`/api/v1/workpay/agreements/${agreement}/instalments/1/waive`)
+      .set(owner())
+      .send({ amount: "605.00", reason: "Vehicle in the workshop" });
+    expect(instalment.body.data).toMatchObject({ status: "active", overdueCount: 0 });
+    const again = await api()
+      .post(`/api/v1/workpay/agreements/${agreement}/instalments/1/waive`)
+      .set(owner())
+      .send({ reason: "Again" });
+    expect(again.body.error.message).toMatch(/Nothing is left/);
+  });
+
+  it("completes once everything is paid, the books still balanced", async () => {
+    const { outstanding } = await balance();
+    const amount = (outstanding.amountMinor / 100).toFixed(2);
+    const res = await pay(amount);
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(res.body.data.balance).toMatchObject({
+      status: "completed",
+      outstanding: { amountMinor: 0 },
+      nextDue: null,
+    });
+    const after = await api().get(`/api/v1/workpay/agreements/${agreement}`).set(owner());
+    expect(after.body.data.completedAt).not.toBeNull();
+    expect(
+      after.body.data.schedule.every(
+        (i: { status: string }) => i.status === "paid" || i.status === "waived",
+      ),
+    ).toBe(true);
+    expect((await pay("10.00")).body.error.message).toMatch(/fully paid/);
+
+    const tb = await api().get("/api/v1/ledger/trial-balance").set(owner());
+    expect(tb.body.data.balanced).toBe(true);
+    const byCode = (code: string) =>
+      (tb.body.data.accounts as { code: string; balance: { amountMinor: number } }[]).find(
+        (a) => a.code === code,
+      )?.balance.amountMinor ?? 0;
+    expect(byCode("1210")).toBe(0); // nothing left receivable
+    expect(byCode("2300")).toBe(0); // everything earned or waived
   });
 });

@@ -1,5 +1,8 @@
-/** System template: work & pay (hire purchase) agreement (version 2: guarantors sign). */
-export const WORKPAY_AGREEMENT_V2 = `<h1 class="center">Work and pay agreement</h1>
+/**
+ * System template: work & pay (hire purchase) agreement (version 3: guarantors sign, the late fee
+ * is stated).
+ */
+export const WORKPAY_AGREEMENT_V3 = `<h1 class="center">Work and pay agreement</h1>
 <p class="center small">{{document.number}} · {{date document.issuedOn}}</p>
 
 <p>This agreement is made between <strong>{{issuer.name}}</strong>{{#if issuer.tin}} (TIN {{issuer.tin}}){{/if}}, the owner, and <strong>{{driver.name}}</strong>{{#if driver.ghanaCardNumber}} (Ghana Card {{driver.ghanaCardNumber}}){{/if}}, the driver, for the vehicle below.</p>
@@ -20,6 +23,7 @@ export const WORKPAY_AGREEMENT_V2 = `<h1 class="center">Work and pay agreement</
   <tr><th>Instalments</th><td>{{agreement.instalments}} × {{money agreement.instalment}}, {{agreement.frequency}}</td></tr>
   <tr><th>First and last due dates</th><td>{{date agreement.firstDueOn}} to {{date agreement.lastDueOn}}</td></tr>
   <tr><th>Grace period</th><td>{{agreement.graceDays}} days</td></tr>
+  <tr><th>Late fee</th><td>{{agreement.lateFee}}</td></tr>
 </table>
 
 <section data-clause="ownership_until_paid" data-title="Ownership" data-locked>
@@ -27,7 +31,7 @@ export const WORKPAY_AGREEMENT_V2 = `<h1 class="center">Work and pay agreement</
 </section>
 
 <section data-clause="payments" data-title="Payments">
-<p>The driver pays each instalment on or before its due date by an agreed method. A payment is applied first to penalties, then to overdue instalments, then to the current instalment, then to future instalments.</p>
+<p>The driver pays each instalment on or before its due date by an agreed method. A payment is applied first to penalties, then to overdue instalments, then to the current instalment, then to future instalments. An instalment still unpaid after the grace period is overdue and attracts the late fee stated above.</p>
 </section>
 
 <section data-clause="default_and_repossession" data-title="Default and repossession" data-locked>

@@ -14,6 +14,15 @@ import {
 } from "./Journal.js";
 import { METHOD_ACCOUNT, type Payment } from "./Payment.js";
 
+/** What the Work & Pay postings need to know about an agreement. */
+export type WorkPayRef = Readonly<{
+  id: string;
+  number: string;
+  driverId: string;
+  vehicleId: string;
+  branchId: string;
+}>;
+
 /** Account ids by role, resolved by the caller. */
 export type AccountResolver = (key: SystemAccountKey) => string;
 
@@ -327,6 +336,133 @@ export const Postings = {
         variance > 0
           ? [debit(variance, cash), credit(variance, overShort)]
           : [debit(-variance, overShort), credit(-variance, cash)],
+    });
+  },
+
+  /**
+   * A Work & Pay agreement starts (docs/08, docs/13): the price is owed as a receivable and is
+   * unearned until paid; the deposit (held as the driver's credit) is applied and earned.
+   */
+  workpayStarted(
+    a: WorkPayRef,
+    amounts: Readonly<{ priceMinor: number; depositMinor: number; date: string }>,
+    accounts: AccountResolver,
+  ): JournalDraft {
+    const driver = { type: "driver" as const, id: a.driverId };
+    const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
+    return journal({
+      date: amounts.date,
+      description: `Work and pay agreement ${a.number} started`,
+      source: { type: "workpay_agreement", id: a.id },
+      reversesId: null,
+      lines: [
+        debit(amounts.priceMinor, {
+          accountId: accounts("workpay_receivables"),
+          ...tags,
+          party: driver,
+        }),
+        credit(amounts.priceMinor, { accountId: accounts("workpay_unearned"), ...tags }),
+        debit(amounts.depositMinor, {
+          accountId: accounts("party_credit"),
+          ...tags,
+          party: driver,
+        }),
+        credit(amounts.depositMinor, {
+          accountId: accounts("workpay_receivables"),
+          ...tags,
+          party: driver,
+        }),
+        debit(amounts.depositMinor, { accountId: accounts("workpay_unearned"), ...tags }),
+        credit(amounts.depositMinor, { accountId: accounts("workpay_income"), ...tags }),
+      ],
+    });
+  },
+
+  /**
+   * A payment applied to an agreement: the driver's credit settles the receivable; the part
+   * that paid instalments is earned (penalties were earned when charged).
+   */
+  workpayCollected(
+    a: WorkPayRef,
+    params: Readonly<{
+      paymentId: string;
+      instalmentsMinor: number;
+      penaltiesMinor: number;
+      date: string;
+    }>,
+    accounts: AccountResolver,
+  ): JournalDraft | null {
+    const total = params.instalmentsMinor + params.penaltiesMinor;
+    if (total === 0) return null;
+    const driver = { type: "driver" as const, id: a.driverId };
+    const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
+    return journal({
+      date: params.date,
+      description: `Work and pay ${a.number}: payment applied`,
+      source: { type: "workpay_payment", id: params.paymentId },
+      reversesId: null,
+      lines: [
+        debit(total, { accountId: accounts("party_credit"), ...tags, party: driver }),
+        credit(total, { accountId: accounts("workpay_receivables"), ...tags, party: driver }),
+        debit(params.instalmentsMinor, { accountId: accounts("workpay_unearned"), ...tags }),
+        credit(params.instalmentsMinor, { accountId: accounts("workpay_income"), ...tags }),
+      ],
+    });
+  },
+
+  /** A late-payment fee charged to the driver. */
+  workpayPenaltyCharged(
+    a: WorkPayRef,
+    params: Readonly<{ penaltyId: string; amountMinor: number; date: string }>,
+    accounts: AccountResolver,
+  ): JournalDraft {
+    const driver = { type: "driver" as const, id: a.driverId };
+    const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
+    return journal({
+      date: params.date,
+      description: `Work and pay ${a.number}: late-payment fee`,
+      source: { type: "workpay_penalty", id: params.penaltyId },
+      reversesId: null,
+      lines: [
+        debit(params.amountMinor, {
+          accountId: accounts("workpay_receivables"),
+          ...tags,
+          party: driver,
+        }),
+        credit(params.amountMinor, { accountId: accounts("workpay_penalties"), ...tags }),
+      ],
+    });
+  },
+
+  /** A forgiven instalment (never earned) or late-payment fee (taken back). */
+  workpayWaived(
+    a: WorkPayRef,
+    params: Readonly<{
+      waiverId: string;
+      kind: "instalment" | "penalty";
+      amountMinor: number;
+      date: string;
+    }>,
+    accounts: AccountResolver,
+  ): JournalDraft {
+    const driver = { type: "driver" as const, id: a.driverId };
+    const tags = { branchId: a.branchId, vehicleId: a.vehicleId };
+    return journal({
+      date: params.date,
+      description: `Work and pay ${a.number}: ${params.kind === "penalty" ? "late-payment fee" : "instalment"} waived`,
+      source: { type: "workpay_waiver", id: params.waiverId },
+      reversesId: null,
+      lines: [
+        debit(params.amountMinor, {
+          accountId: accounts(params.kind === "penalty" ? "workpay_penalties" : "workpay_unearned"),
+          ...tags,
+        }),
+        credit(params.amountMinor, {
+          accountId: accounts("workpay_receivables"),
+          ...tags,
+          party: driver,
+        }),
+      ],
     });
   },
 };

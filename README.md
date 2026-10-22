@@ -330,6 +330,14 @@ agreement document for the owner, driver and guarantors), paid a deposit (`/:id/
 started once signed (`/:id/activate`: the schedule begins and the vehicle is handed over).
 Drivers see their agreement at `/api/v1/me/driver/workpay`.
 
+Instalments are paid at `POST /api/v1/workpay/agreements/:id/payments` (late fees first, then the
+oldest instalments, the rest in advance). `GET …/:id/balance` shows what is outstanding, overdue
+and due now; `GET …/:id/payments` what each payment paid. The tenant's daily job marks
+instalments overdue after the grace days, charges the agreement's late fee and moves the
+agreement to in arrears, defaulted or completed (`?status=in_arrears,defaulted` lists them).
+Instalments and late fees are waived with a reason at `…/instalments/:number/waive` and
+`…/penalties/:penaltyId/waive`. Reversing a payment in finance puts what it paid back as owed.
+
 ## Subscriptions and billing (manual for now)
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

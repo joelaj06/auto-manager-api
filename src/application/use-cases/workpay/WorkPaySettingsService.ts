@@ -1,3 +1,4 @@
+import { WorkPayAgreement } from "../../../domain/workpay/WorkPayAgreement.js";
 import { WorkPayRuleError } from "../../../domain/workpay/WorkPayTerms.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
@@ -43,6 +44,19 @@ export class WorkPaySettingsService {
         after.firstDueAfterDays > 90
       )
         throw new WorkPayRuleError("The first instalment is 0 to 90 days after the start");
+      WorkPayAgreement.checkPenalty(after.defaultPenalty);
+      if (
+        !Number.isInteger(after.defaultAfterOverdue) ||
+        after.defaultAfterOverdue < 1 ||
+        after.defaultAfterOverdue > 100
+      )
+        throw new WorkPayRuleError("Default after 1 to 100 overdue instalments");
+      if (
+        !Number.isInteger(after.defaultAfterDays) ||
+        after.defaultAfterDays < 1 ||
+        after.defaultAfterDays > 365
+      )
+        throw new WorkPayRuleError("Default after 1 to 365 days in arrears");
       await deps.settings.set(after);
       await recordUserAction(deps, actor.userId, {
         action: "settings.workpay_updated",

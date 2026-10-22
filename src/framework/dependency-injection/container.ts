@@ -5,6 +5,8 @@ import type {
   IWorkPaySettingsStore,
 } from "../../application/ports/IWorkPayRecords.js";
 import { WorkPayAgreements } from "../../application/use-cases/workpay/WorkPayAgreements.js";
+import { WorkPayArrears } from "../../application/use-cases/workpay/WorkPayArrears.js";
+import { WorkPayCollections } from "../../application/use-cases/workpay/WorkPayCollections.js";
 import { WorkPayDeposits } from "../../application/use-cases/workpay/WorkPayDeposits.js";
 import { WorkPaySettingsService } from "../../application/use-cases/workpay/WorkPaySettingsService.js";
 import {
@@ -3054,8 +3056,17 @@ export function createContainer(
       calendarForListeners: TenantCalendar,
       postingForListeners: LedgerPosting,
       workpayAgreements: IWorkPayAgreementRepository,
-    ) =>
-      new PaymentRecording({
+    ) => {
+      // Collections records through payment recording: resolved when finance calls back.
+      const collections = () => container.get<WorkPayCollections>(TYPES.WorkPayCollections);
+      const workpayInstalments = {
+        sourceType: "workpay_payment",
+        paymentReversed: (sourceId: string, paymentId: string) =>
+          collections().paymentReversed(sourceId, paymentId),
+        describe: (sourceId: string, paymentId: string) =>
+          collections().describe(sourceId, paymentId),
+      };
+      return new PaymentRecording({
         unitOfWork,
         payments,
         invoices,
@@ -3086,12 +3097,15 @@ export function createContainer(
             clock,
           }),
           new WorkPayDeposits({ agreements: workpayAgreements, payments, clock }),
+          workpayInstalments,
         ],
         purposes: [
           new RemittancePaymentPurpose({ remittances: remittanceStore, records: remittanceStore }),
           new WorkPayDeposits({ agreements: workpayAgreements, payments, clock }),
+          workpayInstalments,
         ],
-      }),
+      });
+    },
     [
       TYPES.UnitOfWork,
       TYPES.PaymentRepository,
@@ -3409,11 +3423,13 @@ export function createContainer(
       stats: VehicleStatsBuilder,
       documents: Documents,
       signing: DocumentSigning,
+      workpayArrears: WorkPayArrears,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
         recurring,
         remittances,
+        workpayArrears,
         stats,
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
@@ -3424,6 +3440,7 @@ export function createContainer(
       TYPES.VehicleStatsBuilder,
       TYPES.Documents,
       TYPES.DocumentSigning,
+      TYPES.WorkPayArrears,
     ],
   );
 
@@ -4180,6 +4197,58 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  container.bind<WorkPayCollections>(TYPES.WorkPayCollections).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      agreements: IWorkPayAgreementRepository,
+      schedule: IWorkPaySchedule,
+      settings: IWorkPaySettingsStore,
+      payments: PaymentRecording,
+      posting: LedgerPosting,
+      scope: BranchScope,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new WorkPayCollections({
+        unitOfWork,
+        agreements,
+        schedule,
+        settings,
+        payments,
+        posting,
+        scope,
+        calendar,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.WorkPayAgreementRepository,
+      TYPES.WorkPaySchedule,
+      TYPES.WorkPaySettingsStore,
+      TYPES.PaymentRecording,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<WorkPayArrears>(TYPES.WorkPayArrears)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        agreements: IWorkPayAgreementRepository,
+        collections: WorkPayCollections,
+        logger: ILogger,
+      ) => new WorkPayArrears({ unitOfWork, agreements, collections, logger }),
+      [TYPES.UnitOfWork, TYPES.WorkPayAgreementRepository, TYPES.WorkPayCollections, TYPES.Logger],
+    );
   container
     .bind<WorkPaySettingsService>(TYPES.WorkPaySettingsService)
     .toResolvedValue(
@@ -4818,6 +4887,7 @@ export function createContainer(
       documentSettings: DocumentSettingsService,
       workpayAgreements: WorkPayAgreements,
       workpaySettings: WorkPaySettingsService,
+      workpayCollections: WorkPayCollections,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -4901,7 +4971,11 @@ export function createContainer(
           handovers: handoverDocuments,
         }),
         ...signingRoutes({ signing: documentSigning, settings: documentSettings }),
-        ...workpayRoutes({ agreements: workpayAgreements, settings: workpaySettings }),
+        ...workpayRoutes({
+          agreements: workpayAgreements,
+          collections: workpayCollections,
+          settings: workpaySettings,
+        }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -5002,6 +5076,7 @@ export function createContainer(
       TYPES.DocumentSettingsService,
       TYPES.WorkPayAgreements,
       TYPES.WorkPaySettingsService,
+      TYPES.WorkPayCollections,
     ],
   );
 

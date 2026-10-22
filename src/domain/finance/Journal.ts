@@ -28,6 +28,10 @@ export type SystemAccountKey =
   | "vehicle_expenses"
   | "fx_difference"
   | "cash_over_short"
+  | "workpay_receivables"
+  | "workpay_unearned"
+  | "workpay_income"
+  | "workpay_penalties"
   | `tax_payable:${string}`;
 
 /** The payable account of a tax component (VAT, NHIL, GETFund; anything else: other). */

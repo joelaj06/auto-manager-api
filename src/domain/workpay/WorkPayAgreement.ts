@@ -1,3 +1,4 @@
+import type { AgreementPosition, PenaltyRule } from "./WorkPayCollections.js";
 import {
   WorkPayRuleError,
   type Pricing,
@@ -52,9 +53,13 @@ export type WorkPayAgreementProps = Readonly<{
   status: AgreementStatus;
   terms: AgreementTerms;
   graceDays: number;
+  penalty: PenaltyRule;
   maintenance: Responsibility;
   insurance: Responsibility;
   depositPaidMinor: number;
+  /** The day the oldest unpaid instalment fell overdue (null: up to date). */
+  arrearsSince: string | null;
+  completedAt: Date | null;
   guarantors: readonly Guarantor[];
   notes: string | null;
   documentId: string | null;
@@ -110,6 +115,7 @@ export class WorkPayAgreement {
       branchId: string;
       terms: WorkPayTerms;
       graceDays: number;
+      penalty: PenaltyRule;
       maintenance: Responsibility;
       insurance: Responsibility;
       guarantors: readonly Guarantor[];
@@ -119,6 +125,7 @@ export class WorkPayAgreement {
     }>,
   ): WorkPayAgreement {
     WorkPayAgreement.check(params.graceDays, params.guarantors);
+    WorkPayAgreement.checkPenalty(params.penalty);
     return new WorkPayAgreement({
       id: params.id,
       number: params.number,
@@ -128,9 +135,12 @@ export class WorkPayAgreement {
       status: "draft",
       terms: agreementTerms(params.terms),
       graceDays: params.graceDays,
+      penalty: params.penalty,
       maintenance: params.maintenance,
       insurance: params.insurance,
       depositPaidMinor: 0,
+      arrearsSince: null,
+      completedAt: null,
       guarantors: params.guarantors,
       notes: params.notes?.trim() || null,
       documentId: null,
@@ -160,6 +170,19 @@ export class WorkPayAgreement {
     }
   }
 
+  static checkPenalty(rule: PenaltyRule): void {
+    if (rule.kind === "none") return;
+    if (rule.kind === "percent") {
+      if (!/^\d{1,2}(\.\d{1,2})?$/.test(rule.percent) || Number(rule.percent) <= 0)
+        throw new WorkPayRuleError("A late-payment percentage is above 0 and below 100");
+      return;
+    }
+    if (!Number.isSafeInteger(rule.amountMinor) || rule.amountMinor <= 0)
+      throw new WorkPayRuleError("A late-payment fee must be above zero");
+    if (rule.kind === "daily" && rule.capMinor !== null && rule.capMinor < rule.amountMinor)
+      throw new WorkPayRuleError("The cap must be at least one day's fee");
+  }
+
   get id(): string {
     return this.props.id;
   }
@@ -181,6 +204,7 @@ export class WorkPayAgreement {
     changes: Readonly<{
       terms?: WorkPayTerms;
       graceDays?: number;
+      penalty?: PenaltyRule;
       maintenance?: Responsibility;
       insurance?: Responsibility;
       guarantors?: readonly Guarantor[];
@@ -192,11 +216,13 @@ export class WorkPayAgreement {
     const graceDays = changes.graceDays ?? this.props.graceDays;
     const guarantors = changes.guarantors ?? this.props.guarantors;
     WorkPayAgreement.check(graceDays, guarantors);
+    if (changes.penalty !== undefined) WorkPayAgreement.checkPenalty(changes.penalty);
     this.props = {
       ...this.props,
       ...(changes.terms === undefined ? {} : { terms: agreementTerms(changes.terms) }),
       graceDays,
       guarantors,
+      penalty: changes.penalty ?? this.props.penalty,
       maintenance: changes.maintenance ?? this.props.maintenance,
       insurance: changes.insurance ?? this.props.insurance,
       notes: changes.notes === undefined ? this.props.notes : changes.notes?.trim() || null,
@@ -270,6 +296,37 @@ export class WorkPayAgreement {
       activatedAt: params.now,
       updatedAt: params.now,
     };
+  }
+
+  get isRunning(): boolean {
+    return ["active", "in_arrears", "defaulted", "completed"].includes(this.props.status);
+  }
+
+  /** Payments are taken while the agreement runs (and corrected after it completes). */
+  assertCollecting(): void {
+    if (!["active", "in_arrears", "defaulted"].includes(this.props.status))
+      throw new WorkPayRuleError(
+        this.props.status === "completed"
+          ? "This agreement is fully paid"
+          : "Payments are recorded once the agreement has started",
+      );
+  }
+
+  /**
+   * Follows the schedule (docs/08 §3, §5): active, in arrears, defaulted or completed, as the
+   * instalments and penalties stand. Returns whether the status changed.
+   */
+  settle(position: AgreementPosition, now: Date): boolean {
+    if (!this.isRunning) return false;
+    const before = this.props.status;
+    this.props = {
+      ...this.props,
+      status: position.status,
+      arrearsSince: position.arrearsSince,
+      completedAt: position.status === "completed" ? (this.props.completedAt ?? now) : null,
+      updatedAt: now,
+    };
+    return before !== position.status;
   }
 
   cancel(reason: string, now: Date): string | null {

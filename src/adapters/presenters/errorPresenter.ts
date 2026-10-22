@@ -215,6 +215,8 @@ const RULES: Readonly<Record<string, Rule>> = {
 
   // Work & Pay
   WORKPAY_AGREEMENT_NOT_FOUND: { status: 404 },
+  WORKPAY_INSTALMENT_NOT_FOUND: { status: 404 },
+  WORKPAY_PENALTY_NOT_FOUND: { status: 404 },
   WORKPAY_RULE: { status: 422 },
 
   // Documents

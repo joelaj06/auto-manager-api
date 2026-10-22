@@ -141,6 +141,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "workpay.create",
       "workpay.activate",
       "workpay.payment.record",
+      "workpay.penalty.waive",
     ]),
   },
   {
