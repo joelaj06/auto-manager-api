@@ -32,6 +32,14 @@ import { SubscriptionNotFoundError } from "./SubscriptionAdministration.js";
 
 const DAY_MS = 86_400_000;
 
+/** Tells a tenant's reseller (if it has one) about its client. */
+export interface ResellerAlerts {
+  tell(
+    tenantId: string,
+    message: Readonly<{ subject: string; body: string; key: string }>,
+  ): Promise<void>;
+}
+
 type Entry = Readonly<{
   tenantId: string;
   tenantName: string;
@@ -89,6 +97,8 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
       gateway: GatewayBilling;
       lifecycle: TenantLifecycleService;
       notices: BillingNotices;
+      /** The client's reseller, told when it goes overdue or is deactivated (docs/25 §5.1). */
+      resellers: ResellerAlerts;
       unitOfWork: IPlatformUnitOfWork;
       audit: IPlatformAuditTrail;
       requestContext: IRequestContext;
@@ -371,7 +381,15 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
     if (plan.charge && (await this.charge(c.invoiceId, today))) tally.chargesTried += 1;
     for (const step of plan.notices)
       tally.noticesSent += await deps.notices.send(step, subject, policy.channels);
-    if (plan.pastDue && (await this.markPastDue(c))) tally.pastDue += 1;
+    if (plan.pastDue && (await this.markPastDue(c))) {
+      tally.pastDue += 1;
+      await this.tellReseller(
+        c,
+        "overdue",
+        `${c.tenantName}'s Autoforce payment is overdue`,
+        `It was due on ${c.dueOn}. Access is switched off on ${plan.deactivateOn} unless it is paid; you may want to help them.`,
+      );
+    }
     if (plan.readOnly && !policy.dryRun && c.tenantStatus !== "read_only")
       await deps.lifecycle.setReadOnlyForBilling(
         c.tenantId,
@@ -456,6 +474,27 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
       this.subject(c, entry.deactivateOn),
       policy.channels.filter((ch) => ch !== "email"), // the owner's email comes with the deactivation
     );
+    await this.tellReseller(
+      c,
+      "deactivated",
+      `${c.tenantName} is deactivated for an unpaid invoice`,
+      "Their access returns as soon as the invoice is paid.",
+    );
+  }
+
+  private async tellReseller(c: DunningCandidate, step: string, subject: string, body: string) {
+    try {
+      await this.deps.resellers.tell(c.tenantId, {
+        subject,
+        body,
+        key: `client:${c.invoiceId}:${step}`,
+      });
+    } catch (error) {
+      this.deps.logger.warn("Could not tell the reseller about a client", {
+        tenantId: c.tenantId,
+        error,
+      });
+    }
   }
 
   private subject(c: DunningCandidate, deactivateOn: string): NoticeSubject {

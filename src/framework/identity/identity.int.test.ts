@@ -144,7 +144,8 @@ describe("sign-in and sessions", () => {
           .send({ identifier: user.email })
       ).status,
     ).toBe(202);
-    const code = /code to reset your password[\s\S]*?(\d{6})/.exec(
+    // The code is on its own line (the business name before it may contain digits).
+    const code = /code to reset your password[^\n]*\n\n(\d{6})\n/.exec(
       await lastEmail(user.email, "auth.otp_code"),
     )![1]!;
     const bad = await api()

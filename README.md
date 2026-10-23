@@ -422,6 +422,16 @@ with no records. The console has the same under `/api/platform/v1/tenants/:id/br
 edit, make default and `…/reconcile`); the nightly `billing.branch_reconcile` job compares billed
 branches with the tenant database (`billing/branch-reconciliations`, `billing/over-limit`).
 
+**Reseller commissions**: staff set terms (`PUT /api/platform/v1/partners/:id/commission-terms`,
+Super Admin) and per-tenant overrides (`PUT …/tenants/:id/partner-terms`). A reseller earns on
+its client's first licence purchase (each payment on it, licence share excluding VAT); refunds
+claw back. Finance works from `partners/commissions/payable`, records payouts
+(`POST partners/:id/payouts`; cash is approved by a second person at
+`partner-payouts/:id/approve`, reversed at `…/reverse`) and adds adjustments; statements at
+`partners/:id/statements/:period[/pdf|/csv]`, liability at `partners/reports/liability`.
+Resellers: `partner/commissions[/balance|/statements/:period]`, `partner/payouts` and
+`…/:id/acknowledge`.
+
 ## Mobile app connect
 
 `GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)

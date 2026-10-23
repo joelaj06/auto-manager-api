@@ -65,6 +65,13 @@ export type EmailTemplateData = {
     paragraphs: readonly string[];
     billingUrl: string;
   }>;
+  /** Reseller news (commissions, payouts), to the partner's contact. */
+  "partner.notice": Readonly<{
+    name: string;
+    subject: string;
+    paragraphs: readonly string[];
+    consoleUrl: string;
+  }>;
   "billing.deactivated": Readonly<{
     ownerName: string;
     businessName: string;
@@ -233,6 +240,12 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       greeting(data.name),
       ...data.paragraphs,
       `Sign in to the Billing tab to pay or ask for more time: ${data.billingUrl}`,
+    ]),
+  "partner.notice": (data) =>
+    simple(data.subject, [
+      greeting(data.name),
+      ...data.paragraphs,
+      `Details are in your partner console: ${data.consoleUrl}`,
     ]),
   "billing.deactivated": (data) =>
     simple(`${data.businessName} is deactivated for an unpaid invoice`, [

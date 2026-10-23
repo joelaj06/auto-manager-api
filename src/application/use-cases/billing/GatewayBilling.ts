@@ -17,6 +17,7 @@ import type {
 import type { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IClock } from "../../ports/IClock.js";
+import type { ICommissionHooks } from "../../ports/ICommissionHooks.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { ILogger } from "../../ports/ILogger.js";
 import type {
@@ -114,6 +115,8 @@ export class GatewayBilling {
       clock: IClock;
       logger: ILogger;
       returnUrl: string;
+      /** Refunds claw back reseller commission. */
+      commissions: ICommissionHooks;
     }>,
   ) {}
 
@@ -539,6 +542,11 @@ export class GatewayBilling {
     const invoice = (await deps.records.invoice(payment.invoiceId, true))!;
     invoice.refund(amountMinor);
     await deps.records.saveInvoice(invoice);
+    await deps.commissions.paymentRefunded(
+      payment,
+      { id: refundId, amountMinor },
+      invoice.snapshot(),
+    );
     const subscription = await deps.records.subscriptionOf(payment.tenantId);
     if (subscription !== null)
       await deps.records.appendEvent(subscription.id, {

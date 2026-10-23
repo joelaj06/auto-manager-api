@@ -152,6 +152,18 @@ const definitions = {
     description: "Assign or change the partner a tenant is attributed to",
     sensitive: true,
   },
+  "platform.partners.commission_terms.manage": {
+    description: "Set a reseller's commission terms and per-tenant overrides",
+    sensitive: true,
+  },
+  "platform.partners.commissions.pay": {
+    description: "Record, approve (cash, as second approver) and reverse reseller payouts",
+  },
+  "platform.partners.adjust": {
+    description: "Add commission adjustments (credits and debits) for a reseller",
+    sensitive: true,
+  },
+  "platform.partners.reports.view": { description: "Commission liability and reseller reports" },
 
   // --- Reseller capabilities (granted per partner, docs/29 §7) ---
   "platform.partner.tenants.view": {
@@ -314,6 +326,9 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.dashboard.view",
       "platform.tenants.view",
       ...keysWithPrefix("platform.billing."),
+      "platform.partners.view",
+      "platform.partners.commissions.pay",
+      "platform.partners.reports.view",
     ],
   },
   {

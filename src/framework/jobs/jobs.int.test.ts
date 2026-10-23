@@ -25,6 +25,12 @@ import { TYPES } from "../dependency-injection/types.js";
 import { JobWorker } from "./JobWorker.js";
 
 const MAILPIT = process.env.MAILPIT_URL ?? "http://localhost:8025";
+const TESTED_JOBS: ReadonlySet<string> = new Set([
+  "outbox.drain",
+  "outbox.sweep",
+  "event.deliver",
+  "email.send",
+]);
 let tenantId: TenantId;
 let closedTenantId: TenantId;
 
@@ -66,10 +72,17 @@ beforeAll(async () => {
   tenantId = (await fixtures.create()).id;
   closedTenantId = (await fixtures.create({ status: "deactivated" })).id;
 
-  // A fast-polling worker with the container's handlers.
+  // Files share the queue and only this one runs a worker: the emails the other files queued
+  // (never sent) would be ahead of this file's own in the worker's queue.
+  await platform.query(
+    "delete from pgboss.job where name = 'email.send' and state in ('created', 'retry')",
+  );
+
+  // A fast-polling worker with the container's handlers for what this file tests — polling every
+  // queue of the catalogue would compete for the queue's connections on a slow runner.
   await new JobWorker({
     queue: container.get<PgBossJobQueue>(TYPES.JobQueue),
-    handlers: container.get<IJobHandler[]>(TYPES.JobHandlers),
+    handlers: container.get<IJobHandler[]>(TYPES.JobHandlers).filter((h) => TESTED_JOBS.has(h.job)),
     tenantContext: container.get<ITenantContext>(TYPES.TenantContext),
     tenants: container.get<ITenantDirectory>(TYPES.TenantDirectory),
     requestContext: container.get<IRequestContext>(TYPES.RequestContext),

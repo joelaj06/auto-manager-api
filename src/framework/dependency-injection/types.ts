@@ -292,6 +292,10 @@ export const TYPES = Object.freeze({
   BranchContents: Symbol.for("IBranchContents"),
   BranchReconciliationRepository: Symbol.for("IBranchReconciliationRepository"),
   BranchReconciliation: Symbol.for("BranchReconciliation"),
+  PartnerCommissionRepository: Symbol.for("IPartnerCommissionRepository"),
+  PartnerNotifier: Symbol.for("PartnerNotifier"),
+  CommissionEngine: Symbol.for("CommissionEngine"),
+  PartnerCommissions: Symbol.for("PartnerCommissions"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

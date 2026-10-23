@@ -286,6 +286,13 @@ import type { IBranchContents } from "../../application/ports/IBranchContents.js
 import type { IBranchReconciliationRepository } from "../../domain/repositories/IBranchReconciliationRepository.js";
 import { PostgresBranchReconciliationRepository } from "../../infrastructure/billing/PostgresBranchReconciliationRepository.js";
 import { PostgresBranchContents } from "../../infrastructure/tenants/PostgresBranchContents.js";
+import { partnerCommissionRoutes } from "../../adapters/routes/partnerCommissionRoutes.js";
+import type { ICommissionHooks } from "../../application/ports/ICommissionHooks.js";
+import { CommissionEngine } from "../../application/use-cases/partners/CommissionEngine.js";
+import { PartnerCommissions } from "../../application/use-cases/partners/PartnerCommissions.js";
+import { PartnerNotifier } from "../../application/use-cases/partners/PartnerNotifier.js";
+import type { IPartnerCommissionRepository } from "../../domain/repositories/IPartnerCommissionRepository.js";
+import { PostgresPartnerCommissionRepository } from "../../infrastructure/partners/PostgresPartnerCommissionRepository.js";
 import { enterpriseQuoteRoutes } from "../../adapters/routes/enterpriseQuoteRoutes.js";
 import { EnterpriseQuotes } from "../../application/use-cases/billing/EnterpriseQuotes.js";
 import type { IEnterpriseQuoteRepository } from "../../domain/repositories/IEnterpriseQuoteRepository.js";
@@ -1602,6 +1609,7 @@ export function createContainer(
       audit: IPlatformAuditTrail,
       requestContext: IRequestContext,
       clock: IClock,
+      commissions: IPartnerCommissionRepository,
     ) =>
       new PartnerPortal({
         queries,
@@ -1615,6 +1623,7 @@ export function createContainer(
         requestContext,
         clock,
         settings: { signupUrl: config.public.webAppUrl },
+        commissionTerms: (partnerId) => commissions.latestTerms(partnerId),
       }),
     [
       TYPES.PartnerQueries,
@@ -1627,6 +1636,7 @@ export function createContainer(
       TYPES.PlatformAuditTrail,
       TYPES.RequestContext,
       TYPES.Clock,
+      TYPES.PartnerCommissionRepository,
     ],
   );
 
@@ -2265,6 +2275,7 @@ export function createContainer(
       directory: ITenantDirectory,
       extensions: IBillingAutomationRepository,
       quotes: IEnterpriseQuoteRepository,
+      commissions: ICommissionHooks,
     ) =>
       new ManualBilling({
         billing,
@@ -2279,6 +2290,7 @@ export function createContainer(
         directory,
         extensions,
         quotes,
+        commissions,
       }),
     [
       TYPES.BillingRepository,
@@ -2293,6 +2305,7 @@ export function createContainer(
       TYPES.TenantDirectory,
       TYPES.BillingAutomationRepository,
       TYPES.EnterpriseQuoteRepository,
+      TYPES.CommissionEngine,
     ],
   );
   container
@@ -2380,6 +2393,7 @@ export function createContainer(
       ids: IIdGenerator,
       clock: IClock,
       logger: ILogger,
+      commissions: ICommissionHooks,
     ) =>
       new GatewayBilling({
         provider,
@@ -2396,6 +2410,7 @@ export function createContainer(
         clock,
         logger,
         returnUrl: config.billing.returnUrl,
+        commissions,
       }),
     [
       TYPES.PaymentGateway,
@@ -2411,6 +2426,7 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.Logger,
+      TYPES.CommissionEngine,
     ],
   );
   container.bind<GatewayReconciliation>(TYPES.GatewayReconciliation).toResolvedValue(
@@ -2501,8 +2517,12 @@ export function createContainer(
       ids: IIdGenerator,
       clock: IClock,
       logger: ILogger,
+      partnerNotifier: PartnerNotifier,
     ) =>
       new BillingAutomation({
+        resellers: {
+          tell: (tenantId, message) => partnerNotifier.tellTenantReseller(tenantId, message),
+        },
         automation,
         billing,
         invoices,
@@ -2529,6 +2549,7 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.Logger,
+      TYPES.PartnerNotifier,
     ],
   );
   container.bind<BillingExtensions>(TYPES.BillingExtensions).toResolvedValue(
@@ -2610,6 +2631,92 @@ export function createContainer(
       TYPES.PlatformUnitOfWork,
       TYPES.PlatformAuditTrail,
       TYPES.RequestContext,
+      TYPES.Logger,
+    ],
+  );
+
+  // --- Reseller commissions (P4-6) ---
+  platformRepository<IPartnerCommissionRepository>(
+    TYPES.PartnerCommissionRepository,
+    (p) => new PostgresPartnerCommissionRepository(p),
+  );
+  container.bind<PartnerNotifier>(TYPES.PartnerNotifier).toResolvedValue(
+    (
+      partners: IPartnerRepository,
+      email: NotificationService,
+      commissions: IPartnerCommissionRepository,
+    ) =>
+      new PartnerNotifier({
+        partners,
+        email,
+        consoleUrl: auth.platform.consoleUrl,
+        attributions: (tenantId) => commissions.attribution(tenantId),
+      }),
+    [TYPES.PartnerRepository, TYPES.NotificationService, TYPES.PartnerCommissionRepository],
+  );
+  container
+    .bind<CommissionEngine>(TYPES.CommissionEngine)
+    .toResolvedValue(
+      (
+        commissions: IPartnerCommissionRepository,
+        billing: IBillingRepository,
+        notifier: PartnerNotifier,
+        ids: IIdGenerator,
+        clock: IClock,
+        logger: ILogger,
+      ) => new CommissionEngine({ commissions, billing, notifier, ids, clock, logger }),
+      [
+        TYPES.PartnerCommissionRepository,
+        TYPES.BillingRepository,
+        TYPES.PartnerNotifier,
+        TYPES.IdGenerator,
+        TYPES.Clock,
+        TYPES.Logger,
+      ],
+    );
+  container.bind<PartnerCommissions>(TYPES.PartnerCommissions).toResolvedValue(
+    (
+      commissions: IPartnerCommissionRepository,
+      partners: IPartnerRepository,
+      billing: IBillingRepository,
+      notifier: PartnerNotifier,
+      renderer: IPdfRenderer,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new PartnerCommissions({
+        commissions,
+        partners,
+        billing,
+        // Lazy: the documents come later in the container.
+        documentIds: async (partnerId) =>
+          (await container.get<PartnerDocuments>(TYPES.PartnerDocuments).list(partnerId)).map(
+            (f) => f.id,
+          ),
+        notifier,
+        renderer,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.PartnerCommissionRepository,
+      TYPES.PartnerRepository,
+      TYPES.BillingRepository,
+      TYPES.PartnerNotifier,
+      TYPES.PdfRenderer,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
       TYPES.Logger,
     ],
   );
@@ -5576,6 +5683,7 @@ export function createContainer(
       billingExtensions: BillingExtensions,
       enterpriseQuotes: EnterpriseQuotes,
       branchReconciliation: BranchReconciliation,
+      partnerCommissions: PartnerCommissions,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -5600,6 +5708,7 @@ export function createContainer(
           auditExport,
         }),
         ...partnerRoutes({ administration: partnerAdministration, portal: partnerPortal }),
+        ...partnerCommissionRoutes({ commissions: partnerCommissions }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...mobileRoutes(mobile),
         ...billingRoutes({
@@ -5804,6 +5913,7 @@ export function createContainer(
       TYPES.BillingExtensions,
       TYPES.EnterpriseQuotes,
       TYPES.BranchReconciliation,
+      TYPES.PartnerCommissions,
     ],
   );
 

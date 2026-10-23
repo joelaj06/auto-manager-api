@@ -1,3 +1,4 @@
+import type { CommissionTerms } from "../../../domain/partners/Commissions.js";
 import type {
   ApplicationCorrections,
   ApplicationStatus,
@@ -65,8 +66,16 @@ export type PartnerProfileView = Readonly<{
   capabilities: readonly string[];
   /** With `platform.partner.referral_tools.view`. */
   referral?: Readonly<{ code: string; link: string }>;
-  /** With `platform.partner.terms.view`; commission terms arrive in phase 2. */
-  commissionTerms?: null;
+  /** With `platform.partner.terms.view`: the terms in force (null until set). */
+  commissionTerms?: Readonly<{
+    version: number;
+    standardPercent: string | null;
+    enterprisePercent: string | null;
+    holdDays: number;
+    minPayoutMinor: number;
+    capPerTenantMinor: number | null;
+    effectiveFrom: Date;
+  }> | null;
 }>;
 
 /**
@@ -88,6 +97,7 @@ export class PartnerPortal {
       requestContext: IRequestContext;
       clock: IClock;
       settings: Readonly<{ signupUrl: string }>;
+      commissionTerms: (partnerId: string) => Promise<CommissionTerms | null>;
     }>,
   ) {}
 
@@ -179,7 +189,9 @@ export class PartnerPortal {
       ...(user.has("platform.partner.referral_tools.view")
         ? { referral: { code: p.referralCode, link: this.referralLink(p.referralCode) } }
         : {}),
-      ...(user.has("platform.partner.terms.view") ? { commissionTerms: null } : {}),
+      ...(user.has("platform.partner.terms.view")
+        ? { commissionTerms: termsView(await this.deps.commissionTerms(p.id)) }
+        : {}),
     };
   }
 
@@ -267,6 +279,20 @@ export class PartnerPortal {
     return `${this.deps.settings.signupUrl.replace(/\/$/, "")}/signup?ref=${encodeURIComponent(code)}`;
   }
 }
+
+/** The reseller's own terms, without staff's internal reason. */
+const termsView = (t: CommissionTerms | null) =>
+  t === null
+    ? null
+    : {
+        version: t.version,
+        standardPercent: t.standardPercent,
+        enterprisePercent: t.enterprisePercent,
+        holdDays: t.holdDays,
+        minPayoutMinor: t.minPayoutMinor,
+        capPerTenantMinor: t.capPerTenantMinor,
+        effectiveFrom: t.effectiveFrom,
+      };
 
 /** The signed-in user's partner; partner routes only admit partner users. */
 function partnerOf(user: PlatformPrincipal): string {

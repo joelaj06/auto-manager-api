@@ -25,6 +25,7 @@ import type {
 import type { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IClock } from "../../ports/IClock.js";
+import type { ICommissionHooks } from "../../ports/ICommissionHooks.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
@@ -103,7 +104,8 @@ const LICENCE_KINDS = new Set(["branch_rate", "size_adjustment"]);
  * or billing deactivation. Standard invoices are computed (billed branches × price, plus the
  * prorations of branches added during the paid period); enterprise invoices are entered line by
  * line. VAT is added on the subtotal when Autoforce is registered; seller and buyer are printed
- * as they are at issue. Clients never send amounts. Every payment gets a receipt number.
+ * as they are at issue. Clients never send amounts. Every payment gets a receipt number and is
+ * offered to the reseller commission engine.
  */
 export class ManualBilling {
   constructor(
@@ -121,6 +123,7 @@ export class ManualBilling {
       /** A paid invoice closes its extension. */
       extensions: Pick<IBillingAutomationRepository, "closeExtensions">;
       quotes: IEnterpriseQuoteRepository;
+      commissions: ICommissionHooks;
     }>,
   ) {}
 
@@ -263,14 +266,18 @@ export class ManualBilling {
     const now = deps.clock.now();
     const settled = invoice.recordPayment(payment.amountMinor, i.currency, now);
     await deps.billing.saveInvoice(invoice);
-    await deps.billing.insertPayment({
+    const record: PaymentRecord = {
       ...payment,
       id: deps.ids.next(),
       invoiceId: i.id,
       tenantId: i.tenantId,
       currency: i.currency,
       receiptNumber: await deps.billing.nextReceiptCode(now.getUTCFullYear()),
-    });
+      createdAt: now,
+    };
+    await deps.billing.insertPayment(record);
+    // A reseller's commission on the tenant's first licence purchase (docs/29 §5).
+    await deps.commissions.paymentApplied(record, invoice.snapshot());
     if (settled) {
       const subscription = await deps.billing.subscriptionOf(i.tenantId, true);
       if (subscription === null) throw new SubscriptionNotFoundError();
