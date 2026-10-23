@@ -414,6 +414,14 @@ only before the first payment), staff build quotes by hand (`POST tenants/:id/qu
 becomes the price list (`/api/v1/billing/price-items`): monthly items on every invoice (the rate
 × billed branches), one-time items on the next invoice only. Quotes have PDFs (`…/pdf`).
 
+**Branches** are the billing unit. `GET /api/v1/branches/price-impact` shows what one more
+branch costs before `POST /api/v1/branches` or `…/:id/reactivate` (`confirmBranchPurchase` beyond
+the subscription). To deactivate: `GET …/:id/deactivation-check`, `POST …/:id/reassign`
+(`targetBranchId`: moves everything live), then `…/deactivate`; `…/remove` only for a branch
+with no records. The console has the same under `/api/platform/v1/tenants/:id/branches` (plus
+edit, make default and `…/reconcile`); the nightly `billing.branch_reconcile` job compares billed
+branches with the tenant database (`billing/branch-reconciliations`, `billing/over-limit`).
+
 ## Mobile app connect
 
 `GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)

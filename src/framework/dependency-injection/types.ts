@@ -289,6 +289,9 @@ export const TYPES = Object.freeze({
   BillingExtensions: Symbol.for("BillingExtensions"),
   EnterpriseQuoteRepository: Symbol.for("IEnterpriseQuoteRepository"),
   EnterpriseQuotes: Symbol.for("EnterpriseQuotes"),
+  BranchContents: Symbol.for("IBranchContents"),
+  BranchReconciliationRepository: Symbol.for("IBranchReconciliationRepository"),
+  BranchReconciliation: Symbol.for("BranchReconciliation"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

@@ -51,6 +51,8 @@ export type JobPayloads = {
   "documents.seal": Readonly<{ tenantId: string; documentId: string }>;
   /** Compare yesterday's gateway payments with the provider's transactions. */
   "billing.reconcile": Readonly<Record<string, never>>;
+  /** Compare each tenant's billed branch count with its active branches. */
+  "billing.branch_reconcile": Readonly<Record<string, never>>;
   /** The daily billing automation: invoices, reminders, charges, past due, deactivation. */
   "billing.automation": Readonly<Record<string, never>>;
   /** Remittance cut-off check (waits until the tenant's cut-off time). */
@@ -183,6 +185,17 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryBackoff: true,
     expireInSeconds: 1_800,
     cron: "17 5 * * *",
+  },
+  "billing.branch_reconcile": {
+    description: "Compare billed branch counts with the tenants' active branches and fix drift",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 1_800,
+    retryBackoff: false,
+    expireInSeconds: 3_600,
+    // 02:37 Accra: before the billing automation issues the day's invoices.
+    cron: "37 2 * * *",
   },
   "billing.automation": {
     description:

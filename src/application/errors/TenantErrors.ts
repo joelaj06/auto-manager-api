@@ -72,6 +72,24 @@ export class BranchDeactivationBlockedError extends ApplicationError {
   }
 }
 
+/** Only a branch with no records at all can be removed; others are deactivated (409). */
+export class BranchRemovalBlockedError extends ApplicationError {
+  readonly code = "BRANCH_REMOVAL_BLOCKED";
+
+  constructor(readonly blockers: readonly string[]) {
+    super(`This branch cannot be removed, only deactivated: ${blockers.join("; ")}`);
+  }
+}
+
+/** The branch to move a branch's records to is not usable (409). */
+export class BranchReassignmentError extends ApplicationError {
+  readonly code = "BRANCH_REASSIGNMENT_INVALID";
+
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 export class TenantNotFoundForStaffError extends ApplicationError {
   readonly code = "TENANT_NOT_FOUND";
 

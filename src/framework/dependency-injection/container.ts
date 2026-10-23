@@ -280,6 +280,12 @@ import { PostgresReferenceData } from "../../infrastructure/reference/PostgresRe
 import { PostgresTenantReferenceData } from "../../infrastructure/reference/PostgresTenantReferenceData.js";
 import { billingRoutes } from "../../adapters/routes/billingRoutes.js";
 import { billingAutomationRoutes } from "../../adapters/routes/billingAutomationRoutes.js";
+import { BranchReconciliation } from "../../application/use-cases/billing/BranchReconciliation.js";
+import { OpenItemsBranchCheck } from "../../application/use-cases/tenants/OpenItemsBranchCheck.js";
+import type { IBranchContents } from "../../application/ports/IBranchContents.js";
+import type { IBranchReconciliationRepository } from "../../domain/repositories/IBranchReconciliationRepository.js";
+import { PostgresBranchReconciliationRepository } from "../../infrastructure/billing/PostgresBranchReconciliationRepository.js";
+import { PostgresBranchContents } from "../../infrastructure/tenants/PostgresBranchContents.js";
 import { enterpriseQuoteRoutes } from "../../adapters/routes/enterpriseQuoteRoutes.js";
 import { EnterpriseQuotes } from "../../application/use-cases/billing/EnterpriseQuotes.js";
 import type { IEnterpriseQuoteRepository } from "../../domain/repositories/IEnterpriseQuoteRepository.js";
@@ -847,6 +853,7 @@ export function createContainer(
       documentHandlers: IJobHandler[],
       reconciliation: GatewayReconciliation,
       automation: BillingAutomation,
+      branchReconciliation: BranchReconciliation,
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -867,6 +874,7 @@ export function createContainer(
       ...documentHandlers,
       reconciliation,
       automation,
+      branchReconciliation,
     ],
     [
       TYPES.UnitOfWork,
@@ -889,6 +897,7 @@ export function createContainer(
       TYPES.DocumentJobHandlers,
       TYPES.GatewayReconciliation,
       TYPES.BillingAutomation,
+      TYPES.BranchReconciliation,
     ],
   );
 
@@ -1807,6 +1816,7 @@ export function createContainer(
     (tx) => new PostgresTenantSessionRevoker(tx),
   );
   tenantRepository<IBranches>(TYPES.Branches, (tx) => new PostgresBranches(tx));
+  tenantRepository<IBranchContents>(TYPES.BranchContents, (tx) => new PostgresBranchContents(tx));
   tenantRepository<IOrganisationReader>(
     TYPES.OrganisationReader,
     (tx) => new PostgresOrganisationReader(tx),
@@ -1815,11 +1825,12 @@ export function createContainer(
   container
     .bind<IBranchDeactivationCheck[]>(TYPES.BranchDeactivationChecks)
     .toResolvedValue(
-      (vehicles: IVehicleQueries, drivers: PostgresDriverRepository) => [
+      (vehicles: IVehicleQueries, drivers: PostgresDriverRepository, contents: IBranchContents) => [
         new VehicleBranchCheck(vehicles),
         new DriverBranchCheck(drivers),
+        new OpenItemsBranchCheck(contents),
       ],
-      [TYPES.VehicleQueries, TYPES.DriverRepository],
+      [TYPES.VehicleQueries, TYPES.DriverRepository, TYPES.BranchContents],
     );
 
   container.bind<TenantLifecycleService>(TYPES.TenantLifecycleService).toResolvedValue(
@@ -1878,10 +1889,12 @@ export function createContainer(
       tenantContext: ITenantContext,
       permissionCache: IPermissionCache,
       entitlements: BranchEntitlements,
+      contents: IBranchContents,
     ) =>
       new BranchLifecycle({
         unitOfWork,
         branches,
+        contents,
         checks,
         auditTrail,
         requestContext,
@@ -1900,6 +1913,7 @@ export function createContainer(
       TYPES.TenantContext,
       TYPES.PermissionCache,
       TYPES.BranchEntitlements,
+      TYPES.BranchContents,
     ],
   );
 
@@ -2176,10 +2190,8 @@ export function createContainer(
       requestContext: IRequestContext,
       files: FileService,
       storage: IObjectStorage,
-      entitlements: BranchEntitlements,
     ) =>
       new OrganisationAdministration({
-        entitlements,
         unitOfWork,
         organisation,
         branches,
@@ -2198,7 +2210,6 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.TenantFileService,
       TYPES.ObjectStorage,
-      TYPES.BranchEntitlements,
     ],
   );
 
@@ -2293,13 +2304,16 @@ export function createContainer(
         unitOfWork: IPlatformUnitOfWork,
         ids: IIdGenerator,
         clock: IClock,
-      ) => new BranchEntitlements({ billing, subscriptions, unitOfWork, ids, clock }),
+        reconciliations: IBranchReconciliationRepository,
+      ) =>
+        new BranchEntitlements({ billing, subscriptions, reconciliations, unitOfWork, ids, clock }),
       [
         TYPES.BillingRepository,
         TYPES.SubscriptionAdministration,
         TYPES.PlatformUnitOfWork,
         TYPES.IdGenerator,
         TYPES.Clock,
+        TYPES.BranchReconciliationRepository,
       ],
     );
   container.bind<TenantBilling>(TYPES.TenantBilling).toResolvedValue(
@@ -2552,6 +2566,50 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+
+  // --- Branch entitlements (P4-5) ---
+  platformRepository<IBranchReconciliationRepository>(
+    TYPES.BranchReconciliationRepository,
+    (p) => new PostgresBranchReconciliationRepository(p),
+  );
+  container.bind<BranchReconciliation>(TYPES.BranchReconciliation).toResolvedValue(
+    (
+      roster: ITenantRoster,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      branches: IBranches,
+      entitlements: BranchEntitlements,
+      reconciliations: IBranchReconciliationRepository,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      logger: ILogger,
+    ) =>
+      new BranchReconciliation({
+        roster,
+        tenantContext,
+        tenantUnitOfWork,
+        branches,
+        entitlements,
+        reconciliations,
+        unitOfWork,
+        audit,
+        requestContext,
+        logger,
+      }),
+    [
+      TYPES.TenantRoster,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.Branches,
+      TYPES.BranchEntitlements,
+      TYPES.BranchReconciliationRepository,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
       TYPES.Logger,
     ],
   );
@@ -5517,6 +5575,7 @@ export function createContainer(
       billingAutomation: BillingAutomation,
       billingExtensions: BillingExtensions,
       enterpriseQuotes: EnterpriseQuotes,
+      branchReconciliation: BranchReconciliation,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -5524,7 +5583,14 @@ export function createContainer(
         ...platformRoutes({ signIn, sessions, administration, approvals, audit }),
         ...applicationRoutes({ signup, review }),
         ...provisioningRoutes({ console: provisioningConsole, acceptInvitation }),
-        ...lifecycleRoutes({ lifecycle, branches, publicConfig, tenantContext, directory }),
+        ...lifecycleRoutes({
+          lifecycle,
+          branches,
+          reconciliation: branchReconciliation,
+          publicConfig,
+          tenantContext,
+          directory,
+        }),
         ...consoleRoutes({
           dashboard,
           tenants: tenantAccounts,
@@ -5737,6 +5803,7 @@ export function createContainer(
       TYPES.BillingAutomation,
       TYPES.BillingExtensions,
       TYPES.EnterpriseQuotes,
+      TYPES.BranchReconciliation,
     ],
   );
 

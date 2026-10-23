@@ -508,35 +508,6 @@ export function identityRoutes(deps: IdentityRouteDependencies): ApiRoute[] {
       },
     }),
     defineRoute({
-      method: "post",
-      path: "/api/v1/branches",
-      summary: "Create a branch",
-      tags: ["branches"],
-      access: access.permission("branches.create"),
-      request: {
-        body: z.object({
-          code: z
-            .string()
-            .trim()
-            .regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,19}$/),
-          name: z.string().trim().min(1).max(120),
-          address: z.string().trim().max(500).nullish(),
-          phone: z.string().trim().max(30).nullish(),
-          /** Beyond the subscription: agree to pay for one more branch (409 explains the price). */
-          confirmBranchPurchase: z.boolean().default(false),
-        }),
-      },
-      responses: {
-        201: { description: "Created" },
-        409: { description: "ENTITLEMENT_BRANCH_LIMIT: beyond the subscription" },
-      },
-      handler: async ({ body }, _req, res) => {
-        res
-          .status(201)
-          .json(envelope({ id: await deps.organisation.createBranch(principalOf(res), body) }));
-      },
-    }),
-    defineRoute({
       method: "patch",
       path: "/api/v1/branches/:id",
       summary: "Edit a branch",

@@ -13,15 +13,14 @@ import type {
 } from "../../ports/IOrganisationSettings.js";
 import type { IObjectStorage } from "../../ports/IObjectStorage.js";
 import type { FileService } from "../files/FileService.js";
-import type { BranchEntitlements } from "../billing/BranchEntitlements.js";
 import { DEFAULT_NUMBERING } from "../reference/DocumentNumbering.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 
 /**
  * Organisation settings and branch management (docs/20, docs/27 §3.5). The base currency is
- * changed in the currency settings; timezones must be real IANA names; branch creation checks
- * the subscription's branch entitlement.
+ * changed in the currency settings; timezones must be real IANA names. Branches are created,
+ * deactivated and removed through the branch lifecycle (billing unit).
  */
 export class OrganisationAdministration {
   constructor(
@@ -35,8 +34,6 @@ export class OrganisationAdministration {
       /** Tenant files (the logo) and storage (its public URL). */
       files: FileService;
       storage: IObjectStorage;
-      /** Subscription branch limit (docs/25 §7); absent: no limit (tests, tooling). */
-      entitlements?: BranchEntitlements;
     }>,
   ) {}
 
@@ -87,41 +84,6 @@ export class OrganisationAdministration {
     await this.deps.unitOfWork.run(async () => {
       await this.deps.organisation.setNumbering(numbering);
       await this.audit(actor, "settings.numbering_updated", "organisation", null, { numbering });
-    });
-  }
-
-  async createBranch(
-    actor: Principal,
-    input: Readonly<{
-      code: string;
-      name: string;
-      address?: string | null;
-      phone?: string | null;
-      /** The tenant agrees to pay for one more branch when beyond the subscription. */
-      confirmBranchPurchase?: boolean;
-    }>,
-  ): Promise<string> {
-    const { deps } = this;
-    const code = input.code.trim().toUpperCase();
-    return deps.unitOfWork.run(async () => {
-      if (await deps.branches.codeTaken(code)) {
-        throw new IdentityRuleError("BRANCH_CODE_TAKEN", "Another branch already uses this code");
-      }
-      if (deps.entitlements !== undefined) {
-        const active = await deps.branches.activeCount();
-        await deps.entitlements.beforeActivating(actor.tenantId, active, {
-          confirmPurchase: input.confirmBranchPurchase === true,
-          userId: actor.userId,
-        });
-      }
-      const id = await deps.branches.create({
-        code,
-        name: input.name.trim(),
-        address: input.address ?? null,
-        phone: input.phone ?? null,
-      });
-      await this.audit(actor, "branch.created", "branch", id, { code, name: input.name });
-      return id;
     });
   }
 

@@ -125,6 +125,8 @@ const RULES: Readonly<Record<string, Rule>> = {
   BRANCH_DEACTIVATED: { status: 403 },
   BRANCH_NOT_FOUND: { status: 404 },
   BRANCH_DEACTIVATION_BLOCKED: { status: 422 },
+  BRANCH_REMOVAL_BLOCKED: { status: 409 },
+  BRANCH_REASSIGNMENT_INVALID: { status: 409 },
 
   // Tenant identity and organisation
   USER_NOT_FOUND: { status: 404 },
