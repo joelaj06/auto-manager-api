@@ -10,6 +10,10 @@ import {
   type InvoiceTaxLine,
 } from "../../../domain/billing/Invoice.js";
 import { addMonths, type Subscription } from "../../../domain/billing/Subscription.js";
+import type {
+  IEnterpriseQuoteRepository,
+  PriceItem,
+} from "../../../domain/repositories/IEnterpriseQuoteRepository.js";
 import type { IBillingAutomationRepository } from "../../../domain/repositories/IBillingAutomationRepository.js";
 import type {
   BillingAdjustment,
@@ -69,6 +73,8 @@ export type InvoiceDraft = Readonly<{
   dueInDays: number;
   /** The prorations it charges. */
   adjustments: readonly BillingAdjustment[];
+  /** Enterprise: the one-time price items it charges (charged once). */
+  oneTimeItems: readonly string[];
 }>;
 
 export type ManualLineInput = Readonly<{
@@ -114,6 +120,7 @@ export class ManualBilling {
       directory: ITenantDirectory;
       /** A paid invoice closes its extension. */
       extensions: Pick<IBillingAutomationRepository, "closeExtensions">;
+      quotes: IEnterpriseQuoteRepository;
     }>,
   ) {}
 
@@ -153,6 +160,7 @@ export class ManualBilling {
         draft.adjustments.map((a) => a.id),
         issued.id,
       );
+      await deps.quotes.markItemsInvoiced(draft.oneTimeItems, issued.id);
       await deps.billing.appendEvent(subscription.id, {
         type: "invoice_issued",
         details: {
@@ -298,8 +306,9 @@ export class ManualBilling {
       if (locked === null) throw new InvoiceNotFoundError();
       locked.void(reason, deps.clock.now());
       await deps.billing.saveInvoice(locked);
-      // Its prorations go on the next invoice instead.
+      // Its prorations and one-time items go on the next invoice instead.
       await deps.billing.releaseAdjustments(invoiceId);
+      await deps.quotes.releaseItems(invoiceId);
       await recordStaffAction(deps, actor, {
         action: "billing.invoice_voided",
         entityType: "billing_invoice",
@@ -357,8 +366,14 @@ export class ManualBilling {
     const today = now.toISOString().slice(0, 10);
     const period = subscription.nextPeriod(today);
     const adjustments = await deps.billing.pendingAdjustments(subscription.id, lock);
+    const items =
+      plan.pricing === "custom" && (manual === undefined || manual.length === 0)
+        ? (await deps.quotes.priceItems(subscription.id)).filter(
+            (i) => i.recurrence === "monthly" || i.invoiceId === null,
+          )
+        : [];
     const lines = [
-      ...this.linesFor(subscription.branchCount, plan, manual, period),
+      ...this.linesFor(subscription.branchCount, plan, manual, period, items),
       ...adjustments.map((a) =>
         invoiceLine({
           kind: "proration",
@@ -385,6 +400,7 @@ export class ManualBilling {
       buyer: await this.buyer(subscription.tenantId),
       dueInDays: settings.invoiceDueDays,
       adjustments,
+      oneTimeItems: items.filter((i) => i.recurrence === "one_time").map((i) => i.id),
     };
   }
 
@@ -407,12 +423,27 @@ export class ManualBilling {
     plan: Awaited<ReturnType<SubscriptionAdministration["plan"]>>,
     manual: readonly ManualLineInput[] | undefined,
     period: Readonly<{ start: string; end: string }>,
+    items: readonly PriceItem[],
   ): InvoiceLine[] {
     if (plan.pricing === "custom") {
+      // The accepted quote's prices: the per-branch rate on the billed branches.
+      if ((manual === undefined || manual.length === 0) && items.length > 0)
+        return items.map((i) =>
+          invoiceLine({
+            kind: i.kind,
+            description:
+              i.kind === "branch_rate"
+                ? `${i.description}, ${branchCount} branch${branchCount === 1 ? "" : "es"}, ${period.start} to ${period.end}`
+                : i.description,
+            quantity: i.kind === "branch_rate" ? branchCount : i.quantity,
+            unitMinor: i.unitMinor,
+            countsAsLicence: i.countsAsLicence,
+          }),
+        );
       if (manual === undefined || manual.length === 0)
         throw new BillingSetupError(
           "LINES_REQUIRED",
-          "Enterprise invoices are entered line by line (from the accepted quote)",
+          "Accept an enterprise quote first, or enter the invoice line by line",
         );
       return manual.map((line) =>
         invoiceLine({

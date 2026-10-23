@@ -25,10 +25,15 @@ export type NoticeSubject = Readonly<{
   extendedUntil: string | null;
 }>;
 
-type Text = Readonly<{ subject: string; body: string; severity: "info" | "warning" | "critical" }>;
+export type NoticeText = Readonly<{
+  subject: string;
+  body: string;
+  severity: "info" | "warning" | "critical";
+}>;
+type Target = Readonly<{ tenantId: string; invoiceId: string | null }>;
 
 /** The words of each step; reminders never carry an invoice number, only a sign-in link. */
-export function noticeText(step: string, s: NoticeSubject): Text {
+export function noticeText(step: string, s: NoticeSubject): NoticeText {
   const amount = Money.ofMinor(s.outstandingMinor, s.currency).formatAscii();
   const branches = `${s.branchCount} branch${s.branchCount === 1 ? "" : "es"}`;
   const days = Number(/_(\d+)$/.exec(step)?.[1] ?? 0);
@@ -105,14 +110,28 @@ export class BillingNotices {
     }>,
   ) {}
 
-  /** Returns how many notices went out for the first time. */
-  async send(
+  /** An invoice notice; returns how many went out for the first time. */
+  send(step: string, subject: NoticeSubject, channels: readonly NoticeChannel[]): Promise<number> {
+    return this.deliver(step, subject, noticeText(step, subject), channels);
+  }
+
+  /** A billing message not about an invoice (a quote sent …), once per step. */
+  announce(
+    tenantId: string,
     step: string,
-    subject: NoticeSubject,
+    text: NoticeText,
+    channels: readonly NoticeChannel[],
+  ): Promise<number> {
+    return this.deliver(step, { tenantId, invoiceId: null }, text, channels);
+  }
+
+  private async deliver(
+    step: string,
+    subject: Target,
+    text: NoticeText,
     channels: readonly NoticeChannel[],
   ): Promise<number> {
     const { deps } = this;
-    const text = noticeText(step, subject);
     const wanted = new Set(channels);
     let sent = 0;
     const owner = await this.inTenant(subject.tenantId, () => deps.seeder.owner());
@@ -177,7 +196,7 @@ export class BillingNotices {
 
   private async once(
     step: string,
-    subject: NoticeSubject,
+    subject: Target,
     channel: NoticeChannel,
     recipient: string,
     deliver: () => Promise<void>,

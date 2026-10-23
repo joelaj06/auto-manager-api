@@ -64,7 +64,7 @@ export class BranchEntitlements {
     await deps.unitOfWork.run(async () => {
       const subscription = await deps.billing.subscriptionOf(tenantId, true);
       if (subscription === null) throw new SubscriptionNotFoundError();
-      const plan = await deps.subscriptions.plan(subscription.licenceType);
+      const plan = await deps.subscriptions.pricedPlan(subscription);
       const entitlements = resolveEntitlements(subscription, plan, deps.clock.now());
       const wanted = activeBranches + 1;
       if (wanted <= entitlements.branchesMax) {

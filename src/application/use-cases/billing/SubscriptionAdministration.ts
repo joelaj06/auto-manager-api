@@ -11,6 +11,7 @@ import type {
   IBillingRepository,
   SubscriptionEvent,
 } from "../../../domain/repositories/IBillingRepository.js";
+import type { IEnterpriseQuoteRepository } from "../../../domain/repositories/IEnterpriseQuoteRepository.js";
 import type { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -63,6 +64,7 @@ export class SubscriptionAdministration {
   constructor(
     private readonly deps: Readonly<{
       billing: IBillingRepository;
+      quotes: IEnterpriseQuoteRepository;
       unitOfWork: IPlatformUnitOfWork;
       audit: IPlatformAuditTrail;
       requestContext: IRequestContext;
@@ -183,6 +185,16 @@ export class SubscriptionAdministration {
     return this.change(tenantId, actor, reason, "licence_type_changed", async (s) => {
       const before = s.licenceType;
       s.setLicenceType(type, await this.plan(type));
+      // Back to the price list: the enterprise quotes and their prices no longer apply.
+      if (before === "enterprise" && type === "standard") {
+        const now = this.deps.clock.now();
+        for (const quote of await this.deps.quotes.quotes(tenantId))
+          if (quote.status === "draft" || quote.status === "sent") {
+            quote.withdraw(now);
+            await this.deps.quotes.save(quote);
+          }
+        await this.deps.quotes.endPriceItems(s.id, now);
+      }
       return { before, after: type };
     });
   }
@@ -210,20 +222,27 @@ export class SubscriptionAdministration {
       const before = s.branchCount;
       s.setBranchCount(branchCount);
       // More branches during a paid period are prorated, as when the tenant adds them.
-      const prorationMinor = await chargeAddedBranches(
-        this.deps,
-        s,
-        await this.plan(s.licenceType),
-        { type: "platform_staff", id: actor.userId },
-      );
+      const prorationMinor = await chargeAddedBranches(this.deps, s, await this.pricedPlan(s), {
+        type: "platform_staff",
+        id: actor.userId,
+      });
       return { before, after: branchCount, prorationMinor };
     });
   }
 
   async toView(subscription: Subscription): Promise<SubscriptionView> {
     const s = subscription.snapshot();
-    const plan = await this.deps.billing.planById(s.planId);
-    if (plan === null) throw new PlanNotFoundError();
+    const plan = await this.pricedPlan(subscription);
+    const monthly =
+      plan.pricing === "custom"
+        ? (await this.deps.quotes.priceItems(s.id))
+            .filter((i) => i.recurrence === "monthly")
+            .reduce(
+              (sum, i) =>
+                sum + (i.kind === "branch_rate" ? s.branchCount : i.quantity) * i.unitMinor,
+              0,
+            )
+        : null;
     return {
       tenantId: s.tenantId,
       plan: {
@@ -242,9 +261,27 @@ export class SubscriptionAdministration {
           : { start: s.currentPeriodStart, end: s.currentPeriodEnd },
       licenceLocked: s.licenceLockedAt !== null,
       monthlyPriceMinor:
-        plan.branchPriceMinor === null ? null : plan.branchPriceMinor * s.branchCount,
+        monthly !== null
+          ? monthly || null
+          : plan.branchPriceMinor === null
+            ? null
+            : plan.branchPriceMinor * s.branchCount,
       entitlements: resolveEntitlements(subscription, plan, this.deps.clock.now()),
     };
+  }
+
+  /**
+   * The subscription's plan as priced for it: Enterprise takes the per-branch rate of its
+   * accepted quote (null before one is accepted).
+   */
+  async pricedPlan(subscription: Subscription): Promise<Plan> {
+    const plan = await this.deps.billing.planById(subscription.snapshot().planId);
+    if (plan === null) throw new PlanNotFoundError();
+    if (plan.pricing !== "custom") return plan;
+    const rate = (await this.deps.quotes.priceItems(subscription.id)).find(
+      (i) => i.kind === "branch_rate",
+    );
+    return { ...plan, branchPriceMinor: rate?.unitMinor ?? null };
   }
 
   async plan(code: string): Promise<Plan> {

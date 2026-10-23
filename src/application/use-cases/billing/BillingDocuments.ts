@@ -1,4 +1,5 @@
 import type { BillingSettings } from "../../../domain/billing/BillingSettings.js";
+import type { QuoteProps, Recurrence } from "../../../domain/billing/EnterpriseQuote.js";
 import type { InvoiceParty, InvoiceProps } from "../../../domain/billing/Invoice.js";
 import { Money } from "../../../domain/money/Money.js";
 import type { PaymentRecord } from "../../../domain/repositories/IBillingRepository.js";
@@ -125,6 +126,67 @@ export class BillingDocuments {
     return {
       filename: `${reference}.pdf`,
       content: await this.render("Receipt", reference, invoice.seller, settings, blocks, {}),
+    };
+  }
+
+  /** An Enterprise quote as sent: monthly and one-time lines, validity, the size judgement. */
+  async quote(q: QuoteProps, tenantName: string, settings: BillingSettings): Promise<PdfFile> {
+    const m = (minor: number) => Money.ofMinor(minor, q.currency).formatAscii();
+    const table = (recurrence: Recurrence, title: string, totalLabel: string, total: number) => {
+      const lines = q.lines.filter((l) => l.recurrence === recurrence);
+      if (lines.length === 0) return [];
+      return [
+        { type: "heading", text: title },
+        {
+          type: "table",
+          columns: [
+            { header: "Description", width: 0.55 },
+            { header: "Qty", width: 0.1, align: "right" },
+            { header: "Unit price", width: 0.17, align: "right" },
+            { header: "Amount", width: 0.18, align: "right" },
+          ],
+          rows: lines.map((l) => [
+            l.kind === "branch_rate" ? `${l.description} (per branch)` : l.description,
+            String(l.quantity),
+            m(l.unitMinor),
+            m(l.quantity * l.unitMinor),
+          ]),
+          total: [totalLabel, "", "", m(total)],
+        },
+      ] as PdfBlock[];
+    };
+    const blocks: PdfBlock[] = [
+      {
+        type: "fields",
+        rows: [
+          { label: "For", value: tenantName },
+          { label: "Version", value: String(q.version) },
+          { label: "Valid until", value: q.validUntil ?? "" },
+          ...(q.sizeBand === null
+            ? []
+            : [{ label: "Business size", value: q.sizeBand.replace("_", " ") }]),
+          ...(q.sizeNote === null ? [] : [{ label: "", value: q.sizeNote }]),
+        ],
+      },
+      ...table("monthly", "Every month", "Monthly total", q.recurringMinor),
+      ...table("one_time", "Once, on the first invoice", "One-time total", q.oneTimeMinor),
+      ...(q.notes === null ? [] : ([{ type: "paragraph", text: q.notes }] as PdfBlock[])),
+      {
+        type: "paragraph",
+        muted: true,
+        text: "Amounts exclude VAT where it applies. The per-branch rate is charged on the branches billed each month. Accept this quote in the Billing tab of the web portal.",
+      },
+    ];
+    return {
+      filename: `${q.code}.pdf`,
+      content: await this.render("Quote", q.code, null, settings, blocks, {
+        watermark:
+          q.status === "draft"
+            ? "DRAFT"
+            : q.status === "superseded" || q.status === "withdrawn"
+              ? q.status.toUpperCase()
+              : undefined,
+      }),
     };
   }
 

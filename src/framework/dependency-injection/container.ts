@@ -280,6 +280,10 @@ import { PostgresReferenceData } from "../../infrastructure/reference/PostgresRe
 import { PostgresTenantReferenceData } from "../../infrastructure/reference/PostgresTenantReferenceData.js";
 import { billingRoutes } from "../../adapters/routes/billingRoutes.js";
 import { billingAutomationRoutes } from "../../adapters/routes/billingAutomationRoutes.js";
+import { enterpriseQuoteRoutes } from "../../adapters/routes/enterpriseQuoteRoutes.js";
+import { EnterpriseQuotes } from "../../application/use-cases/billing/EnterpriseQuotes.js";
+import type { IEnterpriseQuoteRepository } from "../../domain/repositories/IEnterpriseQuoteRepository.js";
+import { PostgresEnterpriseQuoteRepository } from "../../infrastructure/billing/PostgresEnterpriseQuoteRepository.js";
 import { BranchEntitlements } from "../../application/use-cases/billing/BranchEntitlements.js";
 import { ManualBilling } from "../../application/use-cases/billing/ManualBilling.js";
 import { SubscriptionAdministration } from "../../application/use-cases/billing/SubscriptionAdministration.js";
@@ -2203,27 +2207,39 @@ export function createContainer(
     TYPES.BillingRepository,
     (p) => new PostgresBillingRepository(p),
   );
-  container
-    .bind<SubscriptionAdministration>(TYPES.SubscriptionAdministration)
-    .toResolvedValue(
-      (
-        billing: IBillingRepository,
-        unitOfWork: IPlatformUnitOfWork,
-        audit: IPlatformAuditTrail,
-        requestContext: IRequestContext,
-        ids: IIdGenerator,
-        clock: IClock,
-      ) =>
-        new SubscriptionAdministration({ billing, unitOfWork, audit, requestContext, ids, clock }),
-      [
-        TYPES.BillingRepository,
-        TYPES.PlatformUnitOfWork,
-        TYPES.PlatformAuditTrail,
-        TYPES.RequestContext,
-        TYPES.IdGenerator,
-        TYPES.Clock,
-      ],
-    );
+  platformRepository<IEnterpriseQuoteRepository>(
+    TYPES.EnterpriseQuoteRepository,
+    (p) => new PostgresEnterpriseQuoteRepository(p),
+  );
+  container.bind<SubscriptionAdministration>(TYPES.SubscriptionAdministration).toResolvedValue(
+    (
+      billing: IBillingRepository,
+      quotes: IEnterpriseQuoteRepository,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new SubscriptionAdministration({
+        billing,
+        quotes,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.BillingRepository,
+      TYPES.EnterpriseQuoteRepository,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
   container.bind<ManualBilling>(TYPES.ManualBilling).toResolvedValue(
     (
       billing: IBillingRepository,
@@ -2237,6 +2253,7 @@ export function createContainer(
       renderer: IPdfRenderer,
       directory: ITenantDirectory,
       extensions: IBillingAutomationRepository,
+      quotes: IEnterpriseQuoteRepository,
     ) =>
       new ManualBilling({
         billing,
@@ -2250,6 +2267,7 @@ export function createContainer(
         documents: new BillingDocuments({ renderer, clock }),
         directory,
         extensions,
+        quotes,
       }),
     [
       TYPES.BillingRepository,
@@ -2263,6 +2281,7 @@ export function createContainer(
       TYPES.PdfRenderer,
       TYPES.TenantDirectory,
       TYPES.BillingAutomationRepository,
+      TYPES.EnterpriseQuoteRepository,
     ],
   );
   container
@@ -2534,6 +2553,49 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.Logger,
+    ],
+  );
+
+  // --- Enterprise licence (P4-4) ---
+  container.bind<EnterpriseQuotes>(TYPES.EnterpriseQuotes).toResolvedValue(
+    (
+      quotes: IEnterpriseQuoteRepository,
+      billing: IBillingRepository,
+      subscriptions: SubscriptionAdministration,
+      notices: BillingNotices,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+      renderer: IPdfRenderer,
+    ) =>
+      new EnterpriseQuotes({
+        quotes,
+        billing,
+        subscriptions,
+        documents: new BillingDocuments({ renderer, clock }),
+        notices,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.EnterpriseQuoteRepository,
+      TYPES.BillingRepository,
+      TYPES.SubscriptionAdministration,
+      TYPES.BillingNotices,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+      TYPES.PdfRenderer,
     ],
   );
 
@@ -5454,6 +5516,7 @@ export function createContainer(
       paymentGateway: IPaymentGateway,
       billingAutomation: BillingAutomation,
       billingExtensions: BillingExtensions,
+      enterpriseQuotes: EnterpriseQuotes,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -5496,6 +5559,7 @@ export function createContainer(
           automation: billingAutomation,
           extensions: billingExtensions,
         }),
+        ...enterpriseQuoteRoutes({ quotes: enterpriseQuotes }),
         ...referenceRoutes({
           currencies: currencySettings,
           tax: taxAdministration,
@@ -5672,6 +5736,7 @@ export function createContainer(
       TYPES.PaymentGateway,
       TYPES.BillingAutomation,
       TYPES.BillingExtensions,
+      TYPES.EnterpriseQuotes,
     ],
   );
 

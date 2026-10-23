@@ -406,6 +406,14 @@ reconciliation), re-verification of pending payments and dispute holds
 (`tenants/:id/billing/dispute-hold`) hold deactivations back; `billing/automation/pending` lists
 the next 48 h and `billing/automation/runs` what each run did.
 
+**Enterprise licence**: after `PUT /api/platform/v1/tenants/:id/licence-type` (`enterprise`,
+only before the first payment), staff build quotes by hand (`POST tenants/:id/quotes`,
+`PUT billing/quotes/:id`: per-branch rate, size adjustment, setup, other, discount lines with
+`counts_as_licence`); a Super Admin sends one (`billing/quotes/:id/send`); the tenant accepts it
+(`POST /api/v1/billing/quotes/:id/accept`, or staff record it with `…/accept`). The accepted quote
+becomes the price list (`/api/v1/billing/price-items`): monthly items on every invoice (the rate
+× billed branches), one-time items on the next invoice only. Quotes have PDFs (`…/pdf`).
+
 ## Mobile app connect
 
 `GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)

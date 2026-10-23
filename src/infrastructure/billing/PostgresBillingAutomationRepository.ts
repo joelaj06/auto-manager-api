@@ -133,7 +133,12 @@ export class PostgresBillingAutomationRepository implements IBillingAutomationRe
          from subscriptions s
          join plans p on p.id = s.plan_id
          join tenants t on t.id = s.tenant_id
-        where p.pricing = 'flat_per_branch' and p.branch_price_minor is not null
+        -- Priced: the standard price list, or an enterprise tenant's accepted quote.
+        where ((p.pricing = 'flat_per_branch' and p.branch_price_minor is not null)
+               or (p.pricing = 'custom' and exists (
+                     select 1 from subscription_price_items pi
+                      where pi.subscription_id = s.id and pi.ended_at is null
+                        and pi.recurrence = 'monthly')))
           and s.status in ('trialing', 'active', 'past_due')
           and t.status in ('trialing', 'active', 'past_due', 'read_only')
           and ${NEXT_START} <= $2::date

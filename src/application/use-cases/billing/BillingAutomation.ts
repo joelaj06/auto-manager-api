@@ -66,8 +66,8 @@ export type BillingBanner = Readonly<{
 }>;
 
 /**
- * The daily billing automation (docs/25 §5): issues the standard invoices due soon (system
- * actor), then walks every open invoice through the dunning schedule — reminders on every
+ * The daily billing automation (docs/25 §5): issues the invoices due soon (standard, or from an
+ * enterprise tenant's accepted quote; system actor), then walks every open invoice through the dunning schedule — reminders on every
  * channel, the due-day charge of the default card (retried the next day), past due, the
  * optional read-only step and, at the end of grace, deactivation for non-payment (or trial
  * expiry when the tenant never paid). Billing is paused while a tenant is deactivated.
@@ -329,7 +329,7 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
 
   // --- the steps ---
 
-  /** Standard invoices for periods starting within the lead time, due on the period start. */
+  /** Invoices for periods starting within the lead time, due on the period start. */
   private async issueInvoices(today: string, policy: DunningPolicy): Promise<number> {
     const { deps } = this;
     let issued = 0;

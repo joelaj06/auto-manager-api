@@ -287,6 +287,8 @@ export const TYPES = Object.freeze({
   BillingNotices: Symbol.for("BillingNotices"),
   BillingAutomation: Symbol.for("BillingAutomation"),
   BillingExtensions: Symbol.for("BillingExtensions"),
+  EnterpriseQuoteRepository: Symbol.for("IEnterpriseQuoteRepository"),
+  EnterpriseQuotes: Symbol.for("EnterpriseQuotes"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

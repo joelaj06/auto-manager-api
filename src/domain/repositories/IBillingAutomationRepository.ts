@@ -85,7 +85,10 @@ export interface IBillingAutomationRepository {
   savePolicy(policy: DunningPolicy, staffId: string): Promise<PolicyVersion>;
   policies(limit: number): Promise<PolicyVersion[]>;
 
-  /** Standard subscriptions whose next period starts by `until` and has no invoice yet. */
+  /**
+   * Priced subscriptions (standard with a price, enterprise with an accepted quote) whose next
+   * period starts by `until` and has no invoice yet.
+   */
   subscriptionsToInvoice(today: BillingDate, until: BillingDate): Promise<string[]>;
   /** Every open invoice of a tenant that is not archived. */
   dunningCandidates(): Promise<DunningCandidate[]>;
