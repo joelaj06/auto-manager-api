@@ -58,6 +58,18 @@ export type EmailTemplateData = {
     message: string | null;
   }>;
   "tenant.restored": Readonly<{ ownerName: string; businessName: string; message: string | null }>;
+  /** Billing automation notices (docs/25 §5.1): no invoice reference, a link to sign in. */
+  "billing.notice": Readonly<{
+    name: string | null;
+    subject: string;
+    paragraphs: readonly string[];
+    billingUrl: string;
+  }>;
+  "billing.deactivated": Readonly<{
+    ownerName: string;
+    businessName: string;
+    message: string | null;
+  }>;
   "tenant.user_invitation": Readonly<{
     name: string;
     businessName: string;
@@ -215,6 +227,19 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
     simple(`${data.businessName} is active again`, [
       greeting(data.ownerName),
       `Access to ${PRODUCT} for ${data.businessName} has been restored. Everyone can sign in again; all your data is as it was.`,
+    ]),
+  "billing.notice": (data) =>
+    simple(data.subject, [
+      greeting(data.name),
+      ...data.paragraphs,
+      `Sign in to the Billing tab to pay or ask for more time: ${data.billingUrl}`,
+    ]),
+  "billing.deactivated": (data) =>
+    simple(`${data.businessName} is deactivated for an unpaid invoice`, [
+      greeting(data.ownerName),
+      `Access to ${PRODUCT} for ${data.businessName} has been switched off because an invoice is unpaid. Your data is kept safely and nothing has been deleted.`,
+      ...(data.message === null ? [] : [data.message]),
+      "You (and anyone with billing access) can still sign in to the Billing tab to pay or ask for more time. Access is restored as soon as the invoice is paid.",
     ]),
   "tenant.user_invitation": (data) =>
     simple(`You're invited to ${data.businessName} on ${PRODUCT}`, [

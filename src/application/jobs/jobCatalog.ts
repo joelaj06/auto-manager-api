@@ -51,6 +51,8 @@ export type JobPayloads = {
   "documents.seal": Readonly<{ tenantId: string; documentId: string }>;
   /** Compare yesterday's gateway payments with the provider's transactions. */
   "billing.reconcile": Readonly<Record<string, never>>;
+  /** The daily billing automation: invoices, reminders, charges, past due, deactivation. */
+  "billing.automation": Readonly<Record<string, never>>;
   /** Remittance cut-off check (waits until the tenant's cut-off time). */
   "tenant.remittance_cutoff": Readonly<{ tenantId: string; localDate: string }>;
 };
@@ -181,6 +183,18 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryBackoff: true,
     expireInSeconds: 1_800,
     cron: "17 5 * * *",
+  },
+  "billing.automation": {
+    description:
+      "Issue due invoices, send billing reminders, charge saved cards and deactivate unpaid tenants",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 1_800,
+    retryBackoff: false,
+    expireInSeconds: 3_600,
+    // 07:07 Africa/Accra, after the reconciliation of the day before.
+    cron: "7 7 * * *",
   },
   "files.sweep": {
     description: "Remove platform uploads that were started but never completed",

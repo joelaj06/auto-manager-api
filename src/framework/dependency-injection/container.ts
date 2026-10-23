@@ -3,6 +3,11 @@ import { BillingDocuments } from "../../application/use-cases/billing/BillingDoc
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
 import { GatewayBilling } from "../../application/use-cases/billing/GatewayBilling.js";
 import { GatewayReconciliation } from "../../application/use-cases/billing/GatewayReconciliation.js";
+import { BillingAutomation } from "../../application/use-cases/billing/BillingAutomation.js";
+import { BillingExtensions } from "../../application/use-cases/billing/BillingExtensions.js";
+import { BillingNotices } from "../../application/use-cases/billing/BillingNotices.js";
+import type { IBillingAutomationRepository } from "../../domain/repositories/IBillingAutomationRepository.js";
+import { PostgresBillingAutomationRepository } from "../../infrastructure/billing/PostgresBillingAutomationRepository.js";
 import type { IGatewayRepository } from "../../domain/repositories/IGatewayRepository.js";
 import { FakePaymentGateway } from "../../infrastructure/billing/FakePaymentGateway.js";
 import { PaystackGateway } from "../../infrastructure/billing/PaystackGateway.js";
@@ -274,6 +279,7 @@ import { VehicleCatalogue } from "../../application/use-cases/reference/VehicleC
 import { PostgresReferenceData } from "../../infrastructure/reference/PostgresReferenceData.js";
 import { PostgresTenantReferenceData } from "../../infrastructure/reference/PostgresTenantReferenceData.js";
 import { billingRoutes } from "../../adapters/routes/billingRoutes.js";
+import { billingAutomationRoutes } from "../../adapters/routes/billingAutomationRoutes.js";
 import { BranchEntitlements } from "../../application/use-cases/billing/BranchEntitlements.js";
 import { ManualBilling } from "../../application/use-cases/billing/ManualBilling.js";
 import { SubscriptionAdministration } from "../../application/use-cases/billing/SubscriptionAdministration.js";
@@ -836,6 +842,7 @@ export function createContainer(
       notificationHandlers: IJobHandler[],
       documentHandlers: IJobHandler[],
       reconciliation: GatewayReconciliation,
+      automation: BillingAutomation,
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -855,6 +862,7 @@ export function createContainer(
       ...notificationHandlers,
       ...documentHandlers,
       reconciliation,
+      automation,
     ],
     [
       TYPES.UnitOfWork,
@@ -876,6 +884,7 @@ export function createContainer(
       TYPES.NotificationJobHandlers,
       TYPES.DocumentJobHandlers,
       TYPES.GatewayReconciliation,
+      TYPES.BillingAutomation,
     ],
   );
 
@@ -1000,6 +1009,8 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      tenants: ITenantDirectory,
+      permissions: IPermissionResolver,
     ) =>
       new StartAuthSession({
         unitOfWork,
@@ -1012,6 +1023,7 @@ export function createContainer(
         ids,
         clock,
         settings: { refreshTokenTtlMs: auth.refreshTokenTtlDays * 86_400_000 },
+        billingOnly: { tenants, permissions },
       }),
     [
       TYPES.UnitOfWork,
@@ -1023,6 +1035,8 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.TenantDirectory,
+      TYPES.PermissionResolver,
     ],
   );
 
@@ -2221,6 +2235,8 @@ export function createContainer(
       ids: IIdGenerator,
       clock: IClock,
       renderer: IPdfRenderer,
+      directory: ITenantDirectory,
+      extensions: IBillingAutomationRepository,
     ) =>
       new ManualBilling({
         billing,
@@ -2232,6 +2248,8 @@ export function createContainer(
         ids,
         clock,
         documents: new BillingDocuments({ renderer, clock }),
+        directory,
+        extensions,
       }),
     [
       TYPES.BillingRepository,
@@ -2243,6 +2261,8 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.PdfRenderer,
+      TYPES.TenantDirectory,
+      TYPES.BillingAutomationRepository,
     ],
   );
   container
@@ -2388,6 +2408,130 @@ export function createContainer(
       TYPES.PlatformUnitOfWork,
       TYPES.PlatformAuditTrail,
       TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+
+  // --- Billing automation (P4-3) ---
+  platformRepository<IBillingAutomationRepository>(
+    TYPES.BillingAutomationRepository,
+    (p) => new PostgresBillingAutomationRepository(p),
+  );
+  container.bind<BillingNotices>(TYPES.BillingNotices).toResolvedValue(
+    (
+      automation: IBillingAutomationRepository,
+      email: NotificationService,
+      sms: ISmsSender,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      notifier: Notifier,
+      settings: INotificationSettingsStore,
+      seeder: ITenantSeeder,
+      logger: ILogger,
+    ) =>
+      new BillingNotices({
+        automation,
+        email,
+        sms,
+        tenantContext,
+        tenantUnitOfWork,
+        notifier,
+        settings,
+        seeder,
+        logger,
+        billingUrl: `${config.public.webAppUrl}/billing`,
+      }),
+    [
+      TYPES.BillingAutomationRepository,
+      TYPES.NotificationService,
+      TYPES.SmsSender,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.Notifier,
+      TYPES.NotificationSettingsStore,
+      TYPES.TenantSeeder,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<BillingAutomation>(TYPES.BillingAutomation).toResolvedValue(
+    (
+      automation: IBillingAutomationRepository,
+      billing: IBillingRepository,
+      invoices: ManualBilling,
+      gateway: GatewayBilling,
+      lifecycle: TenantLifecycleService,
+      notices: BillingNotices,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new BillingAutomation({
+        automation,
+        billing,
+        invoices,
+        gateway,
+        lifecycle,
+        notices,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.BillingAutomationRepository,
+      TYPES.BillingRepository,
+      TYPES.ManualBilling,
+      TYPES.GatewayBilling,
+      TYPES.TenantLifecycleService,
+      TYPES.BillingNotices,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<BillingExtensions>(TYPES.BillingExtensions).toResolvedValue(
+    (
+      automation: IBillingAutomationRepository,
+      billing: IBillingRepository,
+      lifecycle: TenantLifecycleService,
+      notices: BillingNotices,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new BillingExtensions({
+        automation,
+        billing,
+        lifecycle,
+        notices,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.BillingAutomationRepository,
+      TYPES.BillingRepository,
+      TYPES.TenantLifecycleService,
+      TYPES.BillingNotices,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.Logger,
     ],
@@ -5308,6 +5452,8 @@ export function createContainer(
       gatewayBilling: GatewayBilling,
       reconciliation: GatewayReconciliation,
       paymentGateway: IPaymentGateway,
+      billingAutomation: BillingAutomation,
+      billingExtensions: BillingExtensions,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -5345,6 +5491,10 @@ export function createContainer(
                 },
               }
             : {}),
+        }),
+        ...billingAutomationRoutes({
+          automation: billingAutomation,
+          extensions: billingExtensions,
         }),
         ...referenceRoutes({
           currencies: currencySettings,
@@ -5520,6 +5670,8 @@ export function createContainer(
       TYPES.GatewayBilling,
       TYPES.GatewayReconciliation,
       TYPES.PaymentGateway,
+      TYPES.BillingAutomation,
+      TYPES.BillingExtensions,
     ],
   );
 

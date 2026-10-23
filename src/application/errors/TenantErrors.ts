@@ -26,6 +26,17 @@ export class TenantInactiveError extends ApplicationError {
   }
 }
 
+/** Deactivated by billing: only billing (and signing in and out) works until it is paid (403). */
+export class TenantBillingOnlyError extends ApplicationError {
+  readonly code = "TENANT_DEACTIVATED";
+
+  constructor() {
+    super(
+      "This business account is deactivated for an unpaid invoice. Only billing is available until it is paid.",
+    );
+  }
+}
+
 /** The tenant is read-only: reads work, changes are refused (403). */
 export class TenantReadOnlyError extends ApplicationError {
   readonly code = "TENANT_READ_ONLY";

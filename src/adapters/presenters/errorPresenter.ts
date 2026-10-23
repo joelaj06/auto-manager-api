@@ -165,6 +165,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   BILLING_EMAIL_REQUIRED: { status: 409 },
   REFUND_NOT_POSSIBLE: { status: 409 },
   PAYMENT_ATTEMPT_NOT_FOUND: { status: 404 },
+  EXTENSION_NOT_FOUND: { status: 404 },
+  EXTENSION_OPEN: { status: 409 },
+  EXTENSION_DECIDED: { status: 409 },
+  EXTENSION_LIMIT: { status: 409 },
   WEBHOOK_NOT_FOUND: { status: 404 },
 
   // Vehicles

@@ -31,8 +31,8 @@ export type DeactivateTenantInput = Readonly<{
 }>;
 
 /**
- * Manual tenant lifecycle actions by platform staff (docs/27 §3.3) — special cases only; billing
- * automates the rest (P1-10).
+ * Tenant lifecycle actions: by platform staff (docs/27 §3.3) for special cases, and by the
+ * billing automation (past due, the read-only step, deactivation for non-payment, restore).
  *
  * Deactivation blocks every user at once: the status is committed, this process forgets its
  * cached tenant status (other instances follow within seconds), and every session in the tenant
@@ -92,10 +92,10 @@ export class TenantLifecycleService {
   }
 
   /**
-   * A licence payment was recorded (docs/25 §5.3): a trial or overdue tenant becomes active and
-   * a billing deactivation (not a manual one) is lifted. Safe to call more than once.
+   * A licence payment was recorded (docs/25 §5.3) by staff, or (actor null) through the gateway:
+   * a trial or overdue tenant becomes active and a billing deactivation (not a manual one) or
+   * billing read-only step is lifted. Safe to call more than once.
    */
-  /** A paid licence invoice (staff recorded it, or null: it came through the gateway). */
   async applyLicencePayment(tenantId: string, actor: PlatformPrincipal | null): Promise<void> {
     const before = (await this.deps.directory.findById(tenantId))?.status;
     const tenant = await this.transition(
@@ -107,6 +107,79 @@ export class TenantLifecycleService {
     );
     if (before === "deactivated" && tenant.status !== "deactivated")
       await this.notifyOwner(tenant, "tenant.restored", null);
+  }
+
+  // --- billing automation (docs/25 §5): the system acts, staff only through extensions ---
+
+  /** The invoice is overdue: past due, full access. */
+  async markPastDue(tenantId: string): Promise<void> {
+    await this.transition(
+      tenantId,
+      null,
+      "Billing automation: invoice overdue",
+      "tenant.past_due",
+      (t, now) => t.markPastDue(now),
+    );
+  }
+
+  /** The optional read-only step before deactivation. */
+  async setReadOnlyForBilling(
+    tenantId: string,
+    reason: "non_payment" | "trial_expired",
+    message: string,
+  ): Promise<void> {
+    await this.transition(
+      tenantId,
+      null,
+      "Billing automation: read-only for non-payment",
+      "tenant.read_only_set",
+      (t, now) => t.setReadOnly(message, now, reason),
+    );
+  }
+
+  /**
+   * End of grace: deactivated for non-payment (or trial expiry), sessions revoked; billing users
+   * can still sign in to pay (billing-only mode). A payment restores the tenant.
+   */
+  async deactivateForBilling(
+    tenantId: string,
+    reason: "non_payment" | "trial_expired",
+    message: string,
+  ): Promise<void> {
+    const { deps } = this;
+    const tenant = await this.transition(
+      tenantId,
+      null,
+      `Billing automation: ${reason.replace("_", " ")}`,
+      "tenant.deactivated",
+      (t, now) => t.deactivate(reason, message, false, now),
+    );
+    const revoked = await deps.tenantContext.runAs(TenantId.from(tenantId), () =>
+      deps.tenantUnitOfWork.run(() =>
+        deps.sessions.revokeAll("tenant_deactivated", deps.clock.now()),
+      ),
+    );
+    deps.logger.info("Tenant deactivated by billing", {
+      tenantId,
+      reason,
+      revokedSessions: revoked,
+    });
+    await this.notifyOwner(tenant, "billing.deactivated", message);
+  }
+
+  /** An extension granted to a tenant deactivated by billing: restored unless locked. */
+  async liftForExtension(tenantId: string, actor: PlatformPrincipal): Promise<boolean> {
+    const before = (await this.deps.directory.findById(tenantId))?.status;
+    const tenant = await this.transition(
+      tenantId,
+      actor,
+      "Payment extension granted",
+      "tenant.restored_by_extension",
+      (t, now) => t.liftBillingDeactivation(now),
+    );
+    const restored = before === "deactivated" && tenant.status !== "deactivated";
+    if (restored) await this.notifyOwner(tenant, "tenant.restored", null);
+    return restored;
   }
 
   async setReadOnly(
@@ -173,7 +246,7 @@ export class TenantLifecycleService {
 
   private async notifyOwner(
     tenant: TenantLifecycle,
-    template: "tenant.deactivated" | "tenant.restored",
+    template: "tenant.deactivated" | "tenant.restored" | "billing.deactivated",
     message: string | null,
   ): Promise<void> {
     const { deps } = this;

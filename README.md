@@ -362,7 +362,7 @@ Statements: `GET …/:id/statement` (and `statement.pdf`), for drivers at
 the forecast; `/api/v1/dashboards/workpay/arrears` lists who is behind. Due, overdue, guarantor,
 default, payment and milestone messages are rules in `/settings/notifications` (`workpay_*`).
 
-## Subscriptions and billing (manual payments for now)
+## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
 branch (`PUT /api/platform/v1/billing/plans/standard/price`, step-up) and the billing settings —
@@ -387,6 +387,24 @@ payment is verified with the provider for the exact amount. Console: `billing/ga
 (failed / review queues), `billing/webhooks` (inspector, `…/replay`), `billing/payments/:id/refunds`,
 `billing/reconciliations` (daily job, rerun a day). With the fake gateway,
 `POST /api/v1/billing/fake-gateway/:reference/complete` plays the payer.
+
+**Billing automation** (daily job `billing.automation`, 07:07 Accra; console
+`POST /api/platform/v1/billing/automation/runs` runs it now): issues standard invoices 7 days
+before the period, reminds −7/−3/−1 days, charges the default card on the due day (and the day
+after), puts the tenant past due at +1 with reminders +1/+3/+5, a final notice, and deactivates
+it at +7 (`non_payment`, or `trial_expired` if it never paid). Notices go by email and SMS (the
+platform's senders, to billing contacts and the owner) and to the in-app inbox and push of every
+`billing.manage` user (rule `billing_notices`, always on); `GET /api/v1/billing/banner` and
+`…/notices` feed the apps. A tenant deactivated by billing is in **billing-only mode**: users
+with billing access sign in and reach only `/auth/*`, `/me` and `/billing/*`; others get
+`TENANT_DEACTIVATED`. Paying restores it (its period starts again on the restore day).
+Extensions: `POST /api/v1/billing/extensions` (≤ 10 days after the due date), decided in the
+console (`billing/extensions[/:id/approve|deny]`; over 2 in 90 days needs a Super Admin); an
+approval restores the tenant at once. Safeguards: the policy (`billing/dunning-policy`, versioned)
+starts in **dry run**; a circuit breaker, a gateway-health guard (failed webhooks, failed
+reconciliation), re-verification of pending payments and dispute holds
+(`tenants/:id/billing/dispute-hold`) hold deactivations back; `billing/automation/pending` lists
+the next 48 h and `billing/automation/runs` what each run did.
 
 ## Mobile app connect
 

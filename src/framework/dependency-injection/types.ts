@@ -283,6 +283,10 @@ export const TYPES = Object.freeze({
   GatewayRepository: Symbol.for("IGatewayRepository"),
   GatewayBilling: Symbol.for("GatewayBilling"),
   GatewayReconciliation: Symbol.for("GatewayReconciliation"),
+  BillingAutomationRepository: Symbol.for("IBillingAutomationRepository"),
+  BillingNotices: Symbol.for("BillingNotices"),
+  BillingAutomation: Symbol.for("BillingAutomation"),
+  BillingExtensions: Symbol.for("BillingExtensions"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

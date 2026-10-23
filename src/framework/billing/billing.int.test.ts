@@ -124,6 +124,12 @@ describe("manual billing", () => {
         .set(staff())
         .send({ reason: "Price list test" })
         .expect(200);
+      // Another file may have set another price.
+      await api()
+        .put(`${CONSOLE}/billing/plans/standard/price`)
+        .set(staff())
+        .send({ branchPriceMinor: PRICE, reason: "Launch price list" })
+        .expect(200);
     }
 
     const invoice = await issue(t);

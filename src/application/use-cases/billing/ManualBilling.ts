@@ -9,7 +9,8 @@ import {
   type InvoiceProps,
   type InvoiceTaxLine,
 } from "../../../domain/billing/Invoice.js";
-import type { Subscription } from "../../../domain/billing/Subscription.js";
+import { addMonths, type Subscription } from "../../../domain/billing/Subscription.js";
+import type { IBillingAutomationRepository } from "../../../domain/repositories/IBillingAutomationRepository.js";
 import type {
   BillingAdjustment,
   IBillingRepository,
@@ -24,6 +25,7 @@ import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
+import type { ITenantDirectory } from "../../ports/ITenantDirectory.js";
 import { recordStaffAction } from "../console/consoleAudit.js";
 import type { PdfFile } from "../documents/PrintedDocuments.js";
 import type { BillingDocuments } from "./BillingDocuments.js";
@@ -109,13 +111,17 @@ export class ManualBilling {
       ids: IIdGenerator;
       clock: IClock;
       documents: BillingDocuments;
+      directory: ITenantDirectory;
+      /** A paid invoice closes its extension. */
+      extensions: Pick<IBillingAutomationRepository, "closeExtensions">;
     }>,
   ) {}
 
+  /** Issues the next invoice: by staff, or (actor null) by the billing automation. */
   async issue(
     tenantId: string,
     input: Readonly<{ dueInDays?: number; lines?: readonly ManualLineInput[] }>,
-    actor: PlatformPrincipal,
+    actor: PlatformPrincipal | null,
   ): Promise<InvoiceView> {
     const { deps } = this;
     const invoice = await deps.unitOfWork.run(async () => {
@@ -140,7 +146,7 @@ export class ManualBilling {
         currency: draft.currency,
         now,
         dueAt: new Date(now.getTime() + (input.dueInDays ?? draft.dueInDays) * DAY_MS),
-        createdBy: actor.userId,
+        createdBy: actor?.userId ?? null,
       });
       await deps.billing.saveInvoice(issued);
       await deps.billing.markInvoiced(
@@ -154,20 +160,21 @@ export class ManualBilling {
           code: issued.snapshot().code,
           totalMinor: issued.snapshot().totalMinor,
         },
-        actorType: "platform_staff",
-        actorId: actor.userId,
+        actorType: actor === null ? "system" : "platform_staff",
+        actorId: actor?.userId ?? null,
       });
-      await recordStaffAction(deps, actor, {
-        action: "billing.invoice_issued",
-        entityType: "billing_invoice",
-        entityId: issued.id,
-        targetTenantId: tenantId,
-        after: {
-          code: issued.snapshot().code,
-          period: draft.period,
-          totalMinor: issued.snapshot().totalMinor,
-        },
-      });
+      if (actor !== null)
+        await recordStaffAction(deps, actor, {
+          action: "billing.invoice_issued",
+          entityType: "billing_invoice",
+          entityId: issued.id,
+          targetTenantId: tenantId,
+          after: {
+            code: issued.snapshot().code,
+            period: draft.period,
+            totalMinor: issued.snapshot().totalMinor,
+          },
+        });
       return issued;
     });
     return this.view(invoice);
@@ -232,6 +239,8 @@ export class ManualBilling {
    * A payment received on a locked invoice (inside the caller's unit of work): the payment with
    * its receipt number, the invoice, and — when it is now paid — the subscription's period.
    * Returns whether the invoice is settled (the caller then restores the tenant after commit).
+   * Paid while deactivated by billing: the period starts again on the restore day — the days
+   * the tenant was deactivated are not billed (docs/25 §5.3).
    */
   async applyPayment(
     invoice: Invoice,
@@ -258,18 +267,22 @@ export class ManualBilling {
       const subscription = await deps.billing.subscriptionOf(i.tenantId, true);
       if (subscription === null) throw new SubscriptionNotFoundError();
       const branchLine = i.lines.find((l) => l.kind === "branch_rate");
-      subscription.applyPaidPeriod(
-        { start: i.periodStart, end: i.periodEnd },
-        now,
-        branchLine?.quantity ?? subscription.branchCount,
-      );
+      const today = now.toISOString().slice(0, 10);
+      const restoring = (await deps.directory.findById(i.tenantId))?.billingOnly === true;
+      const period =
+        restoring && i.periodStart < today
+          ? { start: today, end: addMonths(today, 1) }
+          : { start: i.periodStart, end: i.periodEnd };
+      subscription.applyPaidPeriod(period, now, branchLine?.quantity ?? subscription.branchCount);
       await deps.billing.saveSubscription(subscription);
+      await deps.extensions.closeExtensions(i.id);
       await deps.billing.appendEvent(subscription.id, {
         type: "invoice_paid",
         details: {
           invoiceId: i.id,
           code: i.code,
-          period: { start: i.periodStart, end: i.periodEnd },
+          period,
+          reanchored: period.start !== i.periodStart,
         },
         actorType: actor.type,
         actorId: actor.id,

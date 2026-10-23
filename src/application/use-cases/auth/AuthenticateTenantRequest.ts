@@ -22,7 +22,7 @@ export type AuthenticatedTenantRequest = Readonly<{ tenant: TenantSummary; princ
  * Turns a bearer token into the tenant and principal of a request:
  * 1. verify the token (signature with the tenant's key, issuer, audience, expiry);
  * 2. if the client named a tenant, it must be the token's tenant (else TENANT_MISMATCH);
- * 3. the tenant must be usable (not deactivated);
+ * 3. the tenant must be usable (not deactivated; deactivated by billing: see the access guard);
  * 4. the token's permission version must still be current — role changes and disabled users
  *    take effect immediately, not when the token expires;
  * 5. load the user's permission grants (cached by the resolver).
@@ -49,7 +49,7 @@ export class AuthenticateTenantRequest {
       tenant = await deps.tenants.findById(subject.tenantId);
       if (tenant === null) throw new InvalidAccessTokenError("unknown_tenant");
     }
-    assertTenantUsable(tenant);
+    assertTenantUsable(tenant, { billingOnly: true });
 
     const version = await deps.permissions.currentVersion(tenant.id, subject.userId);
     if (version === null) throw new InvalidAccessTokenError("user_unavailable");

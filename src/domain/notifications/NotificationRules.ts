@@ -26,6 +26,7 @@ export const RULE_KEYS = [
   "workpay_defaulted",
   "workpay_payment_received",
   "workpay_milestones",
+  "billing_notices",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -129,6 +130,12 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     channels: ["sms"],
     defaults: { enabled: true, channels: ["sms"] },
     placeholders: ["driverName", "amount", "number", "balance", "nextDue", "businessName"],
+  },
+  billing_notices: {
+    description:
+      "Autoforce billing: reminders, overdue and deactivation notices to the business's billing managers (always sent)",
+    channels: ["in_app", "push"],
+    defaults: { enabled: true, channels: ["in_app", "push"] },
   },
   workpay_milestones: {
     description:

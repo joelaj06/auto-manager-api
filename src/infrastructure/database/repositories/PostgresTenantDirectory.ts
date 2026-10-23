@@ -52,11 +52,25 @@ export class PostgresTenantDirectory implements ITenantDirectory {
   }
 
   private async query(condition: string, value: string): Promise<TenantSummary | null> {
-    const { rows } = await this.platform.query<{ id: string; slug: string; status: TenantStatus }>(
-      `select id, slug::text as slug, status from tenants where ${condition}`,
+    const { rows } = await this.platform.query<{
+      id: string;
+      slug: string;
+      status: TenantStatus;
+      billing_only: boolean;
+    }>(
+      `select id, slug::text as slug, status,
+              (status = 'deactivated' and deactivation_reason in ('non_payment', 'trial_expired'))
+                as billing_only
+         from tenants where ${condition}`,
       [value],
     );
     const row = rows[0];
-    return row === undefined ? null : { id: row.id, slug: row.slug, status: row.status };
+    if (row === undefined) return null;
+    return {
+      id: row.id,
+      slug: row.slug,
+      status: row.status,
+      ...(row.billing_only ? { billingOnly: true } : {}),
+    };
   }
 }

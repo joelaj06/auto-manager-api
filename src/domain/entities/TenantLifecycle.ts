@@ -125,29 +125,59 @@ export class TenantLifecycle {
     if (from === "read_only") {
       if (this.props.previousStatus === "trialing" || this.props.previousStatus === "past_due")
         this.props = { ...this.props, previousStatus: "active" };
-      return null;
+      // Read-only for non-payment (the optional dunning step) ends with the payment.
+      return this.billingReason() ? this.clearReadOnly(now) : null;
     }
-    const billingReason =
-      this.props.deactivationReason === "non_payment" ||
-      this.props.deactivationReason === "trial_expired";
-    if (from === "deactivated" && billingReason && !this.props.autoRestoreLocked) {
+    if (from === "deactivated" && this.billingReason() && !this.props.autoRestoreLocked) {
       this.props = { ...this.props, previousStatus: "active" };
       return this.reactivate(now);
     }
     return null;
   }
 
-  setReadOnly(message: string | null, now: Date): StatusTransition {
+  /** An unpaid invoice past its due date (docs/25 §5.1): full access, status past due. */
+  markPastDue(now: Date): StatusTransition | null {
+    const from = this.props.status;
+    if (from !== "trialing" && from !== "active") return null;
+    this.props = { ...this.props, status: "past_due", statusChangedAt: now };
+    return { from, to: "past_due", reasonCategory: null, message: null };
+  }
+
+  /**
+   * An extension granted to a tenant deactivated by billing (docs/25 §5.4): restored at once,
+   * unless staff locked the deactivation. Null when nothing changes.
+   */
+  liftBillingDeactivation(now: Date): StatusTransition | null {
+    if (this.props.status !== "deactivated" || !this.billingReason()) return null;
+    if (this.props.autoRestoreLocked) return null;
+    return this.reactivate(now);
+  }
+
+  /** Deactivated or read-only by billing automation (not by staff for another reason). */
+  billingReason(): boolean {
+    return (
+      this.props.deactivationReason === "non_payment" ||
+      this.props.deactivationReason === "trial_expired"
+    );
+  }
+
+  /** Read-only: by staff (no reason), or the optional non-payment step of the automation. */
+  setReadOnly(
+    message: string | null,
+    now: Date,
+    reason: Extract<DeactivationReason, "non_payment" | "trial_expired"> | null = null,
+  ): StatusTransition {
     const from = this.props.status;
     if (!OPERATING.has(from)) throw new TenantStateError("set read-only", from);
     this.props = {
       ...this.props,
       status: "read_only",
       previousStatus: from,
+      deactivationReason: reason,
       statusMessage: message,
       statusChangedAt: now,
     };
-    return { from, to: "read_only", reasonCategory: null, message };
+    return { from, to: "read_only", reasonCategory: reason, message };
   }
 
   clearReadOnly(now: Date): StatusTransition {
@@ -158,6 +188,7 @@ export class TenantLifecycle {
       ...this.props,
       status: to,
       previousStatus: null,
+      deactivationReason: null,
       statusMessage: null,
       statusChangedAt: now,
     };

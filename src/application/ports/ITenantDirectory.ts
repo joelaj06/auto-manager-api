@@ -8,7 +8,16 @@ export type TenantStatus =
   | "deactivated"
   | "archived";
 
-export type TenantSummary = Readonly<{ id: string; slug: string; status: TenantStatus }>;
+export type TenantSummary = Readonly<{
+  id: string;
+  slug: string;
+  status: TenantStatus;
+  /**
+   * Deactivated by billing (non-payment, trial expiry): users with billing access may still sign
+   * in and pay; nothing else works (docs/25 §5.4).
+   */
+  billingOnly?: boolean;
+}>;
 
 /** Read-only lookup of tenants in the platform registry (cached by the implementation). */
 export interface ITenantDirectory {

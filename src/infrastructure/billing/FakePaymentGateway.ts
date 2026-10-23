@@ -36,7 +36,8 @@ export class FakePaymentGateway implements IPaymentGateway {
   readonly provider = "fake";
   private readonly transactions_ = new Map<string, Stored>();
   private readonly refunds = new Map<string, { reference: string; amountMinor: number }>();
-  private nextId = 1;
+  /** Provider ids stay unique across restarts (webhooks are deduplicated by them). */
+  private nextId = Date.now();
 
   constructor(
     private readonly options: Readonly<{ webhookSecret: string; checkoutBaseUrl: string }>,

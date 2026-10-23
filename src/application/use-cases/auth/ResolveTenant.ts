@@ -4,7 +4,8 @@ import type { ITenantDirectory, TenantSummary } from "../../ports/ITenantDirecto
 
 /**
  * Resolves the tenant addressed by an unauthenticated tenant request (sign-in, password reset,
- * OTP) from its slug and checks that it may be used.
+ * OTP) from its slug and checks that it may be used. A tenant deactivated by billing still
+ * resolves: its billing users sign in to pay.
  */
 export class ResolveTenant {
   constructor(private readonly tenants: ITenantDirectory) {}
@@ -13,7 +14,7 @@ export class ResolveTenant {
     if (slug === undefined || slug === null || slug.length === 0) throw new TenantRequiredError();
     const tenant = await this.tenants.findBySlug(slug);
     if (tenant === null) throw new TenantNotFoundError();
-    assertTenantUsable(tenant);
+    assertTenantUsable(tenant, { billingOnly: true });
     return tenant;
   }
 }

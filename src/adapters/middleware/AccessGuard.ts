@@ -8,7 +8,10 @@ import {
   PermissionDeniedError,
 } from "../../application/errors/AuthErrors.js";
 import { StepUpRequiredError } from "../../application/errors/StaffErrors.js";
-import { TenantReadOnlyError } from "../../application/errors/TenantErrors.js";
+import {
+  TenantBillingOnlyError,
+  TenantReadOnlyError,
+} from "../../application/errors/TenantErrors.js";
 import type { IClock } from "../../application/ports/IClock.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { TenantSummary } from "../../application/ports/ITenantDirectory.js";
@@ -22,6 +25,11 @@ export const TENANT_HEADER = "x-tenant";
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
 const MAX_TOKEN_LENGTH = 4_096;
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+/** What a tenant deactivated by billing can still reach (docs/25 §5.4). */
+const SESSION_PATHS = /^\/api\/v1\/auth\//;
+const BILLING_PATHS = /^\/api\/v1\/billing(\/|$)/;
+const BILLING_ONLY_PATHS =
+  /^\/api\/v1\/(billing(\/|$)|me(\/(permissions|password|push-devices(\/[a-z-]+)?))?\/?$)/;
 
 type Locals = { tenant?: TenantSummary; principal?: Principal; staff?: PlatformPrincipal };
 
@@ -30,7 +38,8 @@ type Locals = { tenant?: TenantSummary; principal?: Principal; staff?: PlatformP
  * tenant context so the unit of work reaches that tenant's database (and no other):
  * - `tenant`: resolve the X-Tenant slug;
  * - `authenticated`: verify the bearer token, check it belongs to the addressed tenant, check
- *   the permission.
+ *   the permission. A tenant deactivated by billing reaches only its session routes and, for
+ *   users with billing access, billing and their profile.
  * - `platform`: verify the console token and session, check the platform permission and, for
  *   sensitive permissions, a recent step-up. No tenant context: console routes never reach
  *   tenant data directly.
@@ -71,14 +80,17 @@ export class AccessGuard {
           accessToken,
           tenantSlug: tenantSlugOf(req),
         });
+        if (tenant.billingOnly === true) this.assertBillingOnly(req, principal);
         if (access.permission !== null) {
           this.deps.authorization.require(principal, access.permission);
         }
-        // Read-only tenants: reads only (docs/27 §3.3); sign-in routes are `tenant` routes.
+        // Read-only tenants: reads only (docs/27 §3.3) — and paying; sign-in routes are
+        // `tenant` routes.
         if (
           tenant.status === "read_only" &&
           !SAFE_METHODS.has(req.method) &&
-          access.allowWhenReadOnly !== true
+          access.allowWhenReadOnly !== true &&
+          !BILLING_PATHS.test(pathOf(req))
         ) {
           throw new TenantReadOnlyError();
         }
@@ -118,6 +130,15 @@ export class AccessGuard {
       }
     }
   }
+
+  private assertBillingOnly(req: Request, principal: Principal): void {
+    const path = pathOf(req);
+    if (SESSION_PATHS.test(path)) return;
+    const billingUser =
+      this.deps.authorization.decide(principal, "billing.view").allowed ||
+      this.deps.authorization.decide(principal, "billing.manage").allowed;
+    if (!billingUser || !BILLING_ONLY_PATHS.test(path)) throw new TenantBillingOnlyError();
+  }
 }
 
 /** The signed-in user of an `authenticated` route. */
@@ -140,6 +161,8 @@ export function tenantOf(res: Response): TenantSummary {
   if (tenant === undefined) throw new Error("tenantOf() used on a route without tenant access");
   return tenant;
 }
+
+const pathOf = (req: Request): string => req.originalUrl.split("?")[0] ?? "";
 
 function tenantSlugOf(req: Request): string | null {
   const value = req.get(TENANT_HEADER);

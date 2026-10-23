@@ -162,6 +162,18 @@ export class Subscription {
     };
   }
 
+  /** The invoice is overdue (docs/25 §5.1). False when nothing changed. */
+  markPastDue(): boolean {
+    if (this.props.status !== "trialing" && this.props.status !== "active") return false;
+    this.props = { ...this.props, status: "past_due" };
+    return true;
+  }
+
+  /** Paid at least once (the licence type is fixed): an unpaid tenant's trial expired instead. */
+  get everPaid(): boolean {
+    return this.props.licenceLockedAt !== null;
+  }
+
   /**
    * More branches billed during a paid period: how many the period has not been charged for
    * yet (a branch removed and added again in the same period is not charged twice), and the

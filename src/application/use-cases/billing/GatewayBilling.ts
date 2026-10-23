@@ -159,6 +159,25 @@ export class GatewayBilling {
     return card === undefined ? null : this.chargeSaved(invoice, card.id, null);
   }
 
+  /**
+   * Before the automation deactivates a tenant (gateway-health guard): asks the provider about
+   * every pending attempt of the invoice, applying any that went through. True when it is paid.
+   */
+  async reverify(invoiceId: string): Promise<boolean> {
+    const { deps } = this;
+    const pending = await deps.gateway.attempts({ invoiceId, status: "pending", limit: 20 });
+    for (const attempt of pending) {
+      const reference = attempt.snapshot().reference;
+      try {
+        await this.apply(reference, await deps.provider.verify(reference));
+      } catch (error) {
+        deps.logger.warn("Could not re-verify a payment attempt", { reference, error });
+        throw error;
+      }
+    }
+    return (await deps.records.invoice(invoiceId))?.snapshot().status === "paid";
+  }
+
   /** A mobile money prompt on the payer's phone (some networks first send a code to enter). */
   async payWithMomo(
     invoiceId: string,
