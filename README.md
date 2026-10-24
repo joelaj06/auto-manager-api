@@ -447,6 +447,17 @@ overrides at `tenants/:id/entitlements/branches`. **Alerts**: `alerts` (acknowle
 on-call by `ONCALL_EMAILS` / `ONCALL_WEBHOOK_URL`. **Usage**: `tenants/:id/usage` (nightly
 `usage.daily`).
 
+## Legal and operations
+
+**Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);
+`GET /api/v1/public/legal/:kind` serves the one in force; applications accept it; owners accept
+later versions (`GET /api/v1/legal`, `POST /api/v1/legal/accept`). **Data export**: the owner asks
+(`POST /api/v1/data-exports`), is emailed when the ZIP is ready and downloads it within 7 days
+(`POST /api/v1/data-exports/:id/download`). **Data-protection requests**:
+`data-protection-requests` (steps, close). **Status page**: `GET /api/v1/public/status`;
+staff open and update `incidents`. **Restore drills**: `restore-drills` (record the quarterly
+game day). Runbooks: doc 33 §5 (incidents), §8 (on-call), §9–§11.
+
 ## Mobile app connect
 
 `GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)

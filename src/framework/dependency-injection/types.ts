@@ -313,6 +313,18 @@ export const TYPES = Object.freeze({
   TenantUsageCollector: Symbol.for("ITenantUsageCollector"),
   UsageMeter: Symbol.for("UsageMeter"),
   TenantUsageHistory: Symbol.for("TenantUsageHistory"),
+  LegalRepository: Symbol.for("ILegalRepository"),
+  LegalDocuments: Symbol.for("LegalDocuments"),
+  TenantDataExportRepository: Symbol.for("ITenantDataExportRepository"),
+  TenantDataArchiver: Symbol.for("ITenantDataArchiver"),
+  TenantDataExports: Symbol.for("TenantDataExports"),
+  DataProtectionRequestRepository: Symbol.for("IDataProtectionRequestRepository"),
+  IncidentRepository: Symbol.for("IIncidentRepository"),
+  RestoreDrillRepository: Symbol.for("IRestoreDrillRepository"),
+  DataProtectionRequests: Symbol.for("DataProtectionRequests"),
+  StatusPage: Symbol.for("StatusPage"),
+  RestoreDrills: Symbol.for("RestoreDrills"),
+  ComplianceDaily: Symbol.for("ComplianceDaily"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

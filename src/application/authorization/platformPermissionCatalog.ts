@@ -104,6 +104,9 @@ const definitions = {
   "platform.support.sessions.view": {
     description: "View support-access sessions and their request trail",
   },
+  "platform.support.incidents.manage": {
+    description: "Open incidents and post updates on the public status page",
+  },
 
   "platform.flags.manage": {
     description: "Manage feature flags and kill switches",
@@ -127,6 +130,13 @@ const definitions = {
     fourEyes: true,
   },
   "platform.data.migrations.view": { description: "View tenant schema versions and failures" },
+  "platform.data.exports.manage": {
+    description: "See tenants' data exports and start one for an owner (exit path)",
+    sensitive: true,
+  },
+  "platform.data.drills.manage": {
+    description: "Schedule restore drills and record their results",
+  },
   "platform.data.migrations.run": { description: "Run schema migrations", sensitive: true },
   "platform.data.jobs.manage": { description: "Retry and cancel background jobs" },
   "platform.data.scripts.run": {
@@ -142,6 +152,14 @@ const definitions = {
     fourEyes: true,
   },
   "platform.security.access_review.view": { description: "View the staff access review" },
+  "platform.security.dsr.manage": {
+    description: "Track data-protection requests (access, correction, erasure, objection)",
+  },
+  "platform.legal.view": { description: "View terms and privacy versions and who accepted them" },
+  "platform.legal.manage": {
+    description: "Draft and publish terms, privacy policy and DPA versions",
+    sensitive: true,
+  },
 
   "platform.analytics.view": { description: "View platform analytics" },
   "platform.reference.manage": {
@@ -338,6 +356,9 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.support.access_tenant",
       "platform.support.announcements.manage",
       "platform.support.sessions.view",
+      "platform.support.incidents.manage",
+      "platform.security.dsr.manage",
+      "platform.legal.view",
       "platform.health.view",
       "platform.alerts.manage",
       "platform.mobile.view",
@@ -382,6 +403,8 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.alerts.manage",
       "platform.flags.manage",
       "platform.support.maintenance.manage",
+      "platform.support.incidents.manage",
+      "platform.data.drills.manage",
       "platform.data.backups.view",
       "platform.data.migrations.view",
       "platform.data.migrations.run",
@@ -398,6 +421,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.security.audit.view",
       "platform.security.access_review.view",
       "platform.support.sessions.view",
+      "platform.legal.view",
       "platform.staff.view",
       "platform.analytics.view",
     ],

@@ -376,6 +376,16 @@ const definitions = {
   "suppliers.update": { description: "Edit and deactivate suppliers", scopes: ALL },
   "suppliers.delete": { description: "Remove mistaken supplier entries", scopes: ALL },
 
+  "data.export": {
+    description: "Export all the business's data (a zip emailed as a link)",
+    scopes: ALL,
+    sensitive: true,
+  },
+  "legal.accept": {
+    description: "Accept new terms and privacy policy for the business",
+    scopes: ALL,
+  },
+
   "billing.view": { description: "View subscription and invoices", scopes: ALL },
   "billing.manage": {
     description: "Pay, change plan, request extensions",

@@ -71,8 +71,12 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
   {
     systemKey: "administrator",
     name: "Administrator",
-    description: "Everything except billing changes",
-    grants: all(KEYS.filter((key) => key !== "billing.manage")),
+    description: "Everything except billing changes, accepting terms and exporting everything",
+    grants: all(
+      KEYS.filter(
+        (key) => key !== "billing.manage" && key !== "data.export" && key !== "legal.accept",
+      ),
+    ),
   },
   {
     systemKey: "branch_manager",

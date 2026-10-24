@@ -2,7 +2,7 @@
 
 Day-to-day procedures for running the beta. Backups and restores have their own runbooks ([31](31_backup_restore_runbooks.md)); security posture is in [32](32_security_review.md). Commands are `yarn …` from the repository; the API is `node dist/index.js`, the worker `node dist/worker.js`.
 
-> **Status (2026-10-22): local.** Everything below runs on the local stack today. Steps marked **(hosting)** need P0-3 (decision 63).
+> **Status (2026-10-24): local.** Incident, on-call, data-protection and data-export runbooks added with P4-8. Everything below runs on the local stack today. Steps marked **(hosting)** need P0-3 (decision 63).
 
 ## 1. Start, stop, upgrade
 
@@ -13,8 +13,9 @@ Day-to-day procedures for running the beta. Backups and restores have their own 
 | Roll back a release | Redeploy the previous build. Migrations are forward-only: only roll back across a migration after restoring from the backup taken before it (31 §5) |
 | Health | `GET /health/live` (process), `GET /health/ready` (platform database) — wire both into the host's checks **(hosting)** |
 
-## 2. Daily checks (until alerts exist)
+## 2. Daily checks
 
+0. Console **alerts centre** (`GET /api/platform/v1/alerts?status=open`): acknowledge what you take, resolve what is done (§8).
 1. `yarn backup list` — a successful backup of the platform and every tenant from the last 24 h.
 2. Worker log: failed jobs (`tenant.daily_*`, `notifications.send`, `email.send`, `tenant.provision`). pg-boss retries with backoff; a job that keeps failing is in `pgboss.job` with `state = 'failed'`.
 3. `notification-deliveries` with `status = failed` per tenant (`GET /api/v1/notification-deliveries?status=failed`): usually an SMS provider account out of credit or a wrong Sender ID.
@@ -36,7 +37,9 @@ Day-to-day procedures for running the beta. Backups and restores have their own 
 | Request | Steps |
 |---|---|
 | Owner locked out | They reset with `POST /api/v1/auth/password-reset` (email code). Repeated failures lock the account for a while (per-account lockout); it clears on its own |
-| Owner lost access to their email | Verify identity off-line (business registration, Ghana Card). Another administrator of the business can update the owner's user; if there is none, there is no console action yet (gap, P4): a reviewed database change by two staff members, recorded in the tenant's notes |
+| Owner lost access to their email | Verify identity off-line (business registration, Ghana Card, a call back on the number on file). Console **owner recovery** (`POST tenants/:id/owner-recovery`) with the checks written down; a Super Admin approves; the owner gets a reset code at the new address (doc 27 §3.7) |
+| User locked out, signed in on a lost phone | Console user support: `…/users/:userId/unlock`, `…/force-logout`, `…/reset-password` (a code by email) |
+| "I need to see what they see" | Support access (`POST tenants/:id/support-sessions`, reason and ticket): read-only; write mode needs a second staff member. Never for a request you cannot write down |
 | Wrong payment recorded | The tenant reverses it (`POST /payments/:id/reverse`, `finance.payments.reverse`); work and pay, remittances and expenses follow automatically |
 | Wrong work and pay terms after signing | Before activation: withdraw, change, sign again. After: restructure or payment holiday (`workpay.restructure`); terms of the signed document never change |
 | Transfer letter wrong | Before both signed: `POST /workpay/agreements/:id/transfer-letter` with corrections. After: it stands; correct by a new document outside the system and note it on the agreement |
@@ -45,11 +48,33 @@ Day-to-day procedures for running the beta. Backups and restores have their own 
 
 ## 5. Incidents
 
-1. **Declare**: one person leads; open an incident note (time, symptom, who is affected).
-2. **Contain**: tenant `read_only` / `deactivated` for a tenant-specific problem; stop the worker if jobs make it worse; for a suspected credential leak, rotate the secret (§6) — rotating `TENANT_JWT_SECRET` signs everyone out.
-3. **Diagnose** with request ids (every response carries `requestId`; logs and the audit trail record it).
-4. **Recover** (31 for data, §1 for releases).
-5. **Close**: tell affected tenants what happened and what was lost; within 72 h if personal data was exposed (Ghana Data Protection Act 2012 — confirm with counsel, doc 19); write down the cause and the follow-up.
+### 5.1 Severity
+
+| Severity | Examples | Status page impact | Response |
+|---|---|---|---|
+| **SEV1** | API down for everyone, data lost or exposed, money posted wrongly at scale, payments taking money without crediting | `critical` (major outage) | Everyone available; updates every 30 min; tenants emailed |
+| **SEV2** | One module down (payments, notifications, signing), one large tenant down, billing automation halted | `major` (partial outage) | Lead + one helper; updates hourly |
+| **SEV3** | Degraded or slow, a workaround exists, one small tenant affected | `minor` (degraded) | Normal working hours |
+
+When in doubt, declare the higher severity and lower it later.
+
+### 5.2 Steps
+
+1. **Declare.** One person leads (the *incident lead*), one writes the timeline. Open the incident on the status page for anything tenants notice: `POST /api/platform/v1/incidents` (`title`, `impact`, `components`: api, web, mobile, payments, notifications, `message`). Acknowledge the alert that brought you here.
+2. **Contain.** Tenant-specific: `read_only` or `deactivated` (console). Feature-specific: turn the kill switch or flag off (`PATCH flags/:key`, e.g. `documents.signing`). Platform-wide writes: a read-only maintenance window (`POST maintenance-windows`, `readOnly: true`, starting now). Jobs making it worse: stop the worker. Suspected credential leak: rotate (§6).
+3. **Communicate.** Post an update at each change of status (`POST incidents/:id/updates`: investigating → identified → monitoring → resolved) and at the cadence of §5.1. Say what is affected, what tenants should do, when the next update comes. Never guess at causes in public.
+4. **Diagnose** with request ids (every response carries `requestId`; logs, the audit trail and support-session trails record it), the alerts' detail, `GET /api/v1/ledger/integrity` for money.
+5. **Recover** (31 for data, §1 for releases). Lift containment one step at a time and watch.
+6. **Resolve** the incident on the status page when tenants are whole, then resolve the alerts.
+7. **Notify.** If personal data was exposed: tell affected tenants (and through them their people) and the Data Protection Commission within 72 h — Ghana Data Protection Act 2012, confirm the deadline with counsel (doc 19). Log it as a data-protection request of its own (§9) so the steps are kept.
+8. **Review** within five working days, blameless: timeline, cause, what went well, what to change (each with an owner and a date). Keep it in the incident notes; link the status page incident.
+
+### 5.3 Messages
+
+- *Investigating:* "We are looking into reports that {what} is {not working / slow} for some businesses. Next update by {time}."
+- *Identified:* "We found the cause ({plain words}) and are fixing it. {What to do meanwhile}. Next update by {time}."
+- *Monitoring:* "A fix is in place and we are watching. {Anything to re-do}."
+- *Resolved:* "{What} works again since {time}. {Anything lost or to re-do}. We are sorry for the trouble."
 
 ## 6. Secrets
 
@@ -74,3 +99,35 @@ Secrets live in `.env` locally and in the host's secret store **(hosting)**; nev
 | stress | up to 200 | 82,203 | 0 | 92 ms | 103 ms | 456 req/s |
 
 After the stress run (≈ 8,700 payments posted concurrently) every integrity check passed and receipt numbers had no gaps. Laptop numbers are an upper bound for the API code, not for the hosted system: repeat on staging **(hosting)** with the database on its own host before sizing.
+
+## 8. On-call
+
+| Item | How |
+|---|---|
+| Who | One person on call per week, a second as backup; the rota lives with the team (not in the system yet). Hand over on Monday with open alerts and incidents |
+| Where alerts go | The alerts centre (`GET /api/platform/v1/alerts`), plus email to `ONCALL_EMAILS` and the webhook `ONCALL_WEBHOOK_URL` (Slack-compatible; Telegram or WhatsApp through a relay) for severity ≥ `ONCALL_MIN_SEVERITY` (default warning). A repeat counts on the same alert; a more severe repeat notifies again |
+| Response | **critical**: acknowledge within 15 min, any hour. **warning**: within working hours the same day. **info**: in the daily check (§2) |
+| Acknowledge / resolve | `POST alerts/:id/acknowledge` when you take it; `POST alerts/:id/resolve` (with a note) when it is done. An alert that is a symptom of an incident is resolved with the incident (§5) |
+| Escalate | No progress in 30 min on a critical alert, or it is a SEV1: call the backup, then the engineering lead |
+| Typical alerts | `billing.automation.*` (halted by the circuit breaker or failed: read the run, `GET billing/automation/runs`); `billing.gateway_guard:*` and `gateway.reconciliation*` (check webhooks and the provider, doc 25 §9); `billing.branch_reconcile:*` (over-limit tenants); `support.*` (unusual support access: ask the staff member); `drill.*` (§10); `dpr.*` (§9) |
+
+## 9. Data-protection requests
+
+1. **Log** every request the day it arrives: `POST /api/platform/v1/data-protection-requests` (`kind`: access, correction, erasure, objection; the requester and how to reach them; whose data; when received). The deadline defaults to 30 days — confirm the legal deadline with counsel (doc 19 round 5).
+2. **Verify identity** before giving or changing anything; record how (`…/:id/steps`).
+3. **Find the data.** Through the tenant when it is their user, driver or customer: the tenant is the controller for its business records; we help. Platform data (applications, billing contacts, staff) is ours.
+4. **Act.** Access: the tenant's export (§11) or the records concerned. Correction: through the module's own edit. Erasure: tenants are never deleted; anonymisation of personal fields is a four-eyes action still to build (doc 26 §8) — until then record what was done by hand, by two staff members. Objection: stop the processing concerned (e.g. notifications).
+5. **Close** with the outcome (`…/:id/close`: completed or rejected, with why). Alerts warn 5 days before the deadline and when it passes.
+
+## 10. Restore drills
+
+- A **quarterly game day** is always scheduled (`GET /api/platform/v1/restore-drills`, due by the end of each quarter); the daily compliance job keeps it scheduled, alerts two weeks before and when it is missed.
+- Do it with doc 31 §5 (restore a tenant next to the live one, verify, switch) and, when hosted, a rebuild from backups only. Time it.
+- Record it: `POST restore-drills/:id/record` (`outcome`: passed, partial, failed; RTO and RPO reached; notes). The next quarter's drill is scheduled at once. Add a line to the drill log (31 §9).
+- Failed or partial: open the follow-ups as for an incident review (§5.2 step 8).
+
+## 11. Data exports (portability)
+
+- The owner (permission `data.export`, owner only) asks in the app (`POST /api/v1/data-exports`); staff can ask for them when a tenant leaves (`POST tenants/:id/data-exports`, reason).
+- The archive has one CSV per table, the uploaded files (up to 200 MB; the manifest lists the rest) and a README; passwords, tokens and sealed credentials never leave. It is kept 7 days; the owner is emailed and downloads after signing in (a five-minute link, audited).
+- Files beyond the budget: send them separately on request, from storage, after checking who asks.

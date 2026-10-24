@@ -51,6 +51,10 @@ export type JobPayloads = {
   "documents.seal": Readonly<{ tenantId: string; documentId: string }>;
   /** Compare yesterday's gateway payments with the provider's transactions. */
   "billing.reconcile": Readonly<Record<string, never>>;
+  /** Build a tenant's full data export. */
+  "tenant.data_export": Readonly<{ exportId: string }>;
+  /** Daily compliance chores: restore drills, data-protection deadlines, expired exports. */
+  "compliance.daily": Readonly<Record<string, never>>;
   /** Email a published announcement to the owners of its tenants. */
   "announcements.email": Readonly<{ announcementId: string }>;
   /** Email and post a new or escalated alert to on-call. */
@@ -191,6 +195,26 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryBackoff: true,
     expireInSeconds: 1_800,
     cron: "17 5 * * *",
+  },
+  "tenant.data_export": {
+    description: "Build a tenant's full data export (CSV per table, files, README)",
+    tenantScoped: false,
+    policy: "standard",
+    retryLimit: 2,
+    retryDelaySeconds: 600,
+    retryBackoff: false,
+    expireInSeconds: 3_600,
+  },
+  "compliance.daily": {
+    description: "Schedule restore drills, flag data-protection deadlines, remove expired exports",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 2,
+    retryDelaySeconds: 900,
+    retryBackoff: false,
+    expireInSeconds: 1_800,
+    // 06:43 Accra, before the working day.
+    cron: "43 6 * * *",
   },
   "announcements.email": {
     description: "Email a published announcement to the owners of its tenants",

@@ -65,6 +65,8 @@ export type EmailTemplateData = {
     paragraphs: readonly string[];
     billingUrl: string;
   }>;
+  /** The owner's full data export is ready (docs/26 §6). */
+  "tenant.data_export_ready": Readonly<{ name: string; url: string; expiresOn: string }>;
   /** A platform announcement to a tenant owner (docs/27 §3.12). */
   "platform.announcement": Readonly<{ name: string; title: string; body: string }>;
   /** An alert for on-call (docs/27 §3.1). */
@@ -251,6 +253,12 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       greeting(data.name),
       ...data.paragraphs,
       `Sign in to the Billing tab to pay or ask for more time: ${data.billingUrl}`,
+    ]),
+  "tenant.data_export_ready": (data) =>
+    simple("Your data export is ready", [
+      greeting(data.name),
+      `The export of all your business's data is ready. Sign in and download it from ${data.url} until ${data.expiresOn}.`,
+      "If you did not ask for it, tell us at once: reply to this email.",
     ]),
   "platform.announcement": (data) =>
     simple(data.title, [greeting(data.name), ...data.body.split(/\n{2,}/)]),

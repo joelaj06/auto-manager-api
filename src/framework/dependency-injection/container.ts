@@ -286,6 +286,31 @@ import type { IBranchContents } from "../../application/ports/IBranchContents.js
 import type { IBranchReconciliationRepository } from "../../domain/repositories/IBranchReconciliationRepository.js";
 import { PostgresBranchReconciliationRepository } from "../../infrastructure/billing/PostgresBranchReconciliationRepository.js";
 import { PostgresBranchContents } from "../../infrastructure/tenants/PostgresBranchContents.js";
+import { legalOperationsRoutes } from "../../adapters/routes/legalOperationsRoutes.js";
+import type { ITenantDataArchiver } from "../../application/ports/ITenantDataArchiver.js";
+import {
+  ComplianceDaily,
+  DataProtectionRequests,
+  RestoreDrills,
+  StatusPage,
+} from "../../application/use-cases/console/ComplianceOperations.js";
+import { LegalDocuments } from "../../application/use-cases/console/LegalDocuments.js";
+import { TenantDataExports } from "../../application/use-cases/console/TenantDataExports.js";
+import type {
+  IDataProtectionRequestRepository,
+  IIncidentRepository,
+  IRestoreDrillRepository,
+} from "../../domain/repositories/IComplianceRepositories.js";
+import type { ILegalRepository } from "../../domain/repositories/ILegalRepository.js";
+import type { ITenantDataExportRepository } from "../../domain/repositories/ITenantDataExportRepository.js";
+import { PostgresTenantDataArchiver } from "../../infrastructure/exports/PostgresTenantDataArchiver.js";
+import { PostgresTenantDataExportRepository } from "../../infrastructure/exports/PostgresTenantDataExportRepository.js";
+import {
+  PostgresDataProtectionRequestRepository,
+  PostgresIncidentRepository,
+  PostgresRestoreDrillRepository,
+} from "../../infrastructure/legal/PostgresComplianceRepositories.js";
+import { PostgresLegalRepository } from "../../infrastructure/legal/PostgresLegalRepository.js";
 import { consoleOperationsRoutes } from "../../adapters/routes/consoleOperationsRoutes.js";
 import type { IOnCallWebhook } from "../../application/ports/IOnCallWebhook.js";
 import type { ITenantUsageCollector } from "../../application/ports/ITenantUsageCollector.js";
@@ -897,6 +922,8 @@ export function createContainer(
       alertNotifier: AlertNotifier,
       announcementMailer: AnnouncementMailer,
       usageHistory: TenantUsageHistory,
+      dataExports: TenantDataExports,
+      complianceDaily: ComplianceDaily,
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -921,6 +948,8 @@ export function createContainer(
       alertNotifier,
       announcementMailer,
       usageHistory,
+      dataExports,
+      complianceDaily,
     ],
     [
       TYPES.UnitOfWork,
@@ -947,6 +976,8 @@ export function createContainer(
       TYPES.AlertNotifier,
       TYPES.AnnouncementMailer,
       TYPES.TenantUsageHistory,
+      TYPES.TenantDataExports,
+      TYPES.ComplianceDaily,
     ],
   );
 
@@ -1523,6 +1554,13 @@ export function createContainer(
         ids,
         clock,
         settings: { webAppUrl: config.public.webAppUrl, otpTtlMinutes: auth.otpTtlMinutes },
+        // Resolved late: the legal documents come later in the container.
+        legal: {
+          recordSignup: (applicationId, context) =>
+            container
+              .get<LegalDocuments>(TYPES.LegalDocuments)
+              .recordSignup(applicationId, context),
+        },
       });
     },
     [
@@ -3012,6 +3050,177 @@ export function createContainer(
         TYPES.UsageRepository,
         TYPES.TenantUsageCollector,
         TYPES.TenantRoster,
+        TYPES.Clock,
+        TYPES.Logger,
+      ],
+    );
+
+  // --- Legal and operations (P4-8) ---
+  const platformDeps = [
+    TYPES.PlatformUnitOfWork,
+    TYPES.PlatformAuditTrail,
+    TYPES.RequestContext,
+    TYPES.IdGenerator,
+    TYPES.Clock,
+  ] as const;
+  platformRepository<ILegalRepository>(
+    TYPES.LegalRepository,
+    (p) => new PostgresLegalRepository(p),
+  );
+  container
+    .bind<LegalDocuments>(TYPES.LegalDocuments)
+    .toResolvedValue(
+      (
+        legal: ILegalRepository,
+        unitOfWork: IPlatformUnitOfWork,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+        ids: IIdGenerator,
+        clock: IClock,
+      ) => new LegalDocuments({ legal, unitOfWork, audit, requestContext, ids, clock }),
+      [TYPES.LegalRepository, ...platformDeps],
+    );
+  platformRepository<ITenantDataExportRepository>(
+    TYPES.TenantDataExportRepository,
+    (p) => new PostgresTenantDataExportRepository(p),
+  );
+  container
+    .bind<ITenantDataArchiver>(TYPES.TenantDataArchiver)
+    .toResolvedValue(
+      (pools: TenantConnectionPools, storage: IObjectStorage) =>
+        new PostgresTenantDataArchiver(pools, storage),
+      [TYPES.TenantConnectionPools, TYPES.ObjectStorage],
+    );
+  container.bind<TenantDataExports>(TYPES.TenantDataExports).toResolvedValue(
+    (
+      exports: ITenantDataExportRepository,
+      archiver: ITenantDataArchiver,
+      storage: IObjectStorage,
+      queue: IJobQueue,
+      directory: ITenantDirectory,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      seeder: ITenantSeeder,
+      tenantAudit: IAuditTrail,
+      email: NotificationService,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new TenantDataExports({
+        exports,
+        archiver,
+        storage,
+        queue,
+        directory,
+        tenantContext,
+        tenantUnitOfWork,
+        seeder,
+        tenantAudit,
+        email,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        logger,
+        exportsUrl: `${config.public.webAppUrl}/settings/data-export`,
+      }),
+    [
+      TYPES.TenantDataExportRepository,
+      TYPES.TenantDataArchiver,
+      TYPES.ObjectStorage,
+      TYPES.JobQueue,
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TenantSeeder,
+      TYPES.AuditTrail,
+      TYPES.NotificationService,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  platformRepository<IDataProtectionRequestRepository>(
+    TYPES.DataProtectionRequestRepository,
+    (p) => new PostgresDataProtectionRequestRepository(p),
+  );
+  platformRepository<IIncidentRepository>(
+    TYPES.IncidentRepository,
+    (p) => new PostgresIncidentRepository(p),
+  );
+  platformRepository<IRestoreDrillRepository>(
+    TYPES.RestoreDrillRepository,
+    (p) => new PostgresRestoreDrillRepository(p),
+  );
+  container
+    .bind<DataProtectionRequests>(TYPES.DataProtectionRequests)
+    .toResolvedValue(
+      (
+        requests: IDataProtectionRequestRepository,
+        unitOfWork: IPlatformUnitOfWork,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+        ids: IIdGenerator,
+        clock: IClock,
+      ) => new DataProtectionRequests({ requests, unitOfWork, audit, requestContext, ids, clock }),
+      [TYPES.DataProtectionRequestRepository, ...platformDeps],
+    );
+  container.bind<StatusPage>(TYPES.StatusPage).toResolvedValue(
+    (
+      incidents: IIncidentRepository,
+      communications: ICommunicationsRepository,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new StatusPage({
+        incidents,
+        communications,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [TYPES.IncidentRepository, TYPES.CommunicationsRepository, ...platformDeps],
+  );
+  container
+    .bind<RestoreDrills>(TYPES.RestoreDrills)
+    .toResolvedValue(
+      (
+        drills: IRestoreDrillRepository,
+        unitOfWork: IPlatformUnitOfWork,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+        ids: IIdGenerator,
+        clock: IClock,
+      ) => new RestoreDrills({ drills, unitOfWork, audit, requestContext, ids, clock }),
+      [TYPES.RestoreDrillRepository, ...platformDeps],
+    );
+  container
+    .bind<ComplianceDaily>(TYPES.ComplianceDaily)
+    .toResolvedValue(
+      (
+        drills: RestoreDrills,
+        requests: DataProtectionRequests,
+        exports: TenantDataExports,
+        clock: IClock,
+        logger: ILogger,
+      ) => new ComplianceDaily({ drills, requests, exports, alerts: lazyAlerts, clock, logger }),
+      [
+        TYPES.RestoreDrills,
+        TYPES.DataProtectionRequests,
+        TYPES.TenantDataExports,
         TYPES.Clock,
         TYPES.Logger,
       ],
@@ -6106,6 +6315,13 @@ export function createContainer(
         }),
         ...partnerRoutes({ administration: partnerAdministration, portal: partnerPortal }),
         ...partnerCommissionRoutes({ commissions: partnerCommissions }),
+        ...legalOperationsRoutes({
+          legal: container.get<LegalDocuments>(TYPES.LegalDocuments),
+          exports: container.get<TenantDataExports>(TYPES.TenantDataExports),
+          requests: container.get<DataProtectionRequests>(TYPES.DataProtectionRequests),
+          status: container.get<StatusPage>(TYPES.StatusPage),
+          drills: container.get<RestoreDrills>(TYPES.RestoreDrills),
+        }),
         ...consoleOperationsRoutes({
           alerts: container.get<PlatformAlerts>(TYPES.PlatformAlerts),
           onCallWebhookConfigured: config.operations.onCallWebhookUrl !== null,

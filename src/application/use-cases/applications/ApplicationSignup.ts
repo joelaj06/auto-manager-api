@@ -117,6 +117,13 @@ export class ApplicationSignup {
       ids: IIdGenerator;
       clock: IClock;
       settings: SignupSettings;
+      /** The terms and privacy policy in force, accepted with the application (P4-8). */
+      legal?: Readonly<{
+        recordSignup(
+          applicationId: string,
+          context: Readonly<{ ip: string | null; userAgent: string | null }>,
+        ): Promise<void>;
+      }>;
     }>,
   ) {}
 
@@ -185,6 +192,7 @@ export class ApplicationSignup {
         now,
       });
       await deps.applications.save(created);
+      await deps.legal?.recordSignup(created.id, { ip: context.ip, userAgent: context.userAgent });
       await deps.events.append({
         applicationId: created.id,
         type: "submitted",

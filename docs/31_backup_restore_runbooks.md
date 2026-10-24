@@ -134,6 +134,8 @@ Compare counts with the `row_counts` of the catalogue row (`yarn backup list`, o
 | 2026-10-22 | §5 restore of one tenant, then **switch databases** (live → `…_before_20261022`, restored → live), `yarn db:migrate`, API started on the restored database | Load tenant | Tenant id, schema 0025, counts (8,979 payments, 8,979 entries, 9,089 audit rows) identical; ledger nets to 0; API: integrity passed, 40 vehicles, a new payment took `RCT-2026-008980` (numbering continued) | ≈ 3 s restore; < 2 min end to end by hand |
 | every CI run | `src/framework/e2e/moneyFlows.int.test.ts` backs up a tenant with a full work and pay life cycle and restores it through the restore test | Remittances, invoice payment and reversal, agreement to ownership transfer | All checks green | – |
 
+Drills are scheduled in the console from P4-8 (doc 33 §10): record each one there as well as here.
+
 Local only (decision 63): the timings say nothing yet about restores across a network or of large tenants; repeat the drill on the hosted cluster with a production-sized tenant before the RTO in doc 26 §1 is claimed.
 
 ## 10. Still to build with hosting
