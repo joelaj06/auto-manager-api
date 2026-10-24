@@ -279,5 +279,7 @@ describe("status page", () => {
       status: "resolved",
       updates: expect.any(Array),
     });
+    // Public: never who opened it.
+    expect(after.body.data.incidents[0].createdBy).toBeUndefined();
   });
 });

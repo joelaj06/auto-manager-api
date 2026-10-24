@@ -194,7 +194,8 @@ export class DataProtectionRequests {
 export type PublicStatus = Readonly<{
   status: OverallStatus;
   components: readonly Readonly<{ name: string; status: OverallStatus }>[];
-  incidents: readonly Incident[];
+  /** Public: never who opened it. */
+  incidents: readonly Omit<Incident, "createdBy">[];
   maintenance: readonly Readonly<{
     title: string;
     message: string;
@@ -321,7 +322,7 @@ export class StatusPage {
           maintenanceNow,
         ),
       })),
-      incidents,
+      incidents: incidents.map(({ createdBy: _staff, ...shown }) => shown),
       maintenance: windows.map((w) => ({
         title: w.title,
         message: w.message,

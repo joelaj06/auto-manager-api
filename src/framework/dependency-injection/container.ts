@@ -294,6 +294,7 @@ import {
   RestoreDrills,
   StatusPage,
 } from "../../application/use-cases/console/ComplianceOperations.js";
+import { LaunchReadiness } from "../../application/use-cases/console/LaunchReadiness.js";
 import { LegalDocuments } from "../../application/use-cases/console/LegalDocuments.js";
 import { TenantDataExports } from "../../application/use-cases/console/TenantDataExports.js";
 import type {
@@ -740,6 +741,7 @@ export function createContainer(
           databaseNameFor: (tenantId) => naming.databaseNameFor(tenantId),
           maxPools: db.tenantPools.maxPools,
           maxConnectionsPerPool: db.tenantPools.maxConnections,
+          maxTotalConnections: db.tenantPools.maxTotalConnections,
           idleTimeoutMs: db.tenantPools.idleTimeoutMs,
           statementTimeoutMs: db.statementTimeoutMs,
           requiredSchemaVersion: sets.tenant.latestVersion,
@@ -3225,6 +3227,46 @@ export function createContainer(
         TYPES.Logger,
       ],
     );
+
+  // --- Launch readiness (P4-9) ---
+  container.bind<LaunchReadiness>(TYPES.LaunchReadiness).toResolvedValue(
+    (
+      subscriptions: SubscriptionAdministration,
+      automation: BillingAutomation,
+      legal: LegalDocuments,
+      alerts: PlatformAlerts,
+      drills: RestoreDrills,
+      dataOperations: DataOperationsConsole,
+      roles: IPlatformRoles,
+      clock: IClock,
+    ) =>
+      new LaunchReadiness({
+        subscriptions,
+        automation,
+        legal,
+        alerts,
+        drills,
+        dataOperations,
+        roles,
+        clock,
+        settings: {
+          production: config.isProduction,
+          gateway: config.billing.gateway,
+          onCallEmails: config.operations.onCallEmails.length,
+          onCallWebhook: config.operations.onCallWebhookUrl !== null,
+        },
+      }),
+    [
+      TYPES.SubscriptionAdministration,
+      TYPES.BillingAutomation,
+      TYPES.LegalDocuments,
+      TYPES.PlatformAlerts,
+      TYPES.RestoreDrills,
+      TYPES.DataOperationsConsole,
+      TYPES.PlatformRoles,
+      TYPES.Clock,
+    ],
+  );
 
   // --- Reseller commissions (P4-6) ---
   platformRepository<IPartnerCommissionRepository>(
@@ -6331,6 +6373,7 @@ export function createContainer(
           flags: container.get<FeatureFlags>(TYPES.FeatureFlags),
           subscriptions: subscriptionAdministration,
           usage: container.get<TenantUsageHistory>(TYPES.TenantUsageHistory),
+          readiness: container.get<LaunchReadiness>(TYPES.LaunchReadiness),
         }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...mobileRoutes(mobile),
@@ -6557,5 +6600,7 @@ export function createContainer(
 
 /** Releases every resolved resource (database pools) through their deactivation handlers. */
 export async function disposeContainer(container: Container): Promise<void> {
+  // Counters first, while the database is still open (resources are released in no order).
+  if (container.isBound(TYPES.UsageMeter)) await container.get<UsageMeter>(TYPES.UsageMeter).stop();
   await container.unbindAllAsync();
 }

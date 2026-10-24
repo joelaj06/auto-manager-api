@@ -15,6 +15,12 @@ export type TenantConnectionPoolsOptions = Readonly<{
   /** Upper bound on open pools; least recently used idle pools are closed beyond it. */
   maxPools: number;
   maxConnectionsPerPool: number;
+  /**
+   * Upper bound on connections across all pools: idle pools are closed, least recently used
+   * first, while it is exceeded (otherwise every tenant visited keeps an idle connection open
+   * for the idle timeout). Absent: no bound.
+   */
+  maxTotalConnections?: number;
   idleTimeoutMs: number;
   statementTimeoutMs: number;
   /** Lowest schema version this build can run against; null disables the check. */
@@ -168,17 +174,22 @@ export class TenantConnectionPools {
   }
 
   private evictBeyondLimit(): void {
-    if (this.entries.size <= this.options.maxPools) return;
+    const budget = this.options.maxTotalConnections ?? Number.POSITIVE_INFINITY;
+    let connections = 0;
+    for (const { pool } of this.entries.values()) connections += pool.totalCount;
+    const over = () => this.entries.size > this.options.maxPools || connections > budget;
+    if (!over()) return;
 
     for (const [key, entry] of this.entries) {
-      if (this.entries.size <= this.options.maxPools) return;
+      if (!over()) return;
       const busy = entry.leases > 0 || entry.pool.totalCount - entry.pool.idleCount > 0;
       if (busy) continue;
       this.entries.delete(key);
+      connections -= entry.pool.totalCount;
       void entry.pool.end().catch((error: unknown) => {
         if (error instanceof Error) this.options.onPoolError?.(error, key);
       });
     }
-    // If every pool is busy the limit is exceeded temporarily; it is enforced again on release.
+    // If every pool is busy a limit is exceeded temporarily; it is enforced again on release.
   }
 }

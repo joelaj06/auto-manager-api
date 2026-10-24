@@ -42,6 +42,8 @@
 | 32 | [Security review](32_security_review.md) | Internal penetration test against the OWASP Top 10 before the private beta, dependency audit, findings |
 | 33 | [Operations runbooks](33_operations_runbooks.md) | Start/upgrade, daily checks, books out of balance, tenant support, incidents, secrets, load figures |
 | 34 | [Beta onboarding guide](34_beta_onboarding_guide.md) | Taking a trusted business from application to its first work and pay agreement |
+| 35 | [Support process](35_support_process.md) | Channels, hours, severities and response times, triage, console tools, escalation |
+| 36 | [Go-live checklist](36_go_live_checklist.md) | The readiness gate, billing dry run and its review, pricing, legal, hosting, open security decisions, people |
 
 ## Legend used across docs
 

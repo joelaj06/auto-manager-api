@@ -2,7 +2,7 @@
 
 Day-to-day procedures for running the beta. Backups and restores have their own runbooks ([31](31_backup_restore_runbooks.md)); security posture is in [32](32_security_review.md). Commands are `yarn …` from the repository; the API is `node dist/index.js`, the worker `node dist/worker.js`.
 
-> **Status (2026-10-24): local.** Incident, on-call, data-protection and data-export runbooks added with P4-8. Everything below runs on the local stack today. Steps marked **(hosting)** need P0-3 (decision 63).
+> **Status (2026-10-24): local.** Incident, on-call, data-protection and data-export runbooks added with P4-8; multi-tenant load figures and the support process (doc 35) with P4-9. Everything below runs on the local stack today. Steps marked **(hosting)** need P0-3 (decision 63).
 
 ## 1. Start, stop, upgrade
 
@@ -99,6 +99,20 @@ Secrets live in `.env` locally and in the host's secret store **(hosting)**; nev
 | stress | up to 200 | 82,203 | 0 | 92 ms | 103 ms | 456 req/s |
 
 After the stress run (≈ 8,700 payments posted concurrently) every integrity check passed and receipt numbers had no gaps. Laptop numbers are an upper bound for the API code, not for the hosted system: repeat on staging **(hosting)** with the database on its own host before sizing.
+
+**Many tenants (P4-9).** `yarn load:seed --tenants 100 --vehicles 10 --drivers 10 --payments 20` provisions 100 tenants with data and writes `load/k6/data/tenants.json`; `PROFILE=load yarn load:tenants` signs in to each and spreads reads and payments over all of them at random. Measured 2026-10-24, same laptop, local PostgreSQL with `max_connections = 100`, one API process:
+
+| Profile | Tenants | Virtual users | Requests | Errors | p95 reads | p95 payment writes | Throughput |
+|---|---|---|---|---|---|---|---|
+| load | 100 | 20 | 14,999 | 0 | 23 ms | 37 ms | 87 req/s |
+| stress (defaults: 60 total, 4 per pool) | 100 | up to 200 | 74,488 | 13.9 % | 184 ms | 456 ms | 402 req/s |
+| stress (80 total, 2 per pool) | 100 | up to 200 | 76,096 | 5.8 % | 148 ms | 369 ms | 412 req/s |
+
+What it found and what changed:
+
+- Seeding stopped at about 95 tenants: every tenant visited kept an idle connection for the 5-minute idle timeout until PostgreSQL ran out of slots. **`TENANT_POOL_MAX_TOTAL_CONNECTIONS`** (default 60 per process) now closes the least recently used idle pools beyond it.
+- Under stress a connect that stalled never settled, and every later request for that tenant waited on it until the process restarted. **`DATABASE_CONNECT_TIMEOUT_MS`** (default 10 s) bounds connecting and waiting for a pooled connection; the request fails with 503 `TENANT_DATABASE_UNAVAILABLE` and the next one opens a fresh pool.
+- The stress errors are the database server's connection limit (`53300 too many clients`) with 200 concurrent users on 100 busy tenants: the budget only closes *idle* pools, so busy ones can exceed it. That is PgBouncer's job when hosted (doc 36 §5); size `max_connections` ≥ processes × (tenant total + `PLATFORM_POOL_MAX` + `JOB_POOL_MAX`) + headroom.
 
 ## 8. On-call
 

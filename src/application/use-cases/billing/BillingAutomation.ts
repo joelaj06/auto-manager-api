@@ -23,6 +23,7 @@ import type { ILogger } from "../../ports/ILogger.js";
 import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
+import { ApplicationError } from "../../errors/ApplicationError.js";
 import { recordStaffAction } from "../console/consoleAudit.js";
 import type { TenantLifecycleService } from "../tenants/TenantLifecycleService.js";
 import type { IAlerts } from "../console/PlatformAlerts.js";
@@ -32,6 +33,47 @@ import type { ManualBilling } from "./ManualBilling.js";
 import { SubscriptionNotFoundError } from "./SubscriptionAdministration.js";
 
 const DAY_MS = 86_400_000;
+/** Dry run stays on at least this long at launch (docs/25 §5.6: the first weeks). */
+export const DRY_RUN_REVIEW_DAYS = 14;
+
+export type DryRunReview = Readonly<{
+  since: string;
+  runs: number;
+  /** Distinct days with a dry run. */
+  dryRunDays: number;
+  halted: number;
+  failed: number;
+  heldBack: number;
+  wouldDeactivate: readonly Readonly<{
+    invoiceId: string;
+    tenantId: string;
+    tenantName: string;
+    firstOn: string;
+    times: number;
+    status: string;
+    paidAt: Date | null;
+  }>[];
+  /** Flagged, and paid since: deactivating them would have been wrong or needless. */
+  paidAfterFlag: number;
+  stillUnpaid: number;
+}>;
+
+/** Dry run cannot end without its review (409). */
+export class DryRunReviewError extends ApplicationError {
+  readonly code = "DRY_RUN_NOT_REVIEWED";
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+const summary = (r: DryRunReview) => ({
+  runs: r.runs,
+  dryRunDays: r.dryRunDays,
+  halted: r.halted,
+  failed: r.failed,
+  wouldDeactivate: r.wouldDeactivate.length,
+  paidAfterFlag: r.paidAfterFlag,
+});
 
 /** Tells a tenant's reseller (if it has one) about its client. */
 export interface ResellerAlerts {
@@ -250,21 +292,91 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
     return this.deps.automation.policies(limit);
   }
 
-  async setPolicy(input: DunningPolicy, actor: PlatformPrincipal): Promise<PolicyVersion> {
+  /**
+   * A new policy version. Turning dry run off (real deactivations, docs/25 §5.6) needs the
+   * dry-run review acknowledged, and — except for a Super Admin — two weeks of dry runs first.
+   */
+  async setPolicy(
+    input: DunningPolicy,
+    actor: PlatformPrincipal,
+    options: Readonly<{ dryRunReviewed?: boolean }> = {},
+  ): Promise<PolicyVersion> {
     const { deps } = this;
     const policy = dunningPolicy(input);
+    const current = await deps.automation.policy();
+    let review: DryRunReview | null = null;
+    if (current.policy.dryRun && !policy.dryRun) {
+      review = await this.dryRunReview(DRY_RUN_REVIEW_DAYS * 2);
+      if (options.dryRunReviewed !== true)
+        throw new DryRunReviewError(
+          "Review the dry runs first (billing/automation/dry-run-review), then confirm",
+        );
+      if (review.dryRunDays < DRY_RUN_REVIEW_DAYS && !actor.systemRoles.has("super_admin"))
+        throw new DryRunReviewError(
+          `Only ${review.dryRunDays} days of dry runs so far: keep dry run on for ${DRY_RUN_REVIEW_DAYS} days, or ask a Super Admin`,
+        );
+    }
     return deps.unitOfWork.run(async () => {
       const before = await deps.automation.policy();
       const saved = await deps.automation.savePolicy(policy, actor.userId);
       await recordStaffAction(deps, actor, {
-        action: "billing.dunning_policy_changed",
+        action: review === null ? "billing.dunning_policy_changed" : "billing.dry_run_ended",
         entityType: "dunning_policy",
         entityId: String(saved.version),
         before: before.policy,
-        after: policy,
+        after: review === null ? policy : { ...policy, review: summary(review) },
       });
       return saved;
     });
+  }
+
+  /**
+   * What the automation would have done while in dry run (docs/25 §5.6): runs, halts, the tenants
+   * it would have deactivated and whether they paid afterwards — paid ones would have been
+   * deactivated wrongly or needlessly. The basis for turning dry run off.
+   */
+  async dryRunReview(days = DRY_RUN_REVIEW_DAYS * 2): Promise<DryRunReview> {
+    const { deps } = this;
+    const since = new Date(deps.clock.now().getTime() - days * DAY_MS).toISOString().slice(0, 10);
+    const runs = (await deps.automation.runs(500)).filter((r) => r.dryRun && r.runOn >= since);
+    const flagged = new Map<
+      string,
+      { tenantId: string; tenantName: string; firstOn: string; times: number }
+    >();
+    for (const run of [...runs].reverse())
+      for (const entry of run.wouldDeactivate) {
+        const invoiceId = String(entry.invoiceId);
+        const seen = flagged.get(invoiceId);
+        if (seen === undefined)
+          flagged.set(invoiceId, {
+            tenantId: String(entry.tenantId),
+            tenantName: String(entry.tenantName),
+            firstOn: run.runOn,
+            times: 1,
+          });
+        else seen.times += 1;
+      }
+    const invoices = [];
+    for (const [invoiceId, f] of flagged) {
+      const invoice = (await deps.billing.invoice(invoiceId))?.snapshot();
+      invoices.push({
+        invoiceId,
+        ...f,
+        status: invoice?.status ?? "unknown",
+        paidAt: invoice?.paidAt ?? null,
+      });
+    }
+    return {
+      since,
+      runs: runs.length,
+      dryRunDays: new Set(runs.map((r) => r.runOn)).size,
+      halted: runs.filter((r) => r.status === "halted").length,
+      failed: runs.filter((r) => r.status === "failed").length,
+      heldBack: runs.reduce((sum, r) => sum + r.heldBack.length, 0),
+      wouldDeactivate: invoices,
+      paidAfterFlag: invoices.filter((i) => i.status === "paid").length,
+      stillUnpaid: invoices.filter((i) => i.status === "open").length,
+    };
   }
 
   runs(limit: number): Promise<AutomationRun[]> {

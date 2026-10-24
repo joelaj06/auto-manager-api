@@ -186,6 +186,15 @@ describe("TenantConnectionPools", () => {
     expect(p.stats().openPools).toBe(2);
   });
 
+  it("closes idle pools beyond the total connection budget", async () => {
+    const p = pools({ maxTotalConnections: 2 });
+    for (const tenant of [tenantA, tenantB, tenantC, tenantD]) {
+      await p.withTransaction(tenant, (tx) => tx.query("select 1"));
+    }
+    expect(p.stats().totalConnections).toBeLessThanOrEqual(2);
+    expect(p.stats().openPools).toBeLessThanOrEqual(2);
+  });
+
   it("applies transaction-local settings and the statement timeout", async () => {
     const p = pools();
     const userId = randomUUID();

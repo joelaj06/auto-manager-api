@@ -79,6 +79,11 @@ const envSchema = z
     // No default in production: the mode must be chosen explicitly there.
     DATABASE_SSL: z.enum(sslModes).optional(),
     DATABASE_SSL_CA_FILE: z.string().min(1).optional(),
+    /**
+     * Bound on opening a connection and on waiting for a pooled one. Without it a connect that
+     * stalls under load never settles, and every request for that tenant waits on it.
+     */
+    DATABASE_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(10_000),
     PLATFORM_DATABASE_NAME: databaseName.default("autoforce_platform"),
     TENANT_TEMPLATE_DATABASE_NAME: databaseName.default("tenant_template"),
     TENANT_DATABASE_PREFIX: z
@@ -101,6 +106,12 @@ const envSchema = z
     PLATFORM_POOL_MAX: z.coerce.number().int().min(1).max(200).default(10),
     TENANT_POOL_MAX_POOLS: z.coerce.number().int().min(1).max(10_000).default(200),
     TENANT_POOL_MAX_CONNECTIONS: z.coerce.number().int().min(1).max(50).default(4),
+    /**
+     * All tenant pools together, per process: beyond it the least recently used idle pools are
+     * closed. Keep (API + worker processes) × (this + platform and job pools) under the server's
+     * max_connections — or PgBouncer's pool size when hosted.
+     */
+    TENANT_POOL_MAX_TOTAL_CONNECTIONS: z.coerce.number().int().min(1).max(10_000).default(60),
     TENANT_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(300_000),
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000),
 
@@ -367,6 +378,7 @@ export type DatabaseConfig = Readonly<{
   port: number;
   ssl: SslMode;
   sslCaFile: string | undefined;
+  connectTimeoutMs: number;
   platformDatabase: string;
   tenantTemplateDatabase: string;
   tenantDatabasePrefix: string;
@@ -377,7 +389,12 @@ export type DatabaseConfig = Readonly<{
     backup: DatabaseRoleCredentials;
   }>;
   platformPoolMax: number;
-  tenantPools: Readonly<{ maxPools: number; maxConnections: number; idleTimeoutMs: number }>;
+  tenantPools: Readonly<{
+    maxPools: number;
+    maxConnections: number;
+    maxTotalConnections: number;
+    idleTimeoutMs: number;
+  }>;
   statementTimeoutMs: number;
   migrationsDir: string;
 }>;
@@ -659,6 +676,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       port: e.DATABASE_PORT,
       ssl: e.DATABASE_SSL ?? "disable",
       sslCaFile: e.DATABASE_SSL_CA_FILE,
+      connectTimeoutMs: e.DATABASE_CONNECT_TIMEOUT_MS,
       platformDatabase: e.PLATFORM_DATABASE_NAME,
       tenantTemplateDatabase: e.TENANT_TEMPLATE_DATABASE_NAME,
       tenantDatabasePrefix: e.TENANT_DATABASE_PREFIX,
@@ -672,6 +690,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       tenantPools: Object.freeze({
         maxPools: e.TENANT_POOL_MAX_POOLS,
         maxConnections: e.TENANT_POOL_MAX_CONNECTIONS,
+        maxTotalConnections: e.TENANT_POOL_MAX_TOTAL_CONNECTIONS,
         idleTimeoutMs: e.TENANT_POOL_IDLE_TIMEOUT_MS,
       }),
       statementTimeoutMs: e.DB_STATEMENT_TIMEOUT_MS,

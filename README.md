@@ -55,20 +55,21 @@ database, the template and every tenant database.
 
 ## Scripts
 
-| Command                               | What it does                                                                                                                                                      |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `yarn dev`                            | Run the app with reload on change (tsx)                                                                                                                           |
-| `yarn dev:worker`                     | Run the background worker with reload (jobs, scheduler, outbox, email)                                                                                            |
-| `yarn build`                          | Compile to `dist/`                                                                                                                                                |
-| `yarn start`                          | Run the compiled app                                                                                                                                              |
-| `yarn typecheck`                      | Type-check everything (`tsc --noEmit`)                                                                                                                            |
-| `yarn lint` / `yarn lint:fix`         | ESLint, including architecture boundary rules                                                                                                                     |
-| `yarn format` / `yarn format:check`   | Prettier                                                                                                                                                          |
-| `yarn test` / `yarn test:watch`       | Unit tests (Vitest)                                                                                                                                               |
-| `yarn test:integration`               | Integration tests (`*.int.test.ts`) in throw-away PostgreSQL + Mailpit containers (needs Docker); `TEST_INFRA=external` uses the running compose services instead |
-| `yarn load:health` / `yarn load:auth` | k6 load scripts against a running API (`PROFILE=smoke\|load\|stress`, `BASE_URL=…`); uses a local `k6` or the k6 Docker image                                     |
-| `yarn load:seed` / `yarn load:tenant` | A seeded tenant on a local database, then k6 back-office reads and payments as its owner (start the API with a high `RATE_LIMIT_MAX`); figures in docs/33 §7      |
-| `yarn verify`                         | Typecheck, lint, format check and tests — run before every commit                                                                                                 |
+| Command                                            | What it does                                                                                                                                                      |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `yarn dev`                                         | Run the app with reload on change (tsx)                                                                                                                           |
+| `yarn dev:worker`                                  | Run the background worker with reload (jobs, scheduler, outbox, email)                                                                                            |
+| `yarn build`                                       | Compile to `dist/`                                                                                                                                                |
+| `yarn start`                                       | Run the compiled app                                                                                                                                              |
+| `yarn typecheck`                                   | Type-check everything (`tsc --noEmit`)                                                                                                                            |
+| `yarn lint` / `yarn lint:fix`                      | ESLint, including architecture boundary rules                                                                                                                     |
+| `yarn format` / `yarn format:check`                | Prettier                                                                                                                                                          |
+| `yarn test` / `yarn test:watch`                    | Unit tests (Vitest)                                                                                                                                               |
+| `yarn test:integration`                            | Integration tests (`*.int.test.ts`) in throw-away PostgreSQL + Mailpit containers (needs Docker); `TEST_INFRA=external` uses the running compose services instead |
+| `yarn load:health` / `yarn load:auth`              | k6 load scripts against a running API (`PROFILE=smoke\|load\|stress`, `BASE_URL=…`); uses a local `k6` or the k6 Docker image                                     |
+| `yarn load:seed` / `yarn load:tenant`              | A seeded tenant on a local database, then k6 back-office reads and payments as its owner (start the API with a high `RATE_LIMIT_MAX`); figures in docs/33 §7      |
+| `yarn load:seed --tenants N` / `yarn load:tenants` | N seeded tenants (`load/k6/data/tenants.json`), then k6 spreading reads and payments over all of them                                                             |
+| `yarn verify`                                      | Typecheck, lint, format check and tests — run before every commit                                                                                                 |
 
 ## HTTP API
 
@@ -457,6 +458,18 @@ later versions (`GET /api/v1/legal`, `POST /api/v1/legal/accept`). **Data export
 `data-protection-requests` (steps, close). **Status page**: `GET /api/v1/public/status`;
 staff open and update `incidents`. **Restore drills**: `restore-drills` (record the quarterly
 game day). Runbooks: doc 33 §5 (incidents), §8 (on-call), §9–§11.
+
+## Launch
+
+**Readiness gate**: `GET /api/platform/v1/launch/readiness` lists every launch check (price,
+gateway, dry run, legal documents, on-call, backups, restore test, drill, migrations, alerts, two
+Super Admins, support team) with what to fix; `ready` when none fails. **Billing dry run**: read
+`GET /api/platform/v1/billing/automation/dry-run-review?days=28`, then end it with
+`PUT billing/dunning-policy` and `"dryRunReviewed": true` (after 14 days unless a Super Admin).
+**Connections**: `TENANT_POOL_MAX_TOTAL_CONNECTIONS` (idle tenant pools close beyond it) and
+`DATABASE_CONNECT_TIMEOUT_MS`. **Load at many tenants**: `yarn load:seed --tenants 100`, then
+`PROFILE=load yarn load:tenants` (figures in docs/33 §7). Process: support (docs/35) and the
+go-live checklist (docs/36).
 
 ## Mobile app connect
 

@@ -38,7 +38,11 @@ export class PostgresConnectionFactory {
   }
 
   clientConfig(role: DatabaseRole, database: string): pg.ClientConfig {
-    return PostgresConnectionFactory.toClientConfig(this.settings(role, database));
+    return {
+      ...PostgresConnectionFactory.toClientConfig(this.settings(role, database)),
+      // Also the longest a pool makes a caller wait for a free connection.
+      connectionTimeoutMillis: this.config.connectTimeoutMs,
+    };
   }
 
   /** A single dedicated connection (migrations, provisioning, admin tasks). Caller ends it. */

@@ -5,6 +5,7 @@ import type { FeatureFlags } from "../../application/use-cases/console/FeatureFl
 import type { PlatformAlerts } from "../../application/use-cases/console/PlatformAlerts.js";
 import type { SupportAccess } from "../../application/use-cases/console/SupportAccess.js";
 import type { TenantUsageHistory } from "../../application/use-cases/console/TenantUsageHistory.js";
+import type { LaunchReadiness } from "../../application/use-cases/console/LaunchReadiness.js";
 import type { TenantUserSupport } from "../../application/use-cases/console/TenantUserSupport.js";
 import { principalOf, staffOf, tenantOf } from "../middleware/AccessGuard.js";
 import { envelope } from "../presenters/responseEnvelope.js";
@@ -30,6 +31,7 @@ export type ConsoleOperationsRouteDependencies = Readonly<{
   flags: FeatureFlags;
   subscriptions: SubscriptionAdministration;
   usage: TenantUsageHistory;
+  readiness: LaunchReadiness;
 }>;
 
 /**
@@ -40,6 +42,19 @@ export type ConsoleOperationsRouteDependencies = Readonly<{
 export function consoleOperationsRoutes(deps: ConsoleOperationsRouteDependencies): ApiRoute[] {
   const { alerts, support, users, communications, flags, subscriptions, usage } = deps;
   return [
+    // --- launch ---
+    defineRoute({
+      method: "get",
+      path: `${BASE}/launch/readiness`,
+      summary: "The go-live gate: every launch condition the platform can check (docs/36)",
+      tags: ["console: operations"],
+      access: access.platform("platform.health.view"),
+      responses: { 200: { description: "Checks, and whether nothing fails" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await deps.readiness.report()));
+      },
+    }),
+
     // --- alerts centre ---
     defineRoute({
       method: "get",

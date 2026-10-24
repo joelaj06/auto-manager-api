@@ -51,6 +51,8 @@ const POLICY = {
   reviewBranchThreshold: 1,
   gatewayGuard: { maxFailedWebhooks24h: 5 },
   channels: ["email", "sms", "in_app", "push"],
+  // Turning dry run off confirms the dry-run review (P4-9).
+  dryRunReviewed: true,
 };
 
 async function run() {
@@ -120,6 +122,12 @@ beforeAll(async () => {
     `update subscriptions set trial_ends_at = now() + interval '7 days' where tenant_id = $1`,
     [t.tenantId],
   );
+  const { dryRunReviewed: _reviewed, ...unreviewed } = POLICY;
+  const refused = await api()
+    .put(`${CONSOLE}/billing/dunning-policy`)
+    .set(staff())
+    .send(unreviewed);
+  expect(refused.body.error.code).toBe("DRY_RUN_NOT_REVIEWED");
   await api().put(`${CONSOLE}/billing/dunning-policy`).set(staff()).send(POLICY).expect(200);
 
   // A user without billing access, to sign in later.
@@ -346,5 +354,19 @@ describe("billing automation", () => {
 
     const runs = await api().get(`${CONSOLE}/billing/automation/runs?limit=3`).set(staff());
     expect(runs.body.data[0]).toMatchObject({ status: "completed" });
+  });
+
+  it("reviews the dry runs: who would have been deactivated, and who paid since", async () => {
+    const review = await api()
+      .get(`${CONSOLE}/billing/automation/dry-run-review?days=2`)
+      .set(staff());
+    expect(review.status, JSON.stringify(review.body)).toBe(200);
+    expect(review.body.data.runs).toBeGreaterThan(0);
+    expect(review.body.data.wouldDeactivate).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ invoiceId, tenantId: t.tenantId, status: "paid" }),
+      ]),
+    );
+    expect(review.body.data.paidAfterFlag).toBeGreaterThanOrEqual(1);
   });
 });

@@ -177,6 +177,7 @@ const RULES: Readonly<Record<string, Rule>> = {
   ALERT_NOT_FOUND: { status: 404 },
   LEGAL_DOCUMENT_NOT_FOUND: { status: 404 },
   LEGAL_RULE: { status: 409 },
+  DRY_RUN_NOT_REVIEWED: { status: 409 },
   DATA_EXPORT_NOT_FOUND: { status: 404 },
   DATA_EXPORT_RUNNING: { status: 409 },
   DATA_EXPORT_NOT_READY: { status: 409 },

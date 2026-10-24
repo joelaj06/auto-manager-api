@@ -136,3 +136,6 @@ dist
 *.backup-key.pem
 # Mobile connect signing keys (never commit)
 *.key.pem
+
+# Load-test sign-ins written by `yarn load:seed --tenants N`
+load/k6/data/

@@ -325,6 +325,7 @@ export const TYPES = Object.freeze({
   StatusPage: Symbol.for("StatusPage"),
   RestoreDrills: Symbol.for("RestoreDrills"),
   ComplianceDaily: Symbol.for("ComplianceDaily"),
+  LaunchReadiness: Symbol.for("LaunchReadiness"),
 
   // Document engine (P3-1)
   DocumentTemplateRepository: Symbol.for("IDocumentTemplateRepository"),

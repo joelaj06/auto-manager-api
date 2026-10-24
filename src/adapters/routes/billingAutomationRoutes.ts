@@ -120,11 +120,26 @@ export function billingAutomationRoutes(deps: BillingAutomationRouteDependencies
           reviewBranchThreshold: z.number().int(),
           gatewayGuard: z.object({ maxFailedWebhooks24h: z.number().int() }),
           channels: z.array(z.enum(["email", "sms", "in_app", "push"])).min(1),
+          /** Turning dry run off: confirms the dry-run review was read. */
+          dryRunReviewed: z.boolean().optional(),
         }),
       },
       responses: { 200: { description: "The new version" } },
       handler: async ({ body }, _req, res) => {
-        res.json(envelope(await automation.setPolicy(body, staffOf(res))));
+        const { dryRunReviewed, ...policy } = body;
+        res.json(envelope(await automation.setPolicy(policy, staffOf(res), { dryRunReviewed })));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: `${CONSOLE}/billing/automation/dry-run-review`,
+      summary: "What the automation would have done in dry run, and who paid afterwards",
+      tags: ["console: billing"],
+      access: access.platform("platform.billing.view"),
+      request: { query: z.object({ days: z.coerce.number().int().min(1).max(90).default(28) }) },
+      responses: { 200: { description: "Review" } },
+      handler: async ({ query }, _req, res) => {
+        res.json(envelope(await automation.dryRunReview(query.days)));
       },
     }),
     defineRoute({

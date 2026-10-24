@@ -12,6 +12,7 @@ Internal penetration test of the API against the **OWASP Top 10 (2021)**, done f
 | `src/framework/security/auditRegressions.test.ts` | Every unit run | C1–C7 of doc 01: cross-tenant tokens, platform/tenant separation, stale permissions, weak secrets, stack traces, dynamic regular expressions |
 | `src/testing/isolation` | Every integration run | Every tenant table: no row of tenant A reaches tenant B; the app role owns nothing; append-only tables |
 | `src/framework/e2e/moneyFlows.int.test.ts` | Every integration run | Money integrity end to end (A04/A08: the books cannot be pushed out of balance through the API) |
+| `src/framework/security/platformSurfaces.int.test.ts` | Every integration run | Phase 4 surfaces (§4): support tokens bound to their tenant, exports never cross tenants, reseller users kept out of staff routes |
 
 ## 2. OWASP Top 10 checklist
 
@@ -38,7 +39,7 @@ Internal penetration test of the API against the **OWASP Top 10 (2021)**, done f
 | | | CORS: an unknown origin gets no grant | T | Pass |
 | | | Bodies over the limit → 413; unknown routes → JSON 404 without internals; server errors without stacks (C6) | T | Pass |
 | | | Secrets required at start, no defaults, minimum lengths (C5) | T | Pass |
-| A06 | Vulnerable components | `yarn audit`: production dependencies **0** advisories (191 packages). Development: 8 advisories, all through `eslint-plugin-boundaries`; `handlebars` pinned to ≥ 4.7.10 (6 fixed); `braces` ≤ 3.0.3 has no fixed release (2 high, ReDoS in a lint-time glob matcher, never in the API) | R | **Accepted A1** |
+| A06 | Vulnerable components | P4-9 (2026-10-24): `yarn audit` **0** advisories in all 628 packages after upgrading `nodemailer` to 10.1.4 (three address-parser bugs, F4) and pinning `body-parser` ≥ 2.4.0 under Express (DoS through compressed bodies, F5). Before that, at P3-8: production dependencies **0** advisories (191 packages). Development: 8 advisories, all through `eslint-plugin-boundaries`; `handlebars` pinned to ≥ 4.7.10 (6 fixed); `braces` ≤ 3.0.3 has no fixed release (2 high, ReDoS in a lint-time glob matcher, never in the API) | R | **Accepted A1** |
 | A07 | Identification and authentication failures | Expired access tokens rejected | T | Pass |
 | | | The same answer for an unknown account and a wrong password (no enumeration) | T | Pass |
 | | | Brute force: per-IP rate limit on `/auth` (429), per-account lockout after repeated failures, 12+ character passwords not on the common list (NIST 800-63B style) | T, R | Pass |
@@ -57,8 +58,30 @@ Internal penetration test of the API against the **OWASP Top 10 (2021)**, done f
 |---|---|---|---|
 | F1 | 🟠 High (data protection) | National ID (Ghana Card) and licence numbers are stored in clear in tenant databases. Backups are encrypted and the databases are not reachable from outside, but a database compromise would expose them. | Field-level envelope encryption with per-tenant data keys (doc 16 §4), with blind-index lookups where uniqueness is checked. Planned for Phase 4 (P4-8 data protection) — acceptable for a private beta with trusted tenants and their consent |
 | F2 | 🟡 Medium | Tenant users sign in with a password only. | Optional TOTP for tenant users, mandatory for owners and administrators, in Phase 4. Beta mitigation: strong password policy, lockout, short-lived tokens, owners told in onboarding |
-| A1 | 🟢 Low (accepted) | `braces` ReDoS in a development dependency (lint only). | Accepted; revisit when `eslint-plugin-boundaries` updates `micromatch` |
+| A1 | 🟢 Low (accepted) | `braces` ReDoS in a development dependency (lint only). | Accepted; revisit when `eslint-plugin-boundaries` updates `micromatch` (gone from the P4-9 audit) |
+| F3 | 🟡 Medium — **fixed** (P4-9) | The public status page returned the staff id that opened each incident. | Incidents are shown without `createdBy`; asserted in the legal suite |
+| F4 | 🟡 Medium — **fixed** (P4-9) | `nodemailer` < 10.1.4: crafted display names could add recipients. Our recipients come from validated addresses, but the library is upgraded. | 10.1.4 |
+| F5 | 🟠 High — **fixed** (P4-9) | `body-parser` < 2.4.0 (through Express): denial of service with trailing bytes after a compressed body. | `resolutions` pins ≥ 2.4.0 |
 
-## 4. Needs the hosted system (P0-3)
+**Still open at launch review:** F1 (IDs in clear) and F2 (no second factor for tenant users) were planned for phase 4 but are not built. They are decisions on the go-live checklist (doc 36 §6): accept for the first paying tenants with the mitigations above, or build them first.
+
+## 4. Phase 4 surfaces (P4-9 review, 2026-10-24)
+
+| Surface | Check | How | Result |
+|---|---|---|---|
+| Payment webhooks | HMAC over the raw body (`x-paystack-signature`), constant-time compare; unsigned or wrong → 401, stored but never replayed; events applied once (provider event key); amounts re-verified with the provider, never taken from the webhook | T (gateway suite), R | Pass |
+| Billing-only mode | A deactivated-for-billing tenant reaches only `/auth/*`, `/me` and `/billing/*`, and only users with billing permissions sign in | T (automation suite) | Pass |
+| Support access | Reason first; read-only by default; write mode four-eyes; token marked `spt`, bound to the session, the tenant (mismatch → 401 + security alert) and the staff member's console session; exports, downloads, sign-in, passwords and payments refused; IDs, bank and MoMo numbers masked; every request logged; tenant audit names the staff member | T (operations, platform surfaces suites) | Pass |
+| User support and owner recovery | Sensitive (step-up) actions; owner recovery four-eyes by a Super Admin; owner cannot be disabled | T | Pass |
+| Money four-eyes | Refunds above the threshold and cash reseller payouts need a second staff member; the requester can never approve | T | Pass |
+| Data export | Owner only (`data.export`, not Administrators); one at a time; archive private, link 5 min after sign-in; secrets (password, token, hash, sealed columns) and plumbing tables excluded; names in the ZIP sanitised (no path traversal); audited in platform and tenant logs; removed after 7 days | T (legal, platform surfaces suites) | Pass |
+| CSV output | Exports and commission statements quote cells and neutralise leading `= + - @` in free text (formula injection) | R | Pass |
+| Public endpoints | `/public/status` and `/public/legal/:kind` return chosen fields only (F3 fixed); cached; no tenant data | T | Pass |
+| Feature gates and maintenance | Fail open: unreadable flags never block the API (availability over a feature switch); kill switches cover guest signing routes | T | Pass (by design) |
+| Reseller console | Partner users never reach staff routes (403), all partner data scoped by the partner id of the signed-in user | T (partners, platform surfaces suites) | Pass |
+| On-call webhook | URL from configuration only (no SSRF); 10 s timeout; alert text has no secrets | R | Pass |
+| Commission and billing amounts | Computed on the server from invoices and terms; clients never send amounts | R, T | Pass |
+
+## 5. Needs the hosted system (P0-3)
 
 TLS configuration and HSTS through the proxy; database and object storage reachable only on the private network; firewall and SSH policy; secrets in the host's secret store with rotation; log shipping and alerts; a scan of the deployed host (e.g. OWASP ZAP baseline against staging). Repeat this review against staging before general availability.
