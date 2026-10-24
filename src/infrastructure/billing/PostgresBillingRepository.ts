@@ -51,6 +51,8 @@ type SubscriptionRow = {
   current_period_end: string | null;
   period_branch_count: number | null;
   licence_locked_at: Date | null;
+  branch_limit_override: number | null;
+  branch_limit_override_reason: string | null;
   version: number;
 };
 
@@ -174,7 +176,7 @@ const PLAN_COLUMNS = `id, code, name, currency, pricing, branch_price_minor, tri
   trial_branch_limit, features`;
 const SUBSCRIPTION_COLUMNS = `id, tenant_id, plan_id, licence_type, status, branch_count,
   trial_ends_at, current_period_start::text, current_period_end::text, period_branch_count,
-  licence_locked_at, version`;
+  licence_locked_at, branch_limit_override, branch_limit_override_reason, version`;
 const INVOICE_COLUMNS = `id, code, tenant_id, subscription_id, period_start::text,
   period_end::text, lines, subtotal_minor, tax_lines, seller, buyer, tax_minor, total_minor,
   paid_minor, currency, status,
@@ -205,6 +207,10 @@ const toSubscription = (r: SubscriptionRow) =>
     currentPeriodEnd: r.current_period_end,
     periodBranchCount: r.period_branch_count,
     licenceLockedAt: r.licence_locked_at,
+    branchLimitOverride:
+      r.branch_limit_override === null || r.branch_limit_override_reason === null
+        ? null
+        : { branches: r.branch_limit_override, reason: r.branch_limit_override_reason },
     version: r.version,
   });
 
@@ -281,8 +287,9 @@ export class PostgresBillingRepository implements IBillingRepository {
     await this.db.query(
       `insert into subscriptions
          (id, tenant_id, plan_id, licence_type, status, branch_count, trial_ends_at,
-          current_period_start, current_period_end, licence_locked_at, period_branch_count)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          current_period_start, current_period_end, licence_locked_at, period_branch_count,
+          branch_limit_override, branch_limit_override_reason)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        on conflict (id) do update set
          plan_id = excluded.plan_id, licence_type = excluded.licence_type,
          status = excluded.status, branch_count = excluded.branch_count,
@@ -291,6 +298,8 @@ export class PostgresBillingRepository implements IBillingRepository {
          current_period_end = excluded.current_period_end,
          licence_locked_at = excluded.licence_locked_at,
          period_branch_count = excluded.period_branch_count,
+         branch_limit_override = excluded.branch_limit_override,
+         branch_limit_override_reason = excluded.branch_limit_override_reason,
          updated_at = now(), version = subscriptions.version + 1`,
       [
         s.id,
@@ -304,6 +313,8 @@ export class PostgresBillingRepository implements IBillingRepository {
         s.currentPeriodEnd,
         s.licenceLockedAt,
         s.periodBranchCount,
+        s.branchLimitOverride?.branches ?? null,
+        s.branchLimitOverride?.reason ?? null,
       ],
     );
     if (s.status === "trialing")

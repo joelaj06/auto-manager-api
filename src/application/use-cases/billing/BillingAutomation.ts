@@ -25,6 +25,7 @@ import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import { recordStaffAction } from "../console/consoleAudit.js";
 import type { TenantLifecycleService } from "../tenants/TenantLifecycleService.js";
+import type { IAlerts } from "../console/PlatformAlerts.js";
 import type { BillingNotices, NoticeSubject } from "./BillingNotices.js";
 import type { GatewayBilling } from "./GatewayBilling.js";
 import type { ManualBilling } from "./ManualBilling.js";
@@ -97,6 +98,7 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
       gateway: GatewayBilling;
       lifecycle: TenantLifecycleService;
       notices: BillingNotices;
+      alerts: IAlerts;
       /** The client's reseller, told when it goes overdue or is deactivated (docs/25 §5.1). */
       resellers: ResellerAlerts;
       unitOfWork: IPlatformUnitOfWork;
@@ -203,6 +205,7 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
       finishedAt: deps.clock.now(),
     };
     await deps.automation.finishRun(run);
+    await this.alert(run);
     deps.logger.info("Billing automation run", {
       runId: id,
       status,
@@ -212,6 +215,29 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
       heldBack: heldBack.length,
     });
     return run;
+  }
+
+  /** A halted or failed run, or deactivations held back by the gateway guard, reach on-call. */
+  private async alert(run: AutomationRun): Promise<void> {
+    const { alerts } = this.deps;
+    if (run.status !== "completed")
+      await alerts.raise({
+        key: `billing.automation.${run.status}:${run.runOn}`,
+        severity: "critical",
+        source: "billing",
+        title: `Billing automation ${run.status}: ${run.haltReason ?? "see the run"}`,
+        detail: { runId: run.id, wouldDeactivate: run.wouldDeactivate.length },
+        runbook: "docs/33 billing automation",
+      });
+    const guarded = run.heldBack.filter((h) => String(h.reason).startsWith("Gateway guard"));
+    if (guarded.length > 0)
+      await alerts.raise({
+        key: `billing.gateway_guard:${run.runOn}`,
+        severity: "warning",
+        source: "gateway",
+        title: `Deactivations held back by the gateway guard (${guarded.length})`,
+        detail: { runId: run.id, reason: guarded[0]!.reason },
+      });
   }
 
   // --- console ---

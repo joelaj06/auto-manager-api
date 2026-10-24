@@ -9,6 +9,11 @@ export type AccessTokenSubject =
       userId: string;
       sessionId: string;
       permissionVersion: number;
+      /**
+       * Support access (docs/27 §3.8): staff acting in the tenant through this support session
+       * (`sessionId` is then the support session, `userId` the tenant user whose permissions apply).
+       */
+      support?: boolean;
     }>
   | Readonly<{
       audience: "platform";

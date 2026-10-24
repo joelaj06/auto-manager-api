@@ -62,7 +62,8 @@ export class PostgresTenantUserRepository implements ITenantUserRepository {
                           failed_attempts, locked_until, last_login_at, invited_by)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        on conflict (id) do update set
-         phone = excluded.phone, name = excluded.name, status = excluded.status,
+         email = excluded.email, phone = excluded.phone, name = excluded.name,
+         status = excluded.status,
          password_hash = excluded.password_hash, permission_version = excluded.permission_version,
          failed_attempts = excluded.failed_attempts, locked_until = excluded.locked_until,
          last_login_at = excluded.last_login_at, updated_at = now()`,

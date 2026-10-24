@@ -32,6 +32,7 @@ import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { ISecretBox } from "../../ports/ISecretBox.js";
 import type { ITenantContext } from "../../ports/ITenantContext.js";
 import { recordStaffAction } from "../console/consoleAudit.js";
+import type { ApprovalExecutor, ApprovalWorkflow } from "../platform/ApprovalWorkflow.js";
 import type { TenantLifecycleService } from "../tenants/TenantLifecycleService.js";
 import { InvoiceNotFoundError, type ManualBilling } from "./ManualBilling.js";
 import { PaymentMethodNotFoundError, ReceiptNotFoundError } from "./TenantBilling.js";
@@ -44,6 +45,8 @@ export class PaymentNotPossibleError extends ApplicationError {
     super(message);
   }
 }
+
+export const REFUND_ACTION = "billing.refund";
 
 export class PaymentAttemptNotFoundError extends ApplicationError {
   readonly code = "PAYMENT_ATTEMPT_NOT_FOUND";
@@ -117,6 +120,8 @@ export class GatewayBilling {
       returnUrl: string;
       /** Refunds claw back reseller commission. */
       commissions: ICommissionHooks;
+      /** Refunds above the threshold need a second staff member (four-eyes). */
+      refundApproval: Readonly<{ approvals: ApprovalWorkflow; thresholdMinor: number }>;
     }>,
   ) {}
 
@@ -289,26 +294,55 @@ export class GatewayBilling {
 
   // --- refunds (console) ---
 
+  /**
+   * A refund staff ask for: above the threshold it waits for a Super Admin's approval
+   * (four-eyes, docs/27 §8); otherwise it is made at once.
+   */
+  async requestRefund(
+    paymentId: string,
+    request: Readonly<{ amountMinor: number; reason: string }>,
+    actor: PlatformPrincipal,
+  ): Promise<RefundRecord | Readonly<{ status: "awaiting_approval"; approvalId: string }>> {
+    const { deps } = this;
+    if (request.amountMinor <= deps.refundApproval.thresholdMinor)
+      return this.refund(paymentId, request, actor);
+    const payment = await this.refundable(paymentId, request.amountMinor);
+    const approvalId = await deps.refundApproval.approvals.request({
+      action: REFUND_ACTION,
+      payload: { paymentId, amountMinor: request.amountMinor, reason: request.reason.trim() },
+      summary: `Refund ${payment.currency} ${(request.amountMinor / 100).toFixed(2)} of payment ${payment.receiptNumber ?? payment.reference}`,
+      reason: request.reason,
+      targetTenantId: payment.tenantId,
+      requestedBy: actor.userId,
+    });
+    return { status: "awaiting_approval", approvalId };
+  }
+
+  /** A large refund runs once approved, in the name of the staff member who asked. */
+  refundExecutor(): ApprovalExecutor {
+    return {
+      action: REFUND_ACTION,
+      approverSystemRole: "super_admin",
+      execute: async (payload, context) => {
+        const refund = await this.refund(
+          String(payload.paymentId),
+          { amountMinor: Number(payload.amountMinor), reason: String(payload.reason) },
+          { userId: context.requestedBy },
+        );
+        return { refundId: refund.id, status: refund.status };
+      },
+    };
+  }
+
   /** Gives money back: through the gateway for a gateway payment, else as paid back outside. */
   async refund(
     paymentId: string,
     request: Readonly<{ amountMinor: number; reason: string }>,
-    actor: PlatformPrincipal,
+    actor: Pick<PlatformPrincipal, "userId">,
   ): Promise<RefundRecord> {
     const { deps } = this;
-    const payment = await deps.records.payment(paymentId);
-    if (payment === null) throw new ReceiptNotFoundError();
+    const payment = await this.refundable(paymentId, request.amountMinor);
     const reason = request.reason.trim();
-    const already = (await deps.gateway.refunds({ paymentId }))
-      .filter((r) => r.status !== "failed")
-      .reduce((sum, r) => sum + r.amountMinor, 0);
-    if (!Number.isInteger(request.amountMinor) || request.amountMinor <= 0)
-      throw new PaymentNotPossibleError("REFUND_NOT_POSSIBLE", "A refund is above zero");
-    if (request.amountMinor > payment.amountMinor - already)
-      throw new PaymentNotPossibleError(
-        "REFUND_NOT_POSSIBLE",
-        `At most ${payment.amountMinor - already} of this payment is left to refund`,
-      );
     const viaGateway =
       payment.gatewayTransactionId !== null && payment.gatewayTransactionId !== undefined;
     const provider = viaGateway
@@ -350,6 +384,23 @@ export class GatewayBilling {
       });
     });
     return (await deps.gateway.refund(id))!;
+  }
+
+  private async refundable(paymentId: string, amountMinor: number): Promise<PaymentRecord> {
+    const { deps } = this;
+    const payment = await deps.records.payment(paymentId);
+    if (payment === null) throw new ReceiptNotFoundError();
+    const already = (await deps.gateway.refunds({ paymentId }))
+      .filter((r) => r.status !== "failed")
+      .reduce((sum, r) => sum + r.amountMinor, 0);
+    if (!Number.isInteger(amountMinor) || amountMinor <= 0)
+      throw new PaymentNotPossibleError("REFUND_NOT_POSSIBLE", "A refund is above zero");
+    if (amountMinor > payment.amountMinor - already)
+      throw new PaymentNotPossibleError(
+        "REFUND_NOT_POSSIBLE",
+        `At most ${payment.amountMinor - already} of this payment is left to refund`,
+      );
+    return payment;
   }
 
   refunds(paymentId: string): Promise<RefundRecord[]> {

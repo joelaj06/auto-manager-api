@@ -50,6 +50,8 @@ export type SubscriptionView = Readonly<{
   trialEndsAt: Date | null;
   currentPeriod: Readonly<{ start: string; end: string }> | null;
   licenceLocked: boolean;
+  /** Staff allow more active branches than billed (with the reason). */
+  branchLimitOverride: Readonly<{ branches: number; reason: string }> | null;
   /** Standard: billed branches × price; enterprise (priced by hand) or no price yet: null. */
   monthlyPriceMinor: number | null;
   entitlements: Entitlements;
@@ -212,6 +214,20 @@ export class SubscriptionAdministration {
     });
   }
 
+  /** More active branches than billed, granted by staff (docs/27 §3.9); null removes it. */
+  async setBranchLimitOverride(
+    tenantId: string,
+    branches: number | null,
+    reason: string,
+    actor: PlatformPrincipal,
+  ): Promise<SubscriptionView> {
+    return this.change(tenantId, actor, reason, "branch_limit_overridden", (s) => {
+      const before = s.snapshot().branchLimitOverride ?? null;
+      s.setBranchLimitOverride(branches, branches === null ? null : reason);
+      return Promise.resolve({ before, after: s.snapshot().branchLimitOverride ?? null });
+    });
+  }
+
   async setBranchCount(
     tenantId: string,
     branchCount: number,
@@ -260,6 +276,7 @@ export class SubscriptionAdministration {
           ? null
           : { start: s.currentPeriodStart, end: s.currentPeriodEnd },
       licenceLocked: s.licenceLockedAt !== null,
+      branchLimitOverride: s.branchLimitOverride ?? null,
       monthlyPriceMinor:
         monthly !== null
           ? monthly || null

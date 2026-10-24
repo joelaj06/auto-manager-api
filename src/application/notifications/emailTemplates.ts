@@ -65,6 +65,17 @@ export type EmailTemplateData = {
     paragraphs: readonly string[];
     billingUrl: string;
   }>;
+  /** A platform announcement to a tenant owner (docs/27 §3.12). */
+  "platform.announcement": Readonly<{ name: string; title: string; body: string }>;
+  /** An alert for on-call (docs/27 §3.1). */
+  "platform.alert": Readonly<{
+    severity: string;
+    title: string;
+    source: string;
+    occurrences: number;
+    runbook: string | null;
+    url: string;
+  }>;
   /** Reseller news (commissions, payouts), to the partner's contact. */
   "partner.notice": Readonly<{
     name: string;
@@ -240,6 +251,14 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       greeting(data.name),
       ...data.paragraphs,
       `Sign in to the Billing tab to pay or ask for more time: ${data.billingUrl}`,
+    ]),
+  "platform.announcement": (data) =>
+    simple(data.title, [greeting(data.name), ...data.body.split(/\n{2,}/)]),
+  "platform.alert": (data) =>
+    simple(`[${data.severity}] ${data.title}`, [
+      `Source: ${data.source}${data.occurrences > 1 ? ` (seen ${data.occurrences} times)` : ""}.`,
+      ...(data.runbook === null ? [] : [`Runbook: ${data.runbook}`]),
+      `Open it in the ${CONSOLE}: ${data.url}`,
     ]),
   "partner.notice": (data) =>
     simple(data.subject, [

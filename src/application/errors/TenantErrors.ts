@@ -37,6 +37,34 @@ export class TenantBillingOnlyError extends ApplicationError {
   }
 }
 
+/** Support access: read-only mode, or an action support may never take (403). */
+export class SupportAccessError extends ApplicationError {
+  constructor(
+    readonly code: "SUPPORT_READ_ONLY" | "SUPPORT_ACTION_BLOCKED",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/** A maintenance window makes every tenant read-only for now (503). */
+export class MaintenanceReadOnlyError extends ApplicationError {
+  readonly code = "MAINTENANCE_READ_ONLY";
+
+  constructor(title: string, endsAt: Date) {
+    super(`${title}: changes are paused until ${endsAt.toISOString()}. Reading still works.`);
+  }
+}
+
+/** The feature is switched off for this business (403). */
+export class FeatureDisabledError extends ApplicationError {
+  readonly code = "FEATURE_DISABLED";
+
+  constructor(readonly flag: string) {
+    super("This feature is not available for your business at the moment.");
+  }
+}
+
 /** The tenant is read-only: reads work, changes are refused (403). */
 export class TenantReadOnlyError extends ApplicationError {
   readonly code = "TENANT_READ_ONLY";

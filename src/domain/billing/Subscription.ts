@@ -33,6 +33,8 @@ export type SubscriptionProps = Readonly<{
   /** Branches charged for the current paid period (its invoice plus prorations). */
   periodBranchCount: number | null;
   licenceLockedAt: Date | null;
+  /** Staff allow this many active branches whatever is billed (a pilot, goodwill). */
+  branchLimitOverride?: Readonly<{ branches: number; reason: string }> | null;
   version: number;
 }>;
 
@@ -162,6 +164,19 @@ export class Subscription {
     };
   }
 
+  /** An entitlement override (docs/27 §3.9): more active branches than billed; null removes it. */
+  setBranchLimitOverride(branches: number | null, reason: string | null): void {
+    if (branches === null) {
+      this.props = { ...this.props, branchLimitOverride: null };
+      return;
+    }
+    if (!Number.isInteger(branches) || branches < 1 || branches > 1_000)
+      throw new SubscriptionRuleError("The branch limit is 1 to 1000");
+    if (reason === null || reason.trim().length < 5)
+      throw new SubscriptionRuleError("Give a reason for the override");
+    this.props = { ...this.props, branchLimitOverride: { branches, reason: reason.trim() } };
+  }
+
   /** The invoice is overdue (docs/25 §5.1). False when nothing changed. */
   markPastDue(): boolean {
     if (this.props.status !== "trialing" && this.props.status !== "active") return false;
@@ -233,7 +248,10 @@ export function resolveEntitlements(
     status: s.status,
     licenceType: s.licenceType,
     planCode: plan.code,
-    branchesMax: trialing ? Math.max(plan.trialBranchLimit, s.branchCount) : s.branchCount,
+    branchesMax: Math.max(
+      trialing ? Math.max(plan.trialBranchLimit, s.branchCount) : s.branchCount,
+      s.branchLimitOverride?.branches ?? 0,
+    ),
     canBuyBranches: s.status === "active" || s.status === "past_due",
     trialEndsAt: s.trialEndsAt,
     trialEnded: trialing && s.trialEndsAt !== null && s.trialEndsAt <= now,

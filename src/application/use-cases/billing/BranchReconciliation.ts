@@ -16,6 +16,7 @@ import type { ITenantContext } from "../../ports/ITenantContext.js";
 import type { ITenantRoster } from "../../ports/ITenantRoster.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import { recordStaffAction } from "../console/consoleAudit.js";
+import type { IAlerts } from "../console/PlatformAlerts.js";
 import type { BranchEntitlements } from "./BranchEntitlements.js";
 
 const PAGE = 200;
@@ -42,6 +43,7 @@ export class BranchReconciliation implements IJobHandler<"billing.branch_reconci
       audit: IPlatformAuditTrail;
       requestContext: IRequestContext;
       logger: ILogger;
+      alerts: IAlerts;
     }>,
   ) {}
 
@@ -60,6 +62,14 @@ export class BranchReconciliation implements IJobHandler<"billing.branch_reconci
       after = tenants.at(-1)!.id;
     }
     this.deps.logger.info("Branch counts reconciled", tally);
+    if (tally.failed > 0 || tally.over_limit > 0)
+      await this.deps.alerts.raise({
+        key: `billing.branch_reconcile:${new Date().toISOString().slice(0, 10)}`,
+        severity: tally.failed > 0 ? "warning" : "info",
+        source: "billing",
+        title: `Branch reconcile: ${tally.over_limit} over the limit, ${tally.failed} failed`,
+        detail: tally,
+      });
   }
 
   /** The console's one-click fix for one tenant. */

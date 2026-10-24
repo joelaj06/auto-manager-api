@@ -5,7 +5,7 @@ import type { IRequestContext } from "../../ports/IRequestContext.js";
 /** Records a staff action in the platform audit log with the current request's id and IP. */
 export async function recordStaffAction(
   deps: Readonly<{ audit: IPlatformAuditTrail; requestContext: IRequestContext }>,
-  actor: PlatformPrincipal,
+  actor: Pick<PlatformPrincipal, "userId">,
   entry: Omit<PlatformAuditEntry, "actorType" | "actorId" | "requestId" | "ip">,
 ): Promise<void> {
   const request = deps.requestContext.current();

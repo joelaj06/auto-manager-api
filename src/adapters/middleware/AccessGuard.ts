@@ -2,16 +2,26 @@ import type { Request, Response } from "express";
 import type { AuthorizationPolicy } from "../../application/authorization/AuthorizationPolicy.js";
 import { PLATFORM_PERMISSION_CATALOG } from "../../application/authorization/platformPermissionCatalog.js";
 import type { PlatformPrincipal } from "../../application/authorization/PlatformPrincipal.js";
-import type { Principal } from "../../application/authorization/Principal.js";
+import type { Principal, SupportActor } from "../../application/authorization/Principal.js";
 import {
   AuthenticationRequiredError,
   PermissionDeniedError,
 } from "../../application/errors/AuthErrors.js";
 import { StepUpRequiredError } from "../../application/errors/StaffErrors.js";
 import {
+  FeatureDisabledError,
+  MaintenanceReadOnlyError,
+  SupportAccessError,
   TenantBillingOnlyError,
   TenantReadOnlyError,
 } from "../../application/errors/TenantErrors.js";
+import type {
+  IFeatureGate,
+  IMaintenanceState,
+  IUsageMeter,
+} from "../../application/ports/IOperationsGates.js";
+import type { IRequestContext } from "../../application/ports/IRequestContext.js";
+import type { ISupportAccess } from "../../application/ports/ISupportAccess.js";
 import type { IClock } from "../../application/ports/IClock.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { TenantSummary } from "../../application/ports/ITenantDirectory.js";
@@ -20,6 +30,7 @@ import type { ResolveTenant } from "../../application/use-cases/auth/ResolveTena
 import type { StaffSessions } from "../../application/use-cases/platform/StaffSessions.js";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import type { RouteAccess } from "../routes/RouteAccess.js";
+import { maskSensitive, supportVerdict } from "./supportMode.js";
 
 export const TENANT_HEADER = "x-tenant";
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
@@ -53,6 +64,12 @@ export class AccessGuard {
       tenantContext: ITenantContext;
       staffSessions: StaffSessions;
       clock: IClock;
+      /** Console operations (P4-7): support-access trail, maintenance, flags, usage. */
+      requestContext?: IRequestContext;
+      support?: ISupportAccess;
+      maintenance?: IMaintenanceState;
+      features?: IFeatureGate;
+      usage?: IUsageMeter;
     }>,
   ) {}
 
@@ -64,11 +81,17 @@ export class AccessGuard {
   ): Promise<void> {
     const locals = res.locals as Locals;
     switch (access.kind) {
-      case "public":
+      case "public": {
+        // A kill switch also closes public routes (e.g. guest signing links).
+        const flag = await this.deps.features?.disabledBy(null, pathOf(req));
+        if (flag !== undefined && flag !== null) throw new FeatureDisabledError(flag);
         return handler();
+      }
 
       case "tenant": {
         const tenant = await this.deps.resolveTenant.execute(tenantSlugOf(req));
+        const flag = await this.deps.features?.disabledBy(tenant.id, pathOf(req));
+        if (flag !== undefined && flag !== null) throw new FeatureDisabledError(flag);
         locals.tenant = tenant;
         return this.deps.tenantContext.runAs(TenantId.from(tenant.id), handler);
       }
@@ -80,10 +103,22 @@ export class AccessGuard {
           accessToken,
           tenantSlug: tenantSlugOf(req),
         });
+        const path = pathOf(req);
+        if (principal.support !== null) this.trail(req, res, principal.support);
         if (tenant.billingOnly === true) this.assertBillingOnly(req, principal);
         if (access.permission !== null) {
           this.deps.authorization.require(principal, access.permission);
         }
+        if (principal.support !== null) assertSupportAllows(req.method, path, principal.support);
+        const flag = await this.deps.features?.disabledBy(tenant.id, path);
+        if (flag !== undefined && flag !== null) throw new FeatureDisabledError(flag);
+        // Maintenance: every tenant reads only, sign-in and paying aside (docs/27 §3.12).
+        if (!SAFE_METHODS.has(req.method) && access.allowWhenReadOnly !== true) {
+          const window = await this.deps.maintenance?.readOnlyNow();
+          if (window !== undefined && window !== null && !BILLING_PATHS.test(path))
+            throw new MaintenanceReadOnlyError(window.title, window.endsAt);
+        }
+        this.deps.usage?.count(tenant.id);
         // Read-only tenants: reads only (docs/27 §3.3) — and paying; sign-in routes are
         // `tenant` routes.
         if (
@@ -96,7 +131,17 @@ export class AccessGuard {
         }
         locals.tenant = tenant;
         locals.principal = principal;
-        return this.deps.tenantContext.runAs(TenantId.from(tenant.id), handler);
+        const run = () => this.deps.tenantContext.runAs(TenantId.from(tenant.id), handler);
+        if (principal.support === null) return run();
+        // Support access: staff named in the tenant's audit log, sensitive values masked.
+        const support = principal.support;
+        const json = res.json.bind(res);
+        res.json = (body: unknown) => json(maskSensitive(body));
+        const requests = this.deps.requestContext;
+        const context = requests?.current();
+        return requests === undefined || context === undefined
+          ? run()
+          : requests.run({ ...context, support }, run);
       }
 
       case "platform": {
@@ -131,6 +176,21 @@ export class AccessGuard {
     }
   }
 
+  /** Every request of a support session goes to its trail once answered (blocked ones too). */
+  private trail(req: Request, res: Response, support: SupportActor): void {
+    const recorder = this.deps.support;
+    if (recorder === undefined) return;
+    const requestId = this.deps.requestContext?.current()?.requestId ?? null;
+    res.on("finish", () => {
+      void recorder.record(support.sessionId, {
+        method: req.method,
+        path: pathOf(req),
+        statusCode: res.statusCode,
+        requestId,
+      });
+    });
+  }
+
   private assertBillingOnly(req: Request, principal: Principal): void {
     const path = pathOf(req);
     if (SESSION_PATHS.test(path)) return;
@@ -163,6 +223,17 @@ export function tenantOf(res: Response): TenantSummary {
 }
 
 const pathOf = (req: Request): string => req.originalUrl.split("?")[0] ?? "";
+
+function assertSupportAllows(method: string, path: string, support: SupportActor): void {
+  const verdict = supportVerdict(method, path, support.mode);
+  if (verdict === "read_only")
+    throw new SupportAccessError("SUPPORT_READ_ONLY", "Support access is read-only");
+  if (verdict === "blocked")
+    throw new SupportAccessError(
+      "SUPPORT_ACTION_BLOCKED",
+      "Support access cannot sign in or out, change passwords, pay, download or export",
+    );
+}
 
 function tenantSlugOf(req: Request): string | null {
   const value = req.get(TENANT_HEADER);

@@ -11,6 +11,7 @@ import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import { recordStaffAction } from "../console/consoleAudit.js";
+import type { IAlerts } from "../console/PlatformAlerts.js";
 import type { GatewayBilling } from "./GatewayBilling.js";
 
 const DAY_MS = 86_400_000;
@@ -35,6 +36,7 @@ export class GatewayReconciliation implements IJobHandler<"billing.reconcile"> {
       requestContext: IRequestContext;
       clock: IClock;
       logger: ILogger;
+      alerts: IAlerts;
     }>,
   ) {}
 
@@ -73,6 +75,13 @@ export class GatewayReconciliation implements IJobHandler<"billing.reconcile"> {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       deps.logger.error("Gateway reconciliation failed", { day, error: message });
+      await deps.alerts.raise({
+        key: `gateway.reconciliation_failed:${day}`,
+        severity: "warning",
+        source: "gateway",
+        title: `Could not reconcile gateway payments of ${day}: the provider did not answer`,
+        detail: { day, error: message.slice(0, 300) },
+      });
       return deps.unitOfWork.run(() =>
         deps.gateway.saveReconciliation({
           provider,
@@ -120,13 +129,23 @@ export class GatewayReconciliation implements IJobHandler<"billing.reconcile"> {
       missingHere.length + missingThere.length + amountMismatches.length === 0
         ? "matched"
         : "mismatched";
-    if (status === "mismatched")
-      deps.logger.error("Gateway reconciliation mismatch", {
+    if (status === "mismatched") {
+      const detail = {
         day,
         missingHere: missingHere.length,
         missingThere: missingThere.length,
         amountMismatches: amountMismatches.length,
+      };
+      deps.logger.error("Gateway reconciliation mismatch", detail);
+      await deps.alerts.raise({
+        key: `gateway.reconciliation:${day}`,
+        severity: "critical",
+        source: "gateway",
+        title: `Gateway payments of ${day} do not match the provider's`,
+        detail,
+        runbook: "docs/33 reconciliation",
       });
+    }
     return deps.unitOfWork.run(() =>
       deps.gateway.saveReconciliation({
         provider,

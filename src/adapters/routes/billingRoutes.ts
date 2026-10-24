@@ -445,9 +445,14 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
         params: tenantParams,
         body: z.object({ amountMinor: minor.min(1), reason }),
       },
-      responses: { 201: { description: "Refund" } },
+      responses: {
+        201: { description: "Refund" },
+        202: { description: "Waiting for a second staff member's approval" },
+      },
       handler: async ({ params, body }, _req, res) => {
-        res.status(201).json(envelope(await gateway.refund(params.id, body, staffOf(res))));
+        const result = await gateway.requestRefund(params.id, body, staffOf(res));
+        // Above the threshold the refund waits for a second staff member (four-eyes).
+        res.status("approvalId" in result ? 202 : 201).json(envelope(result));
       },
     }),
     defineRoute({

@@ -1,15 +1,41 @@
 import type { AuditEntry } from "../../../application/dto/AuditEntry.js";
 import type { IAuditTrail } from "../../../application/ports/IAuditTrail.js";
+import type { IRequestContext } from "../../../application/ports/IRequestContext.js";
 import type { PostgresTransactionContext } from "../postgres/PostgresTransactionContext.js";
 
 const ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
-/** Writes to the tenant's append-only audit_logs table (enforced by grants and a trigger). */
+/**
+ * Writes to the tenant's append-only audit_logs table (enforced by grants and a trigger). During
+ * support access the actor is the staff member, never the tenant user whose permissions apply,
+ * so the tenant's log cannot mistake it for that user's own action (docs/27 §3.8).
+ */
 export class PostgresAuditTrail implements IAuditTrail {
-  constructor(private readonly transactions: PostgresTransactionContext) {}
+  constructor(
+    private readonly transactions: PostgresTransactionContext,
+    private readonly requestContext?: IRequestContext,
+  ) {}
 
-  async record(entry: AuditEntry): Promise<string> {
-    if (!ACTION.test(entry.action)) throw new Error(`Invalid audit action: ${entry.action}`);
+  async record(original: AuditEntry): Promise<string> {
+    if (!ACTION.test(original.action)) throw new Error(`Invalid audit action: ${original.action}`);
+    const support = this.requestContext?.current()?.support;
+    const entry: AuditEntry =
+      support === undefined
+        ? original
+        : {
+            ...original,
+            actorType: "platform_staff",
+            actorId: support.staffId,
+            metadata: {
+              ...original.metadata,
+              support: {
+                sessionId: support.sessionId,
+                staff: `platform:${support.staffName}`,
+                mode: support.mode,
+                asUser: original.actorId ?? null,
+              },
+            },
+          };
 
     const { rows } = await this.transactions.current().query<{ id: string }>(
       `insert into audit_logs

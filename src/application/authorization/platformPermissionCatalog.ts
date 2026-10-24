@@ -81,8 +81,13 @@ const definitions = {
 
   "platform.users.search": { description: "Search tenant users" },
   "platform.users.reset_access": {
-    description: "Reset a tenant user's password or MFA, sign them out",
+    description: "Reset a tenant user's password, unlock, sign out, disable or enable them",
     sensitive: true,
+  },
+  "platform.users.recover_owner": {
+    description: "Give a tenant owner who lost access a new sign-in email (identity checked)",
+    sensitive: true,
+    fourEyes: true,
   },
 
   "platform.support.access_tenant": { description: "Read-only support access to a tenant" },
@@ -92,9 +97,20 @@ const definitions = {
     fourEyes: true,
   },
   "platform.support.announcements.manage": { description: "Manage announcements" },
+  "platform.support.maintenance.manage": {
+    description: "Schedule maintenance windows (optionally read-only for every tenant)",
+    sensitive: true,
+  },
+  "platform.support.sessions.view": {
+    description: "View support-access sessions and their request trail",
+  },
 
   "platform.flags.manage": {
     description: "Manage feature flags and kill switches",
+    sensitive: true,
+  },
+  "platform.entitlements.override": {
+    description: "Override a tenant's limits (active branches beyond what is billed)",
     sensitive: true,
   },
   "platform.catalogue.view": { description: "View the permission catalogue and role templates" },
@@ -296,6 +312,13 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.billing.view",
       "platform.billing.extensions.grant",
       "platform.users.search",
+      "platform.users.recover_owner",
+      "platform.entitlements.override",
+      "platform.support.access_tenant",
+      "platform.support.access_tenant_write",
+      "platform.support.sessions.view",
+      "platform.support.maintenance.manage",
+      "platform.alerts.manage",
       "platform.partners.view",
       "platform.reference.manage",
       "platform.approvals.approve",
@@ -314,6 +337,9 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.users.reset_access",
       "platform.support.access_tenant",
       "platform.support.announcements.manage",
+      "platform.support.sessions.view",
+      "platform.health.view",
+      "platform.alerts.manage",
       "platform.mobile.view",
       "platform.applications.view",
     ],
@@ -355,6 +381,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.health.view",
       "platform.alerts.manage",
       "platform.flags.manage",
+      "platform.support.maintenance.manage",
       "platform.data.backups.view",
       "platform.data.migrations.view",
       "platform.data.migrations.run",
@@ -370,6 +397,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.dashboard.view",
       "platform.security.audit.view",
       "platform.security.access_review.view",
+      "platform.support.sessions.view",
       "platform.staff.view",
       "platform.analytics.view",
     ],

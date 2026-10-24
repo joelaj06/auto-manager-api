@@ -171,6 +171,26 @@ const envSchema = z
     /** Where the gateway sends the payer back after checkout (the portal's Billing page). */
     BILLING_RETURN_URL: z.url().optional(),
 
+    // --- Console operations (docs/27 §2, §3.1, §8) ---
+    /** On-call: alerts at or above ONCALL_MIN_SEVERITY are emailed and posted to the webhook. */
+    ONCALL_EMAILS: z
+      .string()
+      .default("")
+      .transform((v) =>
+        v
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0),
+      )
+      .pipe(z.array(z.email())),
+    /** Slack-compatible incoming webhook (`{ "text": … }`); Telegram/WhatsApp via a relay. */
+    ONCALL_WEBHOOK_URL: z.url().optional(),
+    ONCALL_MIN_SEVERITY: z.enum(["info", "warning", "critical"]).default("warning"),
+    /** Refunds above this (minor units) need a second staff member's approval. */
+    REFUND_APPROVAL_THRESHOLD_MINOR: z.coerce.number().int().min(0).default(100_000),
+    /** Announcement emails to more tenants than this need a Super Admin's approval. */
+    BULK_MESSAGE_APPROVAL_TENANTS: z.coerce.number().int().min(0).default(50),
+
     // --- Object storage (S3-compatible; files service) ---
     // Development defaults match compose.yaml (RustFS). Production sets everything explicitly;
     // without STORAGE_ENDPOINT it talks to AWS S3 in STORAGE_REGION.
@@ -461,6 +481,15 @@ export type AppConfig = Readonly<{
   public: PublicConfig;
   push: PushConfig;
   billing: BillingGatewayConfig;
+  operations: OperationsConfig;
+}>;
+
+export type OperationsConfig = Readonly<{
+  onCallEmails: readonly string[];
+  onCallWebhookUrl: string | null;
+  onCallMinSeverity: "info" | "warning" | "critical";
+  refundApprovalThresholdMinor: number;
+  bulkMessageApprovalTenants: number;
 }>;
 
 export type BillingGatewayConfig = Readonly<{
@@ -594,6 +623,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       paystackBaseUrl: e.PAYSTACK_BASE_URL,
       fakeWebhookSecret: e.BILLING_FAKE_WEBHOOK_SECRET,
       returnUrl: e.BILLING_RETURN_URL ?? `${e.WEB_APP_URL}/billing/return`,
+    }),
+    operations: Object.freeze({
+      onCallEmails: Object.freeze([...e.ONCALL_EMAILS]),
+      onCallWebhookUrl: e.ONCALL_WEBHOOK_URL ?? null,
+      onCallMinSeverity: e.ONCALL_MIN_SEVERITY,
+      refundApprovalThresholdMinor: e.REFUND_APPROVAL_THRESHOLD_MINOR,
+      bulkMessageApprovalTenants: e.BULK_MESSAGE_APPROVAL_TENANTS,
     }),
     push: Object.freeze({
       provider: e.PUSH_PROVIDER,

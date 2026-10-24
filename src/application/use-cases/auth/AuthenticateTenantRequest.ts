@@ -1,5 +1,5 @@
 import { assertTenantUsable } from "../../authorization/TenantAccessRules.js";
-import { Principal } from "../../authorization/Principal.js";
+import { Principal, type SupportActor } from "../../authorization/Principal.js";
 import { InvalidAccessTokenError } from "../../errors/AuthErrors.js";
 import {
   BranchDeactivatedError,
@@ -8,6 +8,7 @@ import {
 } from "../../errors/TenantErrors.js";
 import type { IAccessTokenService } from "../../ports/IAccessTokenService.js";
 import type { IPermissionResolver } from "../../ports/IPermissionResolver.js";
+import type { ISupportAccess } from "../../ports/ISupportAccess.js";
 import type { ITenantDirectory, TenantSummary } from "../../ports/ITenantDirectory.js";
 
 export type AuthenticateTenantRequestQuery = Readonly<{
@@ -33,6 +34,7 @@ export class AuthenticateTenantRequest {
       accessTokens: IAccessTokenService;
       tenants: ITenantDirectory;
       permissions: IPermissionResolver;
+      support?: ISupportAccess;
     }>,
   ) {}
 
@@ -51,6 +53,13 @@ export class AuthenticateTenantRequest {
     }
     assertTenantUsable(tenant, { billingOnly: true });
 
+    // A support token is only good while its session is live (docs/27 §3.8).
+    let support: SupportActor | null = null;
+    if (subject.support === true) {
+      support = (await deps.support?.live(subject.sessionId, tenant.id)) ?? null;
+      if (support === null) throw new InvalidAccessTokenError("support_session_over");
+    }
+
     const version = await deps.permissions.currentVersion(tenant.id, subject.userId);
     if (version === null) throw new InvalidAccessTokenError("user_unavailable");
     if (version !== subject.permissionVersion)
@@ -63,7 +72,7 @@ export class AuthenticateTenantRequest {
 
     return {
       tenant,
-      principal: new Principal(subject.userId, tenant.id, subject.sessionId, grants),
+      principal: new Principal(subject.userId, tenant.id, subject.sessionId, grants, support),
     };
   }
 }

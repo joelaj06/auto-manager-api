@@ -432,6 +432,21 @@ claw back. Finance works from `partners/commissions/payable`, records payouts
 Resellers: `partner/commissions[/balance|/statements/:period]`, `partner/payouts` and
 `…/:id/acknowledge`.
 
+## Console operations
+
+**Support access**: `POST /api/platform/v1/tenants/:id/support-sessions` (`reason`, `ticket`,
+`mode`: read, or write after a second approver), then `POST support-sessions/:id/token` for a
+tenant token (owner's permissions; writes, exports and payments limited; every request logged;
+tenants see `GET /api/v1/settings/support-access`). **User support**: `users/search`,
+`tenants/:id/users`, `…/users/:userId/{reset-password|unlock|force-logout|disable|enable}`,
+`tenants/:id/owner-recovery` (Super Admin approves). **Communications**: `announcements`
+(banner by segment, optional owner email; tenants read `GET /api/v1/announcements`) and
+`maintenance-windows` (optionally read-only for everyone). **Flags**: `flags`,
+`tenants/:id/flags/:key`, `flags/:key/resolve`; tenants read `GET /api/v1/features`; branch-limit
+overrides at `tenants/:id/entitlements/branches`. **Alerts**: `alerts` (acknowledge, resolve);
+on-call by `ONCALL_EMAILS` / `ONCALL_WEBHOOK_URL`. **Usage**: `tenants/:id/usage` (nightly
+`usage.daily`).
+
 ## Mobile app connect
 
 `GET /api/v1/mobile/connect-link` returns the business's signed connect link and QR code (SVG)

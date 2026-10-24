@@ -211,7 +211,11 @@ export class BranchEntitlements {
       if (status === "trialing" ? target !== before : status !== "canceled" && target < before) {
         await this.setCount(subscription, target, "branch_count_reconciled", actor, false);
         outcome = "fixed";
-      } else if (status !== "trialing" && status !== "canceled" && activeBranches > before) {
+      } else if (
+        status !== "trialing" &&
+        status !== "canceled" &&
+        activeBranches > resolveEntitlements(subscription, plan, now).branchesMax
+      ) {
         outcome = "over_limit";
       }
       await deps.reconciliations.setOverLimit(tenantId, outcome === "over_limit", now);

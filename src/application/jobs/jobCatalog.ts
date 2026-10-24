@@ -51,6 +51,12 @@ export type JobPayloads = {
   "documents.seal": Readonly<{ tenantId: string; documentId: string }>;
   /** Compare yesterday's gateway payments with the provider's transactions. */
   "billing.reconcile": Readonly<Record<string, never>>;
+  /** Email a published announcement to the owners of its tenants. */
+  "announcements.email": Readonly<{ announcementId: string }>;
+  /** Email and post a new or escalated alert to on-call. */
+  "alerts.notify": Readonly<{ alertId: string }>;
+  /** Collect yesterday's usage of every tenant (`usage_daily`). */
+  "usage.daily": Readonly<Record<string, never>>;
   /** Compare each tenant's billed branch count with its active branches. */
   "billing.branch_reconcile": Readonly<Record<string, never>>;
   /** The daily billing automation: invoices, reminders, charges, past due, deactivation. */
@@ -185,6 +191,35 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryBackoff: true,
     expireInSeconds: 1_800,
     cron: "17 5 * * *",
+  },
+  "announcements.email": {
+    description: "Email a published announcement to the owners of its tenants",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 3,
+    retryDelaySeconds: 300,
+    retryBackoff: true,
+    expireInSeconds: 3_600,
+  },
+  "alerts.notify": {
+    description: "Email and post a new or escalated platform alert to on-call",
+    tenantScoped: false,
+    policy: "standard",
+    retryLimit: 5,
+    retryDelaySeconds: 60,
+    retryBackoff: true,
+    expireInSeconds: 300,
+  },
+  "usage.daily": {
+    description: "Collect each tenant's usage of the day before (usage_daily)",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 2,
+    retryDelaySeconds: 900,
+    retryBackoff: false,
+    expireInSeconds: 3_600,
+    // 01:13 Accra: the day before is complete.
+    cron: "13 1 * * *",
   },
   "billing.branch_reconcile": {
     description: "Compare billed branch counts with the tenants' active branches and fix drift",

@@ -20,13 +20,25 @@ export type PermissionGrants = Readonly<{
   allBranchesInactive?: boolean;
 }>;
 
-/** The authenticated tenant user behind the current request. */
+/** Platform staff acting in the tenant through support access (docs/27 §3.8). */
+export type SupportActor = Readonly<{
+  sessionId: string;
+  staffId: string;
+  staffName: string;
+  mode: "read" | "write";
+}>;
+
+/**
+ * The authenticated tenant user behind the current request — or, with `support`, platform staff
+ * acting with that user's permissions through a support session.
+ */
 export class Principal {
   constructor(
     readonly userId: string,
     readonly tenantId: string,
     readonly sessionId: string,
     private readonly grants: PermissionGrants,
+    readonly support: SupportActor | null = null,
   ) {}
 
   get branchIds(): readonly string[] {

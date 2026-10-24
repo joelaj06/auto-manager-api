@@ -33,7 +33,8 @@ type Audience = AccessTokenSubject["audience"];
  * claim. Platform-console tokens use a different secret and audience and are never accepted on
  * tenant routes (docs/16, docs/27).
  *
- * Claims: sub (user), tid (tenant), sid (session), ver (permission version), iss, aud, iat, exp.
+ * Claims: sub (user), tid (tenant), sid (session), ver (permission version), iss, aud, iat, exp;
+ * spt (true: a support-access token, sid is then the support session).
  */
 export class JwtAccessTokenService implements IAccessTokenService {
   private readonly tenantKeys = new Map<string, Uint8Array>();
@@ -54,7 +55,10 @@ export class JwtAccessTokenService implements IAccessTokenService {
         : this.settings.ttlSeconds;
     const expSeconds = nowSeconds + ttl;
     const claims: JWTPayload = { sid: subject.sessionId, ver: subject.permissionVersion };
-    if (subject.audience === "tenant") claims.tid = subject.tenantId;
+    if (subject.audience === "tenant") {
+      claims.tid = subject.tenantId;
+      if (subject.support === true) claims.spt = true;
+    }
 
     const token = await new SignJWT(claims)
       .setProtectedHeader({ alg: ALGORITHM, typ: TOKEN_TYPE })
@@ -95,7 +99,7 @@ export class JwtAccessTokenService implements IAccessTokenService {
       throw new InvalidAccessTokenError(reasonOf(error));
     }
 
-    const { sub, sid, ver, tid } = payload;
+    const { sub, sid, ver, tid, spt } = payload;
     if (typeof sub !== "string" || typeof sid !== "string" || !Number.isSafeInteger(ver)) {
       throw new InvalidAccessTokenError("malformed_claims");
     }
@@ -104,10 +108,12 @@ export class JwtAccessTokenService implements IAccessTokenService {
       return { audience: "platform", ...common } as Extract<AccessTokenSubject, { audience: A }>;
     }
     if (typeof tid !== "string") throw new InvalidAccessTokenError("malformed_claims");
-    return { audience: "tenant", tenantId: tid, ...common } as Extract<
-      AccessTokenSubject,
-      { audience: A }
-    >;
+    return {
+      audience: "tenant",
+      tenantId: tid,
+      ...common,
+      ...(spt === true ? { support: true } : {}),
+    } as Extract<AccessTokenSubject, { audience: A }>;
   }
 
   private keyFor(subject: AccessTokenSubject): Uint8Array {

@@ -24,6 +24,13 @@ export class OwnerProtectedError extends DomainError {
   }
 }
 
+export class UserEmailError extends DomainError {
+  readonly code = "USER_EMAIL";
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 export class UserDisabledError extends DomainError {
   readonly code = "USER_DISABLED";
   constructor() {
@@ -149,6 +156,29 @@ export class TenantUser {
     this.props = {
       ...this.props,
       status: this.props.passwordHash === null ? "invited" : "active",
+      failedAttempts: 0,
+      lockedUntil: null,
+    };
+  }
+
+  /** Support: lifts a sign-in lockout at once. */
+  unlock(): void {
+    this.props = { ...this.props, failedAttempts: 0, lockedUntil: null };
+  }
+
+  /**
+   * Owner recovery (docs/27 §3.7): a new sign-in email, checked by staff. Everything signed in
+   * with the old address stops working.
+   */
+  changeEmail(email: string): void {
+    const normalised = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalised))
+      throw new UserEmailError("Enter a valid email address");
+    if (normalised === this.props.email) throw new UserEmailError("This is already the email");
+    this.props = {
+      ...this.props,
+      email: normalised,
+      permissionVersion: this.props.permissionVersion + 1,
       failedAttempts: 0,
       lockedUntil: null,
     };

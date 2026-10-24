@@ -286,6 +286,38 @@ import type { IBranchContents } from "../../application/ports/IBranchContents.js
 import type { IBranchReconciliationRepository } from "../../domain/repositories/IBranchReconciliationRepository.js";
 import { PostgresBranchReconciliationRepository } from "../../infrastructure/billing/PostgresBranchReconciliationRepository.js";
 import { PostgresBranchContents } from "../../infrastructure/tenants/PostgresBranchContents.js";
+import { consoleOperationsRoutes } from "../../adapters/routes/consoleOperationsRoutes.js";
+import type { IOnCallWebhook } from "../../application/ports/IOnCallWebhook.js";
+import type { ITenantUsageCollector } from "../../application/ports/ITenantUsageCollector.js";
+import {
+  AnnouncementMailer,
+  Communications,
+  MaintenanceState,
+} from "../../application/use-cases/console/Communications.js";
+import { FeatureFlags } from "../../application/use-cases/console/FeatureFlags.js";
+import {
+  AlertNotifier,
+  PlatformAlerts,
+  type IAlerts,
+} from "../../application/use-cases/console/PlatformAlerts.js";
+import { SupportAccess } from "../../application/use-cases/console/SupportAccess.js";
+import {
+  TenantUsageHistory,
+  UsageMeter,
+} from "../../application/use-cases/console/TenantUsageHistory.js";
+import { TenantUserSupport } from "../../application/use-cases/console/TenantUserSupport.js";
+import type { ICommunicationsRepository } from "../../domain/repositories/ICommunicationsRepository.js";
+import type { IFeatureFlagRepository } from "../../domain/repositories/IFeatureFlagRepository.js";
+import type { IPlatformAlertRepository } from "../../domain/repositories/IPlatformAlertRepository.js";
+import type { ISupportSessionRepository } from "../../domain/repositories/ISupportSessionRepository.js";
+import type { IUsageRepository } from "../../domain/repositories/IUsageRepository.js";
+import { HttpOnCallWebhook } from "../../infrastructure/console/HttpOnCallWebhook.js";
+import { PostgresCommunicationsRepository } from "../../infrastructure/console/PostgresCommunicationsRepository.js";
+import { PostgresFeatureFlagRepository } from "../../infrastructure/console/PostgresFeatureFlagRepository.js";
+import { PostgresPlatformAlertRepository } from "../../infrastructure/console/PostgresPlatformAlertRepository.js";
+import { PostgresSupportSessionRepository } from "../../infrastructure/console/PostgresSupportSessionRepository.js";
+import { PostgresTenantUsageCollector } from "../../infrastructure/console/PostgresTenantUsageCollector.js";
+import { PostgresUsageRepository } from "../../infrastructure/console/PostgresUsageRepository.js";
 import { partnerCommissionRoutes } from "../../adapters/routes/partnerCommissionRoutes.js";
 import type { ICommissionHooks } from "../../application/ports/ICommissionHooks.js";
 import { CommissionEngine } from "../../application/use-cases/partners/CommissionEngine.js";
@@ -741,8 +773,9 @@ export function createContainer(
   container
     .bind<IAuditTrail>(TYPES.AuditTrail)
     .toResolvedValue(
-      (tx: PostgresTransactionContext) => new PostgresAuditTrail(tx),
-      [TYPES.PostgresTransactionContext],
+      (tx: PostgresTransactionContext, requestContext: IRequestContext) =>
+        new PostgresAuditTrail(tx, requestContext),
+      [TYPES.PostgresTransactionContext, TYPES.RequestContext],
     );
 
   container.bind<IOutbox>(TYPES.Outbox).toResolvedValue(
@@ -861,6 +894,9 @@ export function createContainer(
       reconciliation: GatewayReconciliation,
       automation: BillingAutomation,
       branchReconciliation: BranchReconciliation,
+      alertNotifier: AlertNotifier,
+      announcementMailer: AnnouncementMailer,
+      usageHistory: TenantUsageHistory,
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -882,6 +918,9 @@ export function createContainer(
       reconciliation,
       automation,
       branchReconciliation,
+      alertNotifier,
+      announcementMailer,
+      usageHistory,
     ],
     [
       TYPES.UnitOfWork,
@@ -905,6 +944,9 @@ export function createContainer(
       TYPES.GatewayReconciliation,
       TYPES.BillingAutomation,
       TYPES.BranchReconciliation,
+      TYPES.AlertNotifier,
+      TYPES.AnnouncementMailer,
+      TYPES.TenantUsageHistory,
     ],
   );
 
@@ -1115,16 +1157,26 @@ export function createContainer(
       ],
     );
 
-  container
-    .bind<AuthenticateTenantRequest>(TYPES.AuthenticateTenantRequest)
-    .toResolvedValue(
-      (
-        accessTokens: IAccessTokenService,
-        tenants: ITenantDirectory,
-        permissions: IPermissionResolver,
-      ) => new AuthenticateTenantRequest({ accessTokens, tenants, permissions }),
-      [TYPES.AccessTokenService, TYPES.TenantDirectory, TYPES.PermissionResolver],
-    );
+  container.bind<AuthenticateTenantRequest>(TYPES.AuthenticateTenantRequest).toResolvedValue(
+    (
+      accessTokens: IAccessTokenService,
+      tenants: ITenantDirectory,
+      permissions: IPermissionResolver,
+    ) =>
+      new AuthenticateTenantRequest({
+        accessTokens,
+        tenants,
+        permissions,
+        // Resolved late: support access depends on much of the container.
+        support: {
+          live: (sessionId, tenantId) =>
+            container.get<SupportAccess>(TYPES.SupportAccess).live(sessionId, tenantId),
+          record: (sessionId, request) =>
+            container.get<SupportAccess>(TYPES.SupportAccess).record(sessionId, request),
+        },
+      }),
+    [TYPES.AccessTokenService, TYPES.TenantDirectory, TYPES.PermissionResolver],
+  );
 
   container
     .bind<ResolveTenant>(TYPES.ResolveTenant)
@@ -2394,8 +2446,9 @@ export function createContainer(
       clock: IClock,
       logger: ILogger,
       commissions: ICommissionHooks,
-    ) =>
-      new GatewayBilling({
+      approvals: ApprovalWorkflow,
+    ) => {
+      const gatewayBilling = new GatewayBilling({
         provider,
         gateway,
         records,
@@ -2411,7 +2464,14 @@ export function createContainer(
         logger,
         returnUrl: config.billing.returnUrl,
         commissions,
-      }),
+        refundApproval: {
+          approvals,
+          thresholdMinor: config.operations.refundApprovalThresholdMinor,
+        },
+      });
+      approvals.register(gatewayBilling.refundExecutor());
+      return gatewayBilling;
+    },
     [
       TYPES.PaymentGateway,
       TYPES.GatewayRepository,
@@ -2427,6 +2487,7 @@ export function createContainer(
       TYPES.Clock,
       TYPES.Logger,
       TYPES.CommissionEngine,
+      TYPES.ApprovalWorkflow,
     ],
   );
   container.bind<GatewayReconciliation>(TYPES.GatewayReconciliation).toResolvedValue(
@@ -2449,6 +2510,7 @@ export function createContainer(
         requestContext,
         clock,
         logger,
+        alerts: lazyAlerts,
       }),
     [
       TYPES.PaymentGateway,
@@ -2523,6 +2585,7 @@ export function createContainer(
         resellers: {
           tell: (tenantId, message) => partnerNotifier.tellTenantReseller(tenantId, message),
         },
+        alerts: lazyAlerts,
         automation,
         billing,
         invoices,
@@ -2610,6 +2673,7 @@ export function createContainer(
       logger: ILogger,
     ) =>
       new BranchReconciliation({
+        alerts: lazyAlerts,
         roster,
         tenantContext,
         tenantUnitOfWork,
@@ -2634,6 +2698,324 @@ export function createContainer(
       TYPES.Logger,
     ],
   );
+
+  // --- Console operations (P4-7) ---
+  const operations = config.operations;
+  const onCall = {
+    emails: operations.onCallEmails,
+    minSeverity: operations.onCallMinSeverity,
+    consoleUrl: auth.platform.consoleUrl,
+  };
+  platformRepository<IPlatformAlertRepository>(
+    TYPES.PlatformAlertRepository,
+    (p) => new PostgresPlatformAlertRepository(p),
+  );
+  container
+    .bind<IOnCallWebhook>(TYPES.OnCallWebhook)
+    .toResolvedValue(() => new HttpOnCallWebhook(operations.onCallWebhookUrl));
+  container.bind<PlatformAlerts>(TYPES.PlatformAlerts).toResolvedValue(
+    (
+      alerts: IPlatformAlertRepository,
+      queue: IJobQueue,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new PlatformAlerts({
+        alerts,
+        queue,
+        unitOfWork,
+        audit,
+        requestContext,
+        clock,
+        logger,
+        onCall,
+      }),
+    [
+      TYPES.PlatformAlertRepository,
+      TYPES.JobQueue,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  /** Alerts raised anywhere, resolved late: they never form a dependency cycle. */
+  const lazyAlerts: IAlerts = {
+    raise: (input) => container.get<PlatformAlerts>(TYPES.PlatformAlerts).raise(input),
+  };
+  container
+    .bind<AlertNotifier>(TYPES.AlertNotifier)
+    .toResolvedValue(
+      (
+        alerts: IPlatformAlertRepository,
+        webhook: IOnCallWebhook,
+        email: NotificationService,
+        clock: IClock,
+      ) => new AlertNotifier({ alerts, webhook, email, clock, onCall }),
+      [TYPES.PlatformAlertRepository, TYPES.OnCallWebhook, TYPES.NotificationService, TYPES.Clock],
+    );
+
+  platformRepository<ISupportSessionRepository>(
+    TYPES.SupportSessionRepository,
+    (p) => new PostgresSupportSessionRepository(p),
+  );
+  container.bind<SupportAccess>(TYPES.SupportAccess).toResolvedValue(
+    (
+      sessions: ISupportSessionRepository,
+      approvals: ApprovalWorkflow,
+      directory: ITenantDirectory,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      seeder: ITenantSeeder,
+      permissions: IPermissionResolver,
+      accessTokens: IAccessTokenService,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+      staffSessions: StaffSessions,
+    ) => {
+      const support = new SupportAccess({
+        sessions,
+        approvals,
+        directory,
+        tenantContext,
+        tenantUnitOfWork,
+        seeder,
+        permissions,
+        accessTokens,
+        alerts: lazyAlerts,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        logger,
+        stepUpMs: staffSessions.settings.stepUpMs,
+      });
+      approvals.register(support.executor());
+      return support;
+    },
+    [
+      TYPES.SupportSessionRepository,
+      TYPES.ApprovalWorkflow,
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TenantSeeder,
+      TYPES.PermissionResolver,
+      TYPES.AccessTokenService,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+      TYPES.StaffSessions,
+    ],
+  );
+  container.bind<TenantUserSupport>(TYPES.TenantUserSupport).toResolvedValue(
+    (
+      directory: ITenantDirectory,
+      userDirectory: IUserDirectory,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      users: ITenantUserRepository,
+      sessions: ITenantSessions,
+      tenantAudit: IAuditTrail,
+      permissionCache: IPermissionCache,
+      signIn: TenantSignIn,
+      approvals: ApprovalWorkflow,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) => {
+      const support = new TenantUserSupport({
+        directory,
+        userDirectory,
+        tenantContext,
+        tenantUnitOfWork,
+        users,
+        sessions,
+        tenantAudit,
+        permissionCache,
+        signIn,
+        approvals,
+        unitOfWork,
+        audit,
+        requestContext,
+        clock,
+      });
+      approvals.register(support.executor());
+      return support;
+    },
+    [
+      TYPES.TenantDirectory,
+      TYPES.UserDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TenantUserRepository,
+      TYPES.TenantSessions,
+      TYPES.AuditTrail,
+      TYPES.PermissionCache,
+      TYPES.TenantSignIn,
+      TYPES.ApprovalWorkflow,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+
+  platformRepository<ICommunicationsRepository>(
+    TYPES.CommunicationsRepository,
+    (p) => new PostgresCommunicationsRepository(p),
+  );
+  container
+    .bind<MaintenanceState>(TYPES.MaintenanceState)
+    .toResolvedValue(
+      (store: ICommunicationsRepository, clock: IClock) => new MaintenanceState({ store, clock }),
+      [TYPES.CommunicationsRepository, TYPES.Clock],
+    );
+  container.bind<Communications>(TYPES.Communications).toResolvedValue(
+    (
+      store: ICommunicationsRepository,
+      approvals: ApprovalWorkflow,
+      queue: IJobQueue,
+      unitOfWork: IPlatformUnitOfWork,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      maintenance: MaintenanceState,
+    ) => {
+      const communications = new Communications({
+        store,
+        approvals,
+        queue,
+        unitOfWork,
+        audit,
+        requestContext,
+        ids,
+        clock,
+        bulkApprovalTenants: operations.bulkMessageApprovalTenants,
+        maintenance,
+      });
+      approvals.register(communications.executor());
+      return communications;
+    },
+    [
+      TYPES.CommunicationsRepository,
+      TYPES.ApprovalWorkflow,
+      TYPES.JobQueue,
+      TYPES.PlatformUnitOfWork,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.MaintenanceState,
+    ],
+  );
+  container.bind<AnnouncementMailer>(TYPES.AnnouncementMailer).toResolvedValue(
+    (
+      store: ICommunicationsRepository,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      seeder: ITenantSeeder,
+      email: NotificationService,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new AnnouncementMailer({
+        store,
+        tenantContext,
+        tenantUnitOfWork,
+        seeder,
+        email,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.CommunicationsRepository,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TenantSeeder,
+      TYPES.NotificationService,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+
+  platformRepository<IFeatureFlagRepository>(
+    TYPES.FeatureFlagRepository,
+    (p) => new PostgresFeatureFlagRepository(p),
+  );
+  container
+    .bind<FeatureFlags>(TYPES.FeatureFlags)
+    .toResolvedValue(
+      (
+        flags: IFeatureFlagRepository,
+        directory: ITenantDirectory,
+        unitOfWork: IPlatformUnitOfWork,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+        clock: IClock,
+        logger: ILogger,
+      ) => new FeatureFlags({ flags, directory, unitOfWork, audit, requestContext, clock, logger }),
+      [
+        TYPES.FeatureFlagRepository,
+        TYPES.TenantDirectory,
+        TYPES.PlatformUnitOfWork,
+        TYPES.PlatformAuditTrail,
+        TYPES.RequestContext,
+        TYPES.Clock,
+        TYPES.Logger,
+      ],
+    );
+
+  platformRepository<IUsageRepository>(
+    TYPES.UsageRepository,
+    (p) => new PostgresUsageRepository(p),
+  );
+  container
+    .bind<ITenantUsageCollector>(TYPES.TenantUsageCollector)
+    .toResolvedValue(
+      (pools: TenantConnectionPools) => new PostgresTenantUsageCollector(pools),
+      [TYPES.TenantConnectionPools],
+    );
+  container
+    .bind<UsageMeter>(TYPES.UsageMeter)
+    .toResolvedValue(
+      (usage: IUsageRepository, clock: IClock, logger: ILogger) =>
+        new UsageMeter({ usage, clock, logger }),
+      [TYPES.UsageRepository, TYPES.Clock, TYPES.Logger],
+    )
+    .onDeactivation((meter) => meter.stop());
+  container
+    .bind<TenantUsageHistory>(TYPES.TenantUsageHistory)
+    .toResolvedValue(
+      (
+        usage: IUsageRepository,
+        collector: ITenantUsageCollector,
+        roster: ITenantRoster,
+        clock: IClock,
+        logger: ILogger,
+      ) => new TenantUsageHistory({ usage, collector, roster, clock, logger }),
+      [
+        TYPES.UsageRepository,
+        TYPES.TenantUsageCollector,
+        TYPES.TenantRoster,
+        TYPES.Clock,
+        TYPES.Logger,
+      ],
+    );
 
   // --- Reseller commissions (P4-6) ---
   platformRepository<IPartnerCommissionRepository>(
@@ -5444,6 +5826,11 @@ export function createContainer(
       tenantContext: ITenantContext,
       staffSessions: StaffSessions,
       clock: IClock,
+      requestContext: IRequestContext,
+      support: SupportAccess,
+      maintenance: MaintenanceState,
+      features: FeatureFlags,
+      usage: UsageMeter,
     ) =>
       new AccessGuard({
         authenticate,
@@ -5452,6 +5839,11 @@ export function createContainer(
         tenantContext,
         staffSessions,
         clock,
+        requestContext,
+        support,
+        maintenance,
+        features,
+        usage,
       }),
     [
       TYPES.AuthenticateTenantRequest,
@@ -5460,6 +5852,11 @@ export function createContainer(
       TYPES.TenantContext,
       TYPES.StaffSessions,
       TYPES.Clock,
+      TYPES.RequestContext,
+      TYPES.SupportAccess,
+      TYPES.MaintenanceState,
+      TYPES.FeatureFlags,
+      TYPES.UsageMeter,
     ],
   );
   // --- Console MVP: dashboard, tenant 360, notes & tags, data operations, health ---
@@ -5709,6 +6106,16 @@ export function createContainer(
         }),
         ...partnerRoutes({ administration: partnerAdministration, portal: partnerPortal }),
         ...partnerCommissionRoutes({ commissions: partnerCommissions }),
+        ...consoleOperationsRoutes({
+          alerts: container.get<PlatformAlerts>(TYPES.PlatformAlerts),
+          onCallWebhookConfigured: config.operations.onCallWebhookUrl !== null,
+          support: container.get<SupportAccess>(TYPES.SupportAccess),
+          users: container.get<TenantUserSupport>(TYPES.TenantUserSupport),
+          communications: container.get<Communications>(TYPES.Communications),
+          flags: container.get<FeatureFlags>(TYPES.FeatureFlags),
+          subscriptions: subscriptionAdministration,
+          usage: container.get<TenantUsageHistory>(TYPES.TenantUsageHistory),
+        }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...mobileRoutes(mobile),
         ...billingRoutes({
