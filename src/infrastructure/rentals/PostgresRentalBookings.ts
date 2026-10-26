@@ -102,6 +102,7 @@ type ChargeRow = {
   event_id: string;
   kind: ChargeKind;
   description: string;
+  damage_id: string | null;
   net_minor: string;
   tax_minor: string;
   total_minor: string;
@@ -255,8 +256,8 @@ export class PostgresRentalBookings implements IRentalBookings {
   async addCharge(c: BookingCharge): Promise<void> {
     await this.tx.query(
       `insert into rental_booking_charges (id, booking_id, event_id, kind, description, net_minor,
-         tax_minor, total_minor, created_by, created_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp())`,
+         tax_minor, total_minor, damage_id, created_by, created_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp())`,
       [
         c.id,
         c.bookingId,
@@ -266,6 +267,7 @@ export class PostgresRentalBookings implements IRentalBookings {
         c.netMinor,
         c.taxMinor,
         c.totalMinor,
+        c.damageId,
         c.createdBy,
       ],
     );
@@ -282,6 +284,7 @@ export class PostgresRentalBookings implements IRentalBookings {
       eventId: r.event_id,
       kind: r.kind,
       description: r.description,
+      damageId: r.damage_id,
       netMinor: Number(r.net_minor),
       taxMinor: Number(r.tax_minor),
       totalMinor: Number(r.total_minor),

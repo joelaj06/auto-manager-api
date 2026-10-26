@@ -2,14 +2,28 @@ import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
 import { rentalRoutes } from "../../adapters/routes/rentalRoutes.js";
 import type { IVehicleBlocks } from "../../application/ports/IVehicleBlocks.js";
 import type { IRentalBookings } from "../../application/ports/IRentalBookings.js";
+import type {
+  IRentalInspections,
+  IVehicleDamages,
+} from "../../application/ports/IRentalInspections.js";
 import type { IRentalRates } from "../../application/ports/IRentalRates.js";
 import { RentalAvailability } from "../../application/use-cases/rentals/RentalAvailability.js";
 import { RentalBookings } from "../../application/use-cases/rentals/RentalBookings.js";
+import {
+  BOOKING_PHOTO_OWNER,
+  RentalInspections,
+} from "../../application/use-cases/rentals/RentalInspections.js";
+import { VehicleDamages } from "../../application/use-cases/rentals/VehicleDamages.js";
 import { RentalQuotes } from "../../application/use-cases/rentals/RentalQuotes.js";
 import { RentalRateAdministration } from "../../application/use-cases/rentals/RentalRateAdministration.js";
 import { PostgresVehicleBlocks } from "../../infrastructure/rentals/PostgresVehicleBlocks.js";
 import { PostgresRentalBookings } from "../../infrastructure/rentals/PostgresRentalBookings.js";
+import {
+  PostgresRentalInspections,
+  PostgresVehicleDamages,
+} from "../../infrastructure/rentals/PostgresRentalInspections.js";
 import { rentalBookingRoutes } from "../../adapters/routes/rentalBookingRoutes.js";
+import { vehicleDamageRoutes } from "../../adapters/routes/vehicleDamageRoutes.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -5367,6 +5381,14 @@ export function createContainer(
     TYPES.RentalBookingRepository,
     (tx) => new PostgresRentalBookings(tx),
   );
+  tenantRepository<IRentalInspections>(
+    TYPES.RentalInspectionRepository,
+    (tx) => new PostgresRentalInspections(tx),
+  );
+  tenantRepository<IVehicleDamages>(
+    TYPES.VehicleDamageRepository,
+    (tx) => new PostgresVehicleDamages(tx),
+  );
   container.bind<RentalRateAdministration>(TYPES.RentalRateAdministration).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5481,6 +5503,87 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  container.bind<RentalInspections>(TYPES.RentalInspections).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      bookings: IRentalBookings,
+      inspections: IRentalInspections,
+      damages: IVehicleDamages,
+      rates: IRentalRates,
+      quotes: RentalQuotes,
+      files: FileService,
+      vehicleAccess: VehicleAccess,
+      policy: AuthorizationPolicy,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new RentalInspections({
+        unitOfWork,
+        bookings,
+        inspections,
+        damages,
+        rates,
+        quotes,
+        files,
+        photos: new OwnedDocuments(files, "rental_photo", BOOKING_PHOTO_OWNER, 60),
+        vehicleAccess,
+        policy,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RentalBookingRepository,
+      TYPES.RentalInspectionRepository,
+      TYPES.VehicleDamageRepository,
+      TYPES.RentalRates,
+      TYPES.RentalQuotes,
+      TYPES.TenantFileService,
+      TYPES.VehicleAccess,
+      TYPES.AuthorizationPolicy,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<VehicleDamages>(TYPES.VehicleDamages).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      damages: IVehicleDamages,
+      bookings: IRentalBookings,
+      vehicleAccess: VehicleAccess,
+      organisation: IOrganisationSettings,
+      files: FileService,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new VehicleDamages({
+        unitOfWork,
+        damages,
+        bookings,
+        vehicleAccess,
+        organisation,
+        files,
+        photos: new OwnedDocuments(files, "rental_photo", "vehicle_damage", 10),
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleDamageRepository,
+      TYPES.RentalBookingRepository,
+      TYPES.VehicleAccess,
+      TYPES.OrganisationSettings,
+      TYPES.TenantFileService,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
   container.bind<RentalBookings>(TYPES.RentalBookings).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5489,6 +5592,7 @@ export function createContainer(
       rates: IRentalRates,
       availability: RentalAvailability,
       quotes: RentalQuotes,
+      inspections: RentalInspections,
       vehicleAccess: VehicleAccess,
       registry: VehicleRegistry,
       odometer: OdometerLog,
@@ -5507,6 +5611,7 @@ export function createContainer(
         rates,
         availability,
         quotes,
+        inspections,
         vehicleAccess,
         registry,
         odometer,
@@ -5525,6 +5630,7 @@ export function createContainer(
       TYPES.RentalRates,
       TYPES.RentalAvailability,
       TYPES.RentalQuotes,
+      TYPES.RentalInspections,
       TYPES.VehicleAccess,
       TYPES.VehicleRegistry,
       TYPES.OdometerLog,
@@ -6525,6 +6631,8 @@ export function createContainer(
       rentalQuotes: RentalQuotes,
       rentalAvailability: RentalAvailability,
       rentalBookings: RentalBookings,
+      rentalInspections: RentalInspections,
+      vehicleDamages: VehicleDamages,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -6666,7 +6774,8 @@ export function createContainer(
           quotes: rentalQuotes,
           availability: rentalAvailability,
         }),
-        ...rentalBookingRoutes({ bookings: rentalBookings }),
+        ...rentalBookingRoutes({ bookings: rentalBookings, inspections: rentalInspections }),
+        ...vehicleDamageRoutes({ damages: vehicleDamages }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -6783,6 +6892,8 @@ export function createContainer(
       TYPES.RentalQuotes,
       TYPES.RentalAvailability,
       TYPES.RentalBookings,
+      TYPES.RentalInspections,
+      TYPES.VehicleDamages,
     ],
   );
 

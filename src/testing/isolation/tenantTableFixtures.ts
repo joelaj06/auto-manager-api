@@ -845,6 +845,91 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from rental_booking_charges where description = $1",
   },
+  rental_inspections: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 c as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Renter', $1)
+                       returning id),
+                 k as (insert into vehicle_blocks (vehicle_id, branch_id, reason, status,
+                         starts_at, ends_at, blocked_until)
+                       select v.id, b.id, 'rental', 'confirmed', now(), now() + interval '1 day',
+                         now() + interval '1 day' from v, b returning id),
+                 r as (insert into rental_bookings (number, status, branch_id, customer_id,
+                         block_id, pickup_at, return_at, currency, terms, quote, notes)
+                       select $2, 'confirmed', b.id, c.id, k.id, now(), now() + interval '1 day',
+                         'GHS', '{}', '{}', $1 from b, c, k returning id)
+            insert into rental_inspections (booking_id, stage, vehicle_id, odometer, fuel,
+              id_checked, notes, inspected_at)
+            select r.id, 'check_out', v.id, 10, 'full', true, $1, now() from r, v`,
+      params: [marker, `RI${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from rental_inspections where notes = $1",
+  },
+  rental_inspection_photos: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 c as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Renter', $1)
+                       returning id),
+                 k as (insert into vehicle_blocks (vehicle_id, branch_id, reason, status,
+                         starts_at, ends_at, blocked_until)
+                       select v.id, b.id, 'rental', 'confirmed', now(), now() + interval '1 day',
+                         now() + interval '1 day' from v, b returning id),
+                 r as (insert into rental_bookings (number, status, branch_id, customer_id,
+                         block_id, pickup_at, return_at, currency, terms, quote, notes)
+                       select $2, 'confirmed', b.id, c.id, k.id, now(), now() + interval '1 day',
+                         'GHS', '{}', '{}', $1 from b, c, k returning id),
+                 i as (insert into rental_inspections (booking_id, stage, vehicle_id, odometer,
+                         fuel, id_checked, inspected_at)
+                       select r.id, 'check_out', v.id, 10, 'full', true, now() from r, v
+                       returning id),
+                 f as (insert into files (kind, storage_key, visibility, filename, content_type,
+                         size_bytes)
+                       values ('rental_photo', $1, 'private', 'front.png', 'image/png', 1)
+                       returning id)
+            insert into rental_inspection_photos (inspection_id, file_id, view)
+            select i.id, f.id, 'front' from i, f`,
+      params: [marker, `RP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from rental_inspection_photos p join files f on f.id = p.file_id
+            where f.storage_key = $1`,
+  },
+  vehicle_damages: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id)
+            insert into vehicle_damages (vehicle_id, branch_id, area, severity, description,
+              currency)
+            select v.id, b.id, 'front', 'minor', $1, 'GHS' from v, b`,
+      params: [marker, `VD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from vehicle_damages where description = $1",
+  },
+  vehicle_damage_photos: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 d as (insert into vehicle_damages (vehicle_id, branch_id, area, severity,
+                         description, currency)
+                       select v.id, b.id, 'front', 'minor', 'Isolation dent', 'GHS' from v, b
+                       returning id),
+                 f as (insert into files (kind, storage_key, visibility, filename, content_type,
+                         size_bytes)
+                       values ('rental_photo', $1, 'private', 'dent.png', 'image/png', 1)
+                       returning id)
+            insert into vehicle_damage_photos (damage_id, file_id) select d.id, f.id from d, f`,
+      params: [marker, `DP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from vehicle_damage_photos p join files f on f.id = p.file_id
+            where f.storage_key = $1`,
+  },
   vehicle_blocks: {
     insert: (marker) => ({
       sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),

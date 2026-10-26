@@ -150,6 +150,12 @@ beforeAll(async () => {
       extraKmRate: "2.00",
     })
     .expect(201);
+  // Inspections (P5-4) are tested on their own: no checklist or photos here.
+  await api()
+    .patch("/api/v1/settings/rentals")
+    .set(owner())
+    .send({ inspectionItems: [], inspectionPhotoViews: [] })
+    .expect(200);
   const licence = { licenceNumber: "DL-12345", licenceClass: "B", licenceExpiresOn: "2030-01-01" };
   adult = await customer({ dateOfBirth: "1990-04-01", ...licence });
   young = await customer({ dateOfBirth: "2006-01-01", ...licence });
@@ -177,14 +183,22 @@ describe("the booking life cycle", () => {
       refId: booking.id,
     });
 
-    const early = await step(booking.id, "checkout", { odometer: 5_000, fuel: "full" });
+    const early = await step(booking.id, "checkout", {
+      odometer: 5_000,
+      fuel: "full",
+      idChecked: true,
+    });
     expect([early.status, early.body.error.message]).toEqual([
       422,
       "Confirm the reservation before the keys are handed over",
     ]);
     expect(data(await step(booking.id, "confirm")).status).toBe("confirmed");
 
-    const out = await step(booking.id, "checkout", { odometer: 5_000, fuel: "full" });
+    const out = await step(booking.id, "checkout", {
+      odometer: 5_000,
+      fuel: "full",
+      idChecked: true,
+    });
     expect(out.status, JSON.stringify(out.body)).toBe(200);
     expect(data(out).status).toBe("checked_out");
     const vehicle = data(out).vehicle.id;

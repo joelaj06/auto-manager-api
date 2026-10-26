@@ -26,6 +26,7 @@ type ClassRow = {
   min_driver_age: number | null;
   min_licence_years: number | null;
   turnaround_minutes: number;
+  refuel_quarter_minor: string | null;
   sort: number;
   active: boolean;
 };
@@ -38,6 +39,7 @@ const toClass = (r: ClassRow): VehicleClass => ({
   minDriverAge: r.min_driver_age,
   minLicenceYears: r.min_licence_years,
   turnaroundMinutes: r.turnaround_minutes,
+  refuelQuarterMinor: r.refuel_quarter_minor === null ? null : Number(r.refuel_quarter_minor),
   sort: r.sort,
   active: r.active,
 });
@@ -236,12 +238,13 @@ export class PostgresRentalRates implements IRentalRates {
   async saveClass(c: VehicleClass, actorId: string | null): Promise<void> {
     await this.tx.query(
       `insert into vehicle_classes (id, code, name, description, min_driver_age,
-         min_licence_years, turnaround_minutes, sort, active, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         min_licence_years, turnaround_minutes, refuel_quarter_minor, sort, active, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        on conflict (id) do update set code = excluded.code, name = excluded.name,
          description = excluded.description, min_driver_age = excluded.min_driver_age,
          min_licence_years = excluded.min_licence_years,
-         turnaround_minutes = excluded.turnaround_minutes, sort = excluded.sort,
+         turnaround_minutes = excluded.turnaround_minutes,
+         refuel_quarter_minor = excluded.refuel_quarter_minor, sort = excluded.sort,
          active = excluded.active, updated_at = now()`,
       [
         c.id,
@@ -251,6 +254,7 @@ export class PostgresRentalRates implements IRentalRates {
         c.minDriverAge,
         c.minLicenceYears,
         c.turnaroundMinutes,
+        c.refuelQuarterMinor,
         c.sort,
         c.active,
         actorId,

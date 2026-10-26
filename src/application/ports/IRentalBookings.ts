@@ -16,6 +16,7 @@ export const BOOKING_EVENT_TYPES = [
   "closed",
   "cancelled",
   "no_show",
+  "damage_charged",
 ] as const;
 export type BookingEventType = (typeof BOOKING_EVENT_TYPES)[number];
 
@@ -35,6 +36,8 @@ export type BookingCharge = ChargeAmount &
     eventId: string;
     kind: ChargeKind;
     description: string;
+    /** The damage a `damage` charge is for (P5-4). */
+    damageId: string | null;
     createdBy: string | null;
     createdAt: Date;
   }>;

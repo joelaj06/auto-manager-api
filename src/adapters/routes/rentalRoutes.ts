@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { RentalAvailability } from "../../application/use-cases/rentals/RentalAvailability.js";
 import type { RentalQuotes } from "../../application/use-cases/rentals/RentalQuotes.js";
 import type { RentalRateAdministration } from "../../application/use-cases/rentals/RentalRateAdministration.js";
+import { PHOTO_VIEWS } from "../../domain/rentals/RentalInspection.js";
 import { EXTRA_CATEGORIES, EXTRA_CHARGES } from "../../domain/rentals/RentalRates.js";
 import { MANUAL_BLOCK_REASONS } from "../../domain/rentals/VehicleBlock.js";
 import { principalOf } from "../middleware/AccessGuard.js";
@@ -36,6 +37,7 @@ const classBody = z.object({
   minDriverAge: z.number().int().min(16).max(99).nullable().optional(),
   minLicenceYears: z.number().int().min(0).max(60).nullable().optional(),
   turnaroundMinutes: z.number().int().min(0).max(1440).optional(),
+  refuelPerQuarter: amount.nullable().optional(),
   sort: z.number().int().min(0).max(1_000_000).optional(),
   active: z.boolean().optional(),
 });
@@ -493,6 +495,12 @@ export function rentalRoutes(deps: RentalRouteDependencies): ApiRoute[] {
           freeCancellationHours: z.number().int().min(0).max(720).optional(),
           lateCancellationFeePercent: percent.optional(),
           noShowFeePercent: percent.optional(),
+          inspectionItems: z
+            .array(z.object({ key: z.string().max(40), label: z.string().trim().min(1).max(80) }))
+            .max(30)
+            .optional(),
+          inspectionPhotoViews: z.array(z.enum(PHOTO_VIEWS)).max(6).optional(),
+          cleaningFee: amount.optional(),
           maxDiscountPercent: z
             .string()
             .regex(/^\d{1,3}(\.\d{1,2})?$/)

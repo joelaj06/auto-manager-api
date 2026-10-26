@@ -188,6 +188,11 @@ const definitions = {
     description: "Log, acknowledge and resolve vehicle issues",
     scopes: BRANCH_OR_ALL,
   },
+  "vehicles.damages.manage": {
+    description:
+      "Record vehicle damages, settle who pays (charging renters), and mark them repaired",
+    scopes: BRANCH_OR_ALL,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,

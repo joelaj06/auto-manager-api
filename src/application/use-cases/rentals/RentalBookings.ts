@@ -42,6 +42,7 @@ import type { OdometerLog } from "../vehicles/OdometerLog.js";
 import type { VehicleAccess } from "../vehicles/VehicleAccess.js";
 import type { VehicleRegistry } from "../vehicles/VehicleRegistry.js";
 import type { RentalAvailability } from "./RentalAvailability.js";
+import type { InspectionInput, RentalInspections } from "./RentalInspections.js";
 import { RentalRateNotFoundError } from "./RentalRateAdministration.js";
 import type { QuoteRequest, RentalQuotes } from "./RentalQuotes.js";
 
@@ -70,23 +71,25 @@ export type BookingChange = Partial<
   Omit<BookingRequest, "customerId" | "holdId" | "confirm" | "branchId">
 >;
 
-export type CheckOutRequest = Readonly<{
-  /** Another vehicle of the class booked (a class booking only). */
-  vehicleId?: string | null;
-  odometer: number;
-  fuel: FuelLevel;
-  notes?: string | null;
-}>;
+export type CheckOutRequest = Omit<InspectionInput, "needsCleaning" | "waiveRefuel"> &
+  Readonly<{
+    /** Another vehicle of the class booked (a class booking only). */
+    vehicleId?: string | null;
+    odometer: number;
+    fuel: FuelLevel;
+    notes?: string | null;
+  }>;
 
-export type CheckInRequest = Readonly<{
-  odometer: number;
-  fuel: FuelLevel;
-  /** When the vehicle came back (default now). */
-  returnedAt?: Date;
-  /** The vehicle goes to maintenance instead of back to rent. */
-  needsMaintenance?: boolean;
-  notes?: string | null;
-}>;
+export type CheckInRequest = Omit<InspectionInput, "idChecked"> &
+  Readonly<{
+    odometer: number;
+    fuel: FuelLevel;
+    /** When the vehicle came back (default now). */
+    returnedAt?: Date;
+    /** The vehicle goes to maintenance instead of back to rent (so does a major damage). */
+    needsMaintenance?: boolean;
+    notes?: string | null;
+  }>;
 
 export type BookingQuery = Readonly<{
   status?: ShownStatus;
@@ -147,6 +150,7 @@ type Deps = Readonly<{
   rates: IRentalRates;
   availability: RentalAvailability;
   quotes: RentalQuotes;
+  inspections: RentalInspections;
   vehicleAccess: VehicleAccess;
   registry: VehicleRegistry;
   odometer: OdometerLog;
@@ -440,6 +444,14 @@ export class RentalBookings {
           `${vehicle.snapshot().code} is ${vehicle.status.replaceAll("_", " ")}: it cannot go out now`,
         );
       const warnings = await this.licenceRules(before.customerId, before.returnAt);
+      const { inspection, damages } = await deps.inspections.record(
+        actor,
+        booking,
+        "check_out",
+        { vehicleId, odometer: request.odometer, fuel: request.fuel, at: now },
+        request,
+        request.notes ?? null,
+      );
 
       // Out early: the vehicle is busy from now.
       const block = (await deps.blocks.get(before.blockId))!;
@@ -464,6 +476,8 @@ export class RentalBookings {
         vehicleId,
         odometer: request.odometer,
         fuel: request.fuel,
+        inspectionId: inspection.id,
+        damagesFound: damages.map((d) => d.id),
         notes: request.notes ?? null,
       });
       await this.audit(actor, "rental_booking.checked_out", booking, before);
@@ -552,6 +566,17 @@ export class RentalBookings {
         quote: toJson(quote),
         now,
       });
+      const inspected = await deps.inspections.record(
+        actor,
+        booking,
+        "check_in",
+        { vehicleId: before.vehicleId, odometer: request.odometer, fuel: request.fuel, at },
+        request,
+        request.notes ?? null,
+      );
+      const toMaintenance =
+        request.needsMaintenance === true ||
+        inspected.damages.some((d) => d.snapshot().severity === "major");
 
       // The block ends at the return (turnaround after it); a late vehicle may run into the next
       // booking, which then keeps its time and is named in the event.
@@ -569,15 +594,11 @@ export class RentalBookings {
         actor.userId,
       );
       if (vehicle.status === "on_rent")
-        await deps.registry.moveByModule(
-          vehicle,
-          request.needsMaintenance === true ? "in_maintenance" : "available",
-          {
-            ref: { type: REF_TYPE, id: booking.id },
-            reason: `Back from rental ${before.number}`,
-            userId: actor.userId,
-          },
-        );
+        await deps.registry.moveByModule(vehicle, toMaintenance ? "in_maintenance" : "available", {
+          ref: { type: REF_TYPE, id: booking.id },
+          reason: `Back from rental ${before.number}`,
+          userId: actor.userId,
+        });
       const lateMinutes = Math.max(
         0,
         Math.round((at.getTime() - before.returnAt.getTime()) / 60_000),
@@ -589,6 +610,9 @@ export class RentalBookings {
         km,
         lateMinutes,
         nextBookingInTheWay: cappedBy?.refId ?? cappedBy?.id ?? null,
+        inspectionId: inspected.inspection.id,
+        damagesFound: inspected.damages.map((d) => d.id),
+        toMaintenance,
         notes: request.notes ?? null,
       });
       if (!isZero(late))
@@ -602,6 +626,8 @@ export class RentalBookings {
         );
       if (!isZero(mileage))
         await this.charge(booking, event, "mileage", `Mileage: ${km} km driven`, mileage, actor);
+      for (const c of inspected.charges)
+        await this.charge(booking, event, c.kind, c.description, c.amount, actor, c.damageId);
       await this.audit(actor, "rental_booking.returned", booking, before);
       return this.detail(
         booking,
@@ -957,6 +983,7 @@ export class RentalBookings {
     description: string,
     amount: ChargeAmount,
     actor: Principal,
+    damageId: string | null = null,
   ): Promise<void> {
     await this.deps.bookings.addCharge({
       ...amount,
@@ -965,6 +992,7 @@ export class RentalBookings {
       eventId: event.id,
       kind,
       description,
+      damageId,
       createdBy: actor.userId,
       createdAt: this.deps.clock.now(),
     });

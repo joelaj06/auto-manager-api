@@ -4,10 +4,12 @@ import {
   quoteRental,
   RentalPricingError,
   selectRatePlan,
+  taxedLikeRental,
   type PricingTerms,
   type QuoteInput,
   type RentalQuote,
 } from "../../../domain/rentals/RentalPricing.js";
+import type { ChargeAmount } from "../../../domain/rentals/RentalBooking.js";
 import { TaxCode } from "../../../domain/tax/TaxCode.js";
 import type { AuthorizationPolicy } from "../../authorization/AuthorizationPolicy.js";
 import type { Principal } from "../../authorization/Principal.js";
@@ -255,10 +257,6 @@ export class RentalQuotes {
     const organisation = await deps.organisation.get();
     const localDate = (instant: Date) => localDateTime(instant, organisation.timezone).date;
     const settings = await deps.rates.settings();
-    const tax = await deps.organisation.taxSettings();
-    const codes = new Map(
-      (await deps.reference.taxCodes()).map((props) => [props.code, TaxCode.create(props)]),
-    );
     const holidays = await deps.rates.holidays(
       localDate(pickupAt),
       TenantCalendar.addDays(localDate(returnAt), 1),
@@ -270,13 +268,39 @@ export class RentalQuotes {
       localDate,
       settings,
       holidays: new Set(holidays.map((h) => h.date)),
-      tax: {
-        registered: tax.scheme !== "not_registered",
-        pricesIncludeTax: tax.pricesIncludeTax,
-        defaultCode: tax.defaultSalesTaxCode,
-        codes,
-      },
+      tax: await this.taxInput(),
     };
     return quoteRental(input);
+  }
+
+  /**
+   * A charge taxed like the booking's rental (refuelling, cleaning at check-in): the plan's tax
+   * code, or the business's default, on the day of `at`.
+   */
+  async taxedLikeRental(terms: PricingTerms, at: Date, amount: Money): Promise<ChargeAmount> {
+    const organisation = await this.deps.organisation.get();
+    const taxed = taxedLikeRental(
+      amount,
+      await this.taxInput(),
+      terms.plan.taxCode,
+      localDateTime(at, organisation.timezone).date,
+    );
+    return {
+      netMinor: taxed.net.amountMinor,
+      taxMinor: taxed.tax.amountMinor,
+      totalMinor: taxed.total.amountMinor,
+    };
+  }
+
+  private async taxInput(): Promise<QuoteInput["tax"]> {
+    const tax = await this.deps.organisation.taxSettings();
+    return {
+      registered: tax.scheme !== "not_registered",
+      pricesIncludeTax: tax.pricesIncludeTax,
+      defaultCode: tax.defaultSalesTaxCode,
+      codes: new Map(
+        (await this.deps.reference.taxCodes()).map((props) => [props.code, TaxCode.create(props)]),
+      ),
+    };
   }
 }

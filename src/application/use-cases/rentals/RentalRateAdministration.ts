@@ -49,6 +49,8 @@ export type VehicleClassInput = Readonly<{
   minDriverAge?: number | null;
   minLicenceYears?: number | null;
   turnaroundMinutes?: number;
+  /** Refuelling per quarter tank missing at check-in; null: none charged. */
+  refuelPerQuarter?: Amount;
   sort?: number;
   active?: boolean;
 }>;
@@ -179,6 +181,7 @@ export class RentalRateAdministration {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const before = id === null ? null : await this.found(deps.rates.vehicleClass(id), "Class");
+      const currency = (await deps.organisation.get()).baseCurrency;
       const after = validateVehicleClass({
         id: before?.id ?? deps.ids.next(),
         code: (input.code ?? before?.code ?? "").trim().toUpperCase(),
@@ -187,6 +190,12 @@ export class RentalRateAdministration {
         minDriverAge: pick(input.minDriverAge, before?.minDriverAge ?? null),
         minLicenceYears: pick(input.minLicenceYears, before?.minLicenceYears ?? null),
         turnaroundMinutes: input.turnaroundMinutes ?? before?.turnaroundMinutes ?? 0,
+        refuelQuarterMinor:
+          input.refuelPerQuarter === undefined
+            ? (before?.refuelQuarterMinor ?? null)
+            : input.refuelPerQuarter === null
+              ? null
+              : minor(input.refuelPerQuarter, currency),
         sort: input.sort ?? before?.sort ?? 1_000,
         active: input.active ?? before?.active ?? true,
       });

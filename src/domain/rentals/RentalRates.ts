@@ -1,5 +1,7 @@
 import { DomainError } from "../errors/DomainError.js";
+import type { ChecklistItemDefinition } from "../assignments/VehicleAssignment.js";
 import { parseDecimal, pow10 } from "../money/Decimal.js";
+import { DEFAULT_INSPECTION_ITEMS, PHOTO_VIEWS, type PhotoView } from "./RentalInspection.js";
 
 export class RentalRateError extends DomainError {
   readonly code = "RENTAL_RATE_RULE";
@@ -23,6 +25,8 @@ export type VehicleClass = Readonly<{
   minLicenceYears: number | null;
   /** Minutes a vehicle stays blocked after each rental for cleaning and checks (docs/07 §3). */
   turnaroundMinutes: number;
+  /** What refuelling costs per quarter tank missing at check-in (minor units); null: no charge. */
+  refuelQuarterMinor: number | null;
   sort: number;
   active: boolean;
 }>;
@@ -153,6 +157,12 @@ export type RentalSettings = Readonly<{
   lateCancellationFeePercent: string;
   /** Percent of the booking's charges when the customer does not come. */
   noShowFeePercent: string;
+  /** Checked at every check-out and check-in (docs/07 §6). */
+  inspectionItems: readonly ChecklistItemDefinition[];
+  /** Sides photographed at every check-out and check-in. */
+  inspectionPhotoViews: readonly PhotoView[];
+  /** Charged when a vehicle comes back needing cleaning; a decimal amount, "0" for none. */
+  cleaningFee: string;
 }>;
 
 export const DEFAULT_RENTAL_SETTINGS: RentalSettings = Object.freeze({
@@ -166,7 +176,12 @@ export const DEFAULT_RENTAL_SETTINGS: RentalSettings = Object.freeze({
   freeCancellationHours: 24,
   lateCancellationFeePercent: "25",
   noShowFeePercent: "50",
+  inspectionItems: DEFAULT_INSPECTION_ITEMS,
+  inspectionPhotoViews: Object.freeze(["front", "back", "left", "right", "interior"] as const),
+  cleaningFee: "0",
 });
+
+const ITEM_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 
 const amount = (value: number | null, what: string, positive = false) => {
   if (value === null) return;
@@ -213,6 +228,7 @@ export function validateVehicleClass(c: VehicleClass): VehicleClass {
     c.turnaroundMinutes > 1440
   )
     throw new RentalRateError("The turnaround is between 0 and 1,440 minutes");
+  amount(c.refuelQuarterMinor, "The refuelling price", true);
   return c;
 }
 
@@ -311,5 +327,25 @@ export function validateSettings(s: RentalSettings): RentalSettings {
     throw new RentalRateError("Free cancellation is from 0 to 720 hours before pickup");
   assertPercent(s.lateCancellationFeePercent, 0, 100, "The late cancellation fee");
   assertPercent(s.noShowFeePercent, 0, 100, "The no-show fee");
-  return { ...s, weekendDays: [...new Set(s.weekendDays)].sort((a, b) => a - b) };
+  const keys = s.inspectionItems.map((i) => i.key);
+  if (
+    keys.length > 30 ||
+    keys.some((k) => !ITEM_KEY.test(k)) ||
+    new Set(keys).size !== keys.length ||
+    s.inspectionItems.some((i) => i.label.trim().length === 0 || i.label.length > 80)
+  )
+    throw new RentalRateError(
+      "Up to 30 inspection items with distinct keys (lowercase letters, digits and _) and labels",
+    );
+  if (s.inspectionPhotoViews.some((v) => !PHOTO_VIEWS.includes(v)))
+    throw new RentalRateError(`Inspection photos are of ${PHOTO_VIEWS.join(", ")}`);
+  const fee = parseDecimal(s.cleaningFee);
+  if (fee.units < 0n || fee.scale > 2)
+    throw new RentalRateError("The cleaning fee is an amount of zero or more");
+  return {
+    ...s,
+    weekendDays: [...new Set(s.weekendDays)].sort((a, b) => a - b),
+    inspectionItems: s.inspectionItems.map((i) => ({ key: i.key, label: i.label.trim() })),
+    inspectionPhotoViews: PHOTO_VIEWS.filter((v) => s.inspectionPhotoViews.includes(v)),
+  };
 }

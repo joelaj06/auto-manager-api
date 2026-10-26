@@ -33,6 +33,9 @@ export const CHARGE_KINDS = [
   "cancellation",
   "cancellation_fee",
   "no_show_fee",
+  "fuel_refill",
+  "cleaning",
+  "damage",
 ] as const;
 export type ChargeKind = (typeof CHARGE_KINDS)[number];
 

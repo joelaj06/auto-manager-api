@@ -399,6 +399,20 @@ check-out; `GET /api/v1/rentals` lists (`status` includes `expired`). Each step 
 and the charge lines it adds (rental, changes, extensions, late return, mileage, fees). Rules:
 docs/07 §2, §6–7, decisions 332–341.
 
+## Rental inspections and damages
+
+Photos are uploaded to the booking first (`POST /api/v1/rentals/:id/photos`, then
+`…/photos/:fileId/complete`). `checkout` then takes `idChecked: true`, the `checklist` (every item
+of the settings' `inspectionItems`), `photos` (`{ fileId, view }`, every side in
+`inspectionPhotoViews`) and the `damages` already there; `checkin` takes the same with the new
+`damages` (`estimate`, `chargeCustomer`), `needsCleaning` and `waiveRefuel`, and adds the
+refuelling (the class's `refuelPerQuarter`), cleaning (`cleaningFee`) and damage charges.
+`GET /api/v1/rentals/:id/inspections` compares check-in with check-out. The damage register:
+`GET|POST /api/v1/vehicle-damages` (`vehicleId` for a vehicle's damage map), `GET|PATCH
+/api/v1/vehicle-damages/:id` (estimate, final cost, liability, work order and claim references;
+the renter's charges follow), `POST …/:id/repaired`, `POST …/:id/photos`. Rules: docs/07 §6,
+decisions 342–351.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

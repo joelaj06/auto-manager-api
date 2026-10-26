@@ -636,15 +636,7 @@ export function quoteRental(input: QuoteInput): RentalQuote {
   }
 
   // --- tax ---
-  const taxCode = (explicit: string | null): TaxCode | null => {
-    if (!input.tax.registered) return null;
-    const key = explicit ?? input.tax.defaultCode;
-    if (key === null) return null;
-    const code = input.tax.codes.get(key);
-    if (code === undefined || !code.active || !code.snapshot().appliesTo.includes("sales"))
-      throw new RentalPricingError(`${key} is not an active sales tax code`);
-    return code;
-  };
+  const taxCode = (explicit: string | null) => salesTaxCode(input.tax, explicit);
   const priced = (raw: RawLine, lineDiscount: Money): QuoteLine => {
     const after = raw.amount.subtract(lineDiscount);
     const code = taxCode(raw.taxCode);
@@ -706,4 +698,28 @@ export function quoteRental(input: QuoteInput): RentalQuote {
       taxComponents: [...components.values()],
     },
   };
+}
+
+/** The sales tax code a line is taxed with (none when the business is not registered). */
+export function salesTaxCode(tax: QuoteInput["tax"], explicit: string | null): TaxCode | null {
+  if (!tax.registered) return null;
+  const key = explicit ?? tax.defaultCode;
+  if (key === null) return null;
+  const code = tax.codes.get(key);
+  if (code === undefined || !code.active || !code.snapshot().appliesTo.includes("sales"))
+    throw new RentalPricingError(`${key} is not an active sales tax code`);
+  return code;
+}
+
+/** One amount taxed like the rental (a refuelling or cleaning charge at check-in). */
+export function taxedLikeRental(
+  amount: Money,
+  tax: QuoteInput["tax"],
+  explicit: string | null,
+  date: string,
+): Readonly<{ net: Money; tax: Money; total: Money }> {
+  const code = salesTaxCode(tax, explicit);
+  if (code === null) return { net: amount, tax: Money.zero(amount.currency), total: amount };
+  const taxed = code.apply(amount, date, tax.pricesIncludeTax);
+  return { net: taxed.net, tax: taxed.tax, total: taxed.gross };
 }
