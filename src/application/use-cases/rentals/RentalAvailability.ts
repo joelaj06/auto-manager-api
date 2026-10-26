@@ -388,6 +388,12 @@ export class RentalAvailability {
     if (given(spec.vehicleId)) {
       const found = await deps.blocks.vehicle(spec.vehicleId);
       if (found === null) throw new VehicleBlockNotFoundError();
+      // A class booking kept on a vehicle it already had (re-placed after a change).
+      if (given(spec.classId)) {
+        if (found.classId !== spec.classId)
+          throw new VehicleUnavailableError(`${found.code} is not in the class booked`);
+        classId = spec.classId;
+      }
       if (spec.reason === "rental" && !RENTABLE_STATUSES.has(found.status))
         throw new VehicleUnavailableError(
           `${found.code} is not offered for rent (${found.status})`,
@@ -489,6 +495,7 @@ export class RentalAvailability {
       const before = await this.reach(actor, id, permissionFor);
       const now = deps.clock.now();
       this.assertOpen(before, now);
+      assertUnowned(before);
       if (change.startsAt !== undefined && before.status === "out")
         throw new VehicleBlockError("The vehicle is out already: only the end can change");
       const vehicle = await deps.blocks.vehicle(before.vehicleId);
@@ -520,16 +527,9 @@ export class RentalAvailability {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const before = await this.reach(actor, id, permissionFor);
-      const now = deps.clock.now();
-      this.assertOpen(before, now);
-      const after: VehicleBlock = {
-        ...before,
-        status: "released",
-        releasedAt: now,
-        releasedReason: reason.trim(),
-        releasedBy: actor.userId,
-      };
-      await deps.blocks.save(after);
+      this.assertOpen(before, deps.clock.now());
+      assertUnowned(before);
+      const after = await this.free(before.id, reason, actor.userId);
       await this.audit(actor, "vehicle.block_released", after, before);
       return after;
     });
@@ -540,41 +540,133 @@ export class RentalAvailability {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const before = await this.reach(actor, id, "rentals.create");
-      const now = deps.clock.now();
-      this.assertOpen(before, now);
-      if (before.classId === null || before.status === "out")
-        throw new VehicleBlockError("Only class bookings not yet checked out change vehicle");
-      const fleet = (
-        await deps.blocks.fleet({
-          branchIds: [before.branchId],
-          classId: before.classId,
-          rentableOnly: true,
-        })
-      ).filter((v) => v.id !== before.vehicleId && (vehicleId === null || v.id === vehicleId));
-      if (vehicleId !== null && fleet.length === 0)
-        throw new VehicleUnavailableError(
-          "That vehicle is not one of the class offered for rent at the branch",
-        );
-      const ids = [before.vehicleId, ...fleet.map((v) => v.id)];
-      await deps.blocks.lock(ids);
-      await deps.blocks.releaseLapsed(ids, now);
-      const window = busyOf(before);
-      const busy = await this.busyByVehicle(fleet, around(window));
-      const chosen = chooseVehicle(
-        fleet.map((v) => candidate(v, busy.get(v.id) ?? [])),
-        window,
-      );
-      if (chosen === null)
-        throw new VehicleUnavailableError(
-          vehicleId === null
-            ? "No other vehicle of the class is free for these times"
-            : "That vehicle is busy at these times",
-        );
-      const after: VehicleBlock = { ...before, vehicleId: chosen };
-      await deps.blocks.save(after);
+      const after = await this.moveTo(before.id, vehicleId);
       await this.audit(actor, "vehicle.block_moved", after, before);
       return after;
     });
+  }
+
+  // --- for the bookings that own blocks (inside their unit of work, permissions theirs) ---
+
+  /** Moves a class booking to the vehicle, or the best-fit other vehicle of its class. */
+  async moveTo(blockId: string, vehicleId: string | null): Promise<VehicleBlock> {
+    const { deps } = this;
+    const before = await deps.blocks.get(blockId);
+    if (before === null) throw new VehicleBlockNotFoundError();
+    const now = deps.clock.now();
+    this.assertOpen(before, now);
+    if (before.classId === null || before.status === "out")
+      throw new VehicleBlockError("Only class bookings not yet checked out change vehicle");
+    const fleet = (
+      await deps.blocks.fleet({
+        branchIds: [before.branchId],
+        classId: before.classId,
+        rentableOnly: true,
+      })
+    ).filter((v) => v.id !== before.vehicleId && (vehicleId === null || v.id === vehicleId));
+    if (vehicleId !== null && fleet.length === 0)
+      throw new VehicleUnavailableError(
+        "That vehicle is not one of the class offered for rent at the branch",
+      );
+    const ids = [before.vehicleId, ...fleet.map((v) => v.id)];
+    await deps.blocks.lock(ids);
+    await deps.blocks.releaseLapsed(ids, now);
+    const window = busyOf(before);
+    const busy = await this.busyByVehicle(fleet, around(window));
+    const chosen = chooseVehicle(
+      fleet.map((v) => candidate(v, busy.get(v.id) ?? [])),
+      window,
+    );
+    if (chosen === null)
+      throw new VehicleUnavailableError(
+        vehicleId === null
+          ? "No other vehicle of the class is free for these times"
+          : "That vehicle is busy at these times",
+      );
+    const after: VehicleBlock = { ...before, vehicleId: chosen };
+    await deps.blocks.save(after);
+    return after;
+  }
+
+  /**
+   * New times for a block. Another live block in the way refuses, unless `capAtNext` (a vehicle
+   * already back late): the block then ends where the next one starts, which the result names.
+   */
+  async retime(
+    blockId: string,
+    startsAt: Date,
+    endsAt: Date,
+    options: Readonly<{ capAtNext?: boolean }> = {},
+  ): Promise<Readonly<{ block: VehicleBlock; cappedBy: VehicleBlock | null }>> {
+    const { deps } = this;
+    const before = await deps.blocks.get(blockId);
+    if (before === null) throw new VehicleBlockNotFoundError();
+    const now = deps.clock.now();
+    const vehicle = await deps.blocks.vehicle(before.vehicleId);
+    if (vehicle === null) throw new VehicleBlockNotFoundError();
+    assertWindow(before.reason, startsAt, endsAt);
+    await deps.blocks.lock([vehicle.id]);
+    await deps.blocks.releaseLapsed([vehicle.id], now);
+    let after: VehicleBlock = {
+      ...before,
+      startsAt,
+      endsAt,
+      blockedUntil: blockedUntil(before.reason, endsAt, vehicle.turnaroundMinutes),
+    };
+    const conflicts = (await deps.blocks.busy([vehicle.id], busyOf(after), now)).filter(
+      (b) => b.id !== before.id,
+    );
+    let cappedBy: VehicleBlock | null = null;
+    if (conflicts.length > 0) {
+      const next = conflicts.find((b) => b.startsAt > startsAt);
+      if (
+        options.capAtNext !== true ||
+        next === undefined ||
+        conflicts.some((b) => b.startsAt <= startsAt)
+      )
+        throw new VehicleUnavailableError(describe(vehicle, conflicts[0]!));
+      cappedBy = next;
+      const cap = next.startsAt < endsAt ? next.startsAt : endsAt;
+      after = { ...after, endsAt: cap, blockedUntil: next.startsAt };
+    }
+    await deps.blocks.save(after);
+    return { block: after, cappedBy };
+  }
+
+  /** Hold → confirmed → out, and the hold's expiry. */
+  async setStatus(
+    blockId: string,
+    status: Exclude<BlockStatus, "released">,
+    expiresAt: Date | null,
+  ): Promise<VehicleBlock> {
+    const { deps } = this;
+    const before = await deps.blocks.get(blockId);
+    if (before === null) throw new VehicleBlockNotFoundError();
+    if (before.status === "released") throw new VehicleBlockError("The block is released already");
+    const after: VehicleBlock = {
+      ...before,
+      status,
+      expiresAt: status === "hold" ? expiresAt : null,
+    };
+    await deps.blocks.save(after);
+    return after;
+  }
+
+  /** Releases a block (a lapsed hold too: its release is recorded now). */
+  async free(blockId: string, reason: string, actorId: string | null): Promise<VehicleBlock> {
+    const { deps } = this;
+    const before = await deps.blocks.get(blockId);
+    if (before === null) throw new VehicleBlockNotFoundError();
+    if (before.status === "released") return before;
+    const after: VehicleBlock = {
+      ...before,
+      status: "released",
+      releasedAt: deps.clock.now(),
+      releasedReason: reason.trim(),
+      releasedBy: actorId,
+    };
+    await deps.blocks.save(after);
+    return after;
   }
 
   // --- helpers ---
@@ -704,6 +796,12 @@ export class RentalAvailability {
 }
 
 const given = <T>(value: T | null | undefined): value is T => value !== undefined && value !== null;
+
+/** A booking's block changes with the booking, not by hand. */
+function assertUnowned(block: VehicleBlock): void {
+  if (block.refType === "rental_booking")
+    throw new VehicleBlockError("This block belongs to a booking: change the booking instead");
+}
 
 /** Holds are agents' work; other blocks are the fleet's. */
 function permissionFor(block: VehicleBlock): PermissionKey {

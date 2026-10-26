@@ -4,6 +4,8 @@ import {
   quoteRental,
   RentalPricingError,
   selectRatePlan,
+  type PricingTerms,
+  type QuoteInput,
   type RentalQuote,
 } from "../../../domain/rentals/RentalPricing.js";
 import { TaxCode } from "../../../domain/tax/TaxCode.js";
@@ -51,6 +53,8 @@ export type QuotedRental = RentalQuote &
     quotedAt: Date;
   }>;
 
+export type TermedQuote = QuotedRental & Readonly<{ terms: PricingTerms }>;
+
 /** Basis points of a percent (exact, for comparing limits). */
 const bps = (percent: string) => {
   const p = parseDecimal(percent);
@@ -77,7 +81,13 @@ export class RentalQuotes {
     }>,
   ) {}
 
-  quote(actor: Principal, request: QuoteRequest): Promise<QuotedRental> {
+  async quote(actor: Principal, request: QuoteRequest): Promise<QuotedRental> {
+    const { terms: _terms, ...quoted } = await this.quoteWithTerms(actor, request);
+    return quoted;
+  }
+
+  /** The quote and the terms it was priced with (what a booking keeps). */
+  quoteWithTerms(actor: Principal, request: QuoteRequest): Promise<TermedQuote> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const { rates } = deps;
@@ -180,20 +190,9 @@ export class RentalQuotes {
         };
       }
 
-      const tax = await deps.organisation.taxSettings();
-      const codes = new Map(
-        (await deps.reference.taxCodes()).map((props) => [props.code, TaxCode.create(props)]),
-      );
-      const returnDate = localDate(request.returnAt);
-      const holidays = await rates.holidays(pickupDate, TenantCalendar.addDays(returnDate, 1));
-      const quote = quoteRental({
-        pickupAt: request.pickupAt,
-        returnAt: request.returnAt,
-        localDate,
+      const terms: PricingTerms = {
         plan,
         classId,
-        settings,
-        holidays: new Set(holidays.map((h) => h.date)),
         extras,
         chauffeur:
           request.chauffeur === undefined || request.chauffeur === null
@@ -210,14 +209,74 @@ export class RentalQuotes {
         discountPercent:
           discountPercent !== null && bps(discountPercent) > 0n ? discountPercent : null,
         override,
-        tax: {
-          registered: tax.scheme !== "not_registered",
-          pricesIncludeTax: tax.pricesIncludeTax,
-          defaultCode: tax.defaultSalesTaxCode,
-          codes,
-        },
-      });
-      return { ...quote, branchId, classId, vehicleId, customerId, quotedAt: deps.clock.now() };
+      };
+      const quote = await this.priceTerms(terms, request.pickupAt, request.returnAt);
+      return {
+        ...quote,
+        branchId,
+        classId,
+        vehicleId,
+        customerId,
+        quotedAt: deps.clock.now(),
+        terms,
+      };
     });
+  }
+
+  /**
+   * Prices kept terms for other times or mileage (inside the caller's unit of work), with the
+   * business's current settings, holidays and tax. No permission is checked: the terms were
+   * agreed when they were quoted. A promo code counts as unused, since this booking holds it.
+   */
+  reprice(
+    terms: PricingTerms,
+    pickupAt: Date,
+    returnAt: Date,
+    changes: Readonly<{ estimatedKm?: number | null; withoutOverride?: boolean }> = {},
+  ): Promise<RentalQuote> {
+    return this.priceTerms(
+      {
+        ...terms,
+        promo: terms.promo === null ? null : { ...terms.promo, usedCount: 0, active: true },
+        estimatedKm: changes.estimatedKm === undefined ? terms.estimatedKm : changes.estimatedKm,
+        override: changes.withoutOverride === true ? null : terms.override,
+      },
+      pickupAt,
+      returnAt,
+    );
+  }
+
+  private async priceTerms(
+    terms: PricingTerms,
+    pickupAt: Date,
+    returnAt: Date,
+  ): Promise<RentalQuote> {
+    const { deps } = this;
+    const organisation = await deps.organisation.get();
+    const localDate = (instant: Date) => localDateTime(instant, organisation.timezone).date;
+    const settings = await deps.rates.settings();
+    const tax = await deps.organisation.taxSettings();
+    const codes = new Map(
+      (await deps.reference.taxCodes()).map((props) => [props.code, TaxCode.create(props)]),
+    );
+    const holidays = await deps.rates.holidays(
+      localDate(pickupAt),
+      TenantCalendar.addDays(localDate(returnAt), 1),
+    );
+    const input: QuoteInput = {
+      ...terms,
+      pickupAt,
+      returnAt,
+      localDate,
+      settings,
+      holidays: new Set(holidays.map((h) => h.date)),
+      tax: {
+        registered: tax.scheme !== "not_registered",
+        pricesIncludeTax: tax.pricesIncludeTax,
+        defaultCode: tax.defaultSalesTaxCode,
+        codes,
+      },
+    };
+    return quoteRental(input);
   }
 }

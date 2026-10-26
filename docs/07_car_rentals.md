@@ -1,6 +1,6 @@
 # 07 — Car Rentals (Enhanced)
 
-> **Status (2026-10-26):** pricing (§4) is built (P5-1): classes, rate plans with seasons, extras, zones, promo codes, holidays and `POST /rentals/quotes`; the rules as built are decisions 314–323. Availability (§3) is built (P5-2): `vehicle_blocks` with an exclusion constraint, class turnaround, holds, best-fit class allocation, manual blocks that can move class bookings, availability search and the calendar; decisions 324–331. The booking lifecycle (§2) follows in P5-3.
+> **Status (2026-10-26):** pricing (§4) is built (P5-1): classes, rate plans with seasons, extras, zones, promo codes, holidays and `POST /rentals/quotes`; the rules as built are decisions 314–323. Availability (§3) is built (P5-2): `vehicle_blocks` with an exclusion constraint, class turnaround, holds, best-fit class allocation, manual blocks that can move class bookings, availability search and the calendar; decisions 324–331. The booking lifecycle (§2, §6 odometer and fuel, §7) is built (P5-3): bookings with events and charge lines, reservations that lapse, check-out and check-in moving the vehicle, extensions, late return and mileage at the booked rates, cancellation and no-show fees; decisions 332–341. Inspections and damages (P5-4), deposits and invoices (P5-5) and the agreement (P5-6) follow.
 
 ## 1. What exists
 

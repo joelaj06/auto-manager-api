@@ -112,7 +112,7 @@ const promoBody = z.object({
   active: z.boolean().optional(),
 });
 
-const quoteBody = z.object({
+export const quoteBody = z.object({
   pickupAt: z.iso.datetime({ offset: true }).transform((v) => new Date(v)),
   returnAt: z.iso.datetime({ offset: true }).transform((v) => new Date(v)),
   classId: uuid.nullable().optional(),
@@ -489,6 +489,10 @@ export function rentalRoutes(deps: RentalRouteDependencies): ApiRoute[] {
           graceMinutes: z.number().int().min(0).max(240).optional(),
           weeklyFromDays: z.number().int().min(2).max(7).optional(),
           monthlyFromDays: z.number().int().min(8).max(30).optional(),
+          reservationHours: z.number().int().min(1).max(168).optional(),
+          freeCancellationHours: z.number().int().min(0).max(720).optional(),
+          lateCancellationFeePercent: percent.optional(),
+          noShowFeePercent: percent.optional(),
           maxDiscountPercent: z
             .string()
             .regex(/^\d{1,3}(\.\d{1,2})?$/)

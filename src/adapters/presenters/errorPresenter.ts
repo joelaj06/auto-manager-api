@@ -271,6 +271,8 @@ const RULES: Readonly<Record<string, Rule>> = {
   VEHICLE_BLOCK_NOT_FOUND: { status: 404 },
   VEHICLE_BLOCK_RULE: { status: 422 },
   VEHICLE_UNAVAILABLE: { status: 409 },
+  RENTAL_BOOKING_NOT_FOUND: { status: 404 },
+  RENTAL_BOOKING_RULE: { status: 422 },
 
   // Documents
   DOCUMENT_NOT_FOUND: { status: 404 },

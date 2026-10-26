@@ -91,6 +91,10 @@ const FLEET_SELECT = `select v.id, v.code, v.plate_number, v.make, v.model, v.br
     v.rental_class_id, v.status, c.turnaround_minutes
   from vehicles v left join vehicle_classes c on c.id = v.rental_class_id`;
 
+/** A vehicle still out past its block (an overdue rental) stays busy until it is back. */
+const OVERDUE_END =
+  "case when b.status = 'out' and b.blocked_until < $2 then $2 else b.blocked_until end";
+
 /** Live at $2: not released, and not a hold past its expiry. */
 const LIVE = "b.status <> 'released' and not (b.status = 'hold' and b.expires_at <= $2)";
 
@@ -131,7 +135,7 @@ export class PostgresVehicleBlocks implements IVehicleBlocks {
     const { rows } = await this.tx.query<BlockRow>(
       `select b.* from vehicle_blocks b
         where b.vehicle_id = any($1::uuid[]) and ${LIVE}
-          and tstzrange(b.starts_at, b.blocked_until, '[)') && tstzrange($3, $4, '[)')
+          and tstzrange(b.starts_at, ${OVERDUE_END}, '[)') && tstzrange($3, $4, '[)')
         order by b.vehicle_id, b.starts_at`,
       [vehicleIds, now, interval.from, interval.until],
     );

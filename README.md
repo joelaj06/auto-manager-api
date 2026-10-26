@@ -387,6 +387,18 @@ vehicle, `POST /api/v1/vehicle-blocks/:id/move` changes it. **Blocks**: `POST
 `PATCH /api/v1/vehicle-blocks/:id`, `POST /api/v1/vehicle-blocks/:id/release`. Classes set a
 `turnaroundMinutes` kept free after each rental. Rules: docs/07 §3, decisions 324–331.
 
+## Rental bookings
+
+`POST /api/v1/rentals` reserves a class or a vehicle for a customer at the quoted price (the quote
+fields plus `customerId`, optional `holdId` to take over a hold, `confirm: true` to book confirmed);
+a reservation lapses after the settings' `reservationHours`. Then `POST /api/v1/rentals/:id/`
+`confirm`, `vehicle` (another vehicle of the class), `checkout` (`odometer`, `fuel`), `extend`
+(`returnAt`), `checkin` (`odometer`, `fuel`, `returnedAt`, `needsMaintenance`), `close`, `cancel`
+and `no-show` (`reason`, `waiveFee`); `PATCH /api/v1/rentals/:id` changes a booking before
+check-out; `GET /api/v1/rentals` lists (`status` includes `expired`). Each step records an event
+and the charge lines it adds (rental, changes, extensions, late return, mileage, fees). Rules:
+docs/07 §2, §6–7, decisions 332–341.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

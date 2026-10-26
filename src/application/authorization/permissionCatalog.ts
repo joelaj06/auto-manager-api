@@ -312,7 +312,23 @@ const definitions = {
     scopes: BRANCH_OR_ALL,
   },
   "rentals.create": {
-    description: "Hold vehicles for customers and move class bookings between vehicles",
+    description: "Book and hold vehicles for customers and move class bookings between vehicles",
+    scopes: BRANCH_OR_ALL,
+  },
+  "rentals.update": {
+    description: "Change, confirm, extend and close rental bookings",
+    scopes: BRANCH_OR_ALL,
+  },
+  "rentals.checkout": {
+    description: "Hand rental vehicles over to customers (check-out)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "rentals.checkin": {
+    description: "Take rental vehicles back (check-in) with their odometer and fuel",
+    scopes: BRANCH_OR_ALL,
+  },
+  "rentals.cancel": {
+    description: "Cancel rental bookings and mark no-shows (policy fees apply)",
     scopes: BRANCH_OR_ALL,
   },
   "rentals.discount.apply": {

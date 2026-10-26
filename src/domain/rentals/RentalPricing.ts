@@ -86,6 +86,25 @@ export type QuoteInput = Readonly<{
   }>;
 }>;
 
+/**
+ * Everything a quote was priced with, resolved (decision 333): a booking keeps it, so its
+ * extensions, late return and mileage are priced at the rates, extras, zones and promo code it
+ * was booked with, whatever changes in the catalogue later. Plain JSON.
+ */
+export type PricingTerms = Readonly<{
+  plan: RatePlan;
+  classId: string | null;
+  extras: readonly Readonly<{ extra: RentalExtra; quantity: number }>[];
+  chauffeur: Readonly<{ overnights: number; outOfTownDays: number }> | null;
+  delivery: RentalZone | null;
+  collection: RentalZone | null;
+  destination: RentalZone | null;
+  estimatedKm: number | null;
+  promo: PromoCode | null;
+  discountPercent: string | null;
+  override: Readonly<{ amountMinor: number; reason: string }> | null;
+}>;
+
 export type RentalQuote = Readonly<{
   currency: string;
   pickupAt: Date;

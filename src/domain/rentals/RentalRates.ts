@@ -145,6 +145,14 @@ export type RentalSettings = Readonly<{
   monthlyFromDays: number;
   /** Discount an agent may give with rentals.discount.apply when the role sets no max_percent. */
   maxDiscountPercent: string;
+  /** A reservation not confirmed within these hours lapses (docs/07 §2). */
+  reservationHours: number;
+  /** Cancelling up to these hours before pickup is free. */
+  freeCancellationHours: number;
+  /** Percent of the booking's charges for a later cancellation. */
+  lateCancellationFeePercent: string;
+  /** Percent of the booking's charges when the customer does not come. */
+  noShowFeePercent: string;
 }>;
 
 export const DEFAULT_RENTAL_SETTINGS: RentalSettings = Object.freeze({
@@ -154,6 +162,10 @@ export const DEFAULT_RENTAL_SETTINGS: RentalSettings = Object.freeze({
   weeklyFromDays: 7,
   monthlyFromDays: 28,
   maxDiscountPercent: "10",
+  reservationHours: 24,
+  freeCancellationHours: 24,
+  lateCancellationFeePercent: "25",
+  noShowFeePercent: "50",
 });
 
 const amount = (value: number | null, what: string, positive = false) => {
@@ -289,5 +301,15 @@ export function validateSettings(s: RentalSettings): RentalSettings {
   if (s.monthlyFromDays < 8 || s.monthlyFromDays > 30)
     throw new RentalRateError("The monthly rate starts from 8 to 30 days");
   assertPercent(s.maxDiscountPercent, 0, 100, "The maximum discount");
+  if (!Number.isInteger(s.reservationHours) || s.reservationHours < 1 || s.reservationHours > 168)
+    throw new RentalRateError("Reservations last from 1 to 168 hours");
+  if (
+    !Number.isInteger(s.freeCancellationHours) ||
+    s.freeCancellationHours < 0 ||
+    s.freeCancellationHours > 720
+  )
+    throw new RentalRateError("Free cancellation is from 0 to 720 hours before pickup");
+  assertPercent(s.lateCancellationFeePercent, 0, 100, "The late cancellation fee");
+  assertPercent(s.noShowFeePercent, 0, 100, "The no-show fee");
   return { ...s, weekendDays: [...new Set(s.weekendDays)].sort((a, b) => a - b) };
 }

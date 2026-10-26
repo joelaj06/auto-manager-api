@@ -777,6 +777,74 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from public_holidays where name = $1",
   },
+  rental_bookings: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 c as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Renter', $1)
+                       returning id),
+                 k as (insert into vehicle_blocks (vehicle_id, branch_id, reason, status,
+                         starts_at, ends_at, blocked_until)
+                       select v.id, b.id, 'rental', 'confirmed', now(), now() + interval '1 day',
+                         now() + interval '1 day' from v, b returning id),
+                 r as (insert into rental_bookings (number, status, branch_id, customer_id,
+                         block_id, pickup_at, return_at, currency, terms, quote, notes)
+                       select $2, 'confirmed', b.id, c.id, k.id, now(), now() + interval '1 day',
+                         'GHS', '{}', '{}', $1 from b, c, k returning id)
+            select 1`,
+      params: [marker, `RB${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from rental_bookings where notes = $1",
+  },
+  rental_booking_events: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 c as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Renter', $1)
+                       returning id),
+                 k as (insert into vehicle_blocks (vehicle_id, branch_id, reason, status,
+                         starts_at, ends_at, blocked_until)
+                       select v.id, b.id, 'rental', 'confirmed', now(), now() + interval '1 day',
+                         now() + interval '1 day' from v, b returning id),
+                 r as (insert into rental_bookings (number, status, branch_id, customer_id,
+                         block_id, pickup_at, return_at, currency, terms, quote, notes)
+                       select $2, 'confirmed', b.id, c.id, k.id, now(), now() + interval '1 day',
+                         'GHS', '{}', '{}', $1 from b, c, k returning id)
+            insert into rental_booking_events (booking_id, type, data)
+            select r.id, 'reserved', jsonb_build_object('marker', $1::text) from r`,
+      params: [marker, `RE${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from rental_booking_events where data->>'marker' = $1",
+  },
+  rental_booking_charges: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 c as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Renter', $1)
+                       returning id),
+                 k as (insert into vehicle_blocks (vehicle_id, branch_id, reason, status,
+                         starts_at, ends_at, blocked_until)
+                       select v.id, b.id, 'rental', 'confirmed', now(), now() + interval '1 day',
+                         now() + interval '1 day' from v, b returning id),
+                 r as (insert into rental_bookings (number, status, branch_id, customer_id,
+                         block_id, pickup_at, return_at, currency, terms, quote, notes)
+                       select $2, 'confirmed', b.id, c.id, k.id, now(), now() + interval '1 day',
+                         'GHS', '{}', '{}', $1 from b, c, k returning id),
+                 e as (insert into rental_booking_events (booking_id, type)
+                       select r.id, 'reserved' from r returning id, booking_id)
+            insert into rental_booking_charges (booking_id, event_id, kind, description,
+              net_minor, tax_minor, total_minor)
+            select e.booking_id, e.id, 'rental', $1, 100, 0, 100 from e`,
+      params: [marker, `RC${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from rental_booking_charges where description = $1",
+  },
   vehicle_blocks: {
     insert: (marker) => ({
       sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
