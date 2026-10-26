@@ -1,4 +1,9 @@
 import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
+import { rentalRoutes } from "../../adapters/routes/rentalRoutes.js";
+import type { IRentalRates } from "../../application/ports/IRentalRates.js";
+import { RentalQuotes } from "../../application/use-cases/rentals/RentalQuotes.js";
+import { RentalRateAdministration } from "../../application/use-cases/rentals/RentalRateAdministration.js";
+import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
 import { GatewayBilling } from "../../application/use-cases/billing/GatewayBilling.js";
@@ -5348,6 +5353,81 @@ export function createContainer(
       TYPES.Logger,
     ],
   );
+  // --- Rentals: classes, rate plans, extras, zones, promo codes, quotes (docs/07 §4) ---
+  tenantRepository<IRentalRates>(TYPES.RentalRates, (tx) => new PostgresRentalRates(tx));
+  container.bind<RentalRateAdministration>(TYPES.RentalRateAdministration).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      rates: IRentalRates,
+      vehicles: IVehicleRepository,
+      vehicleAccess: VehicleAccess,
+      branches: IBranches,
+      parties: IPartyDirectory,
+      reference: ITenantReferenceData,
+      organisation: IOrganisationSettings,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+    ) =>
+      new RentalRateAdministration({
+        unitOfWork,
+        rates,
+        vehicles,
+        vehicleAccess,
+        branches,
+        parties,
+        reference,
+        organisation,
+        auditTrail,
+        requestContext,
+        ids,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RentalRates,
+      TYPES.VehicleRepository,
+      TYPES.VehicleAccess,
+      TYPES.Branches,
+      TYPES.PartyDirectory,
+      TYPES.TenantReferenceData,
+      TYPES.OrganisationSettings,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+    ],
+  );
+  container.bind<RentalQuotes>(TYPES.RentalQuotes).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      rates: IRentalRates,
+      vehicleAccess: VehicleAccess,
+      parties: IPartyDirectory,
+      reference: ITenantReferenceData,
+      organisation: IOrganisationSettings,
+      policy: AuthorizationPolicy,
+      clock: IClock,
+    ) =>
+      new RentalQuotes({
+        unitOfWork,
+        rates,
+        vehicleAccess,
+        parties,
+        reference,
+        organisation,
+        policy,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RentalRates,
+      TYPES.VehicleAccess,
+      TYPES.PartyDirectory,
+      TYPES.TenantReferenceData,
+      TYPES.OrganisationSettings,
+      TYPES.AuthorizationPolicy,
+      TYPES.Clock,
+    ],
+  );
   container.bind<WorkPayReports>(TYPES.WorkPayReports).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -6332,6 +6412,8 @@ export function createContainer(
       enterpriseQuotes: EnterpriseQuotes,
       branchReconciliation: BranchReconciliation,
       partnerCommissions: PartnerCommissions,
+      rentalAdministration: RentalRateAdministration,
+      rentalQuotes: RentalQuotes,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -6468,6 +6550,7 @@ export function createContainer(
           reports: workpayReports,
           settings: workpaySettings,
         }),
+        ...rentalRoutes({ administration: rentalAdministration, quotes: rentalQuotes }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -6580,6 +6663,8 @@ export function createContainer(
       TYPES.EnterpriseQuotes,
       TYPES.BranchReconciliation,
       TYPES.PartnerCommissions,
+      TYPES.RentalRateAdministration,
+      TYPES.RentalQuotes,
     ],
   );
 

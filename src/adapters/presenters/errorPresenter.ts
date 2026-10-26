@@ -265,6 +265,9 @@ const RULES: Readonly<Record<string, Rule>> = {
   WORKPAY_INSTALMENT_NOT_FOUND: { status: 404 },
   WORKPAY_PENALTY_NOT_FOUND: { status: 404 },
   WORKPAY_RULE: { status: 422 },
+  RENTAL_RATE_NOT_FOUND: { status: 404 },
+  RENTAL_RATE_RULE: { status: 422 },
+  RENTAL_PRICING: { status: 422 },
 
   // Documents
   DOCUMENT_NOT_FOUND: { status: 404 },

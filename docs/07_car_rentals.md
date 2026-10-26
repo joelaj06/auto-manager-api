@@ -1,5 +1,7 @@
 # 07 — Car Rentals (Enhanced)
 
+> **Status (2026-10-26):** pricing (§4) is built (P5-1): classes, rate plans with seasons, extras, zones, promo codes, holidays and `POST /rentals/quotes`; the rules as built are decisions 314–323. Availability (§3) and the booking lifecycle (§2) follow in P5-2 and P5-3.
+
 ## 1. What exists
 
 `Rental { renter, vehicle, startDate, endDate, cost, totalAmount, amountPaid, balance, status(active/completed/canceled), extensions[], receiptNumber, dateReturned }` with CRUD + extend + remove extension.

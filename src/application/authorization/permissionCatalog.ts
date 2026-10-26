@@ -305,6 +305,26 @@ const definitions = {
     description: "Change work and pay defaults (frequency, grace, rounding, deposit rule)",
     scopes: ALL,
   },
+  // --- rentals (docs/07) ---
+  "rentals.view": {
+    description: "See rental classes, rate plans and extras, and price rentals",
+    scopes: BRANCH_OR_ALL,
+  },
+  "rentals.discount.apply": {
+    description:
+      "Give rental discounts, up to the role's max_percent (or the rental settings' maximum)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "rentals.price.override": {
+    description: "Agree a rental price other than the rates, and discounts beyond the limit",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "rentals.rate_plans.manage": {
+    description:
+      "Manage vehicle classes, rate plans and seasons, extras, zones, promo codes, holidays and rental pricing settings",
+    scopes: ALL,
+  },
   // --- documents (docs/24) ---
   "documents.list": { description: "List issued documents", scopes: BRANCH_OR_ALL },
   "documents.view": {

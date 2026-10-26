@@ -719,6 +719,64 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from expense_categories where name = $1",
   },
+  vehicle_classes: {
+    insert: (marker) => ({
+      sql: "insert into vehicle_classes (code, name) values ($1, $2)",
+      params: [`ISO${letters(marker).toUpperCase().slice(0, 12)}`, marker],
+    }),
+    find: "select 1 from vehicle_classes where name = $1",
+  },
+  rental_rate_plans: {
+    insert: (marker) => ({
+      sql: `with c as (insert into vehicle_classes (code, name) values ($1, 'Isolation') returning id)
+            insert into rental_rate_plans (code, name, class_id, currency, daily_minor)
+            select $1, $2, c.id, 'GHS', 10000 from c`,
+      params: [`ISO${letters(marker).toUpperCase().slice(0, 12)}`, marker],
+    }),
+    find: "select 1 from rental_rate_plans where name = $1",
+  },
+  rental_rate_seasons: {
+    insert: (marker) => ({
+      sql: `with c as (insert into vehicle_classes (code, name) values ($1, 'Isolation') returning id),
+                 p as (insert into rental_rate_plans (code, name, class_id, currency, daily_minor)
+                       select $1, 'Isolation', c.id, 'GHS', 10000 from c returning id)
+            insert into rental_rate_seasons (plan_id, name, starts_on, ends_on, adjustment_percent)
+            select p.id, $2, '2026-12-20', '2026-12-31', 25 from p`,
+      params: [`ISO${letters(marker).toUpperCase().slice(0, 12)}`, marker],
+    }),
+    find: "select 1 from rental_rate_seasons where name = $1",
+  },
+  rental_extras: {
+    insert: (marker) => ({
+      sql: `insert into rental_extras (code, name, category, charge, price_minor)
+            values ($1, $2, 'equipment', 'per_day', 2000)`,
+      params: [`ISO${letters(marker).toUpperCase().slice(0, 12)}`, marker],
+    }),
+    find: "select 1 from rental_extras where name = $1",
+  },
+  rental_zones: {
+    insert: (marker) => ({
+      sql: "insert into rental_zones (name) values ($1)",
+      params: [marker],
+    }),
+    find: "select 1 from rental_zones where name = $1",
+  },
+  rental_promo_codes: {
+    insert: (marker) => ({
+      sql: `insert into rental_promo_codes (code, description, discount_percent)
+            values ($1, $2, 10)`,
+      params: [letters(marker).toUpperCase().slice(0, 16), marker],
+    }),
+    find: "select 1 from rental_promo_codes where description = $1",
+  },
+  public_holidays: {
+    insert: (marker) => ({
+      sql: `insert into public_holidays (date, name)
+            values (date '2030-01-01' + (abs(hashtext($1)) % 3000), $1)`,
+      params: [marker],
+    }),
+    find: "select 1 from public_holidays where name = $1",
+  },
   tax_codes: {
     insert: (marker) => ({
       sql: "insert into tax_codes (code, name) values ($1, $2)",

@@ -363,6 +363,17 @@ Statements: `GET …/:id/statement` (and `statement.pdf`), for drivers at
 the forecast; `/api/v1/dashboards/workpay/arrears` lists who is behind. Due, overdue, guarantor,
 default, payment and milestone messages are rules in `/settings/notifications` (`workpay_*`).
 
+## Rental pricing
+
+**Classes**: `/api/v1/vehicle-classes` (and `PUT /api/v1/vehicles/:id/rental-class`). **Rates**:
+`/api/v1/rental-rate-plans` (per class or vehicle, optionally a branch or customer; hourly, daily,
+weekend, weekly, monthly; mileage; chauffeur; seasons), `/api/v1/rental-extras`,
+`/api/v1/rental-zones`, `/api/v1/rental-promo-codes`, `/api/v1/public-holidays` and
+`/api/v1/settings/rentals`. **Quote**: `POST /api/v1/rentals/quotes` (`classId` or `vehicleId`,
+`pickupAt`, `returnAt`, extras, chauffeur, zones, `promoCode`, `discountPercent`, `override`)
+returns the lines, discounts, tax and totals; nothing is stored. Rules: docs/07 §4, decisions
+314–323.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
