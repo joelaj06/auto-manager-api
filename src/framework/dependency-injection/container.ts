@@ -1,8 +1,11 @@
 import { workpayRoutes } from "../../adapters/routes/workpayRoutes.js";
 import { rentalRoutes } from "../../adapters/routes/rentalRoutes.js";
+import type { IVehicleBlocks } from "../../application/ports/IVehicleBlocks.js";
 import type { IRentalRates } from "../../application/ports/IRentalRates.js";
+import { RentalAvailability } from "../../application/use-cases/rentals/RentalAvailability.js";
 import { RentalQuotes } from "../../application/use-cases/rentals/RentalQuotes.js";
 import { RentalRateAdministration } from "../../application/use-cases/rentals/RentalRateAdministration.js";
+import { PostgresVehicleBlocks } from "../../infrastructure/rentals/PostgresVehicleBlocks.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -5355,6 +5358,7 @@ export function createContainer(
   );
   // --- Rentals: classes, rate plans, extras, zones, promo codes, quotes (docs/07 §4) ---
   tenantRepository<IRentalRates>(TYPES.RentalRates, (tx) => new PostgresRentalRates(tx));
+  tenantRepository<IVehicleBlocks>(TYPES.VehicleBlocks, (tx) => new PostgresVehicleBlocks(tx));
   container.bind<RentalRateAdministration>(TYPES.RentalRateAdministration).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5425,6 +5429,47 @@ export function createContainer(
       TYPES.TenantReferenceData,
       TYPES.OrganisationSettings,
       TYPES.AuthorizationPolicy,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<RentalAvailability>(TYPES.RentalAvailability).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      blocks: IVehicleBlocks,
+      rates: IRentalRates,
+      vehicleAccess: VehicleAccess,
+      parties: IPartyDirectory,
+      organisation: IOrganisationSettings,
+      quotes: RentalQuotes,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new RentalAvailability({
+        unitOfWork,
+        blocks,
+        rates,
+        vehicleAccess,
+        parties,
+        organisation,
+        quotes,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleBlocks,
+      TYPES.RentalRates,
+      TYPES.VehicleAccess,
+      TYPES.PartyDirectory,
+      TYPES.OrganisationSettings,
+      TYPES.RentalQuotes,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
       TYPES.Clock,
     ],
   );
@@ -6414,6 +6459,7 @@ export function createContainer(
       partnerCommissions: PartnerCommissions,
       rentalAdministration: RentalRateAdministration,
       rentalQuotes: RentalQuotes,
+      rentalAvailability: RentalAvailability,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -6550,7 +6596,11 @@ export function createContainer(
           reports: workpayReports,
           settings: workpaySettings,
         }),
-        ...rentalRoutes({ administration: rentalAdministration, quotes: rentalQuotes }),
+        ...rentalRoutes({
+          administration: rentalAdministration,
+          quotes: rentalQuotes,
+          availability: rentalAvailability,
+        }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -6665,6 +6715,7 @@ export function createContainer(
       TYPES.PartnerCommissions,
       TYPES.RentalRateAdministration,
       TYPES.RentalQuotes,
+      TYPES.RentalAvailability,
     ],
   );
 

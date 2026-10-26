@@ -48,6 +48,7 @@ export type VehicleClassInput = Readonly<{
   description?: string | null;
   minDriverAge?: number | null;
   minLicenceYears?: number | null;
+  turnaroundMinutes?: number;
   sort?: number;
   active?: boolean;
 }>;
@@ -185,6 +186,7 @@ export class RentalRateAdministration {
         description: pick(input.description, before?.description ?? null),
         minDriverAge: pick(input.minDriverAge, before?.minDriverAge ?? null),
         minLicenceYears: pick(input.minLicenceYears, before?.minLicenceYears ?? null),
+        turnaroundMinutes: input.turnaroundMinutes ?? before?.turnaroundMinutes ?? 0,
         sort: input.sort ?? before?.sort ?? 1_000,
         active: input.active ?? before?.active ?? true,
       });

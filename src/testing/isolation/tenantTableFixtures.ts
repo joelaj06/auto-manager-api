@@ -777,6 +777,19 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from public_holidays where name = $1",
   },
+  vehicle_blocks: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id)
+            insert into vehicle_blocks (vehicle_id, branch_id, reason, status, starts_at,
+              ends_at, blocked_until, note)
+            select v.id, b.id, 'maintenance', 'confirmed', now(), now() + interval '1 day',
+              now() + interval '1 day', $1 from v, b`,
+      params: [marker, `VB${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from vehicle_blocks where note = $1",
+  },
   tax_codes: {
     insert: (marker) => ({
       sql: "insert into tax_codes (code, name) values ($1, $2)",

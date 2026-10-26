@@ -151,13 +151,15 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "workpay.terminate",
       "workpay.transfer.manage",
       "rentals.view",
+      "rentals.create",
       "rentals.discount.apply",
     ]),
   },
   {
     systemKey: "rental_agent",
     name: "Rental Agent",
-    description: "Prices rentals for customers in their branches and registers the customers",
+    description:
+      "Prices and holds rentals for customers in their branches and registers the customers",
     grants: branch([
       "branches.list",
       "branches.view",
@@ -168,6 +170,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "customers.create",
       "customers.update",
       "rentals.view",
+      "rentals.create",
       "rentals.discount.apply",
     ]),
   },

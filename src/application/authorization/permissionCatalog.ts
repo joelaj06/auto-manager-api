@@ -307,7 +307,12 @@ const definitions = {
   },
   // --- rentals (docs/07) ---
   "rentals.view": {
-    description: "See rental classes, rate plans and extras, and price rentals",
+    description:
+      "See rental classes, rate plans and extras, availability and the rental calendar, and price rentals",
+    scopes: BRANCH_OR_ALL,
+  },
+  "rentals.create": {
+    description: "Hold vehicles for customers and move class bookings between vehicles",
     scopes: BRANCH_OR_ALL,
   },
   "rentals.discount.apply": {

@@ -21,6 +21,8 @@ export type VehicleClass = Readonly<{
   /** Renter rules checked at booking (docs/07 §8); null: no rule. */
   minDriverAge: number | null;
   minLicenceYears: number | null;
+  /** Minutes a vehicle stays blocked after each rental for cleaning and checks (docs/07 §3). */
+  turnaroundMinutes: number;
   sort: number;
   active: boolean;
 }>;
@@ -193,6 +195,12 @@ export function validateVehicleClass(c: VehicleClass): VehicleClass {
     throw new RentalRateError("The minimum driver age is between 16 and 99");
   if (c.minLicenceYears !== null && (c.minLicenceYears < 0 || c.minLicenceYears > 60))
     throw new RentalRateError("The minimum licence years are between 0 and 60");
+  if (
+    !Number.isInteger(c.turnaroundMinutes) ||
+    c.turnaroundMinutes < 0 ||
+    c.turnaroundMinutes > 1440
+  )
+    throw new RentalRateError("The turnaround is between 0 and 1,440 minutes");
   return c;
 }
 

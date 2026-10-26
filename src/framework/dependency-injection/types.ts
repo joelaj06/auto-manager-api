@@ -281,6 +281,8 @@ export const TYPES = Object.freeze({
   RentalRates: Symbol.for("IRentalRates"),
   RentalRateAdministration: Symbol.for("RentalRateAdministration"),
   RentalQuotes: Symbol.for("RentalQuotes"),
+  VehicleBlocks: Symbol.for("IVehicleBlocks"),
+  RentalAvailability: Symbol.for("RentalAvailability"),
   IntegrityChecks: Symbol.for("IIntegrityChecks"),
   PaymentGateway: Symbol.for("IPaymentGateway"),
   GatewayRepository: Symbol.for("IGatewayRepository"),

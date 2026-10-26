@@ -1,7 +1,9 @@
 import { z } from "zod";
+import type { RentalAvailability } from "../../application/use-cases/rentals/RentalAvailability.js";
 import type { RentalQuotes } from "../../application/use-cases/rentals/RentalQuotes.js";
 import type { RentalRateAdministration } from "../../application/use-cases/rentals/RentalRateAdministration.js";
 import { EXTRA_CATEGORIES, EXTRA_CHARGES } from "../../domain/rentals/RentalRates.js";
+import { MANUAL_BLOCK_REASONS } from "../../domain/rentals/VehicleBlock.js";
 import { principalOf } from "../middleware/AccessGuard.js";
 import { envelope } from "../presenters/responseEnvelope.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
@@ -10,6 +12,7 @@ import { access } from "./RouteAccess.js";
 const uuid = z.uuid();
 const date = z.iso.date();
 const idParams = z.object({ id: uuid });
+const instant = z.iso.datetime({ offset: true }).transform((v) => new Date(v));
 const amount = z.string().regex(/^\d{1,13}(\.\d{1,4})?$/, 'Send amounts as text, e.g. "250.00"');
 const percent = z.string().regex(/^-?\d{1,3}(\.\d{1,2})?$/, 'Send percents as text, e.g. "12.5"');
 const code = z.string().trim().min(1).max(20);
@@ -32,6 +35,7 @@ const classBody = z.object({
   description: text(500),
   minDriverAge: z.number().int().min(16).max(99).nullable().optional(),
   minLicenceYears: z.number().int().min(0).max(60).nullable().optional(),
+  turnaroundMinutes: z.number().int().min(0).max(1440).optional(),
   sort: z.number().int().min(0).max(1_000_000).optional(),
   active: z.boolean().optional(),
 });
@@ -143,9 +147,49 @@ const quoteBody = z.object({
     .optional(),
 });
 
+const availabilityQuery = z.object({
+  from: instant,
+  to: instant,
+  branchId: uuid.optional(),
+  classId: uuid.optional(),
+  customerId: uuid.optional(),
+});
+
+const calendarQuery = z.object({
+  from: date,
+  to: date,
+  branchId: uuid.optional(),
+  classId: uuid.optional(),
+});
+
+const holdBody = z.object({
+  classId: uuid.nullable().optional(),
+  vehicleId: uuid.nullable().optional(),
+  branchId: uuid.nullable().optional(),
+  pickupAt: instant,
+  returnAt: instant,
+  holdMinutes: z.number().int().min(5).max(10_080).optional(),
+  customerId: uuid.nullable().optional(),
+  note: text(500),
+});
+
+const blockBody = z.object({
+  vehicleId: uuid,
+  reason: z.enum(MANUAL_BLOCK_REASONS),
+  startsAt: instant,
+  endsAt: instant.nullable(),
+  note: text(500),
+  displace: z.boolean().optional(),
+});
+
+const blockChangeBody = z
+  .object({ startsAt: instant, endsAt: instant.nullable(), note: text(500) })
+  .partial();
+
 export type RentalRouteDependencies = Readonly<{
   administration: RentalRateAdministration;
   quotes: RentalQuotes;
+  availability: RentalAvailability;
 }>;
 
 /**
@@ -154,7 +198,7 @@ export type RentalRouteDependencies = Readonly<{
  * pricing settings, and price quotes.
  */
 export function rentalRoutes(deps: RentalRouteDependencies): ApiRoute[] {
-  const { administration, quotes } = deps;
+  const { administration, quotes, availability } = deps;
   const manage = access.permission("rentals.rate_plans.manage");
 
   return [
@@ -468,6 +512,109 @@ export function rentalRoutes(deps: RentalRouteDependencies): ApiRoute[] {
       responses: { 200: { description: "Quote" } },
       handler: async ({ body }, _req, res) => {
         res.json(envelope(await quotes.quote(principalOf(res), body)));
+      },
+    }),
+
+    // --- availability (docs/07 §3) ---
+    defineRoute({
+      method: "get",
+      path: "/api/v1/rentals/availability",
+      summary: "Classes with free vehicles at a branch for the times, with their prices",
+      tags: ["rentals"],
+      access: access.permission("rentals.view"),
+      request: { query: availabilityQuery },
+      responses: { 200: { description: "Classes" } },
+      handler: async ({ query }, _req, res) => {
+        res.json(envelope(await availability.search(principalOf(res), query)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/rentals/calendar",
+      summary: "Vehicles with their bookings and blocks, and free vehicles per class per day",
+      tags: ["rentals"],
+      access: access.permission("rentals.view"),
+      request: { query: calendarQuery },
+      responses: { 200: { description: "Calendar" } },
+      handler: async ({ query }, _req, res) => {
+        res.json(envelope(await availability.calendar(principalOf(res), query)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/rentals/holds",
+      summary: "Hold a vehicle, or the best-fit vehicle of a class, until the hold lapses",
+      tags: ["rentals"],
+      access: access.permission("rentals.create"),
+      request: { body: holdBody },
+      responses: { 201: { description: "Block" } },
+      handler: async ({ body }, _req, res) => {
+        res.status(201).json(envelope(await availability.hold(principalOf(res), body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/vehicle-blocks",
+      summary: "Take a vehicle out of rental (maintenance, transfer, sale hold …)",
+      tags: ["rentals"],
+      access: access.permission("vehicles.update"),
+      request: { body: blockBody },
+      responses: { 201: { description: "Block and the class bookings moved" } },
+      handler: async ({ body }, _req, res) => {
+        res.status(201).json(envelope(await availability.block(principalOf(res), body)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/vehicle-blocks/:id",
+      summary: "A block of a vehicle",
+      tags: ["rentals"],
+      access: access.permission("rentals.view"),
+      request: { params: idParams },
+      responses: { 200: { description: "Block" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await availability.get(principalOf(res), params.id)));
+      },
+    }),
+    defineRoute({
+      method: "patch",
+      path: "/api/v1/vehicle-blocks/:id",
+      summary: "Change a block's times or note",
+      tags: ["rentals"],
+      access: access.signedIn(),
+      request: { params: idParams, body: blockChangeBody },
+      responses: { 200: { description: "Block" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await availability.reschedule(principalOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/vehicle-blocks/:id/release",
+      summary: "Free the vehicle (a hold given up, maintenance done …)",
+      tags: ["rentals"],
+      access: access.signedIn(),
+      request: {
+        params: idParams,
+        body: z.object({ reason: z.string().trim().min(3).max(300) }),
+      },
+      responses: { 200: { description: "Block" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await availability.release(principalOf(res), params.id, body.reason)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/vehicle-blocks/:id/move",
+      summary: "Move a class booking to another vehicle of the class (the best fit by default)",
+      tags: ["rentals"],
+      access: access.permission("rentals.create"),
+      request: { params: idParams, body: z.object({ vehicleId: uuid.nullable().optional() }) },
+      responses: { 200: { description: "Block" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(
+          envelope(await availability.move(principalOf(res), params.id, body.vehicleId ?? null)),
+        );
       },
     }),
   ];

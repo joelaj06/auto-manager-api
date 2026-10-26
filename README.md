@@ -374,6 +374,19 @@ weekend, weekly, monthly; mileage; chauffeur; seasons), `/api/v1/rental-extras`,
 returns the lines, discounts, tax and totals; nothing is stored. Rules: docs/07 §4, decisions
 314–323.
 
+## Rental availability
+
+Every busy time of a vehicle is a row of `vehicle_blocks`; an exclusion constraint makes two live
+blocks of a vehicle overlap impossible. **Search**: `GET /api/v1/rentals/availability?from&to`
+(`branchId`, `classId`, `customerId`) returns the free vehicles of each class with the price.
+**Calendar**: `GET /api/v1/rentals/calendar?from&to` (local dates, up to 62 days) returns vehicle
+rows with their blocks and free vehicles per class per day. **Holds**: `POST /api/v1/rentals/holds`
+(`classId` or `vehicleId`, `pickupAt`, `returnAt`, `holdMinutes`); a class hold gets the best-fit
+vehicle, `POST /api/v1/vehicle-blocks/:id/move` changes it. **Blocks**: `POST
+/api/v1/vehicle-blocks` (maintenance, transfer, sale hold; `displace` moves class bookings away),
+`PATCH /api/v1/vehicle-blocks/:id`, `POST /api/v1/vehicle-blocks/:id/release`. Classes set a
+`turnaroundMinutes` kept free after each rental. Rules: docs/07 §3, decisions 324–331.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

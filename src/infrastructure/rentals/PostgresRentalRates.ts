@@ -25,6 +25,7 @@ type ClassRow = {
   description: string | null;
   min_driver_age: number | null;
   min_licence_years: number | null;
+  turnaround_minutes: number;
   sort: number;
   active: boolean;
 };
@@ -36,6 +37,7 @@ const toClass = (r: ClassRow): VehicleClass => ({
   description: r.description,
   minDriverAge: r.min_driver_age,
   minLicenceYears: r.min_licence_years,
+  turnaroundMinutes: r.turnaround_minutes,
   sort: r.sort,
   active: r.active,
 });
@@ -234,11 +236,12 @@ export class PostgresRentalRates implements IRentalRates {
   async saveClass(c: VehicleClass, actorId: string | null): Promise<void> {
     await this.tx.query(
       `insert into vehicle_classes (id, code, name, description, min_driver_age,
-         min_licence_years, sort, active, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         min_licence_years, turnaround_minutes, sort, active, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        on conflict (id) do update set code = excluded.code, name = excluded.name,
          description = excluded.description, min_driver_age = excluded.min_driver_age,
-         min_licence_years = excluded.min_licence_years, sort = excluded.sort,
+         min_licence_years = excluded.min_licence_years,
+         turnaround_minutes = excluded.turnaround_minutes, sort = excluded.sort,
          active = excluded.active, updated_at = now()`,
       [
         c.id,
@@ -247,6 +250,7 @@ export class PostgresRentalRates implements IRentalRates {
         c.description,
         c.minDriverAge,
         c.minLicenceYears,
+        c.turnaroundMinutes,
         c.sort,
         c.active,
         actorId,

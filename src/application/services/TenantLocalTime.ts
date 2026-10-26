@@ -34,3 +34,18 @@ export function localDateTime(instant: Date, timeZone: string): LocalDateTime {
     minute: Number(parts.minute),
   };
 }
+
+/** The instant a YYYY-MM-DD date starts in an IANA timezone (its local midnight). */
+export function localMidnight(date: string, timeZone: string): Date {
+  const target = Date.parse(`${date}T00:00:00Z`);
+  let guess = target;
+  // Two corrections settle any offset, including a change of offset that day.
+  for (let i = 0; i < 2; i++) {
+    const local = localDateTime(new Date(guess), timeZone);
+    const seen = Date.parse(
+      `${local.date}T${String(local.hour).padStart(2, "0")}:${String(local.minute).padStart(2, "0")}:00Z`,
+    );
+    guess += target - seen;
+  }
+  return new Date(guess);
+}
