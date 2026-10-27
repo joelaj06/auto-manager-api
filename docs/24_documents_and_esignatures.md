@@ -114,6 +114,6 @@ GET   /public/sign/:token                 (guest signer page data)
 ## 10. Phasing
 
 - P1: engine + W&P agreement + transfer letter (drawn signature + OTP), receipts/invoices/statements PDFs.
-- P2: rental agreement and handover checklists.
+- P2: rental agreement and handover checklists (built in P5-6: `rental_agreement` at check-out with the check-out checklist, `rental_return` at check-in with the return checklist; decisions 362–368).
 - P4: sales agreement, delivery note.
 - Later: guest signing links, WhatsApp delivery, trusted timestamps, template editor UI.

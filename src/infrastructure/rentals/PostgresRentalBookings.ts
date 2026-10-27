@@ -474,8 +474,13 @@ export class PostgresRentalBookings implements IRentalBookings {
 
 type RenterRow = {
   id: string;
+  code: string;
   name: string;
   type: "individual" | "corporate";
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  ghana_card_number: string | null;
   date_of_birth: string | null;
   licence_number: string | null;
   licence_expires_on: string | null;
@@ -486,7 +491,8 @@ type RenterRow = {
   payment_terms_days: number | null;
 };
 
-const RENTERS = `select c.id, c.name, c.type, c.date_of_birth::text, c.licence_number,
+const RENTERS = `select c.id, c.code, c.name, c.type, c.phone, c.email, c.address,
+    c.ghana_card_number, c.date_of_birth::text, c.licence_number,
     c.licence_expires_on::text, c.risk_status, c.risk_reason, c.credit_limit_minor,
     c.payment_terms_days,
     (c.ghana_card_number is not null or exists (select 1 from party_documents d
@@ -496,8 +502,13 @@ const RENTERS = `select c.id, c.name, c.type, c.date_of_birth::text, c.licence_n
 
 const toRenter = (r: RenterRow): Renter => ({
   id: r.id,
+  code: r.code,
   name: r.name,
   type: r.type,
+  phone: r.phone,
+  email: r.email,
+  address: r.address,
+  ghanaCardNumber: r.ghana_card_number,
   dateOfBirth: r.date_of_birth,
   licenceNumber: r.licence_number,
   licenceExpiresOn: r.licence_expires_on,

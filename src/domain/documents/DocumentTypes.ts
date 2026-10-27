@@ -1,9 +1,17 @@
 import { listOf, type FieldSchema } from "./TemplateEngine.js";
+import { RENTAL_AGREEMENT_V1 } from "./templates/rentalAgreement.js";
+import { RENTAL_RETURN_V1 } from "./templates/rentalReturn.js";
 import { TRANSFER_LETTER_V1 } from "./templates/transferLetter.js";
 import { VEHICLE_HANDOVER_V1 } from "./templates/vehicleHandover.js";
 import { WORKPAY_AGREEMENT_V3 } from "./templates/workPayAgreement.js";
 
-export const DOCUMENT_TYPES = ["vehicle_handover", "workpay_agreement", "transfer_letter"] as const;
+export const DOCUMENT_TYPES = [
+  "vehicle_handover",
+  "workpay_agreement",
+  "transfer_letter",
+  "rental_agreement",
+  "rental_return",
+] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 export const LANGUAGES = ["en"] as const;
 export type Language = (typeof LANGUAGES)[number];
@@ -76,6 +84,43 @@ const SAMPLE_DRIVER = {
   ghanaCardNumber: "GHA-123456789-1",
   licenceNumber: "DL-778899",
 };
+
+const RENTER: FieldSchema = {
+  code: "text",
+  name: "text",
+  phone: "text",
+  email: "text",
+  address: "text",
+};
+const RENTAL_DRIVER: FieldSchema = {
+  name: "text",
+  phone: "text",
+  ghanaCardNumber: "text",
+  licenceNumber: "text",
+  licenceExpiresOn: "date",
+};
+const CHECKLIST = listOf({ label: "text", ok: "boolean", note: "text" });
+const CHARGES = listOf({ description: "text", amount: "money" });
+
+const SAMPLE_RENTER = {
+  code: "CUS-00042",
+  name: "Abena Owusu",
+  phone: "+233 20 765 4321",
+  email: "abena@example.com",
+  address: "14 Spintex Road, Accra",
+};
+const SAMPLE_RENTAL_DRIVER = {
+  name: "Abena Owusu",
+  phone: "+233 20 765 4321",
+  ghanaCardNumber: "GHA-987654321-0",
+  licenceNumber: "DL-445566",
+  licenceExpiresOn: "2029-05-31",
+};
+const SAMPLE_CHECKLIST = [
+  { label: "Spare tyre", ok: true, note: null },
+  { label: "Warning triangle", ok: true, note: null },
+  { label: "Clean inside and out", ok: false, note: "Mud on the rear mats" },
+];
 
 /**
  * The documents the system issues from templates (docs/24 §1). Each type's data is snapshotted
@@ -209,6 +254,139 @@ export const DOCUMENT_TYPE_CATALOG: Readonly<Record<DocumentType, DocumentTypeDe
           { item: "Registration documents", included: true },
           { item: "Insurance certificate", included: true },
           { item: "Spare key", included: false },
+        ],
+      },
+    },
+    rental_agreement: {
+      name: "Vehicle rental agreement",
+      numbering: "rental_agreement_document",
+      subjectType: "rental_booking",
+      fields: {
+        issuer: ISSUER,
+        document: DOCUMENT,
+        vehicle: VEHICLE,
+        renter: RENTER,
+        driver: RENTAL_DRIVER,
+        rental: {
+          number: "text",
+          branch: "text",
+          pickupOn: "date",
+          pickupTime: "text",
+          returnOn: "date",
+          returnTime: "text",
+          plan: "text",
+          mileage: "text",
+          odometer: "number",
+          unit: "text",
+          fuel: "text",
+          deposit: "money",
+          total: "money",
+          signatory: "text",
+        },
+        charges: CHARGES,
+        checklist: CHECKLIST,
+        damages: listOf({ area: "text", severity: "text", description: "text" }),
+      },
+      system: { version: 1, body: RENTAL_AGREEMENT_V1 },
+      sample: {
+        issuer: SAMPLE_ISSUER,
+        document: { number: "RAG-2027-000001", issuedOn: "2027-04-10" },
+        vehicle: SAMPLE_VEHICLE,
+        renter: SAMPLE_RENTER,
+        driver: SAMPLE_RENTAL_DRIVER,
+        rental: {
+          number: "RNT-2027-000014",
+          branch: "Accra",
+          pickupOn: "2027-04-10",
+          pickupTime: "09:00",
+          returnOn: "2027-04-13",
+          returnTime: "09:00",
+          plan: "Saloon standard",
+          mileage: "100 km a day included, then GHS 2.00 a km",
+          odometer: 84_210,
+          unit: "km",
+          fuel: "full",
+          deposit: money(50_000),
+          total: money(90_000),
+          signatory: "Abena Owusu",
+        },
+        charges: [{ description: "Rental", amount: money(90_000) }],
+        checklist: SAMPLE_CHECKLIST,
+        damages: [{ area: "front", severity: "minor", description: "Scratch on the bumper" }],
+      },
+    },
+    rental_return: {
+      name: "Vehicle return",
+      numbering: "rental_return_document",
+      subjectType: "rental_booking",
+      fields: {
+        issuer: ISSUER,
+        document: DOCUMENT,
+        vehicle: VEHICLE,
+        renter: RENTER,
+        driver: RENTAL_DRIVER,
+        rental: {
+          number: "text",
+          agreementNumber: "text",
+          branch: "text",
+          returnedOn: "date",
+          returnedTime: "text",
+          dueOn: "date",
+          dueTime: "text",
+          odometerOut: "number",
+          odometerIn: "number",
+          km: "number",
+          unit: "text",
+          fuelOut: "text",
+          fuelIn: "text",
+          total: "money",
+          signatory: "text",
+        },
+        checklist: CHECKLIST,
+        damages: listOf({
+          area: "text",
+          severity: "text",
+          description: "text",
+          estimate: "money",
+        }),
+        charges: CHARGES,
+      },
+      system: { version: 1, body: RENTAL_RETURN_V1 },
+      sample: {
+        issuer: SAMPLE_ISSUER,
+        document: { number: "RRN-2027-000001", issuedOn: "2027-04-13" },
+        vehicle: SAMPLE_VEHICLE,
+        renter: SAMPLE_RENTER,
+        driver: SAMPLE_RENTAL_DRIVER,
+        rental: {
+          number: "RNT-2027-000014",
+          agreementNumber: "RAG-2027-000001",
+          branch: "Accra",
+          returnedOn: "2027-04-13",
+          returnedTime: "11:30",
+          dueOn: "2027-04-13",
+          dueTime: "09:00",
+          odometerOut: 84_210,
+          odometerIn: 84_650,
+          km: 440,
+          unit: "km",
+          fuelOut: "full",
+          fuelIn: "half",
+          total: money(124_000),
+          signatory: "Abena Owusu",
+        },
+        checklist: SAMPLE_CHECKLIST,
+        damages: [
+          {
+            area: "left",
+            severity: "moderate",
+            description: "Dent in the rear door",
+            estimate: money(85_000),
+          },
+        ],
+        charges: [
+          { description: "Late return (150 minutes)", amount: money(15_000) },
+          { description: "Refuelling (2 quarter tanks)", amount: money(10_000) },
         ],
       },
     },

@@ -24,6 +24,10 @@ export const BOOKING_EVENT_TYPES = [
   "deposit_held",
   "deposit_applied",
   "deposit_released",
+  "agreement_issued",
+  "agreement_signed",
+  "return_issued",
+  "return_signed",
 ] as const;
 export type BookingEventType = (typeof BOOKING_EVENT_TYPES)[number];
 
@@ -68,8 +72,13 @@ export type BookingFilter = Readonly<{
 /** What booking checks about the renter (docs/07 §8). */
 export type Renter = Readonly<{
   id: string;
+  code: string;
   name: string;
   type: "individual" | "corporate";
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  ghanaCardNumber: string | null;
   dateOfBirth: string | null;
   licenceNumber: string | null;
   licenceExpiresOn: string | null;

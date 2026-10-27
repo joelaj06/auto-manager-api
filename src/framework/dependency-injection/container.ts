@@ -7,7 +7,9 @@ import type {
   IVehicleDamages,
 } from "../../application/ports/IRentalInspections.js";
 import type { IRentalRates } from "../../application/ports/IRentalRates.js";
+import { RentalAgreements } from "../../application/use-cases/rentals/RentalAgreements.js";
 import { RentalAvailability } from "../../application/use-cases/rentals/RentalAvailability.js";
+import type { IssuedDocumentProps } from "../../domain/documents/IssuedDocument.js";
 import { RentalBookings } from "../../application/use-cases/rentals/RentalBookings.js";
 import {
   BOOKING_PHOTO_OWNER,
@@ -5021,6 +5023,12 @@ export function createContainer(
             fullySigned: (document) =>
               container.get<WorkPayTransfers>(TYPES.WorkPayTransfers).fullySigned(document),
           },
+          // Rentals: the booking records its agreement and return note as signed.
+          ...(["rental_agreement", "rental_return"] as const).map((documentType) => ({
+            documentType,
+            fullySigned: (document: IssuedDocumentProps) =>
+              container.get<RentalAgreements>(TYPES.RentalAgreements).fullySigned(document),
+          })),
         ],
       }),
     [
@@ -5648,6 +5656,56 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  container.bind<RentalAgreements>(TYPES.RentalAgreements).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      bookings: IRentalBookings,
+      inspections: IRentalInspections,
+      damages: IVehicleDamages,
+      vehicles: IVehicleRepository,
+      branches: IBranches,
+      documents: Documents,
+      issued: IDocumentRepository,
+      signers: IDocumentSigners,
+      organisation: IOrganisationSettings,
+      vehicleAccess: VehicleAccess,
+      policy: AuthorizationPolicy,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new RentalAgreements({
+        unitOfWork,
+        bookings,
+        inspections,
+        damages,
+        vehicles,
+        branches,
+        documents,
+        issued,
+        signers,
+        organisation,
+        vehicleAccess,
+        policy,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RentalBookingRepository,
+      TYPES.RentalInspectionRepository,
+      TYPES.VehicleDamageRepository,
+      TYPES.VehicleRepository,
+      TYPES.Branches,
+      TYPES.Documents,
+      TYPES.DocumentRepository,
+      TYPES.DocumentSigners,
+      TYPES.OrganisationSettings,
+      TYPES.VehicleAccess,
+      TYPES.AuthorizationPolicy,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
   container.bind<RentalBookings>(TYPES.RentalBookings).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5658,6 +5716,7 @@ export function createContainer(
       quotes: RentalQuotes,
       inspections: RentalInspections,
       accounts: RentalAccounts,
+      agreements: RentalAgreements,
       vehicleAccess: VehicleAccess,
       registry: VehicleRegistry,
       odometer: OdometerLog,
@@ -5678,6 +5737,7 @@ export function createContainer(
         quotes,
         inspections,
         accounts,
+        agreements,
         vehicleAccess,
         registry,
         odometer,
@@ -5698,6 +5758,7 @@ export function createContainer(
       TYPES.RentalQuotes,
       TYPES.RentalInspections,
       TYPES.RentalAccounts,
+      TYPES.RentalAgreements,
       TYPES.VehicleAccess,
       TYPES.VehicleRegistry,
       TYPES.OdometerLog,
@@ -6701,6 +6762,7 @@ export function createContainer(
       rentalInspections: RentalInspections,
       vehicleDamages: VehicleDamages,
       rentalAccounts: RentalAccounts,
+      rentalAgreements: RentalAgreements,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -6842,7 +6904,11 @@ export function createContainer(
           quotes: rentalQuotes,
           availability: rentalAvailability,
         }),
-        ...rentalBookingRoutes({ bookings: rentalBookings, inspections: rentalInspections }),
+        ...rentalBookingRoutes({
+          bookings: rentalBookings,
+          inspections: rentalInspections,
+          agreements: rentalAgreements,
+        }),
         ...vehicleDamageRoutes({ damages: vehicleDamages }),
         ...rentalAccountRoutes({ accounts: rentalAccounts }),
         ...identityRoutes({
@@ -6964,6 +7030,7 @@ export function createContainer(
       TYPES.RentalInspections,
       TYPES.VehicleDamages,
       TYPES.RentalAccounts,
+      TYPES.RentalAgreements,
     ],
   );
 

@@ -43,6 +43,7 @@ import type { OdometerLog } from "../vehicles/OdometerLog.js";
 import type { VehicleAccess } from "../vehicles/VehicleAccess.js";
 import type { VehicleRegistry } from "../vehicles/VehicleRegistry.js";
 import type { RentalAccounts } from "./RentalAccounts.js";
+import type { RentalAgreements, RentalDocument } from "./RentalAgreements.js";
 import type { RentalAvailability } from "./RentalAvailability.js";
 import type { InspectionInput, RentalInspections } from "./RentalInspections.js";
 import { RentalRateNotFoundError } from "./RentalRateAdministration.js";
@@ -150,7 +151,12 @@ export type BookingView = Readonly<{
 }>;
 
 export type BookingDetail = BookingView &
-  Readonly<{ events: readonly BookingEvent[]; warnings: readonly string[] }>;
+  Readonly<{
+    events: readonly BookingEvent[];
+    /** The rental agreement and the return note, newest first, with their signers (P5-6). */
+    documents: readonly RentalDocument[];
+    warnings: readonly string[];
+  }>;
 
 type Deps = Readonly<{
   unitOfWork: IUnitOfWork;
@@ -161,6 +167,7 @@ type Deps = Readonly<{
   quotes: RentalQuotes;
   inspections: RentalInspections;
   accounts: RentalAccounts;
+  agreements: RentalAgreements;
   vehicleAccess: VehicleAccess;
   registry: VehicleRegistry;
   odometer: OdometerLog;
@@ -519,6 +526,8 @@ export class RentalBookings {
         damagesFound: damages.map((d) => d.id),
         notes: request.notes ?? null,
       });
+      // The agreement with the terms and the checklist as recorded, for both sides to sign.
+      await deps.agreements.atCheckOut(actor, booking);
       await this.audit(actor, "rental_booking.checked_out", booking, before);
       return this.detail(booking, warnings);
     });
@@ -667,6 +676,7 @@ export class RentalBookings {
         await this.charge(booking, event, "mileage", `Mileage: ${km} km driven`, mileage, actor);
       for (const c of inspected.charges)
         await this.charge(booking, event, c.kind, c.description, c.amount, actor, c.damageId);
+      await deps.agreements.atCheckIn(actor, booking);
       await this.audit(actor, "rental_booking.returned", booking, before);
       return this.detail(
         booking,
@@ -675,7 +685,7 @@ export class RentalBookings {
     });
   }
 
-  /** Done (settling the balance and the deposit come with invoicing, P5-5). */
+  /** Done: invoiced; an agreement or return note still unsigned is a warning. */
   close(actor: Principal, id: string): Promise<BookingDetail> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
@@ -687,7 +697,7 @@ export class RentalBookings {
       await deps.accounts.invoice(actor, booking);
       await this.event(booking, "closed", actor, {});
       await this.audit(actor, "rental_booking.closed", booking, before);
-      return this.detail(booking, []);
+      return this.detail(booking, await deps.agreements.unsigned(booking.id));
     });
   }
 
@@ -1171,6 +1181,7 @@ export class RentalBookings {
     return {
       ...(await this.view(booking)),
       events: await this.deps.bookings.events(booking.id),
+      documents: await this.deps.agreements.of(booking.id),
       warnings,
     };
   }

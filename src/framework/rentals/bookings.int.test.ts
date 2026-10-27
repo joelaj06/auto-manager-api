@@ -260,7 +260,9 @@ describe("the booking life cycle", () => {
       "reserved",
       "confirmed",
       "checked_out",
+      "agreement_issued",
       "returned",
+      "return_issued",
       "invoiced",
       "closed",
     ]);

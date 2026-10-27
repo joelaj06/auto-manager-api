@@ -345,6 +345,13 @@ describe("rental accounts", () => {
     await rentAndReturn(id, { driverId: driver });
     const detail = await api().get(`/api/v1/rentals/${id}`).set(as(agent));
     expect(detail.body.data.driver).toMatchObject({ id: driver });
+    // The authorised driver signs the agreement for the company.
+    const agreement = (detail.body.data.documents as { id: string; type: string }[]).find(
+      (d) => d.type === "rental_agreement",
+    )!;
+    const issued = await api().get(`/api/v1/documents/${agreement.id}`).set(as(agent));
+    expect(issued.body.data.data.rental.signatory).toMatch(/^Ama .* for Acme .* Ltd$/);
+    expect(issued.body.data.data.driver.name).toMatch(/^Ama /);
     expect((await step(id, "close")).status).toBe(200);
 
     const acc = await account(id);

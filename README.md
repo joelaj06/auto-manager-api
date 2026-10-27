@@ -428,6 +428,16 @@ terms and are held to the limit; their bookings name one of their authorised dri
 Blacklisted customers and drivers are refused, the watchlist warns. A renter's account:
 `GET /api/v1/customers/:id/rental-account`. Rules: docs/07 §5, §8, decisions 352–361.
 
+## Rental agreement and return note
+
+Checking out issues the rental agreement (`RAG-…`: terms, charges, deposit, checklist, the damage
+map) and checking in the return note (`RRN-…`: odometer, fuel, return checklist, new damages,
+return charges). The agent signs for the business (`/api/v1/me/signatures`); the renter signs
+through the link sent by SMS or email, or the QR from
+`POST /api/v1/documents/:id/signers/:signerId/link`. The booking's detail lists its `documents`
+with each signer's status. `POST /api/v1/rentals/:id/agreement` and `…/return-note` issue them
+again (the current one is voided). Rules: docs/07 §6, docs/24, decisions 362–368.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

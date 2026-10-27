@@ -183,6 +183,10 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "rentals.cancel",
       "rentals.payments.record",
       "rentals.discount.apply",
+      "documents.list",
+      "documents.view",
+      "documents.issue",
+      "documents.attach_paper",
     ]),
   },
   {

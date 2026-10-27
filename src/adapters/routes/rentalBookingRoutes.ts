@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { RentalBookings } from "../../application/use-cases/rentals/RentalBookings.js";
+import type { RentalAgreements } from "../../application/use-cases/rentals/RentalAgreements.js";
 import type { RentalInspections } from "../../application/use-cases/rentals/RentalInspections.js";
 import { FUEL_LEVELS } from "../../domain/assignments/VehicleAssignment.js";
 import { FILE_KINDS } from "../../domain/files/FileKinds.js";
@@ -82,11 +83,12 @@ const callOffBody = z.object({
 export type RentalBookingRouteDependencies = Readonly<{
   bookings: RentalBookings;
   inspections: RentalInspections;
+  agreements: RentalAgreements;
 }>;
 
 /** Rental bookings (docs/07 §2, §12): reserve, confirm, check out, extend, check in, close. */
 export function rentalBookingRoutes(deps: RentalBookingRouteDependencies): ApiRoute[] {
-  const { bookings, inspections } = deps;
+  const { bookings, inspections, agreements } = deps;
   const step = (
     path: string,
     summary: string,
@@ -258,6 +260,20 @@ export function rentalBookingRoutes(deps: RentalBookingRouteDependencies): ApiRo
         );
       },
     }),
+    step(
+      "agreement",
+      "Issue the rental agreement again (after an extension, a change or a mistake): the current one is voided and signing starts again",
+      "rentals.update",
+      z.object({}),
+      (actor, id) => agreements.reissue(actor, id, "rental_agreement"),
+    ),
+    step(
+      "return-note",
+      "Issue the return note again: the current one is voided and signing starts again",
+      "rentals.update",
+      z.object({}),
+      (actor, id) => agreements.reissue(actor, id, "rental_return"),
+    ),
     step("close", "Close a returned booking", "rentals.update", z.object({}), (actor, id) =>
       bookings.close(actor, id),
     ),
