@@ -14,6 +14,10 @@ import {
   RentalInspections,
 } from "../../application/use-cases/rentals/RentalInspections.js";
 import { VehicleDamages } from "../../application/use-cases/rentals/VehicleDamages.js";
+import {
+  DEPOSIT_SOURCE,
+  RentalAccounts,
+} from "../../application/use-cases/rentals/RentalAccounts.js";
 import { RentalQuotes } from "../../application/use-cases/rentals/RentalQuotes.js";
 import { RentalRateAdministration } from "../../application/use-cases/rentals/RentalRateAdministration.js";
 import { PostgresVehicleBlocks } from "../../infrastructure/rentals/PostgresVehicleBlocks.js";
@@ -24,6 +28,7 @@ import {
 } from "../../infrastructure/rentals/PostgresRentalInspections.js";
 import { rentalBookingRoutes } from "../../adapters/routes/rentalBookingRoutes.js";
 import { vehicleDamageRoutes } from "../../adapters/routes/vehicleDamageRoutes.js";
+import { rentalAccountRoutes } from "../../adapters/routes/rentalAccountRoutes.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -4240,6 +4245,15 @@ export function createContainer(
     ) => {
       // Collections records through payment recording: resolved when finance calls back.
       const collections = () => container.get<WorkPayCollections>(TYPES.WorkPayCollections);
+      // Rental deposits: resolved when finance calls back.
+      const rentalAccounts = () => container.get<RentalAccounts>(TYPES.RentalAccounts);
+      const rentalDeposits = {
+        sourceType: DEPOSIT_SOURCE,
+        paymentReversed: (_bookingId: string, paymentId: string) =>
+          rentalAccounts().depositPaymentReversed(paymentId),
+        describe: (bookingId: string, paymentId: string) =>
+          rentalAccounts().depositPurpose(bookingId, paymentId),
+      };
       const workpayInstalments = {
         sourceType: "workpay_payment",
         paymentReversed: (sourceId: string, paymentId: string) =>
@@ -4279,11 +4293,13 @@ export function createContainer(
           }),
           new WorkPayDeposits({ agreements: workpayAgreements, payments, clock }),
           workpayInstalments,
+          rentalDeposits,
         ],
         purposes: [
           new RemittancePaymentPurpose({ remittances: remittanceStore, records: remittanceStore }),
           new WorkPayDeposits({ agreements: workpayAgreements, payments, clock }),
           workpayInstalments,
+          rentalDeposits,
         ],
       });
     },
@@ -5584,6 +5600,54 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  container.bind<RentalAccounts>(TYPES.RentalAccounts).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      bookings: IRentalBookings,
+      invoicing: Invoicing,
+      invoices: IInvoiceRepository,
+      payments: PaymentRecording,
+      posting: LedgerPosting,
+      organisation: IOrganisationSettings,
+      calendar: TenantCalendar,
+      vehicleAccess: VehicleAccess,
+      policy: AuthorizationPolicy,
+      rates: IRentalRates,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new RentalAccounts({
+        unitOfWork,
+        bookings,
+        invoicing,
+        invoices,
+        payments,
+        posting,
+        organisation,
+        calendar,
+        vehicleAccess,
+        policy,
+        classDeposit: async (classId) =>
+          classId === null ? null : ((await rates.vehicleClass(classId))?.depositMinor ?? null),
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.RentalBookingRepository,
+      TYPES.Invoicing,
+      TYPES.InvoiceRepository,
+      TYPES.PaymentRecording,
+      TYPES.LedgerPosting,
+      TYPES.OrganisationSettings,
+      TYPES.TenantCalendar,
+      TYPES.VehicleAccess,
+      TYPES.AuthorizationPolicy,
+      TYPES.RentalRates,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
   container.bind<RentalBookings>(TYPES.RentalBookings).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5593,6 +5657,7 @@ export function createContainer(
       availability: RentalAvailability,
       quotes: RentalQuotes,
       inspections: RentalInspections,
+      accounts: RentalAccounts,
       vehicleAccess: VehicleAccess,
       registry: VehicleRegistry,
       odometer: OdometerLog,
@@ -5612,6 +5677,7 @@ export function createContainer(
         availability,
         quotes,
         inspections,
+        accounts,
         vehicleAccess,
         registry,
         odometer,
@@ -5631,6 +5697,7 @@ export function createContainer(
       TYPES.RentalAvailability,
       TYPES.RentalQuotes,
       TYPES.RentalInspections,
+      TYPES.RentalAccounts,
       TYPES.VehicleAccess,
       TYPES.VehicleRegistry,
       TYPES.OdometerLog,
@@ -6633,6 +6700,7 @@ export function createContainer(
       rentalBookings: RentalBookings,
       rentalInspections: RentalInspections,
       vehicleDamages: VehicleDamages,
+      rentalAccounts: RentalAccounts,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -6776,6 +6844,7 @@ export function createContainer(
         }),
         ...rentalBookingRoutes({ bookings: rentalBookings, inspections: rentalInspections }),
         ...vehicleDamageRoutes({ damages: vehicleDamages }),
+        ...rentalAccountRoutes({ accounts: rentalAccounts }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -6894,6 +6963,7 @@ export function createContainer(
       TYPES.RentalBookings,
       TYPES.RentalInspections,
       TYPES.VehicleDamages,
+      TYPES.RentalAccounts,
     ],
   );
 

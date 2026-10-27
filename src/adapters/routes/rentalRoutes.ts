@@ -38,6 +38,7 @@ const classBody = z.object({
   minLicenceYears: z.number().int().min(0).max(60).nullable().optional(),
   turnaroundMinutes: z.number().int().min(0).max(1440).optional(),
   refuelPerQuarter: amount.nullable().optional(),
+  deposit: amount.nullable().optional(),
   sort: z.number().int().min(0).max(1_000_000).optional(),
   active: z.boolean().optional(),
 });

@@ -413,6 +413,21 @@ refuelling (the class's `refuelPerQuarter`), cleaning (`cleaningFee`) and damage
 the renter's charges follow), `POST …/:id/repaired`, `POST …/:id/photos`. Rules: docs/07 §6,
 decisions 342–351.
 
+## Rental payments, deposits and accounts
+
+Money goes through finance (recorded, not processed). `GET /api/v1/rentals/:id/account` shows the
+booking's charges, invoices, balance, credit and deposit. `POST …/:id/payments` takes a payment
+(applied to the booking's invoices, the rest to the next one); `POST …/:id/deposit` takes the
+class's security `deposit` (needed before check-out unless `waiveDeposit` with
+`rentals.price.override`); `POST …/:id/deposit/apply` puts it towards the invoices and
+`POST …/:id/deposit/release` returns the rest once the vehicle is back. Closing a booking issues its
+invoice; a cancellation or no-show invoices its fee; `POST …/:id/invoice` bills later charges.
+Corporate customers on account (a credit limit) pay no deposit, are invoiced with their payment
+terms and are held to the limit; their bookings name one of their authorised drivers
+(`POST|DELETE /api/v1/customers/:id/authorised-drivers`, `driverId` on booking or check-out).
+Blacklisted customers and drivers are refused, the watchlist warns. A renter's account:
+`GET /api/v1/customers/:id/rental-account`. Rules: docs/07 §5, §8, decisions 352–361.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

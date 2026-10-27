@@ -51,6 +51,8 @@ export type VehicleClassInput = Readonly<{
   turnaroundMinutes?: number;
   /** Refuelling per quarter tank missing at check-in; null: none charged. */
   refuelPerQuarter?: Amount;
+  /** The security deposit before check-out; null: none. */
+  deposit?: Amount;
   sort?: number;
   active?: boolean;
 }>;
@@ -196,6 +198,12 @@ export class RentalRateAdministration {
             : input.refuelPerQuarter === null
               ? null
               : minor(input.refuelPerQuarter, currency),
+        depositMinor:
+          input.deposit === undefined
+            ? (before?.depositMinor ?? null)
+            : input.deposit === null
+              ? null
+              : minor(input.deposit, currency),
         sort: input.sort ?? before?.sort ?? 1_000,
         active: input.active ?? before?.active ?? true,
       });

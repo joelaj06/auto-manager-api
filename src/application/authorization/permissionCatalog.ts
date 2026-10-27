@@ -336,6 +336,11 @@ const definitions = {
     description: "Cancel rental bookings and mark no-shows (policy fees apply)",
     scopes: BRANCH_OR_ALL,
   },
+  "rentals.payments.record": {
+    description:
+      "Take rental payments and security deposits, apply deposits to invoices and return them",
+    scopes: BRANCH_OR_ALL,
+  },
   "rentals.discount.apply": {
     description:
       "Give rental discounts, up to the role's max_percent (or the rental settings' maximum)",

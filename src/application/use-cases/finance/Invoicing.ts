@@ -208,26 +208,58 @@ export class Invoicing {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const invoice = await this.reach(actor, id, "finance.invoices.manage", true);
-      const p = invoice.snapshot();
-      await deps.posting.assertOpen(p.issueDate);
-      const number = await deps.numbering.next("invoice", new Date(`${p.issueDate}T12:00:00Z`));
-      invoice.issue({
-        number,
-        taxCodes: await this.taxCodes(),
-        issuedBy: actor.userId,
-        now: deps.clock.now(),
-      });
-      const entry = Postings.invoiceIssued(
-        invoice,
-        await deps.posting.accounts(),
-        await deps.posting.baseCurrency(),
-      );
-      invoice.posted(entry.lines.reduce((sum, l) => sum + l.debitMinor, 0));
-      await deps.posting.post(entry, actor.userId);
-      await deps.invoices.save(invoice);
-      await this.audit(actor, "invoice.issued", invoice);
+      await this.issueDraft(actor, invoice);
       return invoiceView(invoice.snapshot());
     });
+  }
+
+  /**
+   * Creates and issues the invoice of a module's record (a rental booking …) in one step. The
+   * module checked its own permission and the branch; the finance permissions are not needed.
+   */
+  async issueFor(
+    actor: Principal,
+    request: InvoiceRequest &
+      Readonly<{ branchId: string; source: Readonly<{ type: string; id: string }> }>,
+  ): Promise<InvoiceView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const { header, lines, taxCodes } = await this.prepare(request, request.branchId);
+      const invoice = Invoice.draft({
+        id: deps.ids.next(),
+        header,
+        lines,
+        taxCodes,
+        source: request.source,
+        createdBy: actor.userId,
+        now: deps.clock.now(),
+      });
+      await deps.invoices.save(invoice);
+      await this.issueDraft(actor, invoice);
+      return invoiceView(invoice.snapshot());
+    });
+  }
+
+  private async issueDraft(actor: Principal, invoice: Invoice): Promise<void> {
+    const { deps } = this;
+    const p = invoice.snapshot();
+    await deps.posting.assertOpen(p.issueDate);
+    const number = await deps.numbering.next("invoice", new Date(`${p.issueDate}T12:00:00Z`));
+    invoice.issue({
+      number,
+      taxCodes: await this.taxCodes(),
+      issuedBy: actor.userId,
+      now: deps.clock.now(),
+    });
+    const entry = Postings.invoiceIssued(
+      invoice,
+      await deps.posting.accounts(),
+      await deps.posting.baseCurrency(),
+    );
+    invoice.posted(entry.lines.reduce((sum, l) => sum + l.debitMinor, 0));
+    await deps.posting.post(entry, actor.userId);
+    await deps.invoices.save(invoice);
+    await this.audit(actor, "invoice.issued", invoice);
   }
 
   async void(actor: Principal, id: string, reason: string): Promise<InvoiceView> {

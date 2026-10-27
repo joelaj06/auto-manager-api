@@ -27,6 +27,8 @@ export type VehicleClass = Readonly<{
   turnaroundMinutes: number;
   /** What refuelling costs per quarter tank missing at check-in (minor units); null: no charge. */
   refuelQuarterMinor: number | null;
+  /** The security deposit held before check-out (minor units); null: none. */
+  depositMinor: number | null;
   sort: number;
   active: boolean;
 }>;
@@ -229,6 +231,7 @@ export function validateVehicleClass(c: VehicleClass): VehicleClass {
   )
     throw new RentalRateError("The turnaround is between 0 and 1,440 minutes");
   amount(c.refuelQuarterMinor, "The refuelling price", true);
+  amount(c.depositMinor, "The deposit", true);
   return c;
 }
 

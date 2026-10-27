@@ -289,6 +289,7 @@ export const TYPES = Object.freeze({
   VehicleDamageRepository: Symbol.for("IVehicleDamages"),
   RentalInspections: Symbol.for("RentalInspections"),
   VehicleDamages: Symbol.for("VehicleDamages"),
+  RentalAccounts: Symbol.for("RentalAccounts"),
   IntegrityChecks: Symbol.for("IIntegrityChecks"),
   PaymentGateway: Symbol.for("IPaymentGateway"),
   GatewayRepository: Symbol.for("IGatewayRepository"),

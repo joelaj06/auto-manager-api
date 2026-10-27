@@ -54,10 +54,14 @@ const createBody = quoteBody.extend({
   customerId: uuid,
   holdId: uuid.nullable().optional(),
   confirm: z.boolean().optional(),
+  driverId: uuid.nullable().optional(),
   notes,
 });
 
-const changeBody = quoteBody.omit({ branchId: true, customerId: true }).partial().extend({ notes });
+const changeBody = quoteBody
+  .omit({ branchId: true, customerId: true })
+  .partial()
+  .extend({ driverId: uuid.nullable().optional(), notes });
 
 const listQuery = z.object({
   status: z.enum([...BOOKING_STATUSES, "expired"]).optional(),
@@ -170,6 +174,8 @@ export function rentalBookingRoutes(deps: RentalBookingRouteDependencies): ApiRo
       "rentals.checkout",
       z.object({
         vehicleId: uuid.nullable().optional(),
+        driverId: uuid.nullable().optional(),
+        waiveDeposit: z.boolean().optional(),
         odometer,
         fuel: z.enum(FUEL_LEVELS),
         idChecked: z.boolean(),

@@ -261,6 +261,7 @@ describe("the booking life cycle", () => {
       "confirmed",
       "checked_out",
       "returned",
+      "invoiced",
       "closed",
     ]);
     const audit = await t.tenant.query<{ action: string }>(

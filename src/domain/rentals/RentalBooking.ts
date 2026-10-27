@@ -51,6 +51,8 @@ export type RentalBookingProps = Readonly<{
   status: BookingStatus;
   branchId: string;
   customerId: string;
+  /** Who drives, for a company: one of its authorised drivers (null: the customer). */
+  driverId: string | null;
   classId: string | null;
   vehicleId: string;
   byClass: boolean;
@@ -203,6 +205,12 @@ export class RentalBooking {
       notes: params.notes === undefined ? this.props.notes : params.notes?.trim() || null,
       updatedAt: params.now,
     };
+  }
+
+  /** The driver of a company's rental, named before the keys go out. */
+  nameDriver(driverId: string | null, now: Date): void {
+    this.assertUpcoming("given another driver");
+    this.props = { ...this.props, driverId, updatedAt: now };
   }
 
   changeVehicle(placement: Placement, now: Date): void {

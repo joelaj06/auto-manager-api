@@ -167,16 +167,20 @@ export class PaymentRecording {
     });
   }
 
+  /**
+   * Records money in or out. A module recording for one of its records (a rental's payment or
+   * deposit …) checks the caller with its own `permission`.
+   */
   async record(
     actor: Principal,
     request: PaymentRequest | SourcedPaymentRequest,
+    permission: PermissionKey = "finance.payments.record",
   ): Promise<PaymentView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const branchId =
-        request.branchId ??
-        (await deps.scope.defaultBranch(actor, "finance.payments.record", "payment"));
-      await deps.scope.branch(actor, "finance.payments.record", branchId);
+        request.branchId ?? (await deps.scope.defaultBranch(actor, permission, "payment"));
+      await deps.scope.branch(actor, permission, branchId);
       const paidOn = request.paidOn ?? (await deps.calendar.today());
       await deps.posting.assertOpen(paidOn);
       const accounts = await deps.posting.accounts();
@@ -270,6 +274,26 @@ export class PaymentRecording {
       const payment = await this.reach(actor, paymentId, "finance.payments.record", true);
       const amountMinor = Money.parse(input.amount, payment.snapshot().currency).amountMinor;
       await this.applyTo(actor, payment, input.invoiceId, amountMinor);
+      await deps.payments.save(payment);
+      return this.detail(payment);
+    });
+  }
+
+  /**
+   * Allocates part of a payment a module recorded (a rental's deposit or prepayment) to one of
+   * its invoices; the module checked its own permission.
+   */
+  async allocateFor(
+    actor: Principal,
+    paymentId: string,
+    invoiceId: string,
+    amountMinor: number,
+  ): Promise<PaymentView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const payment = await deps.payments.lockById(paymentId);
+      if (payment === null) throw new PaymentNotFoundError();
+      await this.applyTo(actor, payment, invoiceId, amountMinor);
       await deps.payments.save(payment);
       return this.detail(payment);
     });

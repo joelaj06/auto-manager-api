@@ -29,6 +29,7 @@ import type {
   BookingEvent,
   BookingEventType,
   IRentalBookings,
+  Renter,
 } from "../../ports/IRentalBookings.js";
 import type { IRentalRates } from "../../ports/IRentalRates.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
@@ -41,6 +42,7 @@ import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import type { OdometerLog } from "../vehicles/OdometerLog.js";
 import type { VehicleAccess } from "../vehicles/VehicleAccess.js";
 import type { VehicleRegistry } from "../vehicles/VehicleRegistry.js";
+import type { RentalAccounts } from "./RentalAccounts.js";
 import type { RentalAvailability } from "./RentalAvailability.js";
 import type { InspectionInput, RentalInspections } from "./RentalInspections.js";
 import { RentalRateNotFoundError } from "./RentalRateAdministration.js";
@@ -64,6 +66,8 @@ export type BookingRequest = QuoteRequest &
     holdId?: string | null;
     /** Confirm at once (rentals.update): a walk-in, a prepaid or a corporate booking. */
     confirm?: boolean;
+    /** For a corporate customer: the authorised driver. */
+    driverId?: string | null;
     notes?: string | null;
   }>;
 
@@ -75,6 +79,10 @@ export type CheckOutRequest = Omit<InspectionInput, "needsCleaning" | "waiveRefu
   Readonly<{
     /** Another vehicle of the class booked (a class booking only). */
     vehicleId?: string | null;
+    /** A company's authorised driver, when not named yet. */
+    driverId?: string | null;
+    /** Out without the class's deposit (rentals.price.override). */
+    waiveDeposit?: boolean;
     odometer: number;
     fuel: FuelLevel;
     notes?: string | null;
@@ -118,6 +126,7 @@ export type BookingView = Readonly<{
   status: ShownStatus;
   branchId: string;
   customer: Readonly<{ id: string; name: string }>;
+  driver: Readonly<{ id: string; name: string }> | null;
   classId: string | null;
   byClass: boolean;
   vehicle: Pick<FleetVehicle, "id" | "code" | "plateNumber" | "make" | "model">;
@@ -151,6 +160,7 @@ type Deps = Readonly<{
   availability: RentalAvailability;
   quotes: RentalQuotes;
   inspections: RentalInspections;
+  accounts: RentalAccounts;
   vehicleAccess: VehicleAccess;
   registry: VehicleRegistry;
   odometer: OdometerLog;
@@ -231,7 +241,18 @@ export class RentalBookings {
       const quoted = await deps.quotes.quoteWithTerms(actor, request);
       deps.policy.require(actor, "rentals.create", { branchId: quoted.branchId });
       if (confirm) deps.policy.require(actor, "rentals.update", { branchId: quoted.branchId });
-      const warnings = await this.renterRules(request.customerId, quoted.classId, request);
+      const { warnings, renter } = await this.renterRules(
+        request.customerId,
+        quoted.classId,
+        request,
+        request.driverId ?? null,
+      );
+      await deps.accounts.assertCredit(
+        actor,
+        renter,
+        quoteAmount(quoted).totalMinor,
+        quoted.branchId,
+      );
       const settings = await deps.rates.settings();
       const id = deps.ids.next();
       const expiresAt = confirm ? null : new Date(now.getTime() + settings.reservationHours * HOUR);
@@ -260,6 +281,7 @@ export class RentalBookings {
         number: await deps.numbering.next("rental", now),
         branchId: quoted.branchId,
         customerId: request.customerId,
+        driverId: request.driverId ?? null,
         classId: quoted.classId,
         vehicleId: block.vehicleId,
         byClass: block.classId !== null,
@@ -316,7 +338,19 @@ export class RentalBookings {
       };
       if (request.returnAt <= now) throw new RentalBookingError("The rental is over already");
       const quoted = await deps.quotes.quoteWithTerms(actor, request);
-      const warnings = await this.renterRules(before.customerId, quoted.classId, request);
+      const driverId = change.driverId === undefined ? before.driverId : change.driverId;
+      const { warnings, renter } = await this.renterRules(
+        before.customerId,
+        quoted.classId,
+        request,
+        driverId,
+      );
+      await deps.accounts.assertCredit(
+        actor,
+        renter,
+        quoteAmount(quoted).totalMinor - jsonAmount(before.quote).totalMinor,
+        before.branchId,
+      );
 
       // Free the vehicle, then hold it again for the new terms (all or nothing).
       await deps.availability.free(before.blockId, "Booking changed", actor.userId);
@@ -355,6 +389,7 @@ export class RentalBookings {
         ...(change.notes === undefined ? {} : { notes: change.notes }),
         now,
       });
+      if (driverId !== before.driverId) booking.nameDriver(driverId, now);
       await deps.bookings.update(booking);
       const delta = minus(quoteAmount(quote), jsonAmount(before.quote));
       const event = await this.event(booking, "changed", actor, {
@@ -376,6 +411,8 @@ export class RentalBookings {
       const booking = await this.reach(actor, id, "rentals.update", true);
       const before = booking.snapshot();
       const now = deps.clock.now();
+      const renter = await deps.bookings.renter(before.customerId);
+      if (renter !== null) riskRules(renter);
       if (booking.isLapsed(now)) {
         // The vehicle may have gone: hold it again (the same vehicle when it is still free).
         await deps.availability.free(before.blockId, "Reservation lapsed", actor.userId);
@@ -443,7 +480,7 @@ export class RentalBookings {
         throw new RentalBookingError(
           `${vehicle.snapshot().code} is ${vehicle.status.replaceAll("_", " ")}: it cannot go out now`,
         );
-      const warnings = await this.licenceRules(before.customerId, before.returnAt);
+      const warnings = await this.handOverRules(actor, booking, request);
       const { inspection, damages } = await deps.inspections.record(
         actor,
         booking,
@@ -458,6 +495,8 @@ export class RentalBookings {
       if (now < block.startsAt)
         await deps.availability.retime(block.id, now, block.endsAt ?? before.returnAt);
       await deps.availability.setStatus(block.id, "out", null);
+      if (given(request.driverId) && request.driverId !== before.driverId)
+        booking.nameDriver(request.driverId, now);
       booking.checkOut({ at: now, odometer: request.odometer, fuel: request.fuel, vehicleId, now });
       await deps.bookings.update(booking);
       await deps.odometer.recordFor(
@@ -644,6 +683,8 @@ export class RentalBookings {
       const before = booking.snapshot();
       booking.close(deps.clock.now());
       await deps.bookings.update(booking);
+      // What the rental cost is invoiced; payments for it are applied (decision 355).
+      await deps.accounts.invoice(actor, booking);
       await this.event(booking, "closed", actor, {});
       await this.audit(actor, "rental_booking.closed", booking, before);
       return this.detail(booking, []);
@@ -738,6 +779,7 @@ export class RentalBookings {
           { netMinor: fee.amountMinor, taxMinor: 0, totalMinor: fee.amountMinor },
           actor,
         );
+      await deps.accounts.invoice(actor, booking);
       await this.audit(
         actor,
         kind === "cancellation" ? "rental_booking.cancelled" : "rental_booking.no_show",
@@ -888,55 +930,117 @@ export class RentalBookings {
   }
 
   /**
-   * Renter rules at booking (docs/07 §8, decision 338): the class's minimum age refuses a
-   * customer known to be younger at pickup; an unknown age or licence is a warning.
+   * Renter rules at booking (docs/07 §8, decisions 338, 358–359): a blacklisted customer or driver
+   * is refused, one on watch is a warning; a company's rentals are driven by one of its
+   * authorised drivers, whose age and licence are checked like an individual renter's.
    */
   private async renterRules(
     customerId: string,
     classId: string | null,
     request: Readonly<{ pickupAt: Date; returnAt: Date }>,
-  ): Promise<string[]> {
+    driverId: string | null,
+  ): Promise<{ warnings: string[]; renter: Renter }> {
     const { deps } = this;
     const renter = await deps.bookings.renter(customerId);
     if (renter === null) throw new RentalRateNotFoundError("Customer");
-    const warnings: string[] = [];
+    const warnings = riskRules(renter);
+    const driver = await this.driverOf(renter, driverId);
+    if (driver === null) {
+      warnings.push(
+        `Name the driver (one of ${renter.name}'s authorised drivers) before the keys go out`,
+      );
+      return { warnings, renter };
+    }
+    if (driver !== renter) warnings.push(...riskRules(driver));
     const vehicleClass = classId === null ? null : await deps.rates.vehicleClass(classId);
     if (vehicleClass !== null && vehicleClass.minDriverAge !== null) {
-      if (renter.dateOfBirth === null)
+      if (driver.dateOfBirth === null)
         warnings.push(
-          `${renter.name}'s date of birth is not recorded (minimum age ${vehicleClass.minDriverAge})`,
+          `${driver.name}'s date of birth is not recorded (minimum age ${vehicleClass.minDriverAge})`,
         );
       else {
         const age = Math.floor(
-          (request.pickupAt.getTime() - Date.parse(`${renter.dateOfBirth}T00:00:00Z`)) / YEAR_MS,
+          (request.pickupAt.getTime() - Date.parse(`${driver.dateOfBirth}T00:00:00Z`)) / YEAR_MS,
         );
         if (age < vehicleClass.minDriverAge)
           throw new RentalBookingError(
-            `${vehicleClass.name} drivers are at least ${vehicleClass.minDriverAge}; ${renter.name} is ${age}`,
+            `${vehicleClass.name} drivers are at least ${vehicleClass.minDriverAge}; ${driver.name} is ${age}`,
           );
       }
     }
     if (vehicleClass !== null && (vehicleClass.minLicenceYears ?? 0) > 0)
       warnings.push(
-        `Check that ${renter.name} has held a licence for ${vehicleClass.minLicenceYears} years`,
+        `Check that ${driver.name} has held a licence for ${vehicleClass.minLicenceYears} years`,
       );
-    return [...warnings, ...(await this.licenceRules(customerId, request.returnAt, renter))];
+    return {
+      warnings: [...warnings, ...(await this.licenceRules(driver, request.returnAt))],
+      renter,
+    };
+  }
+
+  /**
+   * At the counter (docs/07 §6, decisions 343, 358–360): the renter and driver not blacklisted,
+   * a company's driver named and authorised, the licence valid to the return, the class's
+   * deposit held (unless on account or waived).
+   */
+  private async handOverRules(
+    actor: Principal,
+    booking: RentalBooking,
+    request: CheckOutRequest,
+  ): Promise<string[]> {
+    const { deps } = this;
+    const b = booking.snapshot();
+    const renter = await deps.bookings.renter(b.customerId);
+    if (renter === null) throw new RentalRateNotFoundError("Customer");
+    const warnings = riskRules(renter);
+    const driver = await this.driverOf(
+      renter,
+      given(request.driverId) ? request.driverId : b.driverId,
+    );
+    if (driver === null)
+      throw new RentalBookingError(
+        `Name the driver: ${renter.name} is a company (one of its authorised drivers)`,
+      );
+    if (driver !== renter) warnings.push(...riskRules(driver));
+    if (!driver.hasIdDocument)
+      warnings.push(`${driver.name} has no Ghana Card, passport or voter's ID on file`);
+    warnings.push(...(await this.licenceRules(driver, b.returnAt)));
+    const shortfall = await deps.accounts.depositShortfall(booking, renter);
+    if (shortfall > 0) {
+      const amount = Money.ofMinor(shortfall, b.currency).format();
+      if (request.waiveDeposit !== true)
+        throw new RentalBookingError(`Take the security deposit first (${amount} more)`);
+      if (!deps.policy.decide(actor, "rentals.price.override", { branchId: b.branchId }).allowed)
+        throw new PermissionDeniedError("rentals.price.override");
+      warnings.push(`Out without the security deposit (${amount} waived)`);
+    }
+    return warnings;
+  }
+
+  /** Who drives: the individual renter, or the company's authorised driver (null: not named). */
+  private async driverOf(renter: Renter, driverId: string | null): Promise<Renter | null> {
+    const { deps } = this;
+    if (renter.type === "individual") {
+      if (driverId !== null && driverId !== renter.id)
+        throw new RentalBookingError("Only a company's rental names another driver");
+      return renter;
+    }
+    if (driverId === null) return null;
+    if (!(await deps.bookings.isAuthorisedDriver(renter.id, driverId)))
+      throw new RentalBookingError(`The driver is not one of ${renter.name}'s authorised drivers`);
+    const driver = await deps.bookings.renter(driverId);
+    if (driver === null) throw new RentalRateNotFoundError("Driver");
+    return driver;
   }
 
   /** A licence known to expire before the return refuses; an unknown one is a warning. */
-  private async licenceRules(
-    customerId: string,
-    returnAt: Date,
-    known?: Awaited<ReturnType<IRentalBookings["renter"]>>,
-  ): Promise<string[]> {
-    const renter = known ?? (await this.deps.bookings.renter(customerId));
-    if (renter === null) throw new RentalRateNotFoundError("Customer");
-    if (renter.licenceNumber === null || renter.licenceExpiresOn === null)
-      return [`${renter.name}'s driving licence is not recorded: check it at the counter`];
+  private async licenceRules(driver: Renter, returnAt: Date): Promise<string[]> {
+    if (driver.licenceNumber === null || driver.licenceExpiresOn === null)
+      return [`${driver.name}'s driving licence is not recorded: check it at the counter`];
     const returnDate = this.local(returnAt, await this.timezone()).slice(0, 10);
-    if (renter.licenceExpiresOn < returnDate)
+    if (driver.licenceExpiresOn < returnDate)
       throw new RentalBookingError(
-        `${renter.name}'s licence expires on ${renter.licenceExpiresOn}, before the return`,
+        `${driver.name}'s licence expires on ${driver.licenceExpiresOn}, before the return`,
       );
     return [];
   }
@@ -1003,6 +1107,7 @@ export class RentalBookings {
     const b = booking.snapshot();
     const vehicle = await deps.blocks.vehicle(b.vehicleId);
     const renter = await deps.bookings.renter(b.customerId);
+    const driver = b.driverId === null ? null : await deps.bookings.renter(b.driverId);
     const charges = await deps.bookings.charges(b.id);
     const money = (minor: number) => Money.ofMinor(minor, b.currency);
     return {
@@ -1011,6 +1116,7 @@ export class RentalBookings {
       status: booking.shownStatus(deps.clock.now()),
       branchId: b.branchId,
       customer: { id: b.customerId, name: renter?.name ?? "" },
+      driver: b.driverId === null ? null : { id: b.driverId, name: driver?.name ?? "" },
       classId: b.classId,
       byClass: b.byClass,
       vehicle: {
@@ -1103,6 +1209,19 @@ export class RentalBookings {
 }
 
 const given = <T>(value: T | null | undefined): value is T => value !== undefined && value !== null;
+
+/** A blacklisted customer or driver is refused; one on watch is a warning (decision 358). */
+function riskRules(person: Renter): string[] {
+  if (person.riskStatus === "blacklisted")
+    throw new RentalBookingError(
+      `${person.name} is blacklisted${person.riskReason === null ? "" : `: ${person.riskReason}`}`,
+    );
+  return person.riskStatus === "watch"
+    ? [
+        `${person.name} is on the watchlist${person.riskReason === null ? "" : `: ${person.riskReason}`}`,
+      ]
+    : [];
+}
 
 /** The quote as JSON (Money → `{ amountMinor, currency, formatted }`, dates → ISO strings). */
 function toJson(quote: RentalQuote): QuoteJson {

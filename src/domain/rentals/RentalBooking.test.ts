@@ -18,6 +18,7 @@ const booking = (confirmed = false) =>
     number: "RNT-2027-000001",
     branchId: "hq",
     customerId: "c1",
+    driverId: null,
     classId: "suv",
     vehicleId: "v1",
     byClass: true,

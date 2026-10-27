@@ -930,6 +930,49 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     find: `select 1 from vehicle_damage_photos p join files f on f.id = p.file_id
             where f.storage_key = $1`,
   },
+  customer_authorised_drivers: {
+    insert: (marker) => ({
+      sql: `with co as (insert into customers (code, type, company_name, name)
+                        values ($1, 'corporate', 'Isolation Ltd', 'Isolation Ltd') returning id),
+                 d as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Driver', 'Isolation Driver')
+                       returning id)
+            insert into customer_authorised_drivers (corporate_id, driver_id)
+            select co.id, d.id from co, d`,
+      params: [marker, `AD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from customer_authorised_drivers a join customers c on c.id = a.corporate_id
+            where c.code = $1`,
+  },
+  rental_deposits: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 v as (insert into vehicles (code, make, model, status, branch_id)
+                       select $2, 'Isolation', 'Fixture', 'available', b.id from b returning id),
+                 c as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Renter', $1)
+                       returning id),
+                 k as (insert into vehicle_blocks (vehicle_id, branch_id, reason, status,
+                         starts_at, ends_at, blocked_until)
+                       select v.id, b.id, 'rental', 'confirmed', now(), now() + interval '1 day',
+                         now() + interval '1 day' from v, b returning id),
+                 r as (insert into rental_bookings (number, status, branch_id, customer_id,
+                         block_id, pickup_at, return_at, currency, terms, quote)
+                       select $2, 'confirmed', b.id, c.id, k.id, now(), now() + interval '1 day',
+                         'GHS', '{}', '{}' from b, c, k returning id),
+                 p as (insert into payments (number, direction, method, status, party_type,
+                         party_id, party_name, branch_id, paid_on, currency, fx_rate,
+                         amount_minor, amount_base_minor)
+                       select $1, 'in', 'cash', 'recorded', 'customer', c.id, 'Isolation', b.id,
+                         current_date, 'GHS', 1, 100, 100 from b, c returning id)
+            insert into rental_deposits (booking_id, payment_id, currency, amount_minor, status,
+              held_at, updated_at)
+            select r.id, p.id, 'GHS', 100, 'held', now(), now() from r, p`,
+      params: [marker, `DE${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from rental_deposits d join payments p on p.id = d.payment_id
+            where p.number = $1`,
+  },
   vehicle_blocks: {
     insert: (marker) => ({
       sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
