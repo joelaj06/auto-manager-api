@@ -159,6 +159,9 @@ export type BookingDetail = BookingView &
     warnings: readonly string[];
   }>;
 
+/** Bookings whose vehicle is still to go out or is out. */
+const WITH_VEHICLE: ReadonlySet<string> = new Set(["reserved", "confirmed", "checked_out"]);
+
 type Deps = Readonly<{
   unitOfWork: IUnitOfWork;
   bookings: IRentalBookings;
@@ -171,6 +174,8 @@ type Deps = Readonly<{
   agreements: RentalAgreements;
   /** The customer told of the confirmation (P5-7). */
   notifications?: RentalNotifications;
+  /** A due service the booking runs into is a warning (P6-1). */
+  serviceDue?: Readonly<{ warnings(vehicleId: string, returnAt: Date): Promise<string[]> }>;
   vehicleAccess: VehicleAccess;
   registry: VehicleRegistry;
   odometer: OdometerLog;
@@ -1189,8 +1194,16 @@ export class RentalBookings {
       ...(await this.view(booking)),
       events: await this.deps.bookings.events(booking.id),
       documents: await this.deps.agreements.of(booking.id),
-      warnings,
+      warnings: [...warnings, ...(await this.serviceWarnings(booking))],
     };
+  }
+
+  /** Before the vehicle is back: services falling due by the return. */
+  private async serviceWarnings(booking: RentalBooking): Promise<string[]> {
+    const { serviceDue } = this.deps;
+    if (serviceDue === undefined || !WITH_VEHICLE.has(booking.status)) return [];
+    const { vehicleId, returnAt } = booking.snapshot();
+    return serviceDue.warnings(vehicleId, returnAt);
   }
 
   private async timezone(): Promise<string> {

@@ -40,6 +40,11 @@ import { rentalBookingRoutes } from "../../adapters/routes/rentalBookingRoutes.j
 import { vehicleDamageRoutes } from "../../adapters/routes/vehicleDamageRoutes.js";
 import { rentalAccountRoutes } from "../../adapters/routes/rentalAccountRoutes.js";
 import { rentalReportRoutes } from "../../adapters/routes/rentalReportRoutes.js";
+import { maintenanceRoutes } from "../../adapters/routes/maintenanceRoutes.js";
+import type { IServicePlans } from "../../application/ports/IServicePlans.js";
+import { ServicePlans } from "../../application/use-cases/maintenance/ServicePlans.js";
+import { ServiceSchedule } from "../../application/use-cases/maintenance/ServiceSchedule.js";
+import { PostgresServicePlans } from "../../infrastructure/maintenance/PostgresServicePlans.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -3664,6 +3669,11 @@ export function createContainer(
         requestContext,
         ids,
         clock,
+        // Resolved late: the due engine sits above the vehicle services.
+        serviceDue: {
+          vehicleRead: (vehicleId) =>
+            container.get<ServiceSchedule>(TYPES.ServiceSchedule).vehicleRead(vehicleId),
+        },
       }),
     [
       TYPES.UnitOfWork,
@@ -4642,6 +4652,7 @@ export function createContainer(
       documents: Documents,
       signing: DocumentSigning,
       workpayArrears: WorkPayArrears,
+      serviceDue: ServiceSchedule,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
@@ -4649,6 +4660,7 @@ export function createContainer(
         remittances,
         workpayArrears,
         stats,
+        serviceDue,
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
       ],
@@ -4659,6 +4671,7 @@ export function createContainer(
       TYPES.Documents,
       TYPES.DocumentSigning,
       TYPES.WorkPayArrears,
+      TYPES.ServiceSchedule,
     ],
   );
 
@@ -5426,6 +5439,75 @@ export function createContainer(
     TYPES.RentalReporting,
     (tx) => new PostgresRentalReporting(tx),
   );
+  // --- Maintenance: service plans and the due engine (docs/12 §2) ---
+  tenantRepository<IServicePlans>(
+    TYPES.ServicePlanRepository,
+    (tx) => new PostgresServicePlans(tx),
+  );
+  container.bind<ServiceSchedule>(TYPES.ServiceSchedule).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      plans: IServicePlans,
+      vehicleAccess: VehicleAccess,
+      settings: INotificationSettingsStore,
+      organisation: IOrganisationSettings,
+      notifier: Notifier,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new ServiceSchedule({
+        unitOfWork,
+        plans,
+        vehicleAccess,
+        settings,
+        organisation,
+        notifier,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.ServicePlanRepository,
+      TYPES.VehicleAccess,
+      TYPES.NotificationSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.Notifier,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<ServicePlans>(TYPES.ServicePlans)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        plans: IServicePlans,
+        schedule: ServiceSchedule,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+        ids: IIdGenerator,
+        clock: IClock,
+      ) =>
+        new ServicePlans({ unitOfWork, plans, schedule, auditTrail, requestContext, ids, clock }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.ServicePlanRepository,
+        TYPES.ServiceSchedule,
+        TYPES.AuditTrail,
+        TYPES.RequestContext,
+        TYPES.IdGenerator,
+        TYPES.Clock,
+      ],
+    );
   container.bind<RentalRateAdministration>(TYPES.RentalRateAdministration).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5766,6 +5848,7 @@ export function createContainer(
       accounts: RentalAccounts,
       agreements: RentalAgreements,
       notifications: RentalNotifications,
+      serviceDue: ServiceSchedule,
       vehicleAccess: VehicleAccess,
       registry: VehicleRegistry,
       odometer: OdometerLog,
@@ -5788,6 +5871,7 @@ export function createContainer(
         accounts,
         agreements,
         notifications,
+        serviceDue,
         vehicleAccess,
         registry,
         odometer,
@@ -5810,6 +5894,7 @@ export function createContainer(
       TYPES.RentalAccounts,
       TYPES.RentalAgreements,
       TYPES.RentalNotifications,
+      TYPES.ServiceSchedule,
       TYPES.VehicleAccess,
       TYPES.VehicleRegistry,
       TYPES.OdometerLog,
@@ -6842,6 +6927,8 @@ export function createContainer(
       rentalAccounts: RentalAccounts,
       rentalAgreements: RentalAgreements,
       rentalReports: RentalReports,
+      servicePlans: ServicePlans,
+      serviceSchedule: ServiceSchedule,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -6991,6 +7078,7 @@ export function createContainer(
         ...vehicleDamageRoutes({ damages: vehicleDamages }),
         ...rentalAccountRoutes({ accounts: rentalAccounts }),
         ...rentalReportRoutes({ reports: rentalReports }),
+        ...maintenanceRoutes({ plans: servicePlans, schedule: serviceSchedule }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7112,6 +7200,8 @@ export function createContainer(
       TYPES.RentalAccounts,
       TYPES.RentalAgreements,
       TYPES.RentalReports,
+      TYPES.ServicePlans,
+      TYPES.ServiceSchedule,
     ],
   );
 

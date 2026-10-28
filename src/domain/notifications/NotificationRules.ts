@@ -33,6 +33,7 @@ export const RULE_KEYS = [
   "rental_overdue",
   "rental_payment_received",
   "rental_invoiced",
+  "service_due",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -215,6 +216,13 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
       "A driver or staff member reports a vehicle issue (breakdown, accident …): tell the fleet staff of the branch",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  service_due: {
+    description:
+      "A vehicle's service is coming up, due or overdue (by km or date): tell the branch's maintenance staff, and SMS the assigned driver once due",
+    channels: [...STAFF, "sms"],
+    defaults: { enabled: true, channels: ["in_app", "push", "sms"] },
+    placeholders: ["driverName", "vehicle", "task", "dueAt", "businessName"],
   },
 });
 

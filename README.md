@@ -449,6 +449,18 @@ deposits held) and `…/damages`, for `from`/`to` local dates (the last 30 days 
 optional `branchId`. `GET /api/v1/rental-board?date=` lists the day's pickups, returns, overdue
 rentals and lapsing reservations. Rules: docs/07 §10–11, decisions 369–375.
 
+## Service plans and due services
+
+Start a plan from a template (`GET /api/v1/service-plan-templates`, then
+`POST /api/v1/service-plans {"appliesTo":"all","template":"standard"}`) or with your own tasks
+(every N km and/or N days); plans can target a make and model, a vehicle group, a rental class or
+one vehicle, and each vehicle follows its most specific plan. What is due is recomputed on every
+odometer reading and nightly: `GET /api/v1/service-due` (upcoming, due, overdue),
+`GET /api/v1/vehicles/:id/service-schedule`, and `POST /api/v1/vehicles/:id/services` to record a
+service done. The branch's maintenance staff and the assigned driver are alerted (rule
+`service_due`); rental bookings warn when a service falls due before the return. Rules: docs/12
+§2, decisions 376–380.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

@@ -40,6 +40,8 @@ export class OdometerLog {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
+      /** The due engine, recomputed for the vehicle after each reading (P6-1). */
+      serviceDue?: Readonly<{ vehicleRead(vehicleId: string): Promise<void> }>;
     }>,
   ) {}
 
@@ -104,6 +106,7 @@ export class OdometerLog {
     await deps.readings.add(recorded);
     vehicle.applyOdometer(reading.value, readAt, now);
     await deps.vehicles.save(vehicle);
+    await deps.serviceDue?.vehicleRead(vehicle.id);
     return recorded;
   }
 }

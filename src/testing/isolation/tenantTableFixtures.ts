@@ -930,6 +930,50 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     find: `select 1 from vehicle_damage_photos p join files f on f.id = p.file_id
             where f.storage_key = $1`,
   },
+  service_plans: {
+    insert: (marker) => ({
+      sql: "insert into service_plans (name, applies_to) values ($1, 'all')",
+      params: [marker],
+    }),
+    find: "select 1 from service_plans where name = $1",
+  },
+  service_plan_tasks: {
+    insert: (marker) => ({
+      sql: `with p as (insert into service_plans (name, applies_to) values ('Isolation', 'all')
+                       returning id)
+            insert into service_plan_tasks (plan_id, name, every_days) select p.id, $1, 90 from p`,
+      params: [marker],
+    }),
+    find: "select 1 from service_plan_tasks where name = $1",
+  },
+  service_due: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 p as (insert into service_plans (name, applies_to) values ('Isolation', 'all')
+                       returning id),
+                 t as (insert into service_plan_tasks (plan_id, name, every_days)
+                       select p.id, 'Isolation oil', 90 from p returning id)
+            insert into service_due (vehicle_id, task_id, plan_id, branch_id, base_on, due_on,
+              status)
+            select v.id, t.id, p.id, b.id, current_date, current_date + 90, 'scheduled'
+              from v, t, p, b`,
+      params: [marker, `SD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from service_due d join vehicles v on v.id = d.vehicle_id where v.code = $1`,
+  },
+  service_records: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 p as (insert into service_plans (name, applies_to) values ('Isolation', 'all')
+                       returning id),
+                 t as (insert into service_plan_tasks (plan_id, name, every_days)
+                       select p.id, 'Isolation oil', 90 from p returning id)
+            insert into service_records (vehicle_id, task_id, done_on, note)
+            select v.id, t.id, current_date, $1 from v, t`,
+      params: [marker, `SR${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from service_records where note = $1",
+  },
   customer_authorised_drivers: {
     insert: (marker) => ({
       sql: `with co as (insert into customers (code, type, company_name, name)

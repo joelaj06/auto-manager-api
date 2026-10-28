@@ -193,6 +193,19 @@ const definitions = {
       "Record vehicle damages, settle who pays (charging renters), and mark them repaired",
     scopes: BRANCH_OR_ALL,
   },
+  // --- maintenance (docs/12) ---
+  "maintenance.view": {
+    description: "See service plans, what is due on each vehicle and its service history",
+    scopes: BRANCH_OR_ALL,
+  },
+  "maintenance.plans.manage": {
+    description: "Manage service plans and their tasks (intervals by km and days)",
+    scopes: ALL,
+  },
+  "maintenance.work_orders.manage": {
+    description: "Record services done on vehicles (and, later, work orders)",
+    scopes: BRANCH_OR_ALL,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,
