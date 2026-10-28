@@ -44,6 +44,8 @@ export type WorkOrderLine = Readonly<{
   unitCostMinor: number;
   amountMinor: number;
   partRef: string | null;
+  /** A catalogue part, issued from the branch's stock on completion (decision 392). */
+  partId: string | null;
 }>;
 
 export type Allocation = Readonly<{
@@ -229,7 +231,11 @@ export class WorkOrder {
   }
 
   /** Replaces the lines (amount = quantity × unit cost, rounded to the minor unit). */
-  setLines(lines: readonly Omit<WorkOrderLine, "amountMinor" | "position">[], now: Date): void {
+  setLines(
+    lines: readonly (Omit<WorkOrderLine, "amountMinor" | "position" | "partId"> &
+      Readonly<{ partId?: string | null }>)[],
+    now: Date,
+  ): void {
     this.assertOpen();
     if (lines.length > MAX_LINES) throw new WorkOrderError(`At most ${MAX_LINES} lines`);
     this.props = {
@@ -237,6 +243,8 @@ export class WorkOrder {
       lines: lines.map((l, position) => {
         const description = l.description.trim();
         if (description.length === 0) throw new WorkOrderError("Describe every line");
+        if ((l.partId ?? null) !== null && l.kind !== "part")
+          throw new WorkOrderError(`${description}: only a part line comes from stock`);
         if (
           !(l.quantity > 0) ||
           l.quantity > 100_000 ||
@@ -256,6 +264,7 @@ export class WorkOrder {
           description,
           position,
           partRef: l.partRef?.trim() || null,
+          partId: l.partId ?? null,
           amountMinor: Math.round(l.quantity * l.unitCostMinor),
         };
       }),

@@ -174,7 +174,7 @@ describe("provisioning saga", () => {
       permissions: String(catalogue.permissions.length),
       system_roles: String(catalogue.templates.length),
       owners: "1",
-      categories: "11",
+      categories: "12",
       // VAT_STANDARD, ZERO_RATED and EXEMPT for a Ghana business (decision 168).
       active_taxes: "3",
       catalogue_version: catalogue.version,

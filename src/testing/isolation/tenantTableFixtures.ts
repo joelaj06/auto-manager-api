@@ -974,6 +974,33 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from service_records where note = $1",
   },
+  parts: {
+    insert: (marker) => ({
+      sql: "insert into parts (sku, name) values ($2, $1)",
+      params: [marker, `P${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from parts where name = $1",
+  },
+  part_stock: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 p as (insert into parts (sku, name) values ($2, $1) returning id)
+            insert into part_stock (part_id, branch_id, on_hand) select p.id, b.id, 1 from p, b`,
+      params: [marker, `PS${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from part_stock s join parts p on p.id = s.part_id where p.name = $1",
+  },
+  part_moves: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 p as (insert into parts (sku, name) values ($2, $1) returning id)
+            insert into part_moves (part_id, branch_id, kind, quantity, unit_cost_minor,
+              value_minor, on_hand_after, avg_cost_after, reason)
+            select p.id, b.id, 'adjustment', 1, 100, 100, 1, 100, $1 from p, b`,
+      params: [marker, `PM${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from part_moves where reason = $1",
+  },
   work_orders: {
     insert: (marker) => ({
       sql: `${VEHICLE}

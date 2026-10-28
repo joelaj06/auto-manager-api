@@ -49,6 +49,10 @@ import { workOrderRoutes } from "../../adapters/routes/workOrderRoutes.js";
 import type { IWorkOrders } from "../../application/ports/IWorkOrders.js";
 import { WorkOrders } from "../../application/use-cases/maintenance/WorkOrders.js";
 import { PostgresWorkOrders } from "../../infrastructure/maintenance/PostgresWorkOrders.js";
+import { partRoutes } from "../../adapters/routes/partRoutes.js";
+import type { IParts } from "../../application/ports/IParts.js";
+import { PartsInventory } from "../../application/use-cases/maintenance/PartsInventory.js";
+import { PostgresParts } from "../../infrastructure/maintenance/PostgresParts.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -5512,6 +5516,64 @@ export function createContainer(
         TYPES.Clock,
       ],
     );
+  // --- Maintenance: parts inventory (docs/12 §4) ---
+  tenantRepository<IParts>(TYPES.PartRepository, (tx) => new PostgresParts(tx));
+  container.bind<PartsInventory>(TYPES.PartsInventory).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      parts: IParts,
+      vehicles: IVehicleRepository,
+      vehicleAccess: VehicleAccess,
+      expenses: Expenses,
+      expenseSettings: IExpenseSettingsStore,
+      reference: ITenantReferenceData,
+      posting: LedgerPosting,
+      organisation: IOrganisationSettings,
+      settings: INotificationSettingsStore,
+      notifier: Notifier,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new PartsInventory({
+        unitOfWork,
+        parts,
+        vehicles,
+        vehicleAccess,
+        expenses,
+        expenseSettings,
+        reference,
+        posting,
+        organisation,
+        settings,
+        notifier,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.PartRepository,
+      TYPES.VehicleRepository,
+      TYPES.VehicleAccess,
+      TYPES.Expenses,
+      TYPES.ExpenseSettingsStore,
+      TYPES.TenantReferenceData,
+      TYPES.LedgerPosting,
+      TYPES.OrganisationSettings,
+      TYPES.NotificationSettingsStore,
+      TYPES.Notifier,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
   // --- Maintenance: work orders, vendors and downtime (docs/12 §3, §5) ---
   tenantRepository<IWorkOrders>(TYPES.WorkOrderRepository, (tx) => new PostgresWorkOrders(tx));
   container.bind<WorkOrders>(TYPES.WorkOrders).toResolvedValue(
@@ -5538,6 +5600,7 @@ export function createContainer(
       ids: IIdGenerator,
       clock: IClock,
       workpay: WorkPayLifecycle,
+      parts: PartsInventory,
     ) =>
       new WorkOrders({
         unitOfWork,
@@ -5562,6 +5625,7 @@ export function createContainer(
         ids,
         clock,
         workpay,
+        parts,
       }),
     [
       TYPES.UnitOfWork,
@@ -5586,6 +5650,7 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.WorkPayLifecycle,
+      TYPES.PartsInventory,
     ],
   );
   container.bind<RentalRateAdministration>(TYPES.RentalRateAdministration).toResolvedValue(
@@ -7010,6 +7075,7 @@ export function createContainer(
       servicePlans: ServicePlans,
       serviceSchedule: ServiceSchedule,
       workOrders: WorkOrders,
+      partsInventory: PartsInventory,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7161,6 +7227,7 @@ export function createContainer(
         ...rentalReportRoutes({ reports: rentalReports }),
         ...maintenanceRoutes({ plans: servicePlans, schedule: serviceSchedule }),
         ...workOrderRoutes({ orders: workOrders }),
+        ...partRoutes({ parts: partsInventory }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7285,6 +7352,7 @@ export function createContainer(
       TYPES.ServicePlans,
       TYPES.ServiceSchedule,
       TYPES.WorkOrders,
+      TYPES.PartsInventory,
     ],
   );
 

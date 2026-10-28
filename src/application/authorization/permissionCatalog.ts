@@ -203,7 +203,12 @@ const definitions = {
     scopes: ALL,
   },
   "maintenance.work_orders.manage": {
-    description: "Record services done on vehicles (and, later, work orders)",
+    description: "Run work orders and record services done on vehicles",
+    scopes: BRANCH_OR_ALL,
+  },
+  "parts.manage": {
+    description:
+      "Manage the parts catalogue and the branch's stock (opening, purchases, counts, transfers)",
     scopes: BRANCH_OR_ALL,
   },
   "settings.vehicles.manage": {

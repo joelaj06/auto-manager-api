@@ -65,6 +65,7 @@ type LineRow = {
   unit_cost_minor: string;
   amount_minor: string;
   part_ref: string | null;
+  part_id: string | null;
 };
 
 type AllocationRow = {
@@ -245,8 +246,8 @@ export class PostgresWorkOrders implements IWorkOrders {
     for (const l of p.lines)
       await this.tx.query(
         `insert into work_order_lines (id, work_order_id, position, kind, description, quantity,
-           unit_cost_minor, amount_minor, part_ref)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+           unit_cost_minor, amount_minor, part_ref, part_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           l.id,
           p.id,
@@ -257,6 +258,7 @@ export class PostgresWorkOrders implements IWorkOrders {
           l.unitCostMinor,
           l.amountMinor,
           l.partRef,
+          l.partId,
         ],
       );
     for (const a of p.allocations)
@@ -278,7 +280,7 @@ export class PostgresWorkOrders implements IWorkOrders {
     const lines = await this.tx.query<LineRow>(
       `select id, work_order_id, position, kind, description, quantity::text as quantity,
               unit_cost_minor::text as unit_cost_minor, amount_minor::text as amount_minor,
-              part_ref
+              part_ref, part_id
          from work_order_lines where work_order_id = any($1::uuid[]) order by position`,
       [ids],
     );
@@ -332,6 +334,7 @@ export class PostgresWorkOrders implements IWorkOrders {
             unitCostMinor: Number(l.unit_cost_minor),
             amountMinor: Number(l.amount_minor),
             partRef: l.part_ref,
+            partId: l.part_id,
           })),
         allocations: allocations.rows
           .filter((a) => a.work_order_id === r.id)

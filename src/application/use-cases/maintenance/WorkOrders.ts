@@ -35,6 +35,7 @@ import type { VehicleAccess } from "../vehicles/VehicleAccess.js";
 import type { VehicleIssues } from "../vehicles/VehicleIssues.js";
 import type { VehicleRegistry } from "../vehicles/VehicleRegistry.js";
 import type { WorkPayLifecycle } from "../workpay/WorkPayLifecycle.js";
+import type { PartsInventory } from "./PartsInventory.js";
 import type { ServiceSchedule } from "./ServiceSchedule.js";
 
 export class WorkOrderNotFoundError extends ApplicationError {
@@ -70,9 +71,11 @@ export type LineInput = Readonly<{
   kind: LineKind;
   description: string;
   quantity: number;
-  /** "120.00" in the base currency. */
-  unitCost: string;
+  /** "120.00" in the base currency (a catalogue part: its average cost at the branch). */
+  unitCost?: string;
   partRef?: string | null;
+  /** A catalogue part, issued from stock on completion. */
+  partId?: string | null;
 }>;
 
 export type OpenInput = Readonly<{
@@ -169,6 +172,8 @@ export class WorkOrders {
       clock: { now(): Date };
       /** Work & Pay downtime while the vehicle is off the road. */
       workpay?: WorkPayLifecycle;
+      /** Catalogue parts priced and issued from stock. */
+      parts?: PartsInventory;
     }>,
   ) {}
 
@@ -244,7 +249,8 @@ export class WorkOrders {
         createdBy: actor.userId,
         now,
       });
-      if (input.lines !== undefined) order.setLines(this.lines(input.lines, currency), now);
+      if (input.lines !== undefined)
+        order.setLines(await this.lines(input.lines, currency, vehicle.branchId), now);
       await deps.orders.insert(order);
       if (input.offRoad === true) {
         await this.takeOffRoad(actor, order, vehicle, input.offRoadFrom ?? now);
@@ -283,9 +289,9 @@ export class WorkOrders {
   }
 
   setLines(actor: Principal, id: string, lines: readonly LineInput[]): Promise<WorkOrderView> {
-    return this.mutate(actor, id, "work_order.lines_set", (order, now) => {
-      order.setLines(this.lines(lines, order.snapshot().currency), now);
-      return Promise.resolve();
+    return this.mutate(actor, id, "work_order.lines_set", async (order, now) => {
+      const p = order.snapshot();
+      order.setLines(await this.lines(lines, p.currency, p.branchId), now);
     });
   }
 
@@ -320,6 +326,13 @@ export class WorkOrders {
       const p = order.snapshot();
       const vehicle = (await deps.vehicles.lockById(p.vehicleId))!;
       const today = await deps.calendar.today();
+      // Parts from stock leave at the average cost of the day (decision 393).
+      const issued = (await deps.parts?.issueFor(order, actor.userId)) ?? new Map<string, number>();
+      if (issued.size > 0)
+        order.setLines(
+          p.lines.map((l) => ({ ...l, unitCostMinor: issued.get(l.id) ?? l.unitCostMinor })),
+          now,
+        );
       const allocations = await this.allocations(order, vehicle, input.allocations ?? []);
       const odometer = input.odometer ?? null;
       const current = vehicle.snapshot().currentOdometer;
@@ -509,9 +522,13 @@ export class WorkOrders {
       p.vendorId === null
         ? p.lines.filter((l) => l.kind === "labour").reduce((s, l) => s + l.amountMinor, 0)
         : 0;
+    // Parts from stock were paid for when bought: their cost leaves the inventory instead.
+    const fromStock = p.lines
+      .filter((l) => l.partId !== null)
+      .reduce((s, l) => s + l.amountMinor, 0);
     const driver = p.allocations.find((a) => a.payer === "driver");
     const driverMinor = driver?.amountMinor ?? 0;
-    const companyMinor = Math.max(0, order.totalMinor() - inHouseLabour - driverMinor);
+    const companyMinor = Math.max(0, order.totalMinor() - inHouseLabour - fromStock - driverMinor);
     if (companyMinor === 0 && driverMinor === 0) return;
     const { maintenanceCategoryCode } = await deps.expenseSettings.get();
     const category = (await deps.reference.expenseCategories()).find(
@@ -631,15 +648,29 @@ export class WorkOrders {
     return [...given];
   }
 
-  private lines(lines: readonly LineInput[], currency: string) {
-    return lines.map((l) => ({
-      id: this.deps.ids.next(),
-      kind: l.kind,
-      description: l.description,
-      quantity: l.quantity,
-      unitCostMinor: Money.parse(l.unitCost, currency).amountMinor,
-      partRef: l.partRef ?? null,
-    }));
+  /** Catalogue parts are priced at their average cost at the branch (decision 393). */
+  private async lines(lines: readonly LineInput[], currency: string, branchId: string) {
+    const out = [];
+    for (const l of lines) {
+      const partId = l.partId ?? null;
+      if (partId !== null && this.deps.parts === undefined)
+        throw new WorkOrderError("Parts are not stocked");
+      if (partId === null && l.unitCost === undefined)
+        throw new WorkOrderError(`${l.description}: give the unit cost`);
+      out.push({
+        id: this.deps.ids.next(),
+        kind: l.kind,
+        description: l.description,
+        quantity: l.quantity,
+        unitCostMinor:
+          partId === null
+            ? Money.parse(l.unitCost!, currency).amountMinor
+            : await this.deps.parts!.priceFor(partId, branchId),
+        partRef: l.partRef ?? null,
+        partId,
+      });
+    }
+    return out;
   }
 
   private expected(at: Date | null, now: Date): Date | null {

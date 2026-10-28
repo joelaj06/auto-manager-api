@@ -34,6 +34,7 @@ export const RULE_KEYS = [
   "rental_payment_received",
   "rental_invoiced",
   "service_due",
+  "parts_reorder",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -223,6 +224,12 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     channels: [...STAFF, "sms"],
     defaults: { enabled: true, channels: ["in_app", "push", "sms"] },
     placeholders: ["driverName", "vehicle", "task", "dueAt", "businessName"],
+  },
+  parts_reorder: {
+    description:
+      "A part's stock at a branch is at or below its reorder level: tell the branch's staff who manage parts",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
   },
 });
 

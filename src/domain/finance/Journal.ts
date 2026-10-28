@@ -33,6 +33,9 @@ export type SystemAccountKey =
   | "workpay_unearned"
   | "workpay_income"
   | "workpay_penalties"
+  | "parts_inventory"
+  | "stock_adjustments"
+  | "equity"
   | `tax_payable:${string}`;
 
 /** The payable account of a tax component (VAT, NHIL, GETFund; anything else: other). */

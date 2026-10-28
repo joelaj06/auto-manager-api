@@ -299,6 +299,8 @@ export const TYPES = Object.freeze({
   ServiceSchedule: Symbol.for("ServiceSchedule"),
   WorkOrderRepository: Symbol.for("IWorkOrders"),
   WorkOrders: Symbol.for("WorkOrders"),
+  PartRepository: Symbol.for("IParts"),
+  PartsInventory: Symbol.for("PartsInventory"),
   IntegrityChecks: Symbol.for("IIntegrityChecks"),
   PaymentGateway: Symbol.for("IPaymentGateway"),
   GatewayRepository: Symbol.for("IGatewayRepository"),

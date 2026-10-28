@@ -18,13 +18,20 @@ const instant = z.iso.datetime({ offset: true }).transform((v) => new Date(v));
 const amount = z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, "An amount like 120.00");
 const odometer = z.number().int().min(0).max(5_000_000);
 
-const lineBody = z.object({
-  kind: z.enum(LINE_KINDS),
-  description: z.string().trim().min(1).max(300),
-  quantity: z.number().positive().max(100_000),
-  unitCost: amount,
-  partRef: text(80),
-});
+const lineBody = z
+  .object({
+    kind: z.enum(LINE_KINDS),
+    description: z.string().trim().min(1).max(300),
+    quantity: z.number().positive().max(100_000),
+    /** Not for a catalogue part (its average cost at the branch). */
+    unitCost: amount.optional(),
+    partRef: text(80),
+    partId: uuid.nullable().optional(),
+  })
+  .refine((l) => (l.partId ?? null) !== null || l.unitCost !== undefined, {
+    message: "Give the unit cost (or a catalogue part)",
+    path: ["unitCost"],
+  });
 
 const detailFields = {
   type: z.enum(WORK_ORDER_TYPES),

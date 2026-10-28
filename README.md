@@ -473,6 +473,17 @@ pays (`allocations`: the driver, the renter of a rental damage, an insurer; the 
 `…/cancel` puts the vehicle back. `GET /api/v1/suppliers/:id/work-orders` is a vendor's record.
 Rules: docs/12 §3, §5, decisions 381–388.
 
+## Parts inventory
+
+Add parts to the catalogue (`POST /api/v1/parts`, with the makes and models they fit), then stock
+them per branch: `POST /api/v1/parts/:id/stock/:branchId/opening` for what is already on the shelf,
+`…/receipts` for a purchase (an expense to the supplier posted to the parts inventory), `…/counts`
+for a stock count and `POST /api/v1/parts/:id/transfers` between branches; stock is valued at
+average cost. `PUT /api/v1/parts/:id/stock/:branchId` sets the reorder level (rule
+`parts_reorder`; `GET /api/v1/part-stock?low=true`). A work order line with a `partId` is priced at
+the branch's average cost and issued from stock when the order is completed. Rules: docs/12 §4,
+decisions 389–395.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
