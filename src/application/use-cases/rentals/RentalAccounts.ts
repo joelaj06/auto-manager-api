@@ -23,6 +23,7 @@ import type { LedgerPosting } from "../finance/LedgerPosting.js";
 import type { PaymentRecording } from "../finance/PaymentRecording.js";
 import type { VehicleAccess } from "../vehicles/VehicleAccess.js";
 import { RentalBookingNotFoundError } from "./RentalBookings.js";
+import type { RentalNotifications } from "./RentalNotifications.js";
 import { RentalRateNotFoundError } from "./RentalRateAdministration.js";
 
 export const BOOKING_SOURCE = "rental_booking";
@@ -100,6 +101,8 @@ type Deps = Readonly<{
   vehicleAccess: VehicleAccess;
   policy: AuthorizationPolicy;
   classDeposit: (classId: string | null) => Promise<number | null>;
+  /** Receipts and invoices told to the customer (P5-7). */
+  notifications?: RentalNotifications;
   ids: IIdGenerator;
   clock: { now(): Date };
 }>;
@@ -165,7 +168,15 @@ export class RentalAccounts {
         amountMinor: payment.amount.amountMinor,
       });
       await this.settlePrepayments(actor, booking);
-      return this.accountOf(booking);
+      const account = await this.accountOf(booking);
+      await deps.notifications?.paymentReceived(booking, {
+        paymentId: payment.id,
+        number: payment.number,
+        amountMinor: payment.amount.amountMinor,
+        deposit: false,
+        balanceMinor: account.balance.amountMinor,
+      });
+      return account;
     });
   }
 
@@ -211,7 +222,15 @@ export class RentalAccounts {
         paymentId: payment.id,
         amountMinor: payment.amount.amountMinor,
       });
-      return this.accountOf(booking);
+      const account = await this.accountOf(booking);
+      await deps.notifications?.paymentReceived(booking, {
+        paymentId: payment.id,
+        number: payment.number,
+        amountMinor: payment.amount.amountMinor,
+        deposit: true,
+        balanceMinor: account.balance.amountMinor,
+      });
+      return account;
     });
   }
 
@@ -346,6 +365,14 @@ export class RentalAccounts {
       heldBack: draft.heldBack.length,
     });
     await this.settlePrepayments(actor, booking);
+    const issued = (await deps.invoices.findById(invoice.id))!.snapshot();
+    await deps.notifications?.invoiced(booking, {
+      invoiceId: invoice.id,
+      number: issued.number ?? invoice.number ?? "",
+      totalMinor: issued.totalMinor,
+      balanceMinor: issued.totalMinor - issued.paidMinor,
+      dueDate: issued.dueDate,
+    });
     return invoice.id;
   }
 

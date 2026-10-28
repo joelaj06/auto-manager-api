@@ -31,7 +31,7 @@ export type StaffNotice = Readonly<{
 export type DriverSms = Readonly<{
   rule: RuleKey;
   /** A driver (default) or a document signer without an account. */
-  recipientType?: "driver" | "signer" | "guarantor";
+  recipientType?: "driver" | "signer" | "guarantor" | "customer";
   driverId: string;
   phone: string;
   dedupeKey: string;
@@ -42,6 +42,21 @@ export type DriverSms = Readonly<{
   sensitive?: boolean;
   /** Something the person is waiting for now (a signing link): not held for quiet hours. */
   immediate?: boolean;
+}>;
+
+/** A message to a rental customer: the same text by SMS and email, as the rule says. */
+export type CustomerMessage = Readonly<{
+  rule: RuleKey;
+  customerId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  /** The same key never reaches the customer twice on a channel. */
+  dedupeKey: string;
+  /** The email's subject. */
+  title: string;
+  standardText: string;
+  values: Readonly<Record<string, string>>;
 }>;
 
 /** A notice to particular users (a signer's own request), on the rule's staff channels. */
@@ -119,6 +134,47 @@ export class Notifier {
       ...(message.sensitive === true ? { sensitive: true } : {}),
     });
     return id !== null;
+  }
+
+  /**
+   * A customer (docs/07 §10): SMS when the rule sends SMS, a provider is set up and they have a
+   * phone (held for quiet hours); email when the rule sends email and they have an address.
+   * Returns whether anything new was queued.
+   */
+  async customer(
+    settings: NotificationSettings,
+    timezone: string,
+    message: CustomerMessage,
+  ): Promise<boolean> {
+    const rule = settings.rules[message.rule];
+    if (!rule.enabled) return false;
+    let queued = false;
+    if (message.phone !== null)
+      queued = await this.sms(settings, timezone, {
+        rule: message.rule,
+        recipientType: "customer",
+        driverId: message.customerId,
+        phone: message.phone,
+        dedupeKey: message.dedupeKey,
+        standardText: message.standardText,
+        values: message.values,
+      });
+    if (rule.channels.includes("email") && message.email !== null) {
+      const id = await this.deps.deliveries.queue({
+        channel: "email",
+        rule: message.rule,
+        recipientType: "customer",
+        recipientId: message.customerId,
+        address: message.email,
+        title: message.title,
+        body: renderTemplate(rule.smsTemplate ?? message.standardText, message.values),
+        data: { recipientName: message.name },
+        dedupeKey: message.dedupeKey,
+        sendAfter: this.deps.clock.now(),
+      });
+      queued = id !== null || queued;
+    }
+    return queued;
   }
 
   private async tell(

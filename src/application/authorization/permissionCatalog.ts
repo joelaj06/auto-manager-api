@@ -403,6 +403,11 @@ const definitions = {
       "See the work and pay portfolio: collections, arrears (PAR), ageing and the collections forecast",
     scopes: BRANCH_OR_ALL,
   },
+  "dashboards.rentals.view": {
+    description:
+      "See the rental reports: utilisation, revenue, average daily rate, balances and deposits held, damage costs",
+    scopes: BRANCH_OR_ALL,
+  },
   "dashboards.stats.rebuild": {
     description: "Rebuild the vehicle statistics behind the dashboards",
     scopes: ALL,

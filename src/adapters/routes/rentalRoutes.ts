@@ -494,6 +494,8 @@ export function rentalRoutes(deps: RentalRouteDependencies): ApiRoute[] {
           monthlyFromDays: z.number().int().min(8).max(30).optional(),
           reservationHours: z.number().int().min(1).max(168).optional(),
           freeCancellationHours: z.number().int().min(0).max(720).optional(),
+          pickupReminderHours: z.number().int().min(1).max(72).optional(),
+          returnReminderHours: z.number().int().min(1).max(72).optional(),
           lateCancellationFeePercent: percent.optional(),
           noShowFeePercent: percent.optional(),
           inspectionItems: z

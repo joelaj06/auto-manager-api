@@ -67,6 +67,10 @@ export type JobPayloads = {
   "billing.automation": Readonly<Record<string, never>>;
   /** Remittance cut-off check (waits until the tenant's cut-off time). */
   "tenant.remittance_cutoff": Readonly<{ tenantId: string; localDate: string }>;
+  /** Rental pickup and return reminders and overdue returns of a tenant (hourly). */
+  "tenant.rental_reminders": Readonly<{ tenantId: string }>;
+  /** Enqueue the rental reminders of every usable tenant. */
+  "rentals.reminders_sweep": Readonly<Record<string, never>>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -323,6 +327,26 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryDelaySeconds: 30,
     retryBackoff: true,
     expireInSeconds: 300,
+  },
+  "tenant.rental_reminders": {
+    description: "Rental pickup and return reminders and overdue returns of a tenant",
+    tenantScoped: true,
+    policy: "stately",
+    retryLimit: 2,
+    retryDelaySeconds: 120,
+    retryBackoff: true,
+    expireInSeconds: 900,
+  },
+  "rentals.reminders_sweep": {
+    description: "Ask every tenant to send its rental reminders",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 900,
+    // Hourly: the return reminder (default 2 hours before) goes out 1 to 2 hours ahead.
+    cron: "27 * * * *",
   },
   "tenant.remittance_cutoff": {
     description: "Remittance cut-off check of a tenant at its cut-off time",

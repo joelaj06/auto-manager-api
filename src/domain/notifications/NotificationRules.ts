@@ -27,6 +27,12 @@ export const RULE_KEYS = [
   "workpay_payment_received",
   "workpay_milestones",
   "billing_notices",
+  "rental_confirmed",
+  "rental_pickup_reminder",
+  "rental_return_reminder",
+  "rental_overdue",
+  "rental_payment_received",
+  "rental_invoiced",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -51,6 +57,17 @@ export type RuleConfig = Readonly<{
 }>;
 
 const STAFF: readonly Channel[] = ["in_app", "push", "email"];
+/** A rental customer is told by SMS (the business's provider) or email. */
+const CUSTOMER: readonly Channel[] = ["sms", "email"];
+const RENTAL_PLACEHOLDERS = [
+  "customerName",
+  "number",
+  "vehicle",
+  "pickupAt",
+  "returnAt",
+  "branch",
+  "businessName",
+];
 
 /** The automation rules (docs/15 §2) and what each does when the business has not changed it. */
 export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
@@ -142,6 +159,56 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
       "Half the agreement paid, paid in full, and the vehicle the driver's: SMS the driver (standard texts)",
     channels: ["sms"],
     defaults: { enabled: true, channels: ["sms"] },
+  },
+  rental_confirmed: {
+    description:
+      "A rental booking is confirmed: SMS or email the customer the vehicle, times, branch and total",
+    channels: CUSTOMER,
+    defaults: { enabled: true, channels: ["sms", "email"] },
+    placeholders: [...RENTAL_PLACEHOLDERS, "amount"],
+  },
+  rental_pickup_reminder: {
+    description:
+      "Remind the customer of their pickup (rental settings: pickupReminderHours, default 24 hours before)",
+    channels: CUSTOMER,
+    defaults: { enabled: true, channels: ["sms", "email"] },
+    placeholders: RENTAL_PLACEHOLDERS,
+  },
+  rental_return_reminder: {
+    description:
+      "Remind the customer the vehicle is due back (rental settings: returnReminderHours, default 2 hours before)",
+    channels: CUSTOMER,
+    defaults: { enabled: true, channels: ["sms"] },
+    placeholders: RENTAL_PLACEHOLDERS,
+  },
+  rental_overdue: {
+    description:
+      "A rented vehicle is not back after the grace minutes: tell the customer once and the branch's check-in staff",
+    channels: [...STAFF, ...CUSTOMER],
+    defaults: { enabled: true, channels: ["in_app", "push", "sms"] },
+    placeholders: RENTAL_PLACEHOLDERS,
+  },
+  rental_payment_received: {
+    description:
+      "A rental payment or security deposit is recorded: send the customer a receipt with the balance",
+    channels: CUSTOMER,
+    defaults: { enabled: true, channels: ["sms", "email"] },
+    placeholders: ["customerName", "number", "amount", "receipt", "balance", "businessName"],
+  },
+  rental_invoiced: {
+    description:
+      "A rental is invoiced (at close, or a cancellation fee): send the customer the invoice total, balance and due date",
+    channels: CUSTOMER,
+    defaults: { enabled: true, channels: ["sms", "email"] },
+    placeholders: [
+      "customerName",
+      "number",
+      "invoice",
+      "amount",
+      "balance",
+      "dueOn",
+      "businessName",
+    ],
   },
   vehicle_issue_reported: {
     description:

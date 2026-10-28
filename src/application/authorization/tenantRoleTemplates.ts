@@ -133,6 +133,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "dashboards.vehicles.view",
       "dashboards.remittances.view",
       "dashboards.workpay.view",
+      "dashboards.rentals.view",
       "dashboards.expenses.view",
       "vehicles.issues.view",
       "vehicles.issues.manage",

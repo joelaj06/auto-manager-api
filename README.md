@@ -438,6 +438,17 @@ through the link sent by SMS or email, or the QR from
 with each signer's status. `POST /api/v1/rentals/:id/agreement` and `…/return-note` issue them
 again (the current one is voided). Rules: docs/07 §6, docs/24, decisions 362–368.
 
+## Rental notifications and reports
+
+Renters get an SMS (and email) when their booking is confirmed, for each payment and the deposit,
+when it is invoiced, before pickup (`pickupReminderHours`, 24) and return (`returnReminderHours`,
+2), and when overdue; the branch's check-in staff are told of overdue returns in the app. The
+hourly `rentals.reminders_sweep` job runs the reminders. Reports (`dashboards.rentals.view`):
+`GET /api/v1/dashboards/rentals/utilisation`, `…/revenue` (ADR, RevPAV), `…/balances` (with
+deposits held) and `…/damages`, for `from`/`to` local dates (the last 30 days by default) and an
+optional `branchId`. `GET /api/v1/rental-board?date=` lists the day's pickups, returns, overdue
+rentals and lapsing reservations. Rules: docs/07 §10–11, decisions 369–375.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

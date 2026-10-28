@@ -116,7 +116,7 @@ export interface INotificationInbox {
 
 export type DeliveryChannel = Exclude<Channel, "in_app">;
 export type DeliveryStatus = "queued" | "sent" | "failed" | "skipped";
-export type RecipientType = "user" | "driver" | "signer" | "guarantor";
+export type RecipientType = "user" | "driver" | "signer" | "guarantor" | "customer";
 
 export type Delivery = Readonly<{
   id: string;

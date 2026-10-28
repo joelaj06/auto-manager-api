@@ -7,6 +7,14 @@ import type {
   IVehicleDamages,
 } from "../../application/ports/IRentalInspections.js";
 import type { IRentalRates } from "../../application/ports/IRentalRates.js";
+import type { IRentalReporting } from "../../application/ports/IRentalReporting.js";
+import {
+  RentalNotifications,
+  RunRentalReminders,
+  SweepRentalReminders,
+} from "../../application/use-cases/rentals/RentalNotifications.js";
+import { RentalReports } from "../../application/use-cases/rentals/RentalReports.js";
+import { PostgresRentalReporting } from "../../infrastructure/rentals/PostgresRentalReporting.js";
 import { RentalAgreements } from "../../application/use-cases/rentals/RentalAgreements.js";
 import { RentalAvailability } from "../../application/use-cases/rentals/RentalAvailability.js";
 import type { IssuedDocumentProps } from "../../domain/documents/IssuedDocument.js";
@@ -31,6 +39,7 @@ import {
 import { rentalBookingRoutes } from "../../adapters/routes/rentalBookingRoutes.js";
 import { vehicleDamageRoutes } from "../../adapters/routes/vehicleDamageRoutes.js";
 import { rentalAccountRoutes } from "../../adapters/routes/rentalAccountRoutes.js";
+import { rentalReportRoutes } from "../../adapters/routes/rentalReportRoutes.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -5413,6 +5422,10 @@ export function createContainer(
     TYPES.VehicleDamageRepository,
     (tx) => new PostgresVehicleDamages(tx),
   );
+  tenantRepository<IRentalReporting>(
+    TYPES.RentalReporting,
+    (tx) => new PostgresRentalReporting(tx),
+  );
   container.bind<RentalRateAdministration>(TYPES.RentalRateAdministration).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5608,6 +5621,38 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  container.bind<RentalNotifications>(TYPES.RentalNotifications).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      settings: INotificationSettingsStore,
+      organisation: IOrganisationSettings,
+      rates: IRentalRates,
+      reporting: IRentalReporting,
+      notifier: Notifier,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new RentalNotifications({
+        unitOfWork,
+        settings,
+        organisation,
+        rates,
+        reporting,
+        notifier,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.NotificationSettingsStore,
+      TYPES.OrganisationSettings,
+      TYPES.RentalRates,
+      TYPES.RentalReporting,
+      TYPES.Notifier,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
   container.bind<RentalAccounts>(TYPES.RentalAccounts).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -5621,6 +5666,7 @@ export function createContainer(
       vehicleAccess: VehicleAccess,
       policy: AuthorizationPolicy,
       rates: IRentalRates,
+      notifications: RentalNotifications,
       ids: IIdGenerator,
       clock: IClock,
     ) =>
@@ -5637,6 +5683,7 @@ export function createContainer(
         policy,
         classDeposit: async (classId) =>
           classId === null ? null : ((await rates.vehicleClass(classId))?.depositMinor ?? null),
+        notifications,
         ids,
         clock,
       }),
@@ -5652,6 +5699,7 @@ export function createContainer(
       TYPES.VehicleAccess,
       TYPES.AuthorizationPolicy,
       TYPES.RentalRates,
+      TYPES.RentalNotifications,
       TYPES.IdGenerator,
       TYPES.Clock,
     ],
@@ -5717,6 +5765,7 @@ export function createContainer(
       inspections: RentalInspections,
       accounts: RentalAccounts,
       agreements: RentalAgreements,
+      notifications: RentalNotifications,
       vehicleAccess: VehicleAccess,
       registry: VehicleRegistry,
       odometer: OdometerLog,
@@ -5738,6 +5787,7 @@ export function createContainer(
         inspections,
         accounts,
         agreements,
+        notifications,
         vehicleAccess,
         registry,
         odometer,
@@ -5759,6 +5809,7 @@ export function createContainer(
       TYPES.RentalInspections,
       TYPES.RentalAccounts,
       TYPES.RentalAgreements,
+      TYPES.RentalNotifications,
       TYPES.VehicleAccess,
       TYPES.VehicleRegistry,
       TYPES.OdometerLog,
@@ -5771,6 +5822,29 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  container
+    .bind<RentalReports>(TYPES.RentalReports)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        reporting: IRentalReporting,
+        organisation: IOrganisationSettings,
+        posting: LedgerPosting,
+        calendar: TenantCalendar,
+        scope: BranchScope,
+        clock: IClock,
+      ) =>
+        new RentalReports({ unitOfWork, reporting, organisation, posting, calendar, scope, clock }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.RentalReporting,
+        TYPES.OrganisationSettings,
+        TYPES.LedgerPosting,
+        TYPES.TenantCalendar,
+        TYPES.BranchScope,
+        TYPES.Clock,
+      ],
+    );
   container.bind<WorkPayReports>(TYPES.WorkPayReports).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -6250,6 +6324,7 @@ export function createContainer(
       queue: IJobQueue,
       roster: ITenantRoster,
       rules: ReminderRules,
+      rentals: RentalNotifications,
       clock: IClock,
       logger: ILogger,
     ): IJobHandler[] => [
@@ -6270,6 +6345,8 @@ export function createContainer(
       new SweepNotifications({ roster, queue }),
       new RunNotificationRules(rules),
       new RunRemittanceCutoff({ unitOfWork, settings, organisation, rules, queue, clock }),
+      new RunRentalReminders(rentals),
+      new SweepRentalReminders({ roster, queue }),
     ],
     [
       TYPES.UnitOfWork,
@@ -6284,6 +6361,7 @@ export function createContainer(
       TYPES.JobQueue,
       TYPES.TenantRoster,
       TYPES.ReminderRules,
+      TYPES.RentalNotifications,
       TYPES.Clock,
       TYPES.Logger,
     ],
@@ -6763,6 +6841,7 @@ export function createContainer(
       vehicleDamages: VehicleDamages,
       rentalAccounts: RentalAccounts,
       rentalAgreements: RentalAgreements,
+      rentalReports: RentalReports,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -6911,6 +6990,7 @@ export function createContainer(
         }),
         ...vehicleDamageRoutes({ damages: vehicleDamages }),
         ...rentalAccountRoutes({ accounts: rentalAccounts }),
+        ...rentalReportRoutes({ reports: rentalReports }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7031,6 +7111,7 @@ export function createContainer(
       TYPES.VehicleDamages,
       TYPES.RentalAccounts,
       TYPES.RentalAgreements,
+      TYPES.RentalReports,
     ],
   );
 

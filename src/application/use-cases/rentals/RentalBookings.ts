@@ -44,6 +44,7 @@ import type { VehicleAccess } from "../vehicles/VehicleAccess.js";
 import type { VehicleRegistry } from "../vehicles/VehicleRegistry.js";
 import type { RentalAccounts } from "./RentalAccounts.js";
 import type { RentalAgreements, RentalDocument } from "./RentalAgreements.js";
+import type { RentalNotifications } from "./RentalNotifications.js";
 import type { RentalAvailability } from "./RentalAvailability.js";
 import type { InspectionInput, RentalInspections } from "./RentalInspections.js";
 import { RentalRateNotFoundError } from "./RentalRateAdministration.js";
@@ -168,6 +169,8 @@ type Deps = Readonly<{
   inspections: RentalInspections;
   accounts: RentalAccounts;
   agreements: RentalAgreements;
+  /** The customer told of the confirmation (P5-7). */
+  notifications?: RentalNotifications;
   vehicleAccess: VehicleAccess;
   registry: VehicleRegistry;
   odometer: OdometerLog;
@@ -320,7 +323,10 @@ export class RentalBookings {
         quoteAmount(quote),
         actor,
       );
-      if (confirm) await this.event(booking, "confirmed", actor, {});
+      if (confirm) {
+        await this.event(booking, "confirmed", actor, {});
+        await deps.notifications?.confirmed(booking);
+      }
       await this.audit(actor, "rental_booking.created", booking, null);
       return this.detail(booking, warnings);
     });
@@ -433,6 +439,7 @@ export class RentalBookings {
       await this.event(booking, "confirmed", actor, {
         lapsed: booking.snapshot().blockId !== before.blockId,
       });
+      await deps.notifications?.confirmed(booking);
       await this.audit(actor, "rental_booking.confirmed", booking, before);
       return this.detail(booking, []);
     });

@@ -165,6 +165,10 @@ export type RentalSettings = Readonly<{
   inspectionPhotoViews: readonly PhotoView[];
   /** Charged when a vehicle comes back needing cleaning; a decimal amount, "0" for none. */
   cleaningFee: string;
+  /** The customer is reminded of the pickup this many hours before (docs/07 §10). */
+  pickupReminderHours: number;
+  /** The customer is reminded of the return this many hours before. */
+  returnReminderHours: number;
 }>;
 
 export const DEFAULT_RENTAL_SETTINGS: RentalSettings = Object.freeze({
@@ -181,6 +185,8 @@ export const DEFAULT_RENTAL_SETTINGS: RentalSettings = Object.freeze({
   inspectionItems: DEFAULT_INSPECTION_ITEMS,
   inspectionPhotoViews: Object.freeze(["front", "back", "left", "right", "interior"] as const),
   cleaningFee: "0",
+  pickupReminderHours: 24,
+  returnReminderHours: 2,
 });
 
 const ITEM_KEY = /^[a-z][a-z0-9_]{0,39}$/;
@@ -328,6 +334,12 @@ export function validateSettings(s: RentalSettings): RentalSettings {
     s.freeCancellationHours > 720
   )
     throw new RentalRateError("Free cancellation is from 0 to 720 hours before pickup");
+  for (const [hours, what] of [
+    [s.pickupReminderHours, "The pickup reminder"],
+    [s.returnReminderHours, "The return reminder"],
+  ] as const)
+    if (!Number.isInteger(hours) || hours < 1 || hours > 72)
+      throw new RentalRateError(`${what} goes 1 to 72 hours before`);
   assertPercent(s.lateCancellationFeePercent, 0, 100, "The late cancellation fee");
   assertPercent(s.noShowFeePercent, 0, 100, "The no-show fee");
   const keys = s.inspectionItems.map((i) => i.key);
