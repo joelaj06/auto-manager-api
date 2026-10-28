@@ -60,6 +60,8 @@ export class FuelLogs {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
+      /** Checks each fill for anomalies (decision 402). */
+      anomalies?: { check(vehicle: Vehicle, log: FuelLog): Promise<void> };
     }>,
   ) {}
 
@@ -167,6 +169,7 @@ export class FuelLogs {
       createdAt: now,
     };
     await deps.logs.add(log);
+    await deps.anomalies?.check(vehicle, log);
     await recordUserAction(deps, userId, {
       action: "vehicle.fuel_recorded",
       entityType: "vehicle",

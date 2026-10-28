@@ -278,6 +278,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   SERVICE_PLAN_NOT_FOUND: { status: 404 },
   WORK_ORDER_NOT_FOUND: { status: 404 },
   PART_NOT_FOUND: { status: 404 },
+  INCIDENT_NOT_FOUND: { status: 404 },
+  CLAIM_NOT_FOUND: { status: 404 },
+  TRAFFIC_OFFENCE_NOT_FOUND: { status: 404 },
+  FUEL_ANOMALY_NOT_FOUND: { status: 404 },
 
   // Documents
   DOCUMENT_NOT_FOUND: { status: 404 },

@@ -484,6 +484,18 @@ average cost. `PUT /api/v1/parts/:id/stock/:branchId` sets the reorder level (ru
 the branch's average cost and issued from stock when the order is completed. Rules: docs/12 §4,
 decisions 389–395.
 
+## Incidents, claims and offences
+
+Report an incident with `POST /api/v1/incidents` (a theft, an impound or a serious accident puts
+the vehicle in stolen, impounded or accident until `…/close`); link its repairs and expenses with
+`POST /api/v1/incidents/:id/links` and `GET /api/v1/incidents/:id` shows what it cost. Claim on an
+insurer with `POST /api/v1/incidents/:id/claims`, then `/api/v1/insurance-claims/:id/approve`,
+`reject`, `withdraw` or `settle` (the money received posted to insurance recoveries). Record fines
+with `POST /api/v1/traffic-offences` (the driver told by SMS) and `…/pay` (by the business — an
+expense charged to the driver — or by the driver), `…/contest` or `…/waive`. Fuel fills that look
+wrong are listed at `GET /api/v1/fuel-anomalies` for review. Rules: docs/06 §7–8, decisions
+396–402.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

@@ -134,3 +134,47 @@ export function fuelEfficiency(fills: readonly FuelFill[]): FuelEfficiency[] {
     flagged: intervals.length >= 3 && i.kmPerLitre < median * 0.7,
   }));
 }
+
+export type FuelAnomaly = Readonly<{
+  kind: "low_efficiency" | "no_distance";
+  distance: number;
+  litres: number;
+  kmPerLitre: number | null;
+  /** The vehicle's usual km per litre (the median of its intervals). */
+  baseline: number | null;
+}>;
+
+/**
+ * Whether a full-tank fill looks wrong (decision 402): a fill with no km since the last full one,
+ * or an interval below 70% of the vehicle's usual km per litre (three intervals or more).
+ */
+export function fuelAnomaly(fills: readonly FuelFill[], fillId: string): FuelAnomaly | null {
+  const fill = fills.find((f) => f.id === fillId);
+  if (fill === undefined || !fill.fullTank) return null;
+  const earlier = fills
+    .filter((f) => f.id !== fillId && f.odometer <= fill.odometer)
+    .sort((a, b) => a.odometer - b.odometer);
+  const previousFull = [...earlier].reverse().find((f) => f.fullTank);
+  if (previousFull === undefined) return null;
+  if (fill.odometer === previousFull.odometer) {
+    const since = earlier.filter(
+      (f) => f.odometer === previousFull.odometer && f.id !== previousFull.id,
+    );
+    const litres = since.reduce((s, f) => s + f.litres, fill.litres);
+    return { kind: "no_distance", distance: 0, litres, kmPerLitre: 0, baseline: null };
+  }
+  const efficiency = fuelEfficiency(fills);
+  const interval = efficiency.find((e) => e.fillId === fillId);
+  if (interval === undefined || !interval.flagged) return null;
+  const sorted = efficiency.map((e) => e.kmPerLitre).sort((a, b) => a - b);
+  const mid = sorted.length / 2;
+  const median =
+    sorted.length % 2 === 1 ? sorted[Math.floor(mid)]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return {
+    kind: "low_efficiency",
+    distance: interval.distance,
+    litres: interval.litres,
+    kmPerLitre: interval.kmPerLitre,
+    baseline: Math.round(median * 100) / 100,
+  };
+}

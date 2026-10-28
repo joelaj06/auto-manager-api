@@ -1,5 +1,7 @@
 # 06 — Vehicle Records & Lifecycle
 
+> **Status (2026-10-28):** fuel anomaly detection (§7) and incidents (§8) are built (P6-4): incidents with the driver at the time, the vehicle put in accident, stolen or impounded and back on closing, linked work orders and expenses as the cost, insurance claims settled to insurance recoveries, traffic offences with fines charged to the driver, and full-tank fills checked against the vehicle's usual km per litre; decisions 396–402.
+
 The vehicle is the hub of the product. Every module reads from and writes to the vehicle's timeline.
 
 ## 1. Problems today

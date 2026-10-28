@@ -35,6 +35,9 @@ export const RULE_KEYS = [
   "rental_invoiced",
   "service_due",
   "parts_reorder",
+  "incident_reported",
+  "traffic_offence",
+  "fuel_anomaly",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -228,6 +231,24 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
   parts_reorder: {
     description:
       "A part's stock at a branch is at or below its reorder level: tell the branch's staff who manage parts",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  incident_reported: {
+    description:
+      "An incident (accident, theft, impound …) is reported on a vehicle: tell the branch's staff who see incidents",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  traffic_offence: {
+    description: "A traffic offence is recorded on a vehicle: SMS the driver who had it",
+    channels: ["sms"],
+    defaults: { enabled: true, channels: ["sms"] },
+    placeholders: ["driverName", "vehicle", "offence", "date", "fine", "businessName"],
+  },
+  fuel_anomaly: {
+    description:
+      "A fuel fill looks wrong (far fewer km per litre than usual, or no km since the last fill): tell the branch's staff who see incidents",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push"] },
   },

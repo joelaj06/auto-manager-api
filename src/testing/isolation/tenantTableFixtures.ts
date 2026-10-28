@@ -1037,6 +1037,52 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     find: `select 1 from work_order_allocations a join work_orders o on o.id = a.work_order_id
             where o.number = 'WO-' || $1`,
   },
+  incidents: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into incidents (number, vehicle_id, branch_id, type, occurred_at, description)
+            select $1, v.id, b.id, 'accident', now(), 'Isolation incident' from v, b`,
+      params: [marker, `IN${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from incidents where number = $1",
+  },
+  insurance_claims: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 i as (insert into incidents (number, vehicle_id, branch_id, type, occurred_at,
+                         description)
+                       select 'INC-' || $1, v.id, b.id, 'accident', now(), 'Isolation incident'
+                         from v, b returning id),
+                 s as (insert into suppliers (code, name, type) values ($2, $1, 'insurer') returning id)
+            insert into insurance_claims (incident_id, insurer_id, claimed_minor, submitted_on, notes)
+            select i.id, s.id, 100, current_date, $1 from i, s`,
+      params: [marker, `IC${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from insurance_claims where notes = $1",
+  },
+  traffic_offences: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into traffic_offences (vehicle_id, branch_id, type, offence_at, authority,
+              fine_minor, notes)
+            select v.id, b.id, 'speeding', now(), 'Isolation MTTD', 100, $1 from v, b`,
+      params: [marker, `TO${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from traffic_offences where notes = $1",
+  },
+  fuel_anomalies: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 f as (insert into fuel_logs (vehicle_id, filled_at, litres, amount_minor,
+                         odometer, notes)
+                       select v.id, now(), 10, 100, 1000, 'Isolation fill' from v returning id)
+            insert into fuel_anomalies (fuel_log_id, vehicle_id, branch_id, kind, litres,
+              distance, note)
+            select f.id, v.id, b.id, 'no_distance', 10, 0, $1 from f, v, b`,
+      params: [marker, `FA${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from fuel_anomalies where note = $1",
+  },
   customer_authorised_drivers: {
     insert: (marker) => ({
       sql: `with co as (insert into customers (code, type, company_name, name)

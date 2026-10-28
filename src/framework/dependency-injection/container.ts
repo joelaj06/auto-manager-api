@@ -53,6 +53,12 @@ import { partRoutes } from "../../adapters/routes/partRoutes.js";
 import type { IParts } from "../../application/ports/IParts.js";
 import { PartsInventory } from "../../application/use-cases/maintenance/PartsInventory.js";
 import { PostgresParts } from "../../infrastructure/maintenance/PostgresParts.js";
+import { incidentRoutes } from "../../adapters/routes/incidentRoutes.js";
+import type { IIncidents } from "../../application/ports/IIncidents.js";
+import { FuelAnomalies } from "../../application/use-cases/incidents/FuelAnomalies.js";
+import { Incidents } from "../../application/use-cases/incidents/Incidents.js";
+import { TrafficOffences } from "../../application/use-cases/incidents/TrafficOffences.js";
+import { PostgresIncidents } from "../../infrastructure/incidents/PostgresIncidents.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -4546,6 +4552,7 @@ export function createContainer(
       requestContext: IRequestContext,
       ids: IIdGenerator,
       clock: IClock,
+      anomalies: FuelAnomalies,
     ) =>
       new FuelLogs({
         unitOfWork,
@@ -4560,6 +4567,7 @@ export function createContainer(
         requestContext,
         ids,
         clock,
+        anomalies,
       }),
     [
       TYPES.UnitOfWork,
@@ -4574,6 +4582,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.IdGenerator,
       TYPES.Clock,
+      TYPES.FuelAnomalies,
     ],
   );
   container.bind<ExpenseAdministration>(TYPES.ExpenseAdministration).toResolvedValue(
@@ -5568,6 +5577,152 @@ export function createContainer(
       TYPES.NotificationSettingsStore,
       TYPES.Notifier,
       TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  // --- Incidents, insurance claims, traffic offences and fuel anomalies (docs/06 §7–8) ---
+  tenantRepository<IIncidents>(TYPES.VehicleIncidentRepository, (tx) => new PostgresIncidents(tx));
+  container.bind<Incidents>(TYPES.Incidents).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      incidents: IIncidents,
+      vehicles: IVehicleRepository,
+      vehicleAccess: VehicleAccess,
+      registry: VehicleRegistry,
+      issues: VehicleIssues,
+      damages: VehicleDamages,
+      posting: LedgerPosting,
+      numbering: DocumentNumbering,
+      organisation: IOrganisationSettings,
+      settings: INotificationSettingsStore,
+      notifier: Notifier,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new Incidents({
+        unitOfWork,
+        incidents,
+        vehicles,
+        vehicleAccess,
+        registry,
+        issues,
+        damages,
+        posting,
+        numbering,
+        organisation,
+        settings,
+        notifier,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleIncidentRepository,
+      TYPES.VehicleRepository,
+      TYPES.VehicleAccess,
+      TYPES.VehicleRegistry,
+      TYPES.VehicleIssues,
+      TYPES.VehicleDamages,
+      TYPES.LedgerPosting,
+      TYPES.DocumentNumbering,
+      TYPES.OrganisationSettings,
+      TYPES.NotificationSettingsStore,
+      TYPES.Notifier,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<TrafficOffences>(TYPES.TrafficOffences).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      incidents: IIncidents,
+      vehicleAccess: VehicleAccess,
+      expenses: Expenses,
+      reference: ITenantReferenceData,
+      organisation: IOrganisationSettings,
+      settings: INotificationSettingsStore,
+      notifier: Notifier,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new TrafficOffences({
+        unitOfWork,
+        incidents,
+        vehicleAccess,
+        expenses,
+        reference,
+        organisation,
+        settings,
+        notifier,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleIncidentRepository,
+      TYPES.VehicleAccess,
+      TYPES.Expenses,
+      TYPES.TenantReferenceData,
+      TYPES.OrganisationSettings,
+      TYPES.NotificationSettingsStore,
+      TYPES.Notifier,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<FuelAnomalies>(TYPES.FuelAnomalies).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      incidents: IIncidents,
+      logs: IFuelLogs,
+      vehicleAccess: VehicleAccess,
+      settings: INotificationSettingsStore,
+      notifier: Notifier,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new FuelAnomalies({
+        unitOfWork,
+        incidents,
+        logs,
+        vehicleAccess,
+        settings,
+        notifier,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.VehicleIncidentRepository,
+      TYPES.FuelLogStore,
+      TYPES.VehicleAccess,
+      TYPES.NotificationSettingsStore,
+      TYPES.Notifier,
       TYPES.AuditTrail,
       TYPES.RequestContext,
       TYPES.IdGenerator,
@@ -7076,6 +7231,9 @@ export function createContainer(
       serviceSchedule: ServiceSchedule,
       workOrders: WorkOrders,
       partsInventory: PartsInventory,
+      incidents: Incidents,
+      trafficOffences: TrafficOffences,
+      fuelAnomalies: FuelAnomalies,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7228,6 +7386,7 @@ export function createContainer(
         ...maintenanceRoutes({ plans: servicePlans, schedule: serviceSchedule }),
         ...workOrderRoutes({ orders: workOrders }),
         ...partRoutes({ parts: partsInventory }),
+        ...incidentRoutes({ incidents, offences: trafficOffences, anomalies: fuelAnomalies }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7353,6 +7512,9 @@ export function createContainer(
       TYPES.ServiceSchedule,
       TYPES.WorkOrders,
       TYPES.PartsInventory,
+      TYPES.Incidents,
+      TYPES.TrafficOffences,
+      TYPES.FuelAnomalies,
     ],
   );
 

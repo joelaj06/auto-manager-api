@@ -206,6 +206,15 @@ const definitions = {
     description: "Run work orders and record services done on vehicles",
     scopes: BRANCH_OR_ALL,
   },
+  "incidents.view": {
+    description: "See incidents, insurance claims, traffic offences and fuel anomalies on vehicles",
+    scopes: BRANCH_OR_ALL,
+  },
+  "incidents.manage": {
+    description:
+      "Report and close incidents, run insurance claims, record and settle traffic offences and review fuel anomalies",
+    scopes: BRANCH_OR_ALL,
+  },
   "parts.manage": {
     description:
       "Manage the parts catalogue and the branch's stock (opening, purchases, counts, transfers)",
