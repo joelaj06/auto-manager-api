@@ -1,4 +1,5 @@
 import type { IExpenseDriverCosts } from "../../ports/IExpenseDriverCosts.js";
+import type { IExpenseSourceHook } from "../../ports/IExpenseSourceHooks.js";
 import {
   Expense,
   ExpenseRuleError,
@@ -173,6 +174,8 @@ export class Expenses {
       clock: IClock;
       /** Who bears expenses by default and what follows their approval (work and pay). */
       driverCosts?: IExpenseDriverCosts;
+      /** Modules following what their expenses posted (purchases). */
+      sourceHooks?: readonly IExpenseSourceHook[];
     }>,
   ) {}
 
@@ -329,6 +332,7 @@ export class Expenses {
       await this.post(expense, userId);
     }
     await deps.expenses.save(expense);
+    if (expense.status === "approved") await this.postingChanged(expense);
     await recordAction(deps, userId, {
       action: rule?.action === "auto_approve" ? "expense.auto_approved" : "expense.submitted",
       entityType: "expense",
@@ -348,6 +352,7 @@ export class Expenses {
       expense.approve(actor.userId, null, deps.clock.now());
       await this.post(expense, actor.userId);
       await deps.expenses.save(expense);
+      await this.postingChanged(expense);
       await this.audit(actor, "expense.approved", expense);
       return expenseView(expense.snapshot(), await this.base());
     });
@@ -425,21 +430,51 @@ export class Expenses {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const expense = await this.reach(actor, id, "expenses.void", true);
-      const wasApproved = expense.status === "approved";
-      expense.void(actor.userId, reason, deps.clock.now());
-      if (wasApproved) {
-        await deps.posting.reverse(
-          { type: "expense", id },
-          await deps.calendar.today(),
-          `Expense ${expense.snapshot().number ?? ""} voided: ${reason}`,
-          actor.userId,
-        );
-        await deps.driverCosts?.voided(expense.snapshot(), actor.userId);
-      }
-      await deps.expenses.save(expense);
+      await this.voidLoaded(expense, actor.userId, reason);
       await this.audit(actor, "expense.voided", expense, { reason });
       return expenseView(expense.snapshot(), await this.base());
     });
+  }
+
+  /** Voids an expense a module raised (a purchase cost removed), unless it was paid. */
+  async voidFor(id: string, userId: string | null, reason: string): Promise<void> {
+    const { deps } = this;
+    await deps.unitOfWork.run(async () => {
+      const expense = await deps.expenses.lockById(id);
+      if (expense === null) throw new ExpenseNotFoundError();
+      await this.voidLoaded(expense, userId, reason);
+      await recordAction(deps, userId, {
+        action: "expense.voided",
+        entityType: "expense",
+        entityId: id,
+        metadata: { reason },
+      });
+    });
+  }
+
+  private async voidLoaded(expense: Expense, userId: string | null, reason: string): Promise<void> {
+    const { deps } = this;
+    const wasApproved = expense.status === "approved";
+    expense.void(userId, reason, deps.clock.now());
+    await deps.expenses.save(expense);
+    if (wasApproved) {
+      await deps.posting.reverse(
+        { type: "expense", id: expense.id },
+        await deps.calendar.today(),
+        `Expense ${expense.snapshot().number ?? ""} voided: ${reason}`,
+        userId,
+      );
+      await deps.driverCosts?.voided(expense.snapshot(), userId);
+      await this.postingChanged(expense);
+    }
+  }
+
+  /** Tells the module that raised the expense its posting changed. */
+  private async postingChanged(expense: Expense): Promise<void> {
+    const { sourceType, sourceId } = expense.snapshot();
+    if (sourceType === null || sourceId === null) return;
+    for (const hook of this.deps.sourceHooks ?? [])
+      if (hook.sourceType === sourceType) await hook.postingChanged(sourceId);
   }
 
   async startReceipt(

@@ -61,6 +61,11 @@ import { TrafficOffences } from "../../application/use-cases/incidents/TrafficOf
 import { PostgresIncidents } from "../../infrastructure/incidents/PostgresIncidents.js";
 import { maintenanceReportRoutes } from "../../adapters/routes/maintenanceReportRoutes.js";
 import { payablesRoutes } from "../../adapters/routes/payablesRoutes.js";
+import { purchaseRoutes } from "../../adapters/routes/purchaseRoutes.js";
+import type { IPurchases } from "../../application/ports/IPurchases.js";
+import { PurchaseAlerts } from "../../application/use-cases/purchases/PurchaseAlerts.js";
+import { PurchaseCostHook, Purchases } from "../../application/use-cases/purchases/Purchases.js";
+import { PostgresPurchases } from "../../infrastructure/purchases/PostgresPurchases.js";
 import type { IMaintenanceReporting } from "../../application/ports/IMaintenanceReporting.js";
 import { MaintenanceAlerts } from "../../application/use-cases/maintenance/MaintenanceAlerts.js";
 import { MaintenanceReports } from "../../application/use-cases/maintenance/MaintenanceReports.js";
@@ -4554,6 +4559,13 @@ export function createContainer(
         ids,
         clock,
         driverCosts,
+        // Purchases depend on expenses: resolved when a purchase cost posts.
+        sourceHooks: [
+          new PurchaseCostHook({
+            purchases: container.get<IPurchases>(TYPES.PurchaseRepository),
+            book: () => container.get<Purchases>(TYPES.Purchases),
+          }),
+        ],
       }),
     [
       TYPES.UnitOfWork,
@@ -4712,6 +4724,7 @@ export function createContainer(
       workpayArrears: WorkPayArrears,
       serviceDue: ServiceSchedule,
       maintenanceAlerts: MaintenanceAlerts,
+      purchaseAlerts: PurchaseAlerts,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
@@ -4721,6 +4734,7 @@ export function createContainer(
         stats,
         serviceDue,
         maintenanceAlerts,
+        purchaseAlerts,
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
       ],
@@ -4733,6 +4747,7 @@ export function createContainer(
       TYPES.WorkPayArrears,
       TYPES.ServiceSchedule,
       TYPES.MaintenanceAlerts,
+      TYPES.PurchaseAlerts,
     ],
   );
 
@@ -5779,6 +5794,77 @@ export function createContainer(
     (tx) => new PostgresMaintenanceReporting(tx),
   );
   tenantRepository<IPayables>(TYPES.Payables, (tx) => new PostgresPayables(tx));
+  tenantRepository<IPurchases>(TYPES.PurchaseRepository, (tx) => new PostgresPurchases(tx));
+  container.bind<Purchases>(TYPES.Purchases).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      purchases: IPurchases,
+      expenses: Expenses,
+      registry: VehicleRegistry,
+      vehicles: IVehicleRepository,
+      reference: ITenantReferenceData,
+      currencies: CurrencySettingsService,
+      organisation: IOrganisationSettings,
+      posting: LedgerPosting,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      files: FileService,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new Purchases({
+        unitOfWork,
+        purchases,
+        expenses,
+        registry,
+        vehicles,
+        reference,
+        currencies,
+        organisation,
+        posting,
+        scope,
+        numbering,
+        documents: new OwnedDocuments(files, "purchase_document", "purchase", 30),
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.PurchaseRepository,
+      TYPES.Expenses,
+      TYPES.VehicleRegistry,
+      TYPES.VehicleRepository,
+      TYPES.TenantReferenceData,
+      TYPES.CurrencySettingsService,
+      TYPES.OrganisationSettings,
+      TYPES.LedgerPosting,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantFileService,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<PurchaseAlerts>(TYPES.PurchaseAlerts)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        purchases: IPurchases,
+        settings: INotificationSettingsStore,
+        notifier: Notifier,
+      ) => new PurchaseAlerts({ unitOfWork, purchases, settings, notifier }),
+      [TYPES.UnitOfWork, TYPES.PurchaseRepository, TYPES.NotificationSettingsStore, TYPES.Notifier],
+    );
   container.bind<SupplierPayables>(TYPES.SupplierPayables).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -7383,6 +7469,7 @@ export function createContainer(
       fuelAnomalies: FuelAnomalies,
       maintenanceReports: MaintenanceReports,
       supplierPayables: SupplierPayables,
+      purchases: Purchases,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7538,6 +7625,7 @@ export function createContainer(
         ...incidentRoutes({ incidents, offences: trafficOffences, anomalies: fuelAnomalies }),
         ...maintenanceReportRoutes({ reports: maintenanceReports }),
         ...payablesRoutes({ payables: supplierPayables }),
+        ...purchaseRoutes({ purchases }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7668,6 +7756,7 @@ export function createContainer(
       TYPES.FuelAnomalies,
       TYPES.MaintenanceReports,
       TYPES.SupplierPayables,
+      TYPES.Purchases,
     ],
   );
 

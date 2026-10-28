@@ -40,6 +40,8 @@ export const RULE_KEYS = [
   "fuel_anomaly",
   "vehicle_idle",
   "work_order_overdue",
+  "purchase_eta",
+  "purchase_demurrage",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -270,6 +272,18 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
       "A vehicle is still off the road for a work order past the time it was expected back: tell the branch's staff who run work orders",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  purchase_eta: {
+    description:
+      "A shipped import has reached its ETA without its arrival recorded: tell the branch's staff who see purchases",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  purchase_demurrage: {
+    description:
+      "An import at the port is two days from the end of its free days, or past them (demurrage): tell the branch's staff who see purchases",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push", "email"] },
   },
 });
 

@@ -228,6 +228,28 @@ const definitions = {
       "Manage the parts catalogue and the branch's stock (opening, purchases, counts, transfers)",
     scopes: BRANCH_OR_ALL,
   },
+
+  // --- vehicle purchases (docs/11) ---
+  "purchases.view": {
+    description: "See vehicle purchases, their costs, landed cost and import timeline",
+    scopes: BRANCH_OR_ALL,
+  },
+  "purchases.create": {
+    description: "Draft purchases and keep their import timeline, shipping and documents",
+    scopes: BRANCH_OR_ALL,
+  },
+  "purchases.approve": {
+    description: "Order purchases (the vehicles' prices become bills) and cancel them",
+    scopes: BRANCH_OR_ALL,
+  },
+  "purchases.costs.manage": {
+    description: "Add and remove a purchase's cost components",
+    scopes: BRANCH_OR_ALL,
+  },
+  "purchases.receive": {
+    description: "Receive a purchase's vehicles into the fleet (with vehicles.create)",
+    scopes: BRANCH_OR_ALL,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,

@@ -1042,6 +1042,52 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     find: `select 1 from work_order_allocations a join work_orders o on o.id = a.work_order_id
             where o.number = 'WO-' || $1`,
   },
+  purchases: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 s as (insert into suppliers (code, name, type) values ($2, $1, 'dealer') returning id)
+            insert into purchases (number, type, supplier_id, branch_id, currency)
+            select $1, 'local', s.id, b.id, 'GHS' from b, s`,
+      params: [marker, `PU${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from purchases where number = $1",
+  },
+  purchase_lines: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 s as (insert into suppliers (code, name, type) values ($2, $1, 'dealer') returning id),
+                 p as (insert into purchases (number, type, supplier_id, branch_id, currency)
+                       select 'PUR-' || $1, 'local', s.id, b.id, 'GHS' from b, s returning id)
+            insert into purchase_lines (purchase_id, position, make, model, description, price_minor)
+            select p.id, 1, 'Isolation', 'Fixture', $1, 100 from p`,
+      params: [marker, `PL${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from purchase_lines where description = $1",
+  },
+  purchase_costs: {
+    insert: (marker) => ({
+      sql: `${EXPENSE},
+                 s as (insert into suppliers (code, name, type) values ($2, $1, 'dealer') returning id),
+                 p as (insert into purchases (number, type, supplier_id, branch_id, currency)
+                       select 'PUR-' || $1, 'local', s.id, b.id, 'GHS' from b, s returning id)
+            insert into purchase_costs (purchase_id, kind, description, supplier_id, expense_id)
+            select p.id, 'shipping', $1, s.id, e.id from p, s, e`,
+      params: [marker, `PC${letters(marker).toUpperCase().slice(0, 12)}`, letters(marker)],
+    }),
+    find: "select 1 from purchase_costs where description = $1",
+  },
+  purchase_events: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 s as (insert into suppliers (code, name, type) values ($2, $1, 'dealer') returning id),
+                 p as (insert into purchases (number, type, supplier_id, branch_id, currency)
+                       select 'PUR-' || $1, 'local', s.id, b.id, 'GHS' from b, s returning id)
+            insert into purchase_events (purchase_id, kind, occurred_on, note)
+            select p.id, 'note', current_date, $1 from p`,
+      params: [marker, `PE${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from purchase_events where note = $1",
+  },
   incidents: {
     insert: (marker) => ({
       sql: `${VEHICLE}

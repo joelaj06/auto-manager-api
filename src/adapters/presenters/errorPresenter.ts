@@ -247,6 +247,9 @@ const RULES: Readonly<Record<string, Rule>> = {
   EXPENSE_NOT_FOUND: { status: 404 },
   EXPENSE_RULE: { status: 422 },
   PAYABLES_RULE: { status: 422 },
+  PURCHASE_RULE: { status: 422 },
+  PURCHASE_NOT_FOUND: { status: 404 },
+  PURCHASE_COST_NOT_FOUND: { status: 404 },
   APPROVAL_LIMIT_EXCEEDED: { status: 403 },
   EXPENSE_SETUP_NOT_FOUND: { status: 404 },
 

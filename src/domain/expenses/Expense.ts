@@ -266,7 +266,7 @@ export class Expense {
     };
   }
 
-  void(userId: string, reason: string, now: Date): void {
+  void(userId: string | null, reason: string, now: Date): void {
     if (this.props.status === "paid")
       throw new ExpenseRuleError("Reverse the payment of this expense first");
     if (this.props.status === "void") throw new ExpenseRuleError("This expense is already void");

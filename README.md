@@ -526,6 +526,17 @@ payment (`expenseIds`, `method`, optional `withholdingRate`, `fxRate`). The tax 
 2230 Withholding tax payable, and reversing the payment reopens the bills. Rules: docs/11 §5,
 decisions 415–420.
 
+## Vehicle purchases
+
+`POST /api/v1/purchases` drafts a local, import or auction purchase with one line per vehicle,
+and `POST /api/v1/purchases/:id/order` turns each price into a bill to the seller. Cost
+components (`POST /api/v1/purchases/:id/costs`: shipping, duty, clearing …, each in its own
+currency, for one vehicle or shared by value or equally) are bills too, capitalised to 1500
+Vehicles. `GET /api/v1/purchases/:id/landed-cost` gives each vehicle's landed cost. An import
+moves along its timeline (`POST /stage`, `PATCH /shipping`), with papers attached and daily ETA and
+demurrage alerts. `POST /api/v1/purchases/:id/lines/:lineId/receive` registers the vehicle at its
+landed cost, and later costs update it. Rules: docs/11, decisions 421–428.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
