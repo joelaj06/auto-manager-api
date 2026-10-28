@@ -496,6 +496,16 @@ expense charged to the driver — or by the driver), `…/contest` or `…/waive
 wrong are listed at `GET /api/v1/fuel-anomalies` for review. Rules: docs/06 §7–8, decisions
 396–402.
 
+## Maintenance KPIs and compliance
+
+`GET /api/v1/dashboards/maintenance?from=&to=&branchId=&groupBy=` gives the maintenance cost of
+the period by kind, type, vehicle and model with cost per km, downtime and availability,
+preventive against corrective work, mean days between failures and the services due.
+`GET /api/v1/dashboards/compliance?days=30` shows each vehicle red, amber or green on documents,
+services and fines, and drivers' licences expiring. A daily task alerts idle vehicles (rule
+`vehicle_idle`, its `afterDays` set in `PATCH /api/v1/settings/notifications`) and work orders
+past their expected time (rule `work_order_overdue`). Rules: docs/12 §6, decisions 403–409.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

@@ -15,6 +15,7 @@ const rule = z
     enabled: z.boolean(),
     channels: z.array(z.enum(CHANNELS)).max(4),
     daysBefore: z.array(z.number().int().min(0).max(365)).min(1).max(6),
+    afterDays: z.number().int().min(1).max(365),
     smsTemplate: z.string().max(459).nullable(),
   })
   .partial();

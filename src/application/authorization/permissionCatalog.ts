@@ -435,6 +435,11 @@ const definitions = {
       "See the rental reports: utilisation, revenue, average daily rate, balances and deposits held, damage costs",
     scopes: BRANCH_OR_ALL,
   },
+  "dashboards.maintenance.view": {
+    description:
+      "See the maintenance KPIs (cost per vehicle and km, downtime, preventive work, failures) and the compliance dashboard",
+    scopes: BRANCH_OR_ALL,
+  },
   "dashboards.stats.rebuild": {
     description: "Rebuild the vehicle statistics behind the dashboards",
     scopes: ALL,

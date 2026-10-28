@@ -59,6 +59,11 @@ import { FuelAnomalies } from "../../application/use-cases/incidents/FuelAnomali
 import { Incidents } from "../../application/use-cases/incidents/Incidents.js";
 import { TrafficOffences } from "../../application/use-cases/incidents/TrafficOffences.js";
 import { PostgresIncidents } from "../../infrastructure/incidents/PostgresIncidents.js";
+import { maintenanceReportRoutes } from "../../adapters/routes/maintenanceReportRoutes.js";
+import type { IMaintenanceReporting } from "../../application/ports/IMaintenanceReporting.js";
+import { MaintenanceAlerts } from "../../application/use-cases/maintenance/MaintenanceAlerts.js";
+import { MaintenanceReports } from "../../application/use-cases/maintenance/MaintenanceReports.js";
+import { PostgresMaintenanceReporting } from "../../infrastructure/maintenance/PostgresMaintenanceReporting.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -4670,6 +4675,7 @@ export function createContainer(
       signing: DocumentSigning,
       workpayArrears: WorkPayArrears,
       serviceDue: ServiceSchedule,
+      maintenanceAlerts: MaintenanceAlerts,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
@@ -4678,6 +4684,7 @@ export function createContainer(
         workpayArrears,
         stats,
         serviceDue,
+        maintenanceAlerts,
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
       ],
@@ -4689,6 +4696,7 @@ export function createContainer(
       TYPES.DocumentSigning,
       TYPES.WorkPayArrears,
       TYPES.ServiceSchedule,
+      TYPES.MaintenanceAlerts,
     ],
   );
 
@@ -5729,6 +5737,64 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  // --- Maintenance KPIs, compliance and the daily maintenance alerts (docs/12 §6, docs/15 §2) ---
+  tenantRepository<IMaintenanceReporting>(
+    TYPES.MaintenanceReporting,
+    (tx) => new PostgresMaintenanceReporting(tx),
+  );
+  container.bind<MaintenanceReports>(TYPES.MaintenanceReports).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      reporting: IMaintenanceReporting,
+      stats: VehicleStatsBuilder,
+      organisation: IOrganisationSettings,
+      posting: LedgerPosting,
+      calendar: TenantCalendar,
+      scope: BranchScope,
+      clock: IClock,
+    ) =>
+      new MaintenanceReports({
+        unitOfWork,
+        reporting,
+        stats,
+        organisation,
+        posting,
+        calendar,
+        scope,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.MaintenanceReporting,
+      TYPES.VehicleStatsBuilder,
+      TYPES.OrganisationSettings,
+      TYPES.LedgerPosting,
+      TYPES.TenantCalendar,
+      TYPES.BranchScope,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<MaintenanceAlerts>(TYPES.MaintenanceAlerts)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        reporting: IMaintenanceReporting,
+        settings: INotificationSettingsStore,
+        organisation: IOrganisationSettings,
+        notifier: Notifier,
+        clock: IClock,
+      ) =>
+        new MaintenanceAlerts({ unitOfWork, reporting, settings, organisation, notifier, clock }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.MaintenanceReporting,
+        TYPES.NotificationSettingsStore,
+        TYPES.OrganisationSettings,
+        TYPES.Notifier,
+        TYPES.Clock,
+      ],
+    );
   // --- Maintenance: work orders, vendors and downtime (docs/12 §3, §5) ---
   tenantRepository<IWorkOrders>(TYPES.WorkOrderRepository, (tx) => new PostgresWorkOrders(tx));
   container.bind<WorkOrders>(TYPES.WorkOrders).toResolvedValue(
@@ -7234,6 +7300,7 @@ export function createContainer(
       incidents: Incidents,
       trafficOffences: TrafficOffences,
       fuelAnomalies: FuelAnomalies,
+      maintenanceReports: MaintenanceReports,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7387,6 +7454,7 @@ export function createContainer(
         ...workOrderRoutes({ orders: workOrders }),
         ...partRoutes({ parts: partsInventory }),
         ...incidentRoutes({ incidents, offences: trafficOffences, anomalies: fuelAnomalies }),
+        ...maintenanceReportRoutes({ reports: maintenanceReports }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7515,6 +7583,7 @@ export function createContainer(
       TYPES.Incidents,
       TYPES.TrafficOffences,
       TYPES.FuelAnomalies,
+      TYPES.MaintenanceReports,
     ],
   );
 

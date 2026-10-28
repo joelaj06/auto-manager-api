@@ -38,6 +38,8 @@ export const RULE_KEYS = [
   "incident_reported",
   "traffic_offence",
   "fuel_anomaly",
+  "vehicle_idle",
+  "work_order_overdue",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -50,6 +52,8 @@ export type RuleDefinition = Readonly<{
   placeholders?: readonly string[];
   /** The rule counts days before an expiry date. */
   usesDays?: boolean;
+  /** The rule fires once something has lasted this many days. */
+  usesAfterDays?: boolean;
 }>;
 
 export type RuleConfig = Readonly<{
@@ -57,6 +61,8 @@ export type RuleConfig = Readonly<{
   channels: readonly Channel[];
   /** Days before the expiry date to remind on (0: the day it expires). */
   daysBefore?: readonly number[];
+  /** Days something must last before the rule fires (1–365). */
+  afterDays?: number;
   /** Custom SMS text with {{placeholders}}; null: the standard text. */
   smsTemplate?: string | null;
 }>;
@@ -252,6 +258,19 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push"] },
   },
+  vehicle_idle: {
+    description:
+      "A vehicle has stood available (unused) for more than the days set: tell the branch's staff who see vehicle utilisation",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"], afterDays: 7 },
+    usesAfterDays: true,
+  },
+  work_order_overdue: {
+    description:
+      "A vehicle is still off the road for a work order past the time it was expected back: tell the branch's staff who run work orders",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
 });
 
 export type QuietHours = Readonly<{ start: string; end: string }>;
@@ -276,6 +295,12 @@ export function ruleConfig(key: RuleKey, config: RuleConfig): RuleConfig {
     if (daysBefore.some((d) => !Number.isInteger(d) || d < 0 || d > 365))
       throw new NotificationRuleError("Days before are 0 to 365");
   }
+  let afterDays: number | undefined;
+  if (rule.usesAfterDays) {
+    afterDays = config.afterDays ?? rule.defaults.afterDays ?? 7;
+    if (!Number.isInteger(afterDays) || afterDays < 1 || afterDays > 365)
+      throw new NotificationRuleError("After days are 1 to 365");
+  }
   const smsTemplate = config.smsTemplate?.trim() || null;
   if (smsTemplate !== null) {
     if (rule.placeholders === undefined)
@@ -292,6 +317,7 @@ export function ruleConfig(key: RuleKey, config: RuleConfig): RuleConfig {
     enabled: config.enabled,
     channels,
     ...(daysBefore === undefined ? {} : { daysBefore }),
+    ...(afterDays === undefined ? {} : { afterDays }),
     ...(rule.placeholders === undefined ? {} : { smsTemplate }),
   };
 }
