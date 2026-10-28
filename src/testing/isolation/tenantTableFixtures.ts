@@ -1088,6 +1088,39 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from purchase_events where note = $1",
   },
+  dealer_stock: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into dealer_stock (vehicle_id, status, source, stocked_on, notes)
+            select v.id, 'ready', 'other', current_date, $1 from v`,
+      params: [marker, `DS${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_stock where notes = $1",
+  },
+  dealer_price_changes: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 s as (insert into dealer_stock (vehicle_id, status, source, stocked_on)
+                       select v.id, 'ready', 'other', current_date from v returning vehicle_id)
+            insert into dealer_price_changes (vehicle_id, asking_price_minor, reason)
+            select s.vehicle_id, 100, $1 from s`,
+      params: [marker, `DP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_price_changes where reason = $1",
+  },
+  dealer_stock_transfers: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 s as (insert into dealer_stock (vehicle_id, status, source, stocked_on)
+                       select v.id, 'ready', 'other', current_date from v returning vehicle_id),
+                 t as (insert into branches (code, name) values ($2 || 'T', $1) returning id)
+            insert into dealer_stock_transfers (vehicle_id, from_branch_id, to_branch_id,
+              transferred_on, reason)
+            select s.vehicle_id, b.id, t.id, current_date, $1 from s, b, t`,
+      params: [marker, `DT${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_stock_transfers where reason = $1",
+  },
   incidents: {
     insert: (marker) => ({
       sql: `${VEHICLE}

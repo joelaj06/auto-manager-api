@@ -66,6 +66,11 @@ import type { IPurchases } from "../../application/ports/IPurchases.js";
 import { PurchaseAlerts } from "../../application/use-cases/purchases/PurchaseAlerts.js";
 import { PurchaseCostHook, Purchases } from "../../application/use-cases/purchases/Purchases.js";
 import { PostgresPurchases } from "../../infrastructure/purchases/PostgresPurchases.js";
+import type { IDealerStock } from "../../application/ports/IDealerStock.js";
+import { DealerStock } from "../../application/use-cases/dealer/DealerStock.js";
+import { StockAlerts } from "../../application/use-cases/dealer/StockAlerts.js";
+import { PostgresDealerStock } from "../../infrastructure/dealer/PostgresDealerStock.js";
+import { dealerStockRoutes } from "../../adapters/routes/dealerStockRoutes.js";
 import type { IMaintenanceReporting } from "../../application/ports/IMaintenanceReporting.js";
 import { MaintenanceAlerts } from "../../application/use-cases/maintenance/MaintenanceAlerts.js";
 import { MaintenanceReports } from "../../application/use-cases/maintenance/MaintenanceReports.js";
@@ -4725,6 +4730,7 @@ export function createContainer(
       serviceDue: ServiceSchedule,
       maintenanceAlerts: MaintenanceAlerts,
       purchaseAlerts: PurchaseAlerts,
+      stockAlerts: StockAlerts,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
@@ -4735,6 +4741,7 @@ export function createContainer(
         serviceDue,
         maintenanceAlerts,
         purchaseAlerts,
+        stockAlerts,
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
       ],
@@ -4748,6 +4755,7 @@ export function createContainer(
       TYPES.ServiceSchedule,
       TYPES.MaintenanceAlerts,
       TYPES.PurchaseAlerts,
+      TYPES.StockAlerts,
     ],
   );
 
@@ -5799,6 +5807,7 @@ export function createContainer(
     (
       unitOfWork: IUnitOfWork,
       purchases: IPurchases,
+      stock: IDealerStock,
       expenses: Expenses,
       registry: VehicleRegistry,
       vehicles: IVehicleRepository,
@@ -5818,6 +5827,7 @@ export function createContainer(
       new Purchases({
         unitOfWork,
         purchases,
+        stock,
         expenses,
         registry,
         vehicles,
@@ -5837,6 +5847,7 @@ export function createContainer(
     [
       TYPES.UnitOfWork,
       TYPES.PurchaseRepository,
+      TYPES.DealerStockRepository,
       TYPES.Expenses,
       TYPES.VehicleRegistry,
       TYPES.VehicleRepository,
@@ -5864,6 +5875,65 @@ export function createContainer(
         notifier: Notifier,
       ) => new PurchaseAlerts({ unitOfWork, purchases, settings, notifier }),
       [TYPES.UnitOfWork, TYPES.PurchaseRepository, TYPES.NotificationSettingsStore, TYPES.Notifier],
+    );
+  // --- Dealer stock (docs/10 §2) ---
+  tenantRepository<IDealerStock>(TYPES.DealerStockRepository, (tx) => new PostgresDealerStock(tx));
+  container.bind<DealerStock>(TYPES.DealerStock).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      stock: IDealerStock,
+      vehicles: IVehicleRepository,
+      registry: VehicleRegistry,
+      organisation: IOrganisationSettings,
+      scope: BranchScope,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DealerStock({
+        unitOfWork,
+        stock,
+        vehicles,
+        registry,
+        organisation,
+        scope,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DealerStockRepository,
+      TYPES.VehicleRepository,
+      TYPES.VehicleRegistry,
+      TYPES.OrganisationSettings,
+      TYPES.BranchScope,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<StockAlerts>(TYPES.StockAlerts)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        stock: IDealerStock,
+        settings: INotificationSettingsStore,
+        notifier: Notifier,
+      ) => new StockAlerts({ unitOfWork, stock, settings, notifier }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.DealerStockRepository,
+        TYPES.NotificationSettingsStore,
+        TYPES.Notifier,
+      ],
     );
   container.bind<SupplierPayables>(TYPES.SupplierPayables).toResolvedValue(
     (
@@ -7470,6 +7540,7 @@ export function createContainer(
       maintenanceReports: MaintenanceReports,
       supplierPayables: SupplierPayables,
       purchases: Purchases,
+      dealerStock: DealerStock,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7626,6 +7697,7 @@ export function createContainer(
         ...maintenanceReportRoutes({ reports: maintenanceReports }),
         ...payablesRoutes({ payables: supplierPayables }),
         ...purchaseRoutes({ purchases }),
+        ...dealerStockRoutes({ stock: dealerStock }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7757,6 +7829,7 @@ export function createContainer(
       TYPES.MaintenanceReports,
       TYPES.SupplierPayables,
       TYPES.Purchases,
+      TYPES.DealerStock,
     ],
   );
 

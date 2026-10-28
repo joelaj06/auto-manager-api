@@ -1,3 +1,4 @@
+import { StockUnit } from "../../../domain/dealer/StockUnit.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import {
   landedCost,
@@ -26,6 +27,7 @@ import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
+import type { IDealerStock } from "../../ports/IDealerStock.js";
 import type { IExpenseSourceHook } from "../../ports/IExpenseSourceHooks.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
@@ -164,6 +166,7 @@ export class Purchases {
     private readonly deps: Readonly<{
       unitOfWork: IUnitOfWork;
       purchases: IPurchases;
+      stock: IDealerStock;
       expenses: Expenses;
       registry: VehicleRegistry;
       vehicles: IVehicleRepository;
@@ -451,6 +454,19 @@ export class Purchases {
         deps.clock.now(),
       );
       await deps.registry.persist(actor, prepared, "manual");
+      // Bought for resale: into dealer stock at once (decision 436).
+      if (input.usage === "stock")
+        await deps.stock.insert(
+          StockUnit.add({
+            vehicleId: prepared.vehicle.id,
+            source: "purchase",
+            status: prepared.vehicle.status === "available" ? "ready" : "reconditioning",
+            stockedOn: receivedOn,
+            terms: { holdingCostPerDayMinor: 0, consignment: null, notes: `Purchase ${p.number}` },
+            createdBy: actor.userId,
+            now: deps.clock.now(),
+          }),
+        );
       purchase.receive(lineId, prepared.vehicle.id, receivedOn, actor.userId, deps.clock.now());
       await deps.purchases.update(purchase);
       await this.event(purchase, "received", actor, {

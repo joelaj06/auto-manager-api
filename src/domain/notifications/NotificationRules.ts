@@ -42,6 +42,7 @@ export const RULE_KEYS = [
   "work_order_overdue",
   "purchase_eta",
   "purchase_demurrage",
+  "stock_aged",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -284,6 +285,13 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
       "An import at the port is two days from the end of its free days, or past them (demurrage): tell the branch's staff who see purchases",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push", "email"] },
+  },
+  stock_aged: {
+    description:
+      "A vehicle has been in dealer stock for more than the days set: tell the branch's staff who see stock",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"], afterDays: 90 },
+    usesAfterDays: true,
   },
 });
 

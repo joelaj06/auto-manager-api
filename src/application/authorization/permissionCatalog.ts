@@ -250,6 +250,37 @@ const definitions = {
     description: "Receive a purchase's vehicles into the fleet (with vehicles.create)",
     scopes: BRANCH_OR_ALL,
   },
+  // --- dealer stock (docs/10 §2) ---
+  "dealer.stock.list": { description: "List dealer stock and its ageing", scopes: BRANCH_OR_ALL },
+  "dealer.stock.view": {
+    description: "Open a stock vehicle with its price and transfer history",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.stock.create": {
+    description: "Take vehicles into stock (bought, traded in, on consignment …)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.stock.update": {
+    description: "Move stock through reconditioning, set holding cost and consignment terms",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.stock.list_for_sale": {
+    description: "Put stock on sale and take it off sale",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.stock.withdraw": { description: "Withdraw vehicles from stock", scopes: BRANCH_OR_ALL },
+  "dealer.stock.transfer": {
+    description: "Transfer stock between branches (both branches)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.stock.cost.view": {
+    description: "See stock cost, minimum prices and margins",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.stock.price.manage": {
+    description: "Set asking and minimum prices",
+    scopes: BRANCH_OR_ALL,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,

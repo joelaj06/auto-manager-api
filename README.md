@@ -537,6 +537,17 @@ moves along its timeline (`POST /stage`, `PATCH /shipping`), with papers attache
 demurrage alerts. `POST /api/v1/purchases/:id/lines/:lineId/receive` registers the vehicle at its
 landed cost, and later costs update it. Rules: docs/11, decisions 421–428.
 
+## Dealer stock
+
+`POST /api/v1/dealer/stock` takes a vehicle into stock (trade-in, consignment, repossession …;
+usage becomes `stock`), and `GET /api/v1/dealer/stock` lists it oldest first with filters (status,
+source, make, model, year, price, `minDays`, branch, consignor). A unit moves with `/ready`,
+`/recondition`, `/list` (the vehicle goes for sale), `/unlist`, `/withdraw` and `/transfer` (another
+branch, with a record). `PATCH /api/v1/dealer/stock/:vehicleId/pricing` sets the asking and minimum
+prices, logged in `/price-history`. Cost, minimum price and margin appear only with
+`dealer.stock.cost.view`. `GET /api/v1/dealer/stock/ageing` buckets the lot by days in stock, and a
+daily alert flags stock older than 90 days. Rules: docs/10 §2, decisions 429–436.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

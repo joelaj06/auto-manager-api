@@ -54,7 +54,7 @@ describe("permission catalogue", () => {
 
   it("uses well-formed keys", () => {
     for (const key of keys) {
-      expect(key, key).toMatch(/^[a-z][a-z_]*(\.[a-z][a-z_]*){1,2}$/);
+      expect(key, key).toMatch(/^[a-z][a-z_]*(\.[a-z][a-z_]*){1,3}$/);
     }
   });
 
