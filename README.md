@@ -461,6 +461,18 @@ service done. The branch's maintenance staff and the assigned driver are alerted
 `service_due`); rental bookings warn when a service falls due before the return. Rules: docs/12
 §2, decisions 376–380.
 
+## Work orders
+
+`POST /api/v1/work-orders` opens a job on a vehicle (from an issue or a damage, for its service
+plan tasks, at a vendor or in-house) with its labour, parts and sublet lines
+(`PUT /api/v1/work-orders/:id/lines`). `offRoad: true` (or `POST …/off-road`) blocks the vehicle
+for rentals until the expected return, moving class bookings, and pauses Work & Pay as downtime.
+Move it along with `…/start` and `…/awaiting-parts`; `…/complete` records the odometer, the
+services done, the damage repaired and the issue resolved, and posts the cost as expenses with who
+pays (`allocations`: the driver, the renter of a rental damage, an insurer; the business the rest);
+`…/cancel` puts the vehicle back. `GET /api/v1/suppliers/:id/work-orders` is a vendor's record.
+Rules: docs/12 §3, §5, decisions 381–388.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

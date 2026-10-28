@@ -198,6 +198,43 @@ export class VehicleDamages {
     });
   }
 
+  /**
+   * Repaired by a completed work order (P6-2, the caller's unit of work): the final cost and the
+   * work order number; `customerPays` settles it on the renter (their booking is charged).
+   */
+  async repairedBy(
+    actor: Principal,
+    id: string,
+    params: Readonly<{ finalMinor: number; workOrderRef: string; customerPays: boolean }>,
+  ): Promise<void> {
+    const { deps } = this;
+    const damage = await deps.damages.lock(id);
+    if (damage === null) throw new VehicleDamageNotFoundError();
+    const before = damage.snapshot();
+    const now = deps.clock.now();
+    if (params.customerPays && before.liability !== "customer")
+      damage.settle({ liability: "customer" }, now);
+    if (before.status === "repaired")
+      damage.settle({ finalMinor: params.finalMinor, workOrderRef: params.workOrderRef }, now);
+    else
+      damage.repaired(
+        { finalMinor: params.finalMinor, workOrderRef: params.workOrderRef },
+        actor.userId,
+        now,
+      );
+    await deps.damages.update(damage);
+    await this.syncCharge(actor, damage);
+    await this.audit(actor, "vehicle_damage.repaired", damage, before);
+  }
+
+  /** The damage, for a work order of the same vehicle (no permission of its own). */
+  async forWorkOrder(id: string, vehicleId: string): Promise<DamageView> {
+    const damage = await this.deps.damages.get(id);
+    if (damage === null || damage.snapshot().vehicleId !== vehicleId)
+      throw new VehicleDamageNotFoundError();
+    return damageView(damage);
+  }
+
   async startPhoto(
     actor: Principal,
     id: string,

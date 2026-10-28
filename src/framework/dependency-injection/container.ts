@@ -45,6 +45,10 @@ import type { IServicePlans } from "../../application/ports/IServicePlans.js";
 import { ServicePlans } from "../../application/use-cases/maintenance/ServicePlans.js";
 import { ServiceSchedule } from "../../application/use-cases/maintenance/ServiceSchedule.js";
 import { PostgresServicePlans } from "../../infrastructure/maintenance/PostgresServicePlans.js";
+import { workOrderRoutes } from "../../adapters/routes/workOrderRoutes.js";
+import type { IWorkOrders } from "../../application/ports/IWorkOrders.js";
+import { WorkOrders } from "../../application/use-cases/maintenance/WorkOrders.js";
+import { PostgresWorkOrders } from "../../infrastructure/maintenance/PostgresWorkOrders.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
 import type { IPaymentGateway } from "../../application/ports/IPaymentGateway.js";
@@ -5508,6 +5512,82 @@ export function createContainer(
         TYPES.Clock,
       ],
     );
+  // --- Maintenance: work orders, vendors and downtime (docs/12 §3, §5) ---
+  tenantRepository<IWorkOrders>(TYPES.WorkOrderRepository, (tx) => new PostgresWorkOrders(tx));
+  container.bind<WorkOrders>(TYPES.WorkOrders).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      orders: IWorkOrders,
+      vehicles: IVehicleRepository,
+      vehicleAccess: VehicleAccess,
+      registry: VehicleRegistry,
+      odometer: OdometerLog,
+      availability: RentalAvailability,
+      schedule: ServiceSchedule,
+      plans: IServicePlans,
+      issues: VehicleIssues,
+      damages: VehicleDamages,
+      expenses: Expenses,
+      expenseSettings: IExpenseSettingsStore,
+      reference: ITenantReferenceData,
+      numbering: DocumentNumbering,
+      organisation: IOrganisationSettings,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      workpay: WorkPayLifecycle,
+    ) =>
+      new WorkOrders({
+        unitOfWork,
+        orders,
+        vehicles,
+        vehicleAccess,
+        registry,
+        odometer,
+        availability,
+        schedule,
+        plans,
+        issues,
+        damages,
+        expenses,
+        expenseSettings,
+        reference,
+        numbering,
+        organisation,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        workpay,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.WorkOrderRepository,
+      TYPES.VehicleRepository,
+      TYPES.VehicleAccess,
+      TYPES.VehicleRegistry,
+      TYPES.OdometerLog,
+      TYPES.RentalAvailability,
+      TYPES.ServiceSchedule,
+      TYPES.ServicePlanRepository,
+      TYPES.VehicleIssues,
+      TYPES.VehicleDamages,
+      TYPES.Expenses,
+      TYPES.ExpenseSettingsStore,
+      TYPES.TenantReferenceData,
+      TYPES.DocumentNumbering,
+      TYPES.OrganisationSettings,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.WorkPayLifecycle,
+    ],
+  );
   container.bind<RentalRateAdministration>(TYPES.RentalRateAdministration).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -6929,6 +7009,7 @@ export function createContainer(
       rentalReports: RentalReports,
       servicePlans: ServicePlans,
       serviceSchedule: ServiceSchedule,
+      workOrders: WorkOrders,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7079,6 +7160,7 @@ export function createContainer(
         ...rentalAccountRoutes({ accounts: rentalAccounts }),
         ...rentalReportRoutes({ reports: rentalReports }),
         ...maintenanceRoutes({ plans: servicePlans, schedule: serviceSchedule }),
+        ...workOrderRoutes({ orders: workOrders }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7202,6 +7284,7 @@ export function createContainer(
       TYPES.RentalReports,
       TYPES.ServicePlans,
       TYPES.ServiceSchedule,
+      TYPES.WorkOrders,
     ],
   );
 

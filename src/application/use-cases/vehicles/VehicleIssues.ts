@@ -121,6 +121,26 @@ export class VehicleIssues {
     );
   }
 
+  /** A work order takes the issue on (P6-2, the caller's unit of work): acknowledged. */
+  async takenOn(id: string, vehicleId: string, userId: string): Promise<void> {
+    const issue = await this.deps.issues.lockById(id);
+    if (issue === null || issue.snapshot().vehicleId !== vehicleId)
+      throw new VehicleIssueNotFoundError();
+    if (issue.snapshot().status !== "open") return;
+    issue.acknowledge(userId, this.deps.clock.now());
+    await this.deps.issues.save(issue);
+    await this.audit(userId, "vehicle.issue_acknowledged", issue);
+  }
+
+  /** Its work order is completed: resolved, saying by which. */
+  async fixedBy(id: string, resolution: string, userId: string): Promise<void> {
+    const issue = await this.deps.issues.lockById(id);
+    if (issue === null || issue.snapshot().status === "resolved") return;
+    issue.resolve(userId, resolution, this.deps.clock.now());
+    await this.deps.issues.save(issue);
+    await this.audit(userId, "vehicle.issue_resolved", issue);
+  }
+
   async reopen(actor: Principal, id: string): Promise<VehicleIssueView> {
     return this.change(actor, id, "vehicle.issue_reopened", (issue, now) => issue.reopen(now));
   }

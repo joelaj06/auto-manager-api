@@ -238,6 +238,23 @@ export class ServiceSchedule implements ITenantDailyTask {
       );
   }
 
+  /** The tasks of the vehicle's plan, with where each stands (null: not scheduled yet). */
+  async tasksOf(
+    vehicleId: string,
+  ): Promise<Readonly<{ id: string; name: string; status: DueStatus | null }>[]> {
+    const { deps } = this;
+    const [vehicle] = await deps.plans.vehicles([vehicleId]);
+    if (vehicle === undefined || !vehicle.inService) return [];
+    const plan = planFor(await deps.plans.plans(false), vehicle);
+    if (plan === null) return [];
+    const due = await deps.plans.due({ branchIds: "all", vehicleId, limit: 200 });
+    return plan.tasks.map((t) => ({
+      id: t.id,
+      name: t.name,
+      status: due.find((d) => d.taskId === t.id)?.status ?? null,
+    }));
+  }
+
   // --- recording a service ---
 
   /** A service done (in the workshop or outside): the task counts again from it. */

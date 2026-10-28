@@ -234,7 +234,11 @@ export class ExpenseAdministration {
 
   async updateSettings(
     actor: Principal,
-    changes: Readonly<{ receiptRequiredAbove?: string | null; fuelCategoryCode?: string }>,
+    changes: Readonly<{
+      receiptRequiredAbove?: string | null;
+      fuelCategoryCode?: string;
+      maintenanceCategoryCode?: string;
+    }>,
   ): Promise<ExpenseSettings> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
@@ -248,6 +252,7 @@ export class ExpenseAdministration {
               : Money.parse(changes.receiptRequiredAbove, await deps.posting.baseCurrency())
                   .amountMinor,
         fuelCategoryCode: changes.fuelCategoryCode ?? before.fuelCategoryCode,
+        maintenanceCategoryCode: changes.maintenanceCategoryCode ?? before.maintenanceCategoryCode,
       };
       await deps.settings.set(after);
       await recordUserAction(deps, actor.userId, {

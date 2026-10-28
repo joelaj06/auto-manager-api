@@ -522,6 +522,47 @@ export class RentalAvailability {
     });
   }
 
+  /**
+   * A work order takes the vehicle off the road (P6-2): a maintenance block it owns from `startsAt`
+   * until `endsAt` (null: until it is completed), class bookings in the way moved to other vehicles
+   * of their class. A booking that cannot move refuses it (decision 383).
+   */
+  async offRoad(
+    actor: Principal,
+    params: Readonly<{
+      vehicleId: string;
+      branchId: string;
+      workOrderId: string;
+      startsAt: Date;
+      endsAt: Date | null;
+      note: string;
+    }>,
+  ): Promise<Readonly<{ block: VehicleBlock; moved: readonly Moved[] }>> {
+    const now = this.deps.clock.now();
+    const moved = await this.clear(
+      actor,
+      params.vehicleId,
+      { from: params.startsAt, until: params.endsAt },
+      true,
+    );
+    const block = await this.place(
+      {
+        vehicleId: params.vehicleId,
+        branchId: params.branchId,
+        reason: "maintenance",
+        status: params.startsAt <= now ? "out" : "confirmed",
+        startsAt: params.startsAt,
+        endsAt: params.endsAt,
+        refType: "work_order",
+        refId: params.workOrderId,
+        note: params.note,
+      },
+      actor.userId,
+    );
+    await this.audit(actor, "vehicle.block_added", block, null);
+    return { block, moved };
+  }
+
   /** Frees the vehicle (a hold given up, maintenance done early …). */
   release(actor: Principal, id: string, reason: string): Promise<VehicleBlock> {
     const { deps } = this;
@@ -595,7 +636,7 @@ export class RentalAvailability {
   async retime(
     blockId: string,
     startsAt: Date,
-    endsAt: Date,
+    endsAt: Date | null,
     options: Readonly<{ capAtNext?: boolean }> = {},
   ): Promise<Readonly<{ block: VehicleBlock; cappedBy: VehicleBlock | null }>> {
     const { deps } = this;
@@ -626,7 +667,7 @@ export class RentalAvailability {
       )
         throw new VehicleUnavailableError(describe(vehicle, conflicts[0]!));
       cappedBy = next;
-      const cap = next.startsAt < endsAt ? next.startsAt : endsAt;
+      const cap = endsAt === null || next.startsAt < endsAt ? next.startsAt : endsAt;
       after = { ...after, endsAt: cap, blockedUntil: next.startsAt };
     }
     await deps.blocks.save(after);
@@ -801,6 +842,10 @@ const given = <T>(value: T | null | undefined): value is T => value !== undefine
 function assertUnowned(block: VehicleBlock): void {
   if (block.refType === "rental_booking")
     throw new VehicleBlockError("This block belongs to a booking: change the booking instead");
+  if (block.refType === "work_order")
+    throw new VehicleBlockError(
+      "This block belongs to a work order: complete or change the work order instead",
+    );
 }
 
 /** Holds are agents' work; other blocks are the fleet's. */

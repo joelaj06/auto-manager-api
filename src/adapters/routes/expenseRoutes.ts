@@ -139,6 +139,10 @@ export function expenseRoutes(deps: ExpenseRouteDependencies): ApiRoute[] {
             .string()
             .regex(/^[a-z][a-z_]{1,39}$/)
             .optional(),
+          maintenanceCategoryCode: z
+            .string()
+            .regex(/^[a-z][a-z_]{1,39}$/)
+            .optional(),
         }),
       },
       responses: { 200: { description: "Settings" } },

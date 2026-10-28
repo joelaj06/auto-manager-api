@@ -123,11 +123,14 @@ export type ExpenseSettings = Readonly<{
   receiptRequiredAboveMinor: number | null;
   /** Category code of fuel logs. */
   fuelCategoryCode: string;
+  /** Category code of completed work orders' costs. */
+  maintenanceCategoryCode: string;
 }>;
 
 export const DEFAULT_EXPENSE_SETTINGS: ExpenseSettings = Object.freeze({
   receiptRequiredAboveMinor: null,
   fuelCategoryCode: "fuel",
+  maintenanceCategoryCode: "maintenance",
 });
 
 export interface IExpenseSettingsStore {

@@ -423,6 +423,69 @@ export class WorkPayLifecycle {
     });
   }
 
+  /**
+   * A work order took the vehicle off the road (P6-2, the caller's unit of work, the vehicle
+   * locked): downtime of its running agreement, moving the vehicle to maintenance. Returns the
+   * agreement, or null when the vehicle has none running or is already off the road.
+   */
+  async vehicleOffRoad(vehicleId: string, reason: string, userId: string): Promise<string | null> {
+    const { deps } = this;
+    const live = await deps.agreements.liveFor({ vehicleId });
+    if (live === null) return null;
+    const agreement = (await deps.agreements.lockById(live.snapshot().id))!;
+    const a = agreement.snapshot();
+    if (!["active", "in_arrears", "defaulted"].includes(a.status)) return null;
+    if ((await deps.records.openDowntime(a.id)) !== null) return null;
+    const vehicle = (await deps.vehicles.lockById(vehicleId))!;
+    if (vehicle.status === "on_workpay")
+      await deps.registry.moveByModule(vehicle, "in_maintenance", {
+        ref: { type: "workpay_agreement", id: a.id },
+        reason,
+        userId,
+      });
+    const downtimeId = await deps.records.addDowntime({
+      agreementId: a.id,
+      reason,
+      ownerFault: a.maintenance !== "driver",
+      startedOn: await deps.calendar.today(),
+      startedBy: userId,
+    });
+    await recordUserAction(deps, userId, {
+      action: "workpay.downtime_started",
+      entityType: "workpay_agreement",
+      entityId: a.id,
+      after: { downtimeId, reason },
+    });
+    return a.id;
+  }
+
+  /** Its work order is over: the downtime ends and the vehicle is back on work and pay. */
+  async vehicleBack(agreementId: string, userId: string): Promise<void> {
+    const { deps } = this;
+    const agreement = await deps.agreements.lockById(agreementId);
+    if (agreement === null) return;
+    const a = agreement.snapshot();
+    const open = await deps.records.openDowntime(a.id);
+    if (open === null) return;
+    const vehicle = (await deps.vehicles.lockById(a.vehicleId))!;
+    if (
+      vehicle.status === "in_maintenance" &&
+      ["active", "in_arrears", "defaulted"].includes(a.status)
+    )
+      await deps.registry.moveByModule(vehicle, "on_workpay", {
+        ref: { type: "workpay_agreement", id: a.id },
+        reason: "Back on the road",
+        userId,
+      });
+    await deps.records.endDowntime(open.id, await deps.calendar.today(), userId);
+    await recordUserAction(deps, userId, {
+      action: "workpay.downtime_ended",
+      entityType: "workpay_agreement",
+      entityId: a.id,
+      after: { downtimeId: open.id },
+    });
+  }
+
   async downtimes(actor: Principal, id: string): Promise<DowntimeView[]> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {

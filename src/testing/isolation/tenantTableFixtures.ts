@@ -974,6 +974,42 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from service_records where note = $1",
   },
+  work_orders: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into work_orders (number, vehicle_id, branch_id, type, title, currency)
+            select $1, v.id, b.id, 'corrective', 'Isolation job', 'GHS' from v, b`,
+      params: [marker, `WO${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from work_orders where number = $1",
+  },
+  work_order_lines: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 o as (insert into work_orders (number, vehicle_id, branch_id, type, title, currency)
+                       select 'WO-' || $1, v.id, b.id, 'corrective', 'Isolation job', 'GHS'
+                         from v, b returning id)
+            insert into work_order_lines (work_order_id, position, kind, description, quantity,
+              unit_cost_minor, amount_minor)
+            select o.id, 0, 'labour', 'Isolation labour', 1, 100, 100 from o`,
+      params: [marker, `WL${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from work_order_lines l join work_orders o on o.id = l.work_order_id
+            where o.number = 'WO-' || $1`,
+  },
+  work_order_allocations: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 o as (insert into work_orders (number, vehicle_id, branch_id, type, title, currency)
+                       select 'WO-' || $1, v.id, b.id, 'corrective', 'Isolation job', 'GHS'
+                         from v, b returning id)
+            insert into work_order_allocations (work_order_id, payer, amount_minor)
+            select o.id, 'company', 100 from o`,
+      params: [marker, `WA${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from work_order_allocations a join work_orders o on o.id = a.work_order_id
+            where o.number = 'WO-' || $1`,
+  },
   customer_authorised_drivers: {
     insert: (marker) => ({
       sql: `with co as (insert into customers (code, type, company_name, name)

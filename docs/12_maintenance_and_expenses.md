@@ -2,7 +2,7 @@
 
 ## Part A — Maintenance
 
-> **Status (2026-10-28):** preventive maintenance (§2) is built (P6-1): service plans with templates, the most specific plan per vehicle, the due engine recomputed on every odometer reading and nightly, alerts to the branch's maintenance staff and the assigned driver, services recorded, and rentals warned of a service falling due; decisions 376–380. Work orders, parts and KPIs (§3–6) follow in P6-2–P6-5.
+> **Status (2026-10-28):** preventive maintenance (§2) is built (P6-1): service plans with templates, the most specific plan per vehicle, the due engine recomputed on every odometer reading and nightly, alerts to the branch's maintenance staff and the assigned driver, services recorded, and rentals warned of a service falling due; decisions 376–380. Work orders (§3, §5) are built (P6-2): lines, vendors, the vehicle off the road with its block and Work & Pay downtime, completion closing service tasks, damages and issues, and the cost posted with who pays; decisions 381–388. Parts, recoveries and KPIs (§4–6) follow in P6-3–P6-5.
 
 ### 1. Today
 
