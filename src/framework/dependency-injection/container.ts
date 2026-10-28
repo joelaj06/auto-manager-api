@@ -60,9 +60,16 @@ import { Incidents } from "../../application/use-cases/incidents/Incidents.js";
 import { TrafficOffences } from "../../application/use-cases/incidents/TrafficOffences.js";
 import { PostgresIncidents } from "../../infrastructure/incidents/PostgresIncidents.js";
 import { maintenanceReportRoutes } from "../../adapters/routes/maintenanceReportRoutes.js";
+import { payablesRoutes } from "../../adapters/routes/payablesRoutes.js";
 import type { IMaintenanceReporting } from "../../application/ports/IMaintenanceReporting.js";
 import { MaintenanceAlerts } from "../../application/use-cases/maintenance/MaintenanceAlerts.js";
 import { MaintenanceReports } from "../../application/use-cases/maintenance/MaintenanceReports.js";
+import {
+  SupplierPayables,
+  SupplierPaymentListener,
+} from "../../application/use-cases/payables/SupplierPayables.js";
+import type { IPayables } from "../../application/ports/IPayables.js";
+import { PostgresPayables } from "../../infrastructure/payables/PostgresPayables.js";
 import { PostgresMaintenanceReporting } from "../../infrastructure/maintenance/PostgresMaintenanceReporting.js";
 import { PostgresRentalRates } from "../../infrastructure/rentals/PostgresRentalRates.js";
 import { BillingDocuments } from "../../application/use-cases/billing/BillingDocuments.js";
@@ -4342,6 +4349,12 @@ export function createContainer(
             calendar: calendarForListeners,
             clock,
           }),
+          new SupplierPaymentListener({
+            expenses: expenseRepository,
+            posting: postingForListeners,
+            calendar: calendarForListeners,
+            clock,
+          }),
           new RemittancePaymentListener({
             remittances: remittanceStore,
             records: remittanceStore,
@@ -5764,6 +5777,51 @@ export function createContainer(
   tenantRepository<IMaintenanceReporting>(
     TYPES.MaintenanceReporting,
     (tx) => new PostgresMaintenanceReporting(tx),
+  );
+  tenantRepository<IPayables>(TYPES.Payables, (tx) => new PostgresPayables(tx));
+  container.bind<SupplierPayables>(TYPES.SupplierPayables).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      payables: IPayables,
+      expenses: IExpenseRepository,
+      ledger: ILedger,
+      parties: IPartyDirectory,
+      posting: LedgerPosting,
+      payments: PaymentRecording,
+      policy: AuthorizationPolicy,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new SupplierPayables({
+        unitOfWork,
+        payables,
+        expenses,
+        ledger,
+        parties,
+        posting,
+        payments,
+        policy,
+        calendar,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.Payables,
+      TYPES.ExpenseRepository,
+      TYPES.Ledger,
+      TYPES.PartyDirectory,
+      TYPES.LedgerPosting,
+      TYPES.PaymentRecording,
+      TYPES.AuthorizationPolicy,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
   );
   container.bind<MaintenanceReports>(TYPES.MaintenanceReports).toResolvedValue(
     (
@@ -7324,6 +7382,7 @@ export function createContainer(
       trafficOffences: TrafficOffences,
       fuelAnomalies: FuelAnomalies,
       maintenanceReports: MaintenanceReports,
+      supplierPayables: SupplierPayables,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7478,6 +7537,7 @@ export function createContainer(
         ...partRoutes({ parts: partsInventory }),
         ...incidentRoutes({ incidents, offences: trafficOffences, anomalies: fuelAnomalies }),
         ...maintenanceReportRoutes({ reports: maintenanceReports }),
+        ...payablesRoutes({ payables: supplierPayables }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -7607,6 +7667,7 @@ export function createContainer(
       TYPES.TrafficOffences,
       TYPES.FuelAnomalies,
       TYPES.MaintenanceReports,
+      TYPES.SupplierPayables,
     ],
   );
 

@@ -291,6 +291,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "suppliers.view",
       "suppliers.create",
       "suppliers.update",
+      "suppliers.payments.make",
       "billing.view",
     ]),
   },

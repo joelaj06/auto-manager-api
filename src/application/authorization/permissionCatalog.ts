@@ -104,6 +104,10 @@ const definitions = {
   // --- finance and expense reference data ---
   "finance.fx_rates.view": { description: "View exchange rates", scopes: ALL },
   "finance.fx_rates.manage": { description: "Enter and remove exchange rates", scopes: ALL },
+  "finance.payables.view": {
+    description: "See what is owed to suppliers: aged payables, open bills and statements",
+    scopes: ALL,
+  },
   "finance.fx_rates.override": {
     description: "Use another exchange rate than the one entered for the day on a document",
     scopes: ALL,
@@ -467,6 +471,10 @@ const definitions = {
   "suppliers.create": { description: "Add suppliers", scopes: ALL },
   "suppliers.update": { description: "Edit and deactivate suppliers", scopes: ALL },
   "suppliers.delete": { description: "Remove mistaken supplier entries", scopes: ALL },
+  "suppliers.payments.make": {
+    description: "Record one payment for several of a supplier's approved bills",
+    scopes: ALL,
+  },
 
   "data.export": {
     description: "Export all the business's data (a zip emailed as a link)",

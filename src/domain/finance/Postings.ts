@@ -234,6 +234,42 @@ export const Postings = {
     });
   },
 
+  /**
+   * Tax withheld from a supplier payment (decision 417): the supplier's bill is settled in full,
+   * the part withheld is owed to the tax authority instead (Dr payables, Cr withholding tax).
+   */
+  supplierWithholding(
+    params: Readonly<{
+      paymentId: string;
+      amountMinor: number;
+      branchId: string;
+      supplierId: string;
+      date: string;
+      description: string;
+    }>,
+    accounts: AccountResolver,
+  ): JournalDraft {
+    const party = { type: "supplier" as const, id: params.supplierId };
+    return journal({
+      date: params.date,
+      description: params.description.slice(0, 300),
+      source: { type: "supplier_wht", id: params.paymentId },
+      reversesId: null,
+      lines: [
+        debit(params.amountMinor, {
+          accountId: accounts("payables"),
+          branchId: params.branchId,
+          party,
+        }),
+        credit(params.amountMinor, {
+          accountId: accounts("withholding_tax"),
+          branchId: params.branchId,
+          party,
+        }),
+      ],
+    });
+  },
+
   /** A period's target falls due: the driver owes it, the business earned it. */
   remittanceAccrued(
     remittance: Remittance,

@@ -37,6 +37,7 @@ export type SystemAccountKey =
   | "stock_adjustments"
   | "equity"
   | "insurance_recoveries"
+  | "withholding_tax"
   | `tax_payable:${string}`;
 
 /** The payable account of a tax component (VAT, NHIL, GETFund; anything else: other). */

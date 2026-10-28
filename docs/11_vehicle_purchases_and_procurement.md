@@ -1,5 +1,7 @@
 # 11 — Vehicle Purchases & Procurement
 
+> **Update 2026-10-28 (P7-2):** §5 is implemented. A supplier's bills are its approved, unpaid expenses, due after its payment terms. Aged payables, open bills and the supplier statement come from the payables account. One supplier payment can settle several bills with optional withholding tax (2230 Withholding tax payable) and the exchange difference. Permissions are `finance.payables.view` and `suppliers.payments.make` (decisions 415–420). Purchases (§3–4, §6) follow in P7-3.
+
 Covers how vehicles **enter** the business — for every segment (fleet owners buying cars for drivers, rental firms growing fleet, dealers buying stock).
 
 ## 1. Why it matters

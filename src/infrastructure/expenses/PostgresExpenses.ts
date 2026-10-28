@@ -180,6 +180,15 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
     return this.one(id, "for update of e");
   }
 
+  async lockByPayment(paymentId: string): Promise<Expense[]> {
+    if (!UUID.test(paymentId)) return [];
+    const { rows } = await this.tx.query<ExpenseRow>(
+      `select ${COLUMNS} from expenses e where e.payment_id = $1 order by e.number for update of e`,
+      [paymentId],
+    );
+    return (await withLines(this.tx, rows)).map((p) => Expense.restore(p));
+  }
+
   private async one(id: string, lock: string): Promise<Expense | null> {
     if (!UUID.test(id)) return null;
     const { rows } = await this.tx.query<ExpenseRow>(

@@ -516,6 +516,16 @@ the ledger posts only those. Paying a foreign-currency expense at another rate p
 exchange difference to 4950. A currency still on open documents cannot be disabled. Rules:
 docs/20, decisions 172 and 410–414.
 
+## Supplier payables
+
+A supplier's approved, unpaid expenses are its bills, due after its payment terms.
+`GET /api/v1/payables/aged` ages what is owed by payee, `GET /api/v1/suppliers/:id/bills` lists
+a supplier's open bills and `GET /api/v1/suppliers/:id/statement?from=&to=` shows what was billed
+and paid with the balance owed. `POST /api/v1/suppliers/:id/payments` pays several bills in one
+payment (`expenseIds`, `method`, optional `withholdingRate`, `fxRate`). The tax withheld goes to
+2230 Withholding tax payable, and reversing the payment reopens the bills. Rules: docs/11 §5,
+decisions 415–420.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
