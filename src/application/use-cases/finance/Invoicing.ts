@@ -163,7 +163,7 @@ export class Invoicing {
         request.branchId ??
         (await deps.scope.defaultBranch(actor, "finance.invoices.manage", "invoice"));
       await deps.scope.branch(actor, "finance.invoices.manage", branchId);
-      const { header, lines, taxCodes } = await this.prepare(request, branchId);
+      const { header, lines, taxCodes } = await this.prepare(request, branchId, actor);
       const invoice = Invoice.draft({
         id: deps.ids.next(),
         header,
@@ -185,7 +185,7 @@ export class Invoicing {
       const invoice = await this.reach(actor, id, "finance.invoices.manage", true);
       const branchId = request.branchId ?? invoice.snapshot().branchId;
       await deps.scope.branch(actor, "finance.invoices.manage", branchId);
-      const { header, lines, taxCodes } = await this.prepare(request, branchId);
+      const { header, lines, taxCodes } = await this.prepare(request, branchId, actor);
       invoice.revise(header, lines, taxCodes, deps.clock.now());
       await deps.invoices.save(invoice);
       await this.audit(actor, "invoice.revised", invoice);
@@ -299,7 +299,7 @@ export class Invoicing {
     return invoice;
   }
 
-  private async prepare(request: InvoiceRequest, branchId: string) {
+  private async prepare(request: InvoiceRequest, branchId: string, actor: Principal | null = null) {
     const { deps } = this;
     const today = await deps.calendar.today();
     const settings = await deps.settings.get();
@@ -310,6 +310,7 @@ export class Invoicing {
       request.currency ?? (await deps.posting.baseCurrency()),
       issueDate,
       request.fxRate,
+      actor,
     );
     const taxCodes = await this.taxCodes();
     const accounts = await deps.ledger.accounts();

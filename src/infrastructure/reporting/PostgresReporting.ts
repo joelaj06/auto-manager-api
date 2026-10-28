@@ -473,8 +473,8 @@ export class PostgresDashboardQueries implements IDashboardQueries {
       tax: string;
     }>(
       `select e.expense_date::text as day, c.id as category_id, c.name as category_name,
-              count(*) as count, sum(e.amount_minor) as amount, sum(e.net_minor) as net,
-              sum(e.tax_minor) as tax
+              count(*) as count, sum(e.amount_base_minor) as amount,
+              sum(e.net_base_minor) as net, sum(e.tax_base_minor) as tax
          from expenses e
          join expense_categories c on c.id = e.category_id
         where e.status in ('approved', 'paid') and e.expense_date between $1 and $2
@@ -507,7 +507,7 @@ export class PostgresDashboardQueries implements IDashboardQueries {
       plate_number: string | null;
       amount: string;
     }>(
-      `select v.id as vehicle_id, v.code, v.plate_number, sum(l.amount_minor) as amount
+      `select v.id as vehicle_id, v.code, v.plate_number, sum(l.amount_base_minor) as amount
          from expense_lines l
          join expenses e on e.id = l.expense_id
          join vehicles v on v.id = l.vehicle_id
@@ -529,7 +529,7 @@ export class PostgresDashboardQueries implements IDashboardQueries {
 
   async pendingExpenses(filter: BranchFilter) {
     const { rows } = await this.tx.query<{ count: string; amount: string }>(
-      `select count(*) as count, coalesce(sum(amount_minor), 0) as amount
+      `select count(*) as count, coalesce(sum(amount_base_minor), 0) as amount
          from expenses
         where status = 'submitted'
           and ($1::uuid[] is null or branch_id = any($1::uuid[]))

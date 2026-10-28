@@ -6,6 +6,7 @@ import type { RecurringExpenses } from "../../application/use-cases/expenses/Rec
 import { EXPENSE_STATUSES } from "../../domain/expenses/Expense.js";
 import { FILE_KINDS } from "../../domain/files/FileKinds.js";
 import { PAYMENT_METHODS } from "../../domain/finance/Payment.js";
+import { CURRENCY_CODES, type CurrencyCode } from "../../domain/money/Currency.js";
 import { principalOf } from "../middleware/AccessGuard.js";
 import { envelope } from "../presenters/responseEnvelope.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
@@ -15,6 +16,8 @@ const uuid = z.uuid();
 const date = z.iso.date();
 const idParams = z.object({ id: uuid });
 const amount = z.string().regex(/^\d{1,13}(\.\d{1,4})?$/, 'Send amounts as text, e.g. "250.00"');
+const currency = z.enum(CURRENCY_CODES as [CurrencyCode, ...CurrencyCode[]]);
+const rate = z.string().regex(/^\d{1,10}(\.\d{1,10})?$/, 'An exchange rate, e.g. "15.42"');
 const reason = z.string().trim().min(3).max(500);
 const text = (max: number) => z.string().trim().max(max).nullable().optional();
 const taxCode = z
@@ -34,6 +37,8 @@ const expenseBody = z.object({
   driverId: uuid.nullable().optional(),
   chargeToDriver: z.boolean().optional(),
   amount,
+  currency: currency.optional(),
+  fxRate: rate.nullable().optional(),
   taxCode,
   vehicleIds: z.array(uuid).max(200).optional(),
   split: z
@@ -469,6 +474,7 @@ export function expenseRoutes(deps: ExpenseRouteDependencies): ApiRoute[] {
           momoNetwork: z.enum(["mtn", "telecel", "at"]).nullable().optional(),
           reference: text(100),
           paidOn: date.optional(),
+          fxRate: rate.nullable().optional(),
         }),
       },
       responses: { 200: { description: "Paid expense" } },

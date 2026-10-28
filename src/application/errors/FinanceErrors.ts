@@ -37,6 +37,16 @@ export class FxRateRequiredError extends ApplicationError {
   }
 }
 
+/** Changing the suggested exchange rate needs `finance.fx_rates.override` — 403. */
+export class FxRateOverrideError extends ApplicationError {
+  readonly code = "FX_RATE_OVERRIDE_DENIED";
+  constructor(currency: string, suggested: string) {
+    super(
+      `The ${currency} rate for that date is ${suggested}; you may not change it (finance.fx_rates.override)`,
+    );
+  }
+}
+
 /** A cash payment needs the cashier's open cash session in that branch — 409. */
 export class CashSessionRequiredError extends ApplicationError {
   readonly code = "CASH_SESSION_REQUIRED";

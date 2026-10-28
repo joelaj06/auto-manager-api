@@ -21,9 +21,15 @@ export type ExpenseListFilter = Readonly<{
 /** Reads over expenses (tenant unit of work). */
 export interface IExpenseQueries {
   list(filter: ExpenseListFilter): Promise<ExpenseProps[]>;
-  /** Expenses (not void) that look like a duplicate: same category, date and amount. */
+  /** Expenses (not void) that look like a duplicate: same category, date, currency and amount. */
   similar(
-    expense: Readonly<{ id: string; categoryId: string; expenseDate: string; amountMinor: number }>,
+    expense: Readonly<{
+      id: string;
+      categoryId: string;
+      expenseDate: string;
+      currency: string;
+      amountMinor: number;
+    }>,
   ): Promise<ExpenseProps[]>;
   /**
    * Approved and paid spending in a month (YYYY-MM) for a budget's filters (the category

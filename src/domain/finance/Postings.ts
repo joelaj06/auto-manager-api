@@ -162,7 +162,7 @@ export const Postings = {
       p.chargeToDriver && p.driverId !== null ? { type: "driver" as const, id: p.driverId } : null;
     const debits: JournalLine[] = [];
     for (const line of p.lines) {
-      const cost = recoverTax ? line.netMinor : line.amountMinor;
+      const cost = recoverTax ? line.netBaseMinor : line.amountBaseMinor;
       debits.push(
         driver === null
           ? debit(cost, {
@@ -177,9 +177,9 @@ export const Postings = {
               party: driver,
             }),
       );
-      if (recoverTax && line.taxMinor > 0)
+      if (recoverTax && line.taxBaseMinor > 0)
         debits.push(
-          debit(line.taxMinor, { accountId: accounts("input_tax"), branchId: p.branchId }),
+          debit(line.taxBaseMinor, { accountId: accounts("input_tax"), branchId: p.branchId }),
         );
     }
     return journal({
@@ -189,13 +189,48 @@ export const Postings = {
       reversesId: null,
       lines: [
         ...debits,
-        credit(p.amountMinor, {
+        credit(p.amountBaseMinor, {
           accountId: accounts("payables"),
           branchId: p.branchId,
           party: p.payee === null ? null : { type: p.payee.type, id: p.payee.id },
           memo: p.payeeName,
         }),
       ],
+    });
+  },
+
+  /**
+   * A foreign-currency bill paid at another rate than it was booked at (decision 411): what is
+   * owed was cleared at the payment's base amount, so the rest of it (`difference` > 0, a gain)
+   * or the excess (< 0, a loss) goes to exchange differences.
+   */
+  payableExchangeDifference(
+    params: Readonly<{
+      paymentId: string;
+      difference: number;
+      branchId: string;
+      party: Readonly<{ type: "supplier" | "driver"; id: string }> | null;
+      date: string;
+      description: string;
+    }>,
+    accounts: AccountResolver,
+  ): JournalDraft {
+    const amount = Math.abs(params.difference);
+    const owed = {
+      accountId: accounts("payables"),
+      branchId: params.branchId,
+      party: params.party,
+    };
+    const fx = { accountId: accounts("fx_difference"), branchId: params.branchId };
+    return journal({
+      date: params.date,
+      description: params.description.slice(0, 300),
+      source: { type: "payable_fx", id: params.paymentId },
+      reversesId: null,
+      lines:
+        params.difference > 0
+          ? [debit(amount, owed), credit(amount, fx)]
+          : [debit(amount, fx), credit(amount, owed)],
     });
   },
 

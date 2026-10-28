@@ -143,6 +143,7 @@ const RULES: Readonly<Record<string, Rule>> = {
   CURRENCY_MISMATCH: { status: 422 },
   CURRENCY_BASE_LOCKED: { status: 409 },
   CURRENCY_NOT_ENABLED: { status: 422 },
+  CURRENCY_IN_USE: { status: 409 },
   TAX_CODE_NOT_FOUND: { status: 404 },
   TAX_RATES_MISSING: { status: 409 },
   INVALID_TAX_CODE: { status: 422 },
@@ -238,6 +239,7 @@ const RULES: Readonly<Record<string, Rule>> = {
   CASH_SESSION_NOT_FOUND: { status: 404 },
   PERIOD_LOCKED: { status: 409 },
   FX_RATE_REQUIRED: { status: 422 },
+  FX_RATE_OVERRIDE_DENIED: { status: 403 },
   CASH_SESSION_REQUIRED: { status: 409 },
   FINANCE_RULE: { status: 422 },
 

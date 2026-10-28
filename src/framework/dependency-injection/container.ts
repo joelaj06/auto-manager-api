@@ -272,6 +272,7 @@ import {
   PostgresPartyDirectory,
   PostgresPaymentRepository,
 } from "../../infrastructure/finance/PostgresFinanceDocuments.js";
+import { PostgresCurrencyUsage } from "../../infrastructure/finance/PostgresCurrencyUsage.js";
 import { PostgresLedger } from "../../infrastructure/finance/PostgresLedger.js";
 import { assignmentRoutes } from "../../adapters/routes/assignmentRoutes.js";
 import type { IAssignmentSettingsStore } from "../../application/ports/IAssignmentRecords.js";
@@ -336,6 +337,7 @@ import type {
   IReferenceData,
   ITenantReferenceData,
 } from "../../application/ports/IReferenceData.js";
+import type { ICurrencyUsage } from "../../application/ports/ICurrencyUsage.js";
 import { CurrencySettingsService } from "../../application/use-cases/reference/CurrencySettingsService.js";
 import { DocumentNumbering } from "../../application/use-cases/reference/DocumentNumbering.js";
 import { ExpenseCategoryAdministration } from "../../application/use-cases/reference/ExpenseCategoryAdministration.js";
@@ -3469,17 +3471,30 @@ export function createContainer(
     TYPES.TenantReferenceData,
     (tx) => new PostgresTenantReferenceData(tx),
   );
-  container
-    .bind<CurrencySettingsService>(TYPES.CurrencySettingsService)
-    .toResolvedValue(
-      (
-        unitOfWork: IUnitOfWork,
-        organisation: IOrganisationSettings,
-        auditTrail: IAuditTrail,
-        requestContext: IRequestContext,
-      ) => new CurrencySettingsService({ unitOfWork, organisation, auditTrail, requestContext }),
-      [TYPES.UnitOfWork, TYPES.OrganisationSettings, TYPES.AuditTrail, TYPES.RequestContext],
-    );
+  tenantRepository<ICurrencyUsage>(TYPES.CurrencyUsage, (tx) => new PostgresCurrencyUsage(tx));
+  container.bind<CurrencySettingsService>(TYPES.CurrencySettingsService).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      organisation: IOrganisationSettings,
+      usage: ICurrencyUsage,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+    ) =>
+      new CurrencySettingsService({
+        unitOfWork,
+        organisation,
+        usage,
+        auditTrail,
+        requestContext,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.OrganisationSettings,
+      TYPES.CurrencyUsage,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+    ],
+  );
   const tenantReferenceDeps = (): [symbol, symbol, symbol, symbol, symbol, symbol] => [
     TYPES.UnitOfWork,
     TYPES.OrganisationSettings,
@@ -4321,7 +4336,12 @@ export function createContainer(
         ids,
         clock,
         reversalListeners: [
-          new ExpensePaymentListener({ expenses: expenseRepository, clock }),
+          new ExpensePaymentListener({
+            expenses: expenseRepository,
+            posting: postingForListeners,
+            calendar: calendarForListeners,
+            clock,
+          }),
           new RemittancePaymentListener({
             remittances: remittanceStore,
             records: remittanceStore,
@@ -4485,6 +4505,7 @@ export function createContainer(
       vehicles: IVehicleRepository,
       parties: IPartyDirectory,
       posting: LedgerPosting,
+      context: FinanceContext,
       payments: PaymentRecording,
       files: FileService,
       policy: AuthorizationPolicy,
@@ -4508,6 +4529,7 @@ export function createContainer(
         vehicles,
         parties,
         posting,
+        context,
         payments,
         receipts: new OwnedDocuments(files, "expense_receipt", "expense", 5),
         policy,
@@ -4530,6 +4552,7 @@ export function createContainer(
       TYPES.VehicleRepository,
       TYPES.PartyDirectory,
       TYPES.LedgerPosting,
+      TYPES.FinanceContext,
       TYPES.PaymentRecording,
       TYPES.TenantFileService,
       TYPES.AuthorizationPolicy,

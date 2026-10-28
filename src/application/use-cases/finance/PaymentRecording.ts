@@ -199,6 +199,7 @@ export class PaymentRecording {
         request.currency ?? (await deps.posting.baseCurrency()),
         paidOn,
         request.fxRate,
+        actor,
       );
       const amountMinor = Money.parse(request.amount, currency).amountMinor;
       const amountBaseMinor = toBase(amountMinor, currency, fxRate, base);

@@ -27,15 +27,17 @@ const details: ExpenseDetails = {
   reference: null,
   notes: null,
 };
+const GHS = { currency: "GHS", fxRate: "1", base: "GHS" };
 const draft = (
   overrides: Partial<Parameters<typeof Expense.draft>[0]["amount"]> = {},
   d: Partial<ExpenseDetails> = {},
+  currency: Parameters<typeof Expense.draft>[0]["currency"] = GHS,
 ) =>
   Expense.draft({
     id: "e1",
     details: { ...details, ...d },
     amount: { amountMinor: 100_000, taxCode: null, split: [], ...overrides },
-    currency: "GHS",
+    currency,
     source: null,
     createdBy: "u1",
     now,
@@ -79,6 +81,46 @@ describe("Expense", () => {
     expense.reopen(now);
     expect(expense.status).toBe("approved");
   });
+
+  it("keeps a foreign-currency bill's base amounts at its rate, split by the same shares", () => {
+    const usd = { currency: "USD", fxRate: "15.5", base: "GHS" };
+    const expense = draft(
+      {
+        amountMinor: 12_000,
+        taxCode: vat,
+        split: [
+          { vehicleId: "v1", weight: 1 },
+          { vehicleId: "v2", weight: 1 },
+        ],
+      },
+      {},
+      usd,
+    ).snapshot();
+    expect([expense.currency, expense.fxRate, expense.amountMinor]).toEqual([
+      "USD",
+      "15.5",
+      12_000,
+    ]);
+    expect([expense.amountBaseMinor, expense.netBaseMinor, expense.taxBaseMinor]).toEqual([
+      186_000, 155_000, 31_000,
+    ]);
+    expect(expense.lines.map((l) => [l.amountBaseMinor, l.netBaseMinor, l.taxBaseMinor])).toEqual([
+      [93_000, 77_500, 15_500],
+      [93_000, 77_500, 15_500],
+    ]);
+    expect(() => draft({ amountMinor: 1 }, {}, { ...usd, fxRate: "0.001" })).toThrow(/too small/);
+    expect(draft().snapshot().fxRate).toBe("1");
+  });
+
+  it("records the exchange difference of the payment and clears it when reopened", () => {
+    const expense = draft({}, {}, { currency: "USD", fxRate: "15", base: "GHS" });
+    expense.submit("EXP-2026-000003", "u1", now);
+    expense.approve("u2", null, now);
+    expense.markPaid("p1", now, -5_000);
+    expect(expense.snapshot().fxDifferenceMinor).toBe(-5_000);
+    expense.reopen(now);
+    expect(expense.snapshot().fxDifferenceMinor).toBe(0);
+  });
 });
 
 describe("expense posting", () => {
@@ -106,6 +148,40 @@ describe("expense posting", () => {
         ["acc:payables", null, 0, 120_000],
       ],
     );
+  });
+
+  it("posts a foreign-currency bill at its base amounts and the payment's exchange difference", () => {
+    const expense = draft(
+      { amountMinor: 10_000 },
+      {},
+      { currency: "USD", fxRate: "15", base: "GHS" },
+    );
+    const entry = Postings.expenseApproved(
+      expense,
+      "acc:vehicle_expenses",
+      true,
+      accounts,
+      "2026-10-19",
+    );
+    expect(entry.lines.map((l) => [l.accountId, l.debitMinor, l.creditMinor])).toEqual([
+      ["acc:vehicle_expenses", 150_000, 0],
+      ["acc:payables", 0, 150_000],
+    ]);
+    const loss = Postings.payableExchangeDifference(
+      {
+        paymentId: "p1",
+        difference: -10_000,
+        branchId: "b1",
+        party: { type: "supplier", id: "s1" },
+        date: "2026-10-25",
+        description: "Exchange difference",
+      },
+      accounts,
+    );
+    expect(loss.lines.map((l) => [l.accountId, l.debitMinor, l.creditMinor])).toEqual([
+      ["acc:fx_difference", 10_000, 0],
+      ["acc:payables", 0, 10_000],
+    ]);
   });
 
   it("charges a driver who bears the cost instead of the business", () => {

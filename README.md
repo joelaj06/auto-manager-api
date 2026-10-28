@@ -506,6 +506,16 @@ services and fines, and drivers' licences expiring. A daily task alerts idle veh
 `vehicle_idle`, its `afterDays` set in `PATCH /api/v1/settings/notifications`) and work orders
 past their expected time (rule `work_order_overdue`). Rules: docs/12 §6, decisions 403–409.
 
+## Multi-currency
+
+Enable extra currencies in `PATCH /api/v1/settings/currency` and record rates in
+`POST /api/v1/fx-rates`. Invoices, payments and expenses take a `currency` and an optional
+`fxRate` (the latest rate on or before the date is suggested; a different one needs
+`finance.fx_rates.override`). Each document keeps its base-currency amounts at that rate, and
+the ledger posts only those. Paying a foreign-currency expense at another rate posts the
+exchange difference to 4950. A currency still on open documents cannot be disabled. Rules:
+docs/20, decisions 172 and 410–414.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

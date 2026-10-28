@@ -7,6 +7,7 @@ import {
 } from "../../../domain/money/Currency.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
+import type { ICurrencyUsage } from "../../ports/ICurrencyUsage.js";
 import type { CurrencySettings, IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
@@ -14,7 +15,7 @@ import { recordUserAction } from "./userAudit.js";
 
 export class CurrencyRuleError extends DomainError {
   constructor(
-    readonly code: "CURRENCY_BASE_LOCKED" | "CURRENCY_NOT_ENABLED",
+    readonly code: "CURRENCY_BASE_LOCKED" | "CURRENCY_NOT_ENABLED" | "CURRENCY_IN_USE",
     message: string,
   ) {
     super(message);
@@ -29,13 +30,15 @@ export type CurrencySettingsChanges = Readonly<{
 
 /**
  * Currency settings (docs/20 §3, §8): the base currency (GHS by default) — changeable only until
- * the first financial transaction — and the extra currencies users may pick on documents.
+ * the first financial transaction — and the extra currencies users may pick on documents. A
+ * currency stays enabled while invoices or expenses in it are still open (decision 413).
  */
 export class CurrencySettingsService {
   constructor(
     private readonly deps: Readonly<{
       unitOfWork: IUnitOfWork;
       organisation: IOrganisationSettings;
+      usage: ICurrencyUsage;
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
     }>,
@@ -68,6 +71,14 @@ export class CurrencySettingsService {
           ),
         ]),
       ];
+      for (const code of before.enabledCurrencies.filter((c) => !enabled.includes(c))) {
+        const open = await deps.usage.openDocuments(code);
+        if (open.invoices + open.expenses > 0)
+          throw new CurrencyRuleError(
+            "CURRENCY_IN_USE",
+            `${code} is still on ${open.invoices} open invoice(s) and ${open.expenses} unpaid expense(s); settle or void them first`,
+          );
+      }
       const next = {
         baseCurrency,
         enabledCurrencies: enabled,

@@ -104,6 +104,10 @@ const definitions = {
   // --- finance and expense reference data ---
   "finance.fx_rates.view": { description: "View exchange rates", scopes: ALL },
   "finance.fx_rates.manage": { description: "Enter and remove exchange rates", scopes: ALL },
+  "finance.fx_rates.override": {
+    description: "Use another exchange rate than the one entered for the day on a document",
+    scopes: ALL,
+  },
   "expenses.list": {
     description: "List expenses (own: only those you entered)",
     scopes: ["own", "branch", "all"],

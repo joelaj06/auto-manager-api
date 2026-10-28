@@ -20,6 +20,8 @@ import type { PostgresTransactionContext } from "../database/postgres/PostgresTr
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Tx = ReturnType<PostgresTransactionContext["current"]>;
 const num = (value: string | null) => (value === null ? null : Number(value));
+const trimRate = (rate: string) =>
+  rate.includes(".") ? rate.replace(/0+$/, "").replace(/\.$/, "") : rate;
 
 // --- expenses ---
 
@@ -36,11 +38,17 @@ type ExpenseRow = {
   payee_name: string | null;
   driver_id: string | null;
   charge_to_driver: boolean;
+  currency: string;
+  fx_rate: string;
   amount_minor: string;
   tax_code: string | null;
   tax_components: ExpenseProps["taxComponents"];
   net_minor: string;
   tax_minor: string;
+  amount_base_minor: string;
+  net_base_minor: string;
+  tax_base_minor: string;
+  fx_difference_minor: string;
   reference: string | null;
   notes: string | null;
   source_type: string | null;
@@ -70,11 +78,16 @@ type LineRow = {
   amount_minor: string;
   net_minor: string;
   tax_minor: string;
+  amount_base_minor: string;
+  net_base_minor: string;
+  tax_base_minor: string;
 };
 
 const COLUMNS = `e.id, e.number, e.status, e.category_id, e.description, e.branch_id,
   e.expense_date::text as expense_date, e.payee_type, e.payee_id, e.payee_name, e.driver_id,
-  e.charge_to_driver, e.amount_minor, e.tax_code, e.tax_components, e.net_minor, e.tax_minor,
+  e.charge_to_driver, e.currency, e.fx_rate::text as fx_rate, e.amount_minor, e.tax_code,
+  e.tax_components, e.net_minor, e.tax_minor, e.amount_base_minor, e.net_base_minor,
+  e.tax_base_minor, e.fx_difference_minor,
   e.reference, e.notes, e.source_type, e.source_id, e.submitted_by, e.submitted_at,
   e.approval_rule_id, e.approved_by, e.approved_at, e.rejected_by, e.rejected_at,
   e.rejection_reason, e.payment_id, e.paid_at, e.void_reason, e.voided_by, e.voided_at,
@@ -93,11 +106,16 @@ const toExpense = (r: ExpenseRow, lines: ExpenseLine[]): ExpenseProps => ({
   payeeName: r.payee_name,
   driverId: r.driver_id,
   chargeToDriver: r.charge_to_driver,
+  currency: r.currency,
+  fxRate: trimRate(r.fx_rate),
   amountMinor: Number(r.amount_minor),
   taxCode: r.tax_code,
   taxComponents: r.tax_components,
   netMinor: Number(r.net_minor),
   taxMinor: Number(r.tax_minor),
+  amountBaseMinor: Number(r.amount_base_minor),
+  netBaseMinor: Number(r.net_base_minor),
+  taxBaseMinor: Number(r.tax_base_minor),
   lines,
   reference: r.reference,
   notes: r.notes,
@@ -113,6 +131,7 @@ const toExpense = (r: ExpenseRow, lines: ExpenseLine[]): ExpenseProps => ({
   rejectionReason: r.rejection_reason,
   paymentId: r.payment_id,
   paidAt: r.paid_at,
+  fxDifferenceMinor: Number(r.fx_difference_minor),
   voidReason: r.void_reason,
   voidedBy: r.voided_by,
   voidedAt: r.voided_at,
@@ -137,6 +156,9 @@ async function withLines(tx: Tx, rows: ExpenseRow[]): Promise<ExpenseProps[]> {
           amountMinor: Number(l.amount_minor),
           netMinor: Number(l.net_minor),
           taxMinor: Number(l.tax_minor),
+          amountBaseMinor: Number(l.amount_base_minor),
+          netBaseMinor: Number(l.net_base_minor),
+          taxBaseMinor: Number(l.tax_base_minor),
         })),
     ),
   );
@@ -176,10 +198,11 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
          amount_minor, tax_code, tax_components, net_minor, tax_minor, reference, notes,
          source_type, source_id, submitted_by, submitted_at, approval_rule_id, approved_by,
          approved_at, rejected_by, rejected_at, rejection_reason, payment_id, paid_at,
-         void_reason, voided_by, voided_at, created_by, created_at, updated_at)
+         void_reason, voided_by, voided_at, created_by, created_at, updated_at, currency, fx_rate,
+         amount_base_minor, net_base_minor, tax_base_minor, fx_difference_minor)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
          $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
-         $36, $37)
+         $36, $37, $38, $39, $40, $41, $42, $43)
        on conflict (id) do update set number = excluded.number, status = excluded.status,
          category_id = excluded.category_id, description = excluded.description,
          branch_id = excluded.branch_id, expense_date = excluded.expense_date,
@@ -195,7 +218,11 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
          rejected_at = excluded.rejected_at, rejection_reason = excluded.rejection_reason,
          payment_id = excluded.payment_id, paid_at = excluded.paid_at,
          void_reason = excluded.void_reason, voided_by = excluded.voided_by,
-         voided_at = excluded.voided_at, updated_at = excluded.updated_at`,
+         voided_at = excluded.voided_at, updated_at = excluded.updated_at,
+         currency = excluded.currency, fx_rate = excluded.fx_rate,
+         amount_base_minor = excluded.amount_base_minor, net_base_minor = excluded.net_base_minor,
+         tax_base_minor = excluded.tax_base_minor,
+         fx_difference_minor = excluded.fx_difference_minor`,
       [
         p.id,
         p.number,
@@ -234,14 +261,31 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
         p.createdBy,
         p.createdAt,
         p.updatedAt,
+        p.currency,
+        p.fxRate,
+        p.amountBaseMinor,
+        p.netBaseMinor,
+        p.taxBaseMinor,
+        p.fxDifferenceMinor,
       ],
     );
     await this.tx.query("delete from expense_lines where expense_id = $1", [p.id]);
     for (const [index, line] of p.lines.entries())
       await this.tx.query(
-        `insert into expense_lines (expense_id, position, vehicle_id, amount_minor, net_minor, tax_minor)
-         values ($1, $2, $3, $4, $5, $6)`,
-        [p.id, index + 1, line.vehicleId, line.amountMinor, line.netMinor, line.taxMinor],
+        `insert into expense_lines (expense_id, position, vehicle_id, amount_minor, net_minor,
+           tax_minor, amount_base_minor, net_base_minor, tax_base_minor)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          p.id,
+          index + 1,
+          line.vehicleId,
+          line.amountMinor,
+          line.netMinor,
+          line.taxMinor,
+          line.amountBaseMinor,
+          line.netBaseMinor,
+          line.taxBaseMinor,
+        ],
       );
   }
 
@@ -292,14 +336,20 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
   }
 
   async similar(
-    expense: Readonly<{ id: string; categoryId: string; expenseDate: string; amountMinor: number }>,
+    expense: Readonly<{
+      id: string;
+      categoryId: string;
+      expenseDate: string;
+      currency: string;
+      amountMinor: number;
+    }>,
   ): Promise<ExpenseProps[]> {
     const { rows } = await this.tx.query<ExpenseRow>(
       `select ${COLUMNS} from expenses e
         where e.id <> $1 and e.category_id = $2 and e.expense_date = $3 and e.amount_minor = $4
-          and e.status <> 'void'
+          and e.currency = $5 and e.status <> 'void'
         order by e.created_at limit 5`,
-      [expense.id, expense.categoryId, expense.expenseDate, expense.amountMinor],
+      [expense.id, expense.categoryId, expense.expenseDate, expense.amountMinor, expense.currency],
     );
     return withLines(this.tx, rows);
   }
@@ -313,7 +363,7 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
     }>,
   ): Promise<number> {
     const { rows } = await this.tx.query<{ spent: string }>(
-      `select coalesce(sum(l.amount_minor), 0) as spent
+      `select coalesce(sum(l.amount_base_minor), 0) as spent
          from expenses e join expense_lines l on l.expense_id = e.id
         where e.status in ('approved', 'paid')
           and to_char(e.expense_date, 'YYYY-MM') = $1

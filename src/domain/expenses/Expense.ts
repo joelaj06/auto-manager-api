@@ -20,13 +20,25 @@ export class ExpenseRuleError extends DomainError {
   }
 }
 
-/** A share of the expense (a vehicle's part of a split bill, or the whole without a vehicle). */
+/**
+ * A share of the expense (a vehicle's part of a split bill, or the whole without a vehicle), in
+ * the expense's currency and in the base currency at its rate.
+ */
 export type ExpenseLine = Readonly<{
   vehicleId: string | null;
   amountMinor: number;
   netMinor: number;
   taxMinor: number;
+  amountBaseMinor: number;
+  netBaseMinor: number;
+  taxBaseMinor: number;
 }>;
+
+/**
+ * The currency an expense is in and its rate to the base currency (base units per 1 unit; "1"
+ * for the base currency), fixed with the expense (decision 410).
+ */
+export type ExpenseCurrency = Readonly<{ currency: string; fxRate: string; base: string }>;
 
 export type ExpenseDetails = Readonly<{
   categoryId: string;
@@ -46,6 +58,8 @@ export type ExpenseProps = ExpenseDetails &
     id: string;
     number: string | null;
     status: ExpenseStatus;
+    currency: string;
+    fxRate: string;
     amountMinor: number;
     taxCode: string | null;
     taxComponents: readonly Readonly<{
@@ -56,6 +70,10 @@ export type ExpenseProps = ExpenseDetails &
     }>[];
     netMinor: number;
     taxMinor: number;
+    /** The amounts in the base currency at the expense's rate (what is posted and reported). */
+    amountBaseMinor: number;
+    netBaseMinor: number;
+    taxBaseMinor: number;
     lines: readonly ExpenseLine[];
     sourceType: string | null;
     sourceId: string | null;
@@ -69,6 +87,8 @@ export type ExpenseProps = ExpenseDetails &
     rejectionReason: string | null;
     paymentId: string | null;
     paidAt: Date | null;
+    /** Paid at another rate: the exchange gain (positive) or loss (negative) in base units. */
+    fxDifferenceMinor: number;
     voidReason: string | null;
     voidedBy: string | null;
     voidedAt: Date | null;
@@ -79,7 +99,7 @@ export type ExpenseProps = ExpenseDetails &
 
 /** The amount of an expense and how it is split. */
 export type ExpenseAmount = Readonly<{
-  /** Gross, as on the receipt (base currency minor units). */
+  /** Gross, as on the receipt (minor units of the expense's currency). */
   amountMinor: number;
   /** Purchase tax included in the amount (VAT-registered businesses recover it). */
   taxCode: TaxCode | null;
@@ -104,7 +124,7 @@ export class Expense {
       id: string;
       details: ExpenseDetails;
       amount: ExpenseAmount;
-      currency: string;
+      currency: ExpenseCurrency;
       source: Readonly<{ type: string; id: string }> | null;
       createdBy: string | null;
       now: Date;
@@ -128,6 +148,7 @@ export class Expense {
       rejectionReason: null,
       paymentId: null,
       paidAt: null,
+      fxDifferenceMinor: 0,
       voidReason: null,
       voidedBy: null,
       voidedAt: null,
@@ -154,7 +175,12 @@ export class Expense {
   }
 
   /** Corrects a draft or a rejected expense. */
-  revise(details: ExpenseDetails, amount: ExpenseAmount, currency: string, now: Date): void {
+  revise(
+    details: ExpenseDetails,
+    amount: ExpenseAmount,
+    currency: ExpenseCurrency,
+    now: Date,
+  ): void {
     if (this.props.status !== "draft" && this.props.status !== "rejected")
       throw new ExpenseRuleError("Only a draft or a rejected expense can be changed");
     this.props = {
@@ -213,10 +239,18 @@ export class Expense {
     };
   }
 
-  markPaid(paymentId: string, now: Date): void {
+  /** Paid; at another rate than the expense's, `fxDifferenceMinor` is the gain or loss. */
+  markPaid(paymentId: string, now: Date, fxDifferenceMinor = 0): void {
     if (this.props.status !== "approved")
       throw new ExpenseRuleError("Only an approved, unpaid expense can be paid");
-    this.props = { ...this.props, status: "paid", paymentId, paidAt: now, updatedAt: now };
+    this.props = {
+      ...this.props,
+      status: "paid",
+      paymentId,
+      paidAt: now,
+      fxDifferenceMinor,
+      updatedAt: now,
+    };
   }
 
   /** Its payment was reversed: approved and unpaid again. */
@@ -227,6 +261,7 @@ export class Expense {
       status: "approved",
       paymentId: null,
       paidAt: null,
+      fxDifferenceMinor: 0,
       updatedAt: now,
     };
   }
@@ -270,12 +305,23 @@ function checked(d: ExpenseDetails): ExpenseDetails {
 
 function computed(
   amount: ExpenseAmount,
-  currency: string,
+  money: ExpenseCurrency,
   date: string,
 ): Pick<
   ExpenseProps,
-  "amountMinor" | "taxCode" | "taxComponents" | "netMinor" | "taxMinor" | "lines"
+  | "currency"
+  | "fxRate"
+  | "amountMinor"
+  | "taxCode"
+  | "taxComponents"
+  | "netMinor"
+  | "taxMinor"
+  | "amountBaseMinor"
+  | "netBaseMinor"
+  | "taxBaseMinor"
+  | "lines"
 > {
+  const { currency } = money;
   if (!Number.isSafeInteger(amount.amountMinor) || amount.amountMinor <= 0)
     throw new ExpenseRuleError("An expense has an amount");
   if (amount.split.length > MAX_SPLIT)
@@ -291,13 +337,29 @@ function computed(
     throw new ExpenseRuleError("Split weights are whole numbers above 0");
   const grossParts = gross.allocate(weights);
   const netParts = net.allocate(weights);
+  // The base amounts: the whole converted once and split like the expense, so they add up.
+  const foreign = currency !== money.base;
+  const grossBase = foreign ? gross.convert(money.fxRate, money.base) : gross;
+  const netBase = foreign ? net.convert(money.fxRate, money.base) : net;
+  if (grossBase.amountMinor <= 0)
+    throw new ExpenseRuleError("The amount is too small at this exchange rate");
+  const grossBaseParts = grossBase.allocate(weights);
+  const netBaseParts = netBase.allocate(weights);
   const lines: ExpenseLine[] = weights.map((_, i) => ({
     vehicleId: amount.split[i]?.vehicleId ?? null,
     amountMinor: grossParts[i]!.amountMinor,
     netMinor: netParts[i]!.amountMinor,
     taxMinor: grossParts[i]!.amountMinor - netParts[i]!.amountMinor,
+    amountBaseMinor: grossBaseParts[i]!.amountMinor,
+    netBaseMinor: netBaseParts[i]!.amountMinor,
+    taxBaseMinor: grossBaseParts[i]!.amountMinor - netBaseParts[i]!.amountMinor,
   }));
   return {
+    currency,
+    fxRate: foreign ? money.fxRate : "1",
+    amountBaseMinor: grossBase.amountMinor,
+    netBaseMinor: netBase.amountMinor,
+    taxBaseMinor: grossBase.amountMinor - netBase.amountMinor,
     amountMinor: gross.amountMinor,
     taxCode: amount.taxCode?.code ?? null,
     taxComponents:

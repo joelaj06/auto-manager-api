@@ -498,7 +498,7 @@ export class PostgresNotificationQueries implements INotificationQueries {
 
   async pendingApprovals() {
     const { rows } = await this.tx.query<{ branch_id: string; n: string; amount: string }>(
-      `select branch_id, count(*) as n, sum(amount_minor) as amount
+      `select branch_id, count(*) as n, sum(amount_base_minor) as amount
          from expenses where status = 'submitted'
         group by branch_id`,
     );

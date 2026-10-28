@@ -38,8 +38,10 @@ const DRIVER = `with b as (insert into branches (code, name) values ($2, $1) ret
 const EXPENSE = `with b as (insert into branches (code, name) values ($2, $1) returning id),
                  c as (insert into expense_categories (code, name) values ('ex' || $3, 'Isolation') returning id),
                  e as (insert into expenses (status, category_id, description, branch_id, expense_date,
-                         amount_minor, net_minor)
-                       select 'draft', c.id, $1, b.id, current_date, 100, 100 from b, c returning id)`;
+                         amount_minor, net_minor, currency, amount_base_minor, net_base_minor,
+                         tax_base_minor)
+                       select 'draft', c.id, $1, b.id, current_date, 100, 100, 'GHS', 100, 100, 0
+                         from b, c returning id)`;
 
 /** A draft work and pay agreement (number = marker) for a driver and vehicle; `$2` = branch code. */
 const WORKPAY = `${DRIVER},
@@ -131,8 +133,9 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
   expense_lines: {
     insert: (marker) => ({
       sql: `${EXPENSE}
-            insert into expense_lines (expense_id, position, amount_minor, net_minor, tax_minor)
-            select e.id, 1, 100, 100, 0 from e`,
+            insert into expense_lines (expense_id, position, amount_minor, net_minor, tax_minor,
+              amount_base_minor, net_base_minor, tax_base_minor)
+            select e.id, 1, 100, 100, 0, 100, 100, 0 from e`,
       params: [marker, `EL${letters(marker).toUpperCase().slice(0, 12)}`, letters(marker)],
     }),
     find: `select 1 from expense_lines l join expenses e on e.id = l.expense_id
@@ -416,8 +419,10 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
                  c as (insert into expense_categories (code, name) values ('wc' || $3, 'Isolation')
                        returning id),
                  e as (insert into expenses (status, category_id, description, branch_id,
-                         expense_date, amount_minor, net_minor)
-                       select 'draft', c.id, $1, b.id, current_date, 100, 100 from b, c returning id)
+                         expense_date, amount_minor, net_minor, currency, amount_base_minor,
+                         net_base_minor, tax_base_minor)
+                       select 'draft', c.id, $1, b.id, current_date, 100, 100, 'GHS', 100, 100, 0
+                         from b, c returning id)
             insert into workpay_charges (agreement_id, expense_id, description, charged_on,
               amount_minor)
             select w.id, e.id, $1, current_date, 100 from w, e`,

@@ -177,6 +177,7 @@ export const TYPES = Object.freeze({
   ReferenceData: Symbol.for("IReferenceData"),
   TenantReferenceData: Symbol.for("ITenantReferenceData"),
   CurrencySettingsService: Symbol.for("CurrencySettingsService"),
+  CurrencyUsage: Symbol.for("CurrencyUsage"),
   TaxAdministration: Symbol.for("TaxAdministration"),
   FxRateBook: Symbol.for("FxRateBook"),
   ExpenseCategoryAdministration: Symbol.for("ExpenseCategoryAdministration"),

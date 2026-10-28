@@ -36,6 +36,7 @@ import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { FileView, UploadStarted } from "../files/FileService.js";
 import type { DocumentUploadInput, OwnedDocuments } from "../files/OwnedDocuments.js";
+import type { FinanceContext } from "../finance/FinanceContext.js";
 import type { LedgerPosting } from "../finance/LedgerPosting.js";
 import type { PaymentRecording } from "../finance/PaymentRecording.js";
 import type { PaymentMethod } from "../../../domain/finance/Payment.js";
@@ -57,7 +58,7 @@ export class ApprovalLimitError extends ApplicationError {
   }
 }
 
-/** As sent by clients: amounts as decimal strings in the base currency. */
+/** As sent by clients: amounts as decimal strings in the expense's currency (default: base). */
 export type ExpenseRequest = Readonly<{
   categoryId: string;
   description: string;
@@ -69,6 +70,10 @@ export type ExpenseRequest = Readonly<{
   driverId?: string | null;
   chargeToDriver?: boolean;
   amount: string;
+  /** An enabled currency (default: the base currency). */
+  currency?: string;
+  /** Base units per 1 unit of `currency` (default: the rate entered for the expense date). */
+  fxRate?: string | null;
   /** Purchase tax included in the amount (VAT-registered businesses only). */
   taxCode?: string | null;
   /** Split equally across these vehicles. */
@@ -81,12 +86,26 @@ export type ExpenseRequest = Readonly<{
 
 export type ExpenseView = Omit<
   ExpenseProps,
-  "amountMinor" | "netMinor" | "taxMinor" | "lines" | "taxComponents"
+  | "amountMinor"
+  | "netMinor"
+  | "taxMinor"
+  | "amountBaseMinor"
+  | "netBaseMinor"
+  | "taxBaseMinor"
+  | "fxDifferenceMinor"
+  | "lines"
+  | "taxComponents"
 > &
   Readonly<{
     amount: MoneyJson;
     net: MoneyJson;
     tax: MoneyJson;
+    /** In the base currency at the expense's rate (the same as `amount` in the base currency). */
+    amountBase: MoneyJson;
+    netBase: MoneyJson;
+    taxBase: MoneyJson;
+    /** Paid at another rate: the exchange gain (positive) or loss (negative). */
+    fxDifference: MoneyJson;
     taxComponents: readonly Readonly<{
       key: string;
       name: string;
@@ -98,6 +117,7 @@ export type ExpenseView = Omit<
       amount: MoneyJson;
       net: MoneyJson;
       tax: MoneyJson;
+      amountBase: MoneyJson;
     }>[];
     receipts?: readonly FileView[];
   }>;
@@ -116,6 +136,8 @@ export type PayExpenseInput = Readonly<{
   momoNetwork?: "mtn" | "telecel" | "at" | null;
   reference?: string | null;
   paidOn?: string;
+  /** The rate on the payment date for a foreign-currency expense (default: the one entered). */
+  fxRate?: string | null;
 }>;
 
 /**
@@ -138,6 +160,7 @@ export class Expenses {
       vehicles: IVehicleRepository;
       parties: IPartyDirectory;
       posting: LedgerPosting;
+      context: FinanceContext;
       payments: PaymentRecording;
       receipts: OwnedDocuments;
       policy: AuthorizationPolicy;
@@ -186,7 +209,7 @@ export class Expenses {
       const branchId =
         request.branchId ?? (await deps.scope.defaultBranch(actor, "expenses.create", "expense"));
       await deps.scope.branch(actor, "expenses.create", branchId);
-      const expense = await this.draftFor(actor.userId, request, branchId, null);
+      const expense = await this.draftFor(actor.userId, request, branchId, null, actor);
       return {
         expense: expenseView(expense.snapshot(), await this.base()),
         warnings: await this.warnings(expense),
@@ -203,9 +226,10 @@ export class Expenses {
     request: ExpenseRequest,
     branchId: string,
     source: Readonly<{ type: string; id: string }> | null,
+    actor: Principal | null = null,
   ): Promise<Expense> {
     const { deps } = this;
-    const { details, amount, currency } = await this.prepare(request, branchId);
+    const { details, amount, currency } = await this.prepare(request, branchId, actor);
     const expense = Expense.draft({
       id: deps.ids.next(),
       details,
@@ -231,7 +255,7 @@ export class Expenses {
       const expense = await this.reach(actor, id, "expenses.create", true);
       const branchId = request.branchId ?? expense.snapshot().branchId;
       await deps.scope.branch(actor, "expenses.create", branchId);
-      const { details, amount, currency } = await this.prepare(request, branchId);
+      const { details, amount, currency } = await this.prepare(request, branchId, actor);
       expense.revise(details, amount, currency, deps.clock.now());
       await deps.expenses.save(expense);
       await this.audit(actor, "expense.revised", expense);
@@ -279,7 +303,7 @@ export class Expenses {
     if (
       options.skipReceiptRule !== true &&
       settings.receiptRequiredAboveMinor !== null &&
-      p.amountMinor > settings.receiptRequiredAboveMinor &&
+      p.amountBaseMinor > settings.receiptRequiredAboveMinor &&
       (await deps.receipts.list(p.id)).length === 0
     )
       throw new ExpenseRuleError(
@@ -293,7 +317,7 @@ export class Expenses {
     );
     const category = await deps.reference.expenseCategory(p.categoryId);
     const rule = matchingRule(await deps.rules.list(), {
-      amountMinor: p.amountMinor,
+      amountMinor: p.amountBaseMinor,
       branchId: p.branchId,
       categoryIds: [
         p.categoryId,
@@ -319,7 +343,7 @@ export class Expenses {
     return deps.unitOfWork.run(async () => {
       const expense = await this.reach(actor, id, "expenses.approve", true);
       const limit = deps.policy.limit(actor, "expenses.approve", "max_amount_minor");
-      if (limit !== undefined && expense.snapshot().amountMinor > limit)
+      if (limit !== undefined && expense.snapshot().amountBaseMinor > limit)
         throw new ApprovalLimitError(Money.ofMinor(limit, await this.base()).format());
       expense.approve(actor.userId, null, deps.clock.now());
       await this.post(expense, actor.userId);
@@ -340,7 +364,11 @@ export class Expenses {
     });
   }
 
-  /** Pays an approved expense through finance (a payment out to the payee). */
+  /**
+   * Pays an approved expense through finance (a payment out to the payee) in its currency. At a
+   * rate other than the expense's, what is owed is cleared at the expense's base amount and the
+   * difference is an exchange gain or loss (decision 411).
+   */
   async pay(actor: Principal, id: string, input: PayExpenseInput): Promise<ExpenseView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
@@ -357,7 +385,9 @@ export class Expenses {
           ? { partyName: p.payeeName }
           : { partyType: p.payee.type, partyId: p.payee.id }),
         branchId: p.branchId,
-        amount: Money.ofMinor(p.amountMinor, base).toDecimalString(),
+        amount: Money.ofMinor(p.amountMinor, p.currency).toDecimalString(),
+        currency: p.currency,
+        fxRate: input.fxRate ?? null,
         counterAccountId: accounts("payables"),
         reference: input.reference ?? p.reference,
         momoNetwork: input.momoNetwork ?? null,
@@ -365,9 +395,28 @@ export class Expenses {
         ...(input.paidOn === undefined ? {} : { paidOn: input.paidOn }),
         source: { type: "expense", id },
       });
-      expense.markPaid(payment.id, deps.clock.now());
+      const difference = p.amountBaseMinor - payment.amountBase.amountMinor;
+      if (difference !== 0)
+        await deps.posting.post(
+          Postings.payableExchangeDifference(
+            {
+              paymentId: payment.id,
+              difference,
+              branchId: p.branchId,
+              party: p.payee === null ? null : { type: p.payee.type, id: p.payee.id },
+              date: payment.paidOn,
+              description: `Exchange difference on expense ${p.number ?? ""} paid in ${p.currency}`,
+            },
+            accounts,
+          ),
+          actor.userId,
+        );
+      expense.markPaid(payment.id, deps.clock.now(), difference);
       await deps.expenses.save(expense);
-      await this.audit(actor, "expense.paid", expense, { paymentId: payment.id });
+      await this.audit(actor, "expense.paid", expense, {
+        paymentId: payment.id,
+        ...(difference === 0 ? {} : { fxDifferenceMinor: difference }),
+      });
       return expenseView(expense.snapshot(), base);
     });
   }
@@ -432,7 +481,7 @@ export class Expenses {
     if (p.chargeToDriver)
       await deps.driverCosts?.approved(
         p,
-        p.lines.reduce((sum, l) => sum + (recoverTax ? l.netMinor : l.amountMinor), 0),
+        p.lines.reduce((sum, l) => sum + (recoverTax ? l.netBaseMinor : l.amountBaseMinor), 0),
         userId,
       );
   }
@@ -456,9 +505,16 @@ export class Expenses {
     return expense;
   }
 
-  private async prepare(request: ExpenseRequest, branchId: string) {
+  private async prepare(request: ExpenseRequest, branchId: string, actor: Principal | null) {
     const { deps } = this;
-    const currency = await this.base();
+    const expenseDate = request.expenseDate ?? (await deps.calendar.today());
+    const money = await deps.context.rate(
+      request.currency ?? (await this.base()),
+      expenseDate,
+      request.fxRate,
+      actor,
+    );
+    const { currency } = money;
     const category = await deps.reference.expenseCategory(request.categoryId);
     if (category === null || !category.active)
       throw new ExpenseRuleError("Choose an active expense category");
@@ -523,7 +579,7 @@ export class Expenses {
       categoryId: category.id,
       description: request.description,
       branchId,
-      expenseDate: request.expenseDate ?? (await deps.calendar.today()),
+      expenseDate,
       payee,
       payeeName:
         payee === null
@@ -534,7 +590,7 @@ export class Expenses {
       reference: request.reference ?? null,
       notes: request.notes ?? null,
     };
-    return { details, amount: { amountMinor, taxCode, split }, currency };
+    return { details, amount: { amountMinor, taxCode, split }, currency: money };
   }
 
   private async warnings(expense: Expense): Promise<string[]> {
@@ -576,27 +632,47 @@ function summary(expense: Expense) {
     number: p.number,
     status: p.status,
     categoryId: p.categoryId,
+    currency: p.currency,
     amountMinor: p.amountMinor,
+    amountBaseMinor: p.amountBaseMinor,
     payee: p.payee,
     payeeName: p.payeeName,
     vehicles: p.lines.map((l) => l.vehicleId).filter((v) => v !== null),
   };
 }
 
-export function expenseView(p: ExpenseProps, currency: string): ExpenseView {
-  const m = (minor: number) => Money.ofMinor(minor, currency).toJSON();
-  const { amountMinor, netMinor, taxMinor, lines, taxComponents, ...rest } = p;
+/** An expense for clients: amounts in its currency, and in `base` at its rate. */
+export function expenseView(p: ExpenseProps, base: string): ExpenseView {
+  const m = (minor: number) => Money.ofMinor(minor, p.currency).toJSON();
+  const b = (minor: number) => Money.ofMinor(minor, base).toJSON();
+  const {
+    amountMinor,
+    netMinor,
+    taxMinor,
+    amountBaseMinor,
+    netBaseMinor,
+    taxBaseMinor,
+    fxDifferenceMinor,
+    lines,
+    taxComponents,
+    ...rest
+  } = p;
   return {
     ...rest,
     amount: m(amountMinor),
     net: m(netMinor),
     tax: m(taxMinor),
+    amountBase: b(amountBaseMinor),
+    netBase: b(netBaseMinor),
+    taxBase: b(taxBaseMinor),
+    fxDifference: b(fxDifferenceMinor),
     taxComponents: taxComponents.map(({ amountMinor: a, ...c }) => ({ ...c, amount: m(a) })),
     lines: lines.map((l) => ({
       vehicleId: l.vehicleId,
       amount: m(l.amountMinor),
       net: m(l.netMinor),
       tax: m(l.taxMinor),
+      amountBase: b(l.amountBaseMinor),
     })),
   };
 }

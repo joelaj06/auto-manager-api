@@ -144,7 +144,7 @@ export class PostgresIncidents implements IIncidents {
       [incidentId],
     );
     const expenses = await this.tx.query<Row>(
-      `select id, number, status, amount_minor::text as amount, charge_to_driver
+      `select id, number, status, amount_base_minor::text as amount, charge_to_driver
          from expenses where incident_id = $1 order by created_at`,
       [incidentId],
     );

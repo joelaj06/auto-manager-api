@@ -2,6 +2,8 @@
 
 > **Update 2026-10-13:** decision 25 — currency selection is **tenant level** (no per-user display currency; §14 closed). Storage targets PostgreSQL: `*_minor bigint`, `currency char(3)`, `fx_rate numeric(18,8)`, `fx_rates` table; settings live in `organisation` columns/`jsonb`. Section 10 (migrating existing data) is not needed — no data is carried over; seed new tenants with `base_currency = 'GHS'`. Payment-provider wording in §6 applies to *recording* payments only (decision 16).
 
+> **Update 2026-10-28 (P7-1):** implemented for finance. Enabled currencies, the manual rate book and foreign-currency invoices and payments (with the exchange difference on allocation) came with P2-1/P2-5 (decision 172). P7-1 adds expenses in any enabled currency with frozen base amounts used for posting, approval, budgets and reports, the realised exchange difference on paying them, `finance.fx_rates.override` for a rate other than the recorded one, and blocks disabling a currency on open documents (decisions 410–414). Rentals, Work & Pay, remittances and dealership pricing stay in the base currency for now.
+
 > Status: **Design / brainstorm.** Requested 2026-10-13.
 > Requirement: the user selects a currency; **the default is Ghana Cedi (GHS, ₵)**.
 
