@@ -1,5 +1,10 @@
 import { FinanceRuleError, type LedgerPartyType } from "../../../domain/finance/Journal.js";
-import { Payment, type PaymentMethod, type PaymentProps } from "../../../domain/finance/Payment.js";
+import {
+  Payment,
+  TRADE_IN_SOURCE,
+  type PaymentMethod,
+  type PaymentProps,
+} from "../../../domain/finance/Payment.js";
 import { Postings, toBase } from "../../../domain/finance/Postings.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type {
@@ -178,6 +183,13 @@ export class PaymentRecording {
   ): Promise<PaymentView> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
+      if (
+        request.method === "trade_in" &&
+        (request.direction !== "in" ||
+          !("source" in request) ||
+          request.source.type !== TRADE_IN_SOURCE)
+      )
+        throw new FinanceRuleError("A trade-in is taken in by its deal");
       const branchId =
         request.branchId ?? (await deps.scope.defaultBranch(actor, permission, "payment"));
       await deps.scope.branch(actor, permission, branchId);

@@ -186,6 +186,13 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "dealer.leads.assign",
       "dealer.testdrives.manage",
       "dealer.quotes.manage",
+      "dealer.appraisals.manage",
+      "dealer.deals.view",
+      "dealer.deals.create",
+      "dealer.deals.discount",
+      "dealer.deals.approve",
+      "dealer.deals.payments.record",
+      "dealer.deals.deliver",
     ]),
   },
   {
@@ -263,7 +270,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
     systemKey: "sales_executive",
     name: "Sales Executive",
     description:
-      "Sells vehicles in their branches: works the leads given to them, books test drives and sends quotes",
+      "Sells vehicles in their branches: works the leads given to them, books test drives, sends quotes and makes and delivers the sales",
     grants: [
       ...branch([
         "branches.list",
@@ -277,11 +284,16 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
         "dealer.leads.create",
         "dealer.testdrives.manage",
         "dealer.quotes.manage",
+        "dealer.appraisals.manage",
+        "dealer.deals.create",
+        "dealer.deals.discount",
+        "dealer.deals.deliver",
         "documents.list",
         "documents.view",
       ]),
       { key: "dealer.leads.view", scope: "own" as const },
       { key: "dealer.leads.update", scope: "own" as const },
+      { key: "dealer.deals.view", scope: "own" as const },
     ],
   },
   {
@@ -307,6 +319,8 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "remittances.record",
       "workpay.view",
       "workpay.payment.record",
+      "dealer.deals.view",
+      "dealer.deals.payments.record",
     ]),
   },
   {

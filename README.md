@@ -562,6 +562,20 @@ a quote; a price below the minimum is `/approve`d first, `/send` issues the quot
 `/decision` records the answer; sent quotes expire after their date. Rules: docs/10 §4–6, decisions
 437–444.
 
+## Dealer deals: appraisals, sales and delivery
+
+`POST /api/v1/dealer/appraisals` values a trade-in (with `/photos`, `/decline`). `POST
+/api/v1/dealer/deals` opens a deal on a stock vehicle, from a `quoteId` or afresh, with a discount,
+add-ons, a `tradeInId` and cash, a bank `loan` or an in-house `plan` (down payment, markup percent,
+weekly or monthly, months). A price below the minimum or a discount over the seller's limit is
+`/approve`d first. `/payments` records a deposit or any payment (held as the customer's credit,
+then applied to the sale); `/reserve` holds the vehicle against a deposit until a date (released
+by the daily job when it passes); `/loan` records the bank's answer and, when disbursed, its
+payment. `/sell` issues the invoice, takes the trade-in into stock, builds the instalment schedule
+and its charge invoice and issues the sales agreement; `/deliver` hands the car over against a
+checklist with the delivery note once what is due is paid; `/cancel` calls off an unsold deal.
+Overdue instalments are reported daily. Rules: docs/10 §6–7, decisions 445–452.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

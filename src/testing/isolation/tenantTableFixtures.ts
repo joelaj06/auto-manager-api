@@ -27,6 +27,16 @@ const VEHICLE = `with b as (insert into branches (code, name) values ($2, $1) re
                  v as (insert into vehicles (code, make, model, status, branch_id)
                        select $1, 'Isolation', 'Fixture', 'available', b.id from b returning id)`;
 
+/** A branch, vehicle, user, customer and a draft deal (number = marker); `$2` = branch code. */
+const DEAL = `${VEHICLE},
+                 u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation')
+                       returning id),
+                 c as (insert into customers (code, type, first_name, last_name, name)
+                       values ($2, 'individual', 'Isolation', 'Buyer', $1) returning id),
+                 d as (insert into dealer_deals (number, branch_id, vehicle_id, customer_id,
+                         sales_executive_id, price_minor, notes)
+                       select $1, b.id, v.id, c.id, u.id, 100, $1 from b, v, c, u returning id)`;
+
 /** A branch and a driver (code = marker) for tables that hang off a driver; `$2` = branch code. */
 const DRIVER = `with b as (insert into branches (code, name) values ($2, $1) returning id),
                  d as (insert into drivers (code, first_name, last_name, phone, branch_id)
@@ -1194,6 +1204,46 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
       params: [marker, `TD${letters(marker).toUpperCase().slice(0, 12)}`],
     }),
     find: "select 1 from dealer_test_drives where notes = $1",
+  },
+  dealer_appraisals: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation')
+                       returning id)
+            insert into dealer_appraisals (number, branch_id, make, model, condition, value_minor,
+              valid_until, appraised_by, appraised_on)
+            select $1, b.id, 'Isolation', 'Fixture', 'good', 100, current_date + 14, u.id,
+              current_date from b, u`,
+      params: [marker, `AP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_appraisals where number = $1",
+  },
+  dealer_deals: {
+    insert: (marker) => ({
+      sql: `${DEAL}
+            select 1`,
+      params: [marker, `DD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_deals where number = $1",
+  },
+  dealer_deal_items: {
+    insert: (marker) => ({
+      sql: `${DEAL}
+            insert into dealer_deal_items (deal_id, position, kind, description, amount_minor)
+            select d.id, 1, 'tint', $1, 100 from d`,
+      params: [marker, `DI${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_deal_items where description = $1",
+  },
+  dealer_deal_instalments: {
+    insert: (marker) => ({
+      sql: `${DEAL}
+            insert into dealer_deal_instalments (deal_id, number, due_on, amount_minor)
+            select d.id, 1, current_date, length($1) from d`,
+      params: [marker, `DN${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from dealer_deal_instalments i join dealer_deals d on d.id = i.deal_id
+            where d.number = $1`,
   },
   dealer_quotes: {
     insert: (marker) => ({

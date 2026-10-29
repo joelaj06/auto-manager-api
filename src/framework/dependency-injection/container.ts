@@ -80,6 +80,13 @@ import { PostgresLeads } from "../../infrastructure/dealer/PostgresLeads.js";
 import { PostgresTestDrives } from "../../infrastructure/dealer/PostgresTestDrives.js";
 import { PostgresQuotes } from "../../infrastructure/dealer/PostgresQuotes.js";
 import { dealerSalesRoutes } from "../../adapters/routes/dealerSalesRoutes.js";
+import { dealerDealRoutes } from "../../adapters/routes/dealerDealRoutes.js";
+import { Appraisals } from "../../application/use-cases/dealer/Appraisals.js";
+import { DealerDeals } from "../../application/use-cases/dealer/DealerDeals.js";
+import { DealerDealAlerts } from "../../application/use-cases/dealer/DealerDealAlerts.js";
+import type { IAppraisals, IDeals } from "../../application/ports/IDealerDeals.js";
+import { PostgresDeals } from "../../infrastructure/dealer/PostgresDeals.js";
+import { PostgresAppraisals } from "../../infrastructure/dealer/PostgresAppraisals.js";
 import type { IMaintenanceReporting } from "../../application/ports/IMaintenanceReporting.js";
 import { MaintenanceAlerts } from "../../application/use-cases/maintenance/MaintenanceAlerts.js";
 import { MaintenanceReports } from "../../application/use-cases/maintenance/MaintenanceReports.js";
@@ -4741,6 +4748,7 @@ export function createContainer(
       purchaseAlerts: PurchaseAlerts,
       stockAlerts: StockAlerts,
       dealerCrmAlerts: DealerCrmAlerts,
+      dealerDealAlerts: DealerDealAlerts,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
@@ -4753,6 +4761,7 @@ export function createContainer(
         purchaseAlerts,
         stockAlerts,
         dealerCrmAlerts,
+        dealerDealAlerts,
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
       ],
@@ -4768,6 +4777,7 @@ export function createContainer(
       TYPES.PurchaseAlerts,
       TYPES.StockAlerts,
       TYPES.DealerCrmAlerts,
+      TYPES.DealerDealAlerts,
     ],
   );
 
@@ -6119,6 +6129,158 @@ export function createContainer(
         TYPES.OrganisationSettings,
         TYPES.NotificationSettingsStore,
         TYPES.Notifier,
+      ],
+    );
+  tenantRepository<IDeals>(TYPES.DealRepository, (tx) => new PostgresDeals(tx));
+  tenantRepository<IAppraisals>(TYPES.AppraisalRepository, (tx) => new PostgresAppraisals(tx));
+  container.bind<Appraisals>(TYPES.Appraisals).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      appraisals: IAppraisals,
+      deals: IDeals,
+      leads: ILeads,
+      files: FileService,
+      organisation: IOrganisationSettings,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new Appraisals({
+        unitOfWork,
+        appraisals,
+        deals,
+        leads,
+        photos: new OwnedDocuments(files, "vehicle_photo", "dealer_appraisal", 20),
+        organisation,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.AppraisalRepository,
+      TYPES.DealRepository,
+      TYPES.LeadRepository,
+      TYPES.TenantFileService,
+      TYPES.OrganisationSettings,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<DealerDeals>(TYPES.DealerDeals).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      deals: IDeals,
+      appraisals: IAppraisals,
+      leads: ILeads,
+      quotes: IQuotes,
+      stock: IDealerStock,
+      vehicles: IVehicleRepository,
+      registry: VehicleRegistry,
+      invoicing: Invoicing,
+      invoices: IInvoiceRepository,
+      payments: PaymentRecording,
+      posting: LedgerPosting,
+      documents: Documents,
+      files: FileService,
+      recipients: IRecipientDirectory,
+      organisation: IOrganisationSettings,
+      policy: AuthorizationPolicy,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DealerDeals({
+        unitOfWork,
+        deals,
+        appraisals,
+        leads,
+        quotes,
+        stock,
+        vehicles,
+        registry,
+        invoicing,
+        invoices,
+        payments,
+        posting,
+        documents,
+        photos: new OwnedDocuments(files, "vehicle_photo", "dealer_deal", 30),
+        recipients,
+        organisation,
+        policy,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DealRepository,
+      TYPES.AppraisalRepository,
+      TYPES.LeadRepository,
+      TYPES.QuoteRepository,
+      TYPES.DealerStockRepository,
+      TYPES.VehicleRepository,
+      TYPES.VehicleRegistry,
+      TYPES.Invoicing,
+      TYPES.InvoiceRepository,
+      TYPES.PaymentRecording,
+      TYPES.LedgerPosting,
+      TYPES.Documents,
+      TYPES.TenantFileService,
+      TYPES.RecipientDirectory,
+      TYPES.OrganisationSettings,
+      TYPES.AuthorizationPolicy,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<DealerDealAlerts>(TYPES.DealerDealAlerts)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        deals: IDeals,
+        sales: DealerDeals,
+        organisation: IOrganisationSettings,
+        settings: INotificationSettingsStore,
+        notifier: Notifier,
+        clock: IClock,
+      ) =>
+        new DealerDealAlerts({ unitOfWork, deals, sales, organisation, settings, notifier, clock }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.DealRepository,
+        TYPES.DealerDeals,
+        TYPES.OrganisationSettings,
+        TYPES.NotificationSettingsStore,
+        TYPES.Notifier,
+        TYPES.Clock,
       ],
     );
   container.bind<SupplierPayables>(TYPES.SupplierPayables).toResolvedValue(
@@ -7730,6 +7892,8 @@ export function createContainer(
       dealerLeads: DealerLeads,
       testDrives: TestDrives,
       dealerQuotes: DealerQuotes,
+      appraisals: Appraisals,
+      dealerDeals: DealerDeals,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -7888,6 +8052,7 @@ export function createContainer(
         ...purchaseRoutes({ purchases }),
         ...dealerStockRoutes({ stock: dealerStock }),
         ...dealerSalesRoutes({ leads: dealerLeads, drives: testDrives, quotes: dealerQuotes }),
+        ...dealerDealRoutes({ appraisals, deals: dealerDeals }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -8023,6 +8188,8 @@ export function createContainer(
       TYPES.DealerLeads,
       TYPES.TestDrives,
       TYPES.DealerQuotes,
+      TYPES.Appraisals,
+      TYPES.DealerDeals,
     ],
   );
 

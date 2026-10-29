@@ -258,6 +258,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   TEST_DRIVE_NOT_FOUND: { status: 404 },
   SALES_QUOTE_RULE: { status: 422 },
   SALES_QUOTE_NOT_FOUND: { status: 404 },
+  APPRAISAL_RULE: { status: 422 },
+  APPRAISAL_NOT_FOUND: { status: 404 },
+  DEAL_RULE: { status: 422 },
+  DEAL_NOT_FOUND: { status: 404 },
   APPROVAL_LIMIT_EXCEEDED: { status: 403 },
   EXPENSE_SETUP_NOT_FOUND: { status: 404 },
 

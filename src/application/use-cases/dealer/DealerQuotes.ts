@@ -37,7 +37,7 @@ const QUOTABLE = new Set(["ready", "listed"]);
 /** Days a quote holds when none is given. */
 export const DEFAULT_QUOTE_DAYS = 14;
 const SUBJECT = "dealer_quote";
-const FINANCING_WORDS: Readonly<Record<Financing, string>> = {
+export const FINANCING_WORDS: Readonly<Record<Financing, string>> = {
   cash: "Cash",
   bank: "Bank loan",
   in_house: "Instalments with the dealer",
@@ -89,7 +89,7 @@ export type QuoteView = Omit<
     }>;
   }>;
 
-const ADD_ON_WORDS: Readonly<Record<AddOnKind, string>> = {
+export const ADD_ON_WORDS: Readonly<Record<AddOnKind, string>> = {
   registration: "Registration and number plates",
   tint: "Window tint",
   tracker: "Tracker",

@@ -1,8 +1,12 @@
 import { Money } from "../money/Money.js";
 import { FinanceRuleError, type LedgerPartyType, type SystemAccountKey } from "./Journal.js";
 
+/** How money is taken at a counter. */
 export const PAYMENT_METHODS = ["cash", "momo", "bank_transfer", "cheque", "card"] as const;
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+/** Plus a vehicle taken in part exchange, recorded only by a deal (decision 448). */
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number] | "trade_in";
+/** The source of a trade-in payment: the deal it was taken in on. */
+export const TRADE_IN_SOURCE = "dealer_trade_in";
 export type PaymentDirection = "in" | "out";
 
 /** Where the money sits after a payment of each method. */
@@ -13,6 +17,8 @@ export const METHOD_ACCOUNT: Readonly<Record<PaymentMethod, SystemAccountKey>> =
   // Not yet in the bank: the deposit moves them (reconciliation, later).
   cheque: "undeposited",
   card: "undeposited",
+  // A vehicle, not money: it enters stock at its trade-in value.
+  trade_in: "vehicles",
 };
 
 export type PaymentProps = Readonly<{

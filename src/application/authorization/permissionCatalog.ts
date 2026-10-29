@@ -305,6 +305,37 @@ const definitions = {
     description: "Prepare, send and record the answer to sales quotes",
     scopes: BRANCH_OR_ALL,
   },
+  "dealer.appraisals.manage": {
+    description: "Appraise vehicles offered in part exchange",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.deals.view": {
+    description: "See vehicle sales with their payments and documents (own: those you sell)",
+    scopes: ["own", "branch", "all"],
+  },
+  "dealer.deals.create": {
+    description: "Draft, reserve, sell and cancel vehicle sales",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.deals.discount": {
+    description:
+      "Give a discount on a sale, up to the role's max_percent (default 5%) without approval",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.deals.approve": {
+    description:
+      "Approve a sale below the minimum price or with a discount over the seller's limit",
+    scopes: BRANCH_OR_ALL,
+    sensitive: true,
+  },
+  "dealer.deals.payments.record": {
+    description: "Record deposits and payments on sales, and the bank's loan",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.deals.deliver": {
+    description: "Hand a sold vehicle over to its buyer",
+    scopes: BRANCH_OR_ALL,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,

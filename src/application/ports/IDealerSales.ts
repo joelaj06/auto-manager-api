@@ -28,6 +28,7 @@ export const ACTIVITY_KINDS = [
   "assignment",
   "test_drive",
   "quote",
+  "deal",
 ] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 

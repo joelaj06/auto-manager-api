@@ -46,6 +46,8 @@ export const RULE_KEYS = [
   "lead_assigned",
   "lead_follow_up",
   "stock_match",
+  "deal_hold_lapsed",
+  "deal_instalment_overdue",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -309,6 +311,18 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
   stock_match: {
     description:
       "A listed vehicle fits a lead's saved search: tell the lead's sales executive (or the branch's staff who see leads)",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  deal_hold_lapsed: {
+    description:
+      "A reserved vehicle's hold ran out and it is back on sale: tell the sale's sales executive",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  deal_instalment_overdue: {
+    description:
+      "An in-house instalment on a vehicle sale is overdue: tell the branch's staff who record sale payments",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push"] },
   },

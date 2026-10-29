@@ -1,5 +1,7 @@
 import { listOf, type FieldSchema } from "./TemplateEngine.js";
+import { DEALER_DELIVERY_NOTE_V1 } from "./templates/dealerDeliveryNote.js";
 import { DEALER_QUOTE_V1 } from "./templates/dealerQuote.js";
+import { DEALER_SALES_AGREEMENT_V1 } from "./templates/dealerSalesAgreement.js";
 import { RENTAL_AGREEMENT_V1 } from "./templates/rentalAgreement.js";
 import { RENTAL_RETURN_V1 } from "./templates/rentalReturn.js";
 import { TEST_DRIVE_WAIVER_V1 } from "./templates/testDriveWaiver.js";
@@ -15,6 +17,8 @@ export const DOCUMENT_TYPES = [
   "rental_return",
   "dealer_quote",
   "test_drive_waiver",
+  "dealer_sales_agreement",
+  "dealer_delivery_note",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 export const LANGUAGES = ["en"] as const;
@@ -481,6 +485,115 @@ export const DOCUMENT_TYPE_CATALOG: Readonly<Record<DocumentType, DocumentTypeDe
           accompaniedBy: "Esi Boateng",
           odometerOut: 64_200,
         },
+      },
+    },
+    dealer_sales_agreement: {
+      name: "Vehicle sales agreement",
+      numbering: "sales_agreement_document",
+      subjectType: "dealer_deal",
+      fields: {
+        issuer: ISSUER,
+        document: DOCUMENT,
+        vehicle: { ...VEHICLE, odometer: "number" },
+        buyer: { name: "text", phone: "text", address: "text", ghanaCardNumber: "text" },
+        deal: {
+          number: "text",
+          price: "money",
+          hasDiscount: "boolean",
+          discount: "money",
+          invoiceNumber: "text",
+          invoiced: "money",
+          tradeIn: "text",
+          tradeInValue: "money",
+          financing: "text",
+          lender: "text",
+          loan: "money",
+          hasPlan: "boolean",
+          downPayment: "money",
+          instalments: "number",
+          instalment: "money",
+          firstDueOn: "date",
+          lastDueOn: "date",
+          planCharge: "money",
+          warrantyMonths: "number",
+          serviceVouchers: "number",
+          notes: "text",
+        },
+        addOns: CHARGES_OF("description", "amount"),
+      },
+      system: { version: 1, body: DEALER_SALES_AGREEMENT_V1 },
+      sample: {
+        issuer: SAMPLE_ISSUER,
+        document: { number: "SAG-2026-000001", issuedOn: "2026-10-29" },
+        vehicle: { ...SAMPLE_VEHICLE, odometer: 64_200 },
+        buyer: {
+          name: "Yaw Mensah",
+          phone: "+233 24 555 0101",
+          address: "5 Lake Road, Kumasi",
+          ghanaCardNumber: "GHA-123456789-0",
+        },
+        deal: {
+          number: "DEAL-2026-000003",
+          price: money(15_500_000),
+          hasDiscount: true,
+          discount: money(500_000),
+          invoiceNumber: "INV-2026-000120",
+          invoiced: money(15_350_000),
+          tradeIn: "Honda Civic 2012, GT 1234-12",
+          tradeInValue: money(4_000_000),
+          financing: "Instalments with the dealer",
+          lender: null,
+          loan: null,
+          hasPlan: true,
+          downPayment: money(2_000_000),
+          instalments: 12,
+          instalment: money(850_000),
+          firstDueOn: "2026-11-29",
+          lastDueOn: "2027-10-29",
+          planCharge: money(850_000),
+          warrantyMonths: 3,
+          serviceVouchers: 2,
+          notes: null,
+        },
+        addOns: [{ description: "Tracker", amount: money(200_000) }],
+      },
+    },
+    dealer_delivery_note: {
+      name: "Vehicle delivery note",
+      numbering: "delivery_note_document",
+      subjectType: "dealer_deal",
+      fields: {
+        issuer: ISSUER,
+        document: DOCUMENT,
+        vehicle: VEHICLE,
+        buyer: { name: "text", phone: "text" },
+        deal: { number: "text" },
+        delivery: {
+          deliveredOn: "date",
+          odometer: "number",
+          warrantyEndsOn: "date",
+          serviceVouchers: "number",
+        },
+        checklist: listOf({ item: "text", checked: "boolean", note: "text" }),
+      },
+      system: { version: 1, body: DEALER_DELIVERY_NOTE_V1 },
+      sample: {
+        issuer: SAMPLE_ISSUER,
+        document: { number: "DNT-2026-000001", issuedOn: "2026-10-29" },
+        vehicle: SAMPLE_VEHICLE,
+        buyer: { name: "Yaw Mensah", phone: "+233 24 555 0101" },
+        deal: { number: "DEAL-2026-000003" },
+        delivery: {
+          deliveredOn: "2026-10-29",
+          odometer: 64_250,
+          warrantyEndsOn: "2027-01-29",
+          serviceVouchers: 2,
+        },
+        checklist: [
+          { item: "Keys and spare key", checked: true, note: null },
+          { item: "DVLA transfer forms signed", checked: true, note: null },
+          { item: "Customs papers", checked: false, note: "Bought locally: none" },
+        ],
       },
     },
   });
