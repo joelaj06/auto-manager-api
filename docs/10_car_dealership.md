@@ -1,5 +1,7 @@
 # 10 — Car Dealership
 
+> **Update 2026-10-29 (P7-5):** §4 and §5 are implemented, and the quote part of §6: leads with sources, the pipeline and lost reasons, activities, follow-ups with reminders, assignment with a per-branch rotation, own-scope sales executives, saved-search stock matches and the funnel; test drives on a vehicle block with the licence checked, staff along, the waiver and the odometer; quotes with discount, add-ons, trade-in value, financing, approval below the minimum price, the quotation PDF, acceptance and expiry (decisions 437–444). Deals, deposits and the sale itself come with P7-6.
+
 > **Update 2026-10-28 (P7-4):** §2 is implemented except the spec sheet, photo gallery and shareable listing page: stock statuses with the vehicle following them, the stock list with filters, asking and minimum prices with their history, cost, minimum price and margin hidden without `dealer.stock.cost.view`, days in stock and ageing buckets, holding cost per day, the aged-stock alert (`stock_aged`), consignment on a fixed payout or commission, and branch transfers with records (decisions 429–436). Reserving, selling and delivering come with deals (P7-6).
 
 New module for tenants who **sell** vehicles (new, used, imported "home-used"/"foreign-used", trade-ins, consignment).

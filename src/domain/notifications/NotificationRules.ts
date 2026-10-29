@@ -43,6 +43,9 @@ export const RULE_KEYS = [
   "purchase_eta",
   "purchase_demurrage",
   "stock_aged",
+  "lead_assigned",
+  "lead_follow_up",
+  "stock_match",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -292,6 +295,22 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push"], afterDays: 90 },
     usesAfterDays: true,
+  },
+  lead_assigned: {
+    description: "A lead was given to a sales executive: tell them",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  lead_follow_up: {
+    description: "A lead's follow-up is due today or overdue: remind whoever has it",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  stock_match: {
+    description:
+      "A listed vehicle fits a lead's saved search: tell the lead's sales executive (or the branch's staff who see leads)",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
   },
 });
 

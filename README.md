@@ -548,6 +548,20 @@ prices, logged in `/price-history`. Cost, minimum price and margin appear only w
 `dealer.stock.cost.view`. `GET /api/v1/dealer/stock/ageing` buckets the lot by days in stock, and a
 daily alert flags stock older than 90 days. Rules: docs/10 §2, decisions 429–436.
 
+## Dealer sales: leads, test drives and quotes
+
+`POST /api/v1/dealer/leads` captures a lead (walk-in, phone, WhatsApp, website …); without an
+assignee it goes to the next person in the branch's rotation (`PUT
+/api/v1/dealer/lead-rotation/:branchId`) or stays with whoever entered it. Leads move through
+`/stage` (lost needs a reason), take `/activities` and `/tasks` (reminded on the day they are due)
+and can carry a saved search that raises a `stock_match` alert when fitting stock is listed. Sales
+executives see only their own leads. `GET /api/v1/dealer/leads/funnel` reports the pipeline and
+conversion. `POST /api/v1/dealer/test-drives` books a drive on ready or listed stock (blocking the
+vehicle); `/start` issues the waiver, `/return` frees the car. `POST /api/v1/dealer/quotes` drafts
+a quote; a price below the minimum is `/approve`d first, `/send` issues the quotation PDF and
+`/decision` records the answer; sent quotes expire after their date. Rules: docs/10 §4–6, decisions
+437–444.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

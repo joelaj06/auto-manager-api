@@ -1,6 +1,8 @@
 import { listOf, type FieldSchema } from "./TemplateEngine.js";
+import { DEALER_QUOTE_V1 } from "./templates/dealerQuote.js";
 import { RENTAL_AGREEMENT_V1 } from "./templates/rentalAgreement.js";
 import { RENTAL_RETURN_V1 } from "./templates/rentalReturn.js";
+import { TEST_DRIVE_WAIVER_V1 } from "./templates/testDriveWaiver.js";
 import { TRANSFER_LETTER_V1 } from "./templates/transferLetter.js";
 import { VEHICLE_HANDOVER_V1 } from "./templates/vehicleHandover.js";
 import { WORKPAY_AGREEMENT_V3 } from "./templates/workPayAgreement.js";
@@ -11,6 +13,8 @@ export const DOCUMENT_TYPES = [
   "transfer_letter",
   "rental_agreement",
   "rental_return",
+  "dealer_quote",
+  "test_drive_waiver",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 export const LANGUAGES = ["en"] as const;
@@ -101,6 +105,8 @@ const RENTAL_DRIVER: FieldSchema = {
 };
 const CHECKLIST = listOf({ label: "text", ok: "boolean", note: "text" });
 const CHARGES = listOf({ description: "text", amount: "money" });
+const CHARGES_OF = (description: string, amount: string) =>
+  listOf({ [description]: "text", [amount]: "money" });
 
 const SAMPLE_RENTER = {
   code: "CUS-00042",
@@ -388,6 +394,93 @@ export const DOCUMENT_TYPE_CATALOG: Readonly<Record<DocumentType, DocumentTypeDe
           { description: "Late return (150 minutes)", amount: money(15_000) },
           { description: "Refuelling (2 quarter tanks)", amount: money(10_000) },
         ],
+      },
+    },
+    dealer_quote: {
+      name: "Sales quotation",
+      numbering: "quote_document",
+      subjectType: "dealer_quote",
+      fields: {
+        issuer: ISSUER,
+        document: DOCUMENT,
+        vehicle: { ...VEHICLE, odometer: "number" },
+        customer: { name: "text", phone: "text" },
+        quote: {
+          number: "text",
+          validUntil: "date",
+          currency: "text",
+          price: "money",
+          hasDiscount: "boolean",
+          discount: "money",
+          total: "money",
+          tradeIn: "text",
+          tradeInValue: "money",
+          balance: "money",
+          financing: "text",
+          deposit: "money",
+          termMonths: "number",
+          financingNote: "text",
+          notes: "text",
+        },
+        addOns: CHARGES_OF("description", "amount"),
+      },
+      system: { version: 1, body: DEALER_QUOTE_V1 },
+      sample: {
+        issuer: SAMPLE_ISSUER,
+        document: { number: "QTD-2026-000001", issuedOn: "2026-10-29" },
+        vehicle: { ...SAMPLE_VEHICLE, odometer: 64_200 },
+        customer: { name: "Yaw Mensah", phone: "+233 24 555 0101" },
+        quote: {
+          number: "QUO-2026-000007",
+          validUntil: "2026-11-12",
+          currency: "GHS",
+          price: money(15_500_000),
+          hasDiscount: true,
+          discount: money(500_000),
+          total: money(15_350_000),
+          tradeIn: "Honda Civic 2012, GT 1234-12",
+          tradeInValue: money(4_000_000),
+          balance: money(11_350_000),
+          financing: "Bank loan",
+          deposit: money(3_000_000),
+          termMonths: 24,
+          financingNote: "Subject to the bank's approval",
+          notes: null,
+        },
+        addOns: [
+          { description: "Registration and number plates", amount: money(150_000) },
+          { description: "Tracker", amount: money(200_000) },
+        ],
+      },
+    },
+    test_drive_waiver: {
+      name: "Test drive waiver",
+      numbering: "test_drive_document",
+      subjectType: "dealer_test_drive",
+      fields: {
+        issuer: ISSUER,
+        document: DOCUMENT,
+        vehicle: VEHICLE,
+        driver: { name: "text", phone: "text", licenceNumber: "text", licenceExpiresOn: "date" },
+        drive: { startsAt: "text", endsAt: "text", accompaniedBy: "text", odometerOut: "number" },
+      },
+      system: { version: 1, body: TEST_DRIVE_WAIVER_V1 },
+      sample: {
+        issuer: SAMPLE_ISSUER,
+        document: { number: "TDW-2026-000001", issuedOn: "2026-10-29" },
+        vehicle: SAMPLE_VEHICLE,
+        driver: {
+          name: "Yaw Mensah",
+          phone: "+233 24 555 0101",
+          licenceNumber: "DL-112233",
+          licenceExpiresOn: "2029-01-31",
+        },
+        drive: {
+          startsAt: "29 Oct 2026, 10:00",
+          endsAt: "29 Oct 2026, 10:45",
+          accompaniedBy: "Esi Boateng",
+          odometerOut: 64_200,
+        },
       },
     },
   });

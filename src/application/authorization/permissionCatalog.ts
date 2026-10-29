@@ -281,6 +281,30 @@ const definitions = {
     description: "Set asking and minimum prices",
     scopes: BRANCH_OR_ALL,
   },
+  "dealer.leads.view": {
+    description: "See leads with their activity and tasks (own: those assigned to you)",
+    scopes: ["own", "branch", "all"],
+  },
+  "dealer.leads.create": {
+    description: "Capture leads (and take leads given to you there)",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.leads.update": {
+    description: "Work leads: details, stages, activity and follow-ups (own: yours)",
+    scopes: ["own", "branch", "all"],
+  },
+  "dealer.leads.assign": {
+    description: "Give leads to sales staff and set the branch's lead rotation",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.testdrives.manage": {
+    description: "Book test drives and hand the cars out and back",
+    scopes: BRANCH_OR_ALL,
+  },
+  "dealer.quotes.manage": {
+    description: "Prepare, send and record the answer to sales quotes",
+    scopes: BRANCH_OR_ALL,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,

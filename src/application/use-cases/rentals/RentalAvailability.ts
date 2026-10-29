@@ -928,6 +928,7 @@ const WHAT: Record<BlockReason, string> = {
   maintenance: "in maintenance",
   transfer: "being transferred",
   sale_hold: "held for a sale",
+  test_drive: "out on a test drive",
   other: "blocked",
 };
 

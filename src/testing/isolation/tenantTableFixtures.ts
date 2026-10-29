@@ -1121,6 +1121,103 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from dealer_stock_transfers where reason = $1",
   },
+  dealer_leads: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)
+            insert into dealer_leads (number, branch_id, source, name, phone)
+            select $1, b.id, 'walk_in', 'Isolation', '+233200000000' from b`,
+      params: [marker, `DL${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_leads where number = $1",
+  },
+  dealer_lead_activities: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 l as (insert into dealer_leads (number, branch_id, source, name, phone)
+                       select $1, b.id, 'walk_in', 'Isolation', '+233200000000' from b returning id)
+            insert into dealer_lead_activities (lead_id, kind, note, occurred_at)
+            select l.id, 'note', $1, now() from l`,
+      params: [marker, `LA${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_lead_activities where note = $1",
+  },
+  dealer_lead_tasks: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 l as (insert into dealer_leads (number, branch_id, source, name, phone)
+                       select $1, b.id, 'walk_in', 'Isolation', '+233200000000' from b returning id)
+            insert into dealer_lead_tasks (lead_id, title, due_on)
+            select l.id, $1, current_date from l`,
+      params: [marker, `LT${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_lead_tasks where title = $1",
+  },
+  dealer_lead_matches: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 l as (insert into dealer_leads (number, branch_id, source, name, phone)
+                       select $1, b.id, 'walk_in', 'Isolation', '+233200000000' from b returning id)
+            insert into dealer_lead_matches (lead_id, vehicle_id) select l.id, v.id from l, v`,
+      params: [marker, `LM${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from dealer_lead_matches m join dealer_leads l on l.id = m.lead_id
+            where l.number = $1`,
+  },
+  dealer_lead_pool: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation')
+                       returning id)
+            insert into dealer_lead_pool (branch_id, user_id, position)
+            select b.id, u.id, 1 from b, u`,
+      params: [marker, `LP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from dealer_lead_pool p join users u on u.id = p.user_id
+            where u.email = $1 || '@example.com'`,
+  },
+  dealer_test_drives: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation')
+                       returning id),
+                 k as (insert into vehicle_blocks (vehicle_id, branch_id, reason, status,
+                         starts_at, ends_at, blocked_until)
+                       select v.id, b.id, 'test_drive', 'confirmed', now() + interval '1 day',
+                         now() + interval '1 day 1 hour', now() + interval '1 day 1 hour'
+                         from v, b returning id)
+            insert into dealer_test_drives (branch_id, vehicle_id, starts_at, ends_at,
+              driver_name, driver_phone, licence_number, licence_expires_on, accompanied_by,
+              block_id, notes)
+            select b.id, v.id, now() + interval '1 day', now() + interval '1 day 1 hour',
+              'Isolation', '+233200000000', 'GH-123', current_date + 365, u.id, k.id, $1
+              from b, v, u, k`,
+      params: [marker, `TD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_test_drives where notes = $1",
+  },
+  dealer_quotes: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into dealer_quotes (number, branch_id, customer_name, vehicle_id, price_minor,
+              valid_until)
+            select $1, b.id, 'Isolation', v.id, 100, current_date + 14 from b, v`,
+      params: [marker, `DQ${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_quotes where number = $1",
+  },
+  dealer_quote_items: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 q as (insert into dealer_quotes (number, branch_id, customer_name, vehicle_id,
+                         price_minor, valid_until)
+                       select 'Q-' || $1, b.id, 'Isolation', v.id, 100, current_date + 14
+                         from b, v returning id)
+            insert into dealer_quote_items (quote_id, position, kind, description, amount_minor)
+            select q.id, 1, 'tint', $1, 10 from q`,
+      params: [marker, `QI${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_quote_items where description = $1",
+  },
   incidents: {
     insert: (marker) => ({
       sql: `${VEHICLE}

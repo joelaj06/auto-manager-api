@@ -8,7 +8,14 @@ export class VehicleBlockError extends DomainError {
   }
 }
 
-export const BLOCK_REASONS = ["rental", "maintenance", "transfer", "sale_hold", "other"] as const;
+export const BLOCK_REASONS = [
+  "rental",
+  "maintenance",
+  "transfer",
+  "sale_hold",
+  "test_drive",
+  "other",
+] as const;
 export type BlockReason = (typeof BLOCK_REASONS)[number];
 /** Blocks people add by hand; rental blocks come from holds and bookings. */
 export const MANUAL_BLOCK_REASONS = ["maintenance", "transfer", "sale_hold", "other"] as const;
