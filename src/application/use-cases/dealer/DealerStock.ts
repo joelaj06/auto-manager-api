@@ -161,6 +161,11 @@ export type AgeingSummary = Readonly<{
   buckets: Readonly<Record<AgeingBucket, BucketSummary>>;
   total: BucketSummary;
   averageDays: number | null;
+  /** Stock valuation (docs/14): the same figures by stock status, source, make and branch. */
+  byStatus: readonly (BucketSummary & Readonly<{ status: StockStatus }>)[];
+  bySource: readonly (BucketSummary & Readonly<{ source: StockSource }>)[];
+  byMake: readonly (BucketSummary & Readonly<{ make: string }>)[];
+  byBranch: readonly (BucketSummary & Readonly<{ branchId: string }>)[];
 }>;
 
 type Context = Readonly<{
@@ -500,21 +505,36 @@ export class DealerStock {
         after = page[page.length - 1]!.unit.vehicleId;
       }
       const spend = await this.spend(records, context);
-      const sums = new Map<AgeingBucket | "total", { count: number; asking: number; cost: number }>(
-        [...AGEING_BUCKETS, "total" as const].map((b) => [b, { count: 0, asking: 0, cost: 0 }]),
+      type Sum = { count: number; asking: number; cost: number };
+      const sums = new Map<string, Sum>(
+        [...AGEING_BUCKETS, "total"].map((b) => [b, { count: 0, asking: 0, cost: 0 }]),
       );
+      // Groups keep the order they are first met in; makes are sorted below.
+      const groups = { status: [], source: [], make: [], branch: [] } as Record<
+        "status" | "source" | "make" | "branch",
+        string[]
+      >;
       let days = 0;
       for (const r of records) {
         const view = this.view(r, context, spend.get(r.unit.vehicleId));
         days += view.daysInStock;
-        for (const key of [view.ageing, "total"] as const) {
-          const s = sums.get(key)!;
+        const keys: [keyof typeof groups, string][] = [
+          ["status", view.status],
+          ["source", view.source],
+          ["make", view.vehicle.make],
+          ["branch", view.vehicle.branchId],
+        ];
+        for (const [group, value] of keys)
+          if (!groups[group].includes(value)) groups[group].push(value);
+        for (const key of [view.ageing, "total", ...keys.map(([g, v]) => `${g}:${v}`)]) {
+          let s = sums.get(key);
+          if (s === undefined) sums.set(key, (s = { count: 0, asking: 0, cost: 0 }));
           s.count += 1;
           s.asking += view.askingPrice?.amountMinor ?? 0;
           s.cost += view.cost?.total.amountMinor ?? 0;
         }
       }
-      const summary = (key: AgeingBucket | "total"): BucketSummary => {
+      const summary = (key: string): BucketSummary => {
         const s = sums.get(key)!;
         return {
           count: s.count,
@@ -532,6 +552,18 @@ export class DealerStock {
         >,
         total: summary("total"),
         averageDays: records.length === 0 ? null : Math.round(days / records.length),
+        byStatus: groups.status.map((status) => ({
+          status: status as StockStatus,
+          ...summary(`status:${status}`),
+        })),
+        bySource: groups.source.map((source) => ({
+          source: source as StockSource,
+          ...summary(`source:${source}`),
+        })),
+        byMake: groups.make
+          .sort((a, b) => a.localeCompare(b))
+          .map((make) => ({ make, ...summary(`make:${make}`) })),
+        byBranch: groups.branch.map((branchId) => ({ branchId, ...summary(`branch:${branchId}`) })),
       };
     });
   }

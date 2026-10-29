@@ -194,6 +194,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "dealer.deals.payments.record",
       "dealer.deals.deliver",
       "dealer.commissions.view",
+      "dashboards.dealer.view",
     ]),
   },
   {

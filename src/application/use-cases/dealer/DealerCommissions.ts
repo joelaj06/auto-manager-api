@@ -82,17 +82,22 @@ export type CommissionView = Omit<CommissionProps, "baseMinor" | "amountMinor"> 
 
 export type PayoutView = Omit<PayoutRecord, "amountMinor"> & Readonly<{ amount: MoneyJson }>;
 
+type StatementTotals = Readonly<{
+  /** Earned in the month and not clawed back, less clawbacks of paid commissions. */
+  earned: MoneyJson;
+  accrued: MoneyJson;
+  payable: MoneyJson;
+  paid: MoneyJson;
+  clawedBack: MoneyJson;
+}>;
+
 export type CommissionStatement = Readonly<{
   period: string;
   userId: string | null;
-  totals: Readonly<{
-    /** Earned in the month and not clawed back, less clawbacks of paid commissions. */
-    earned: MoneyJson;
-    accrued: MoneyJson;
-    payable: MoneyJson;
-    paid: MoneyJson;
-    clawedBack: MoneyJson;
-  }>;
+  totals: StatementTotals;
+  /** Commissions per seller (docs/14): vehicles earned on and not clawed back, and the totals. */
+  bySeller: readonly (StatementTotals &
+    Readonly<{ userId: string; userName: string; units: number }>)[];
   commissions: readonly CommissionView[];
   payouts: readonly PayoutView[];
 }>;
@@ -310,22 +315,44 @@ export class DealerCommissions {
       });
       const base = await this.base();
       const m = (minor: number) => Money.ofMinor(minor, base).toJSON();
-      const sum = (pick: (c: CommissionProps) => boolean) =>
-        lines
-          .map((l) => l.commission.snapshot())
-          .filter(pick)
-          .reduce((s, c) => s + c.amountMinor, 0);
       const by = (status: CommissionStatus) => (c: CommissionProps) => c.status === status;
-      return {
-        period: query.period,
-        userId: userId ?? null,
-        totals: {
+      const totals = (of: readonly CommissionLine[]): StatementTotals => {
+        const sum = (pick: (c: CommissionProps) => boolean) =>
+          of
+            .map((l) => l.commission.snapshot())
+            .filter(pick)
+            .reduce((s, c) => s + c.amountMinor, 0);
+        return {
           earned: m(sum((c) => c.status !== "clawed_back")),
           accrued: m(sum(by("accrued"))),
           payable: m(sum(by("payable"))),
           paid: m(sum(by("paid"))),
           clawedBack: m(sum((c) => c.kind === "earned" && c.clawbackReason !== null)),
-        },
+        };
+      };
+      const sellers = new Map<string, CommissionLine[]>();
+      for (const l of lines) {
+        const id = l.commission.snapshot().userId;
+        sellers.set(id, [...(sellers.get(id) ?? []), l]);
+      }
+      return {
+        period: query.period,
+        userId: userId ?? null,
+        totals: totals(lines),
+        bySeller: [...sellers.entries()]
+          .map(([id, of]) => ({
+            userId: id,
+            userName: of[0]!.userName,
+            units: new Set(
+              of
+                .map((l) => l.commission.snapshot())
+                .filter((c) => c.kind === "earned" && c.status !== "clawed_back")
+                .filter((c) => c.clawbackReason === null)
+                .map((c) => c.dealId),
+            ).size,
+            ...totals(of),
+          }))
+          .sort((a, b) => b.earned.amountMinor - a.earned.amountMinor),
         commissions: lines.map((l) => commissionView(l, base)),
         payouts: payouts.map(({ amountMinor, ...p }) => ({ ...p, amount: m(amountMinor) })),
       };

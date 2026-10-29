@@ -82,16 +82,20 @@ import { PostgresQuotes } from "../../infrastructure/dealer/PostgresQuotes.js";
 import { dealerSalesRoutes } from "../../adapters/routes/dealerSalesRoutes.js";
 import { dealerDealRoutes } from "../../adapters/routes/dealerDealRoutes.js";
 import { dealerCommissionRoutes } from "../../adapters/routes/dealerCommissionRoutes.js";
+import { dealerReportRoutes } from "../../adapters/routes/dealerReportRoutes.js";
 import { CostOfSales } from "../../application/use-cases/dealer/CostOfSales.js";
 import { DealProfit } from "../../application/use-cases/dealer/DealProfit.js";
 import { DealerCommissions } from "../../application/use-cases/dealer/DealerCommissions.js";
 import { DealerGrossProfit } from "../../application/use-cases/dealer/DealerGrossProfit.js";
+import { DealerReports } from "../../application/use-cases/dealer/DealerReports.js";
+import type { IDealerReporting } from "../../application/ports/IDealerReporting.js";
 import { VehicleDepreciation } from "../../application/use-cases/finance/VehicleDepreciation.js";
 import type {
   ICommissions,
   IDepreciationLedger,
 } from "../../application/ports/IDealerCommissions.js";
 import { PostgresCommissions } from "../../infrastructure/dealer/PostgresCommissions.js";
+import { PostgresDealerReporting } from "../../infrastructure/dealer/PostgresDealerReporting.js";
 import { PostgresDepreciationLedger } from "../../infrastructure/finance/PostgresDepreciationLedger.js";
 import { Appraisals } from "../../application/use-cases/dealer/Appraisals.js";
 import { DealerDeals } from "../../application/use-cases/dealer/DealerDeals.js";
@@ -6293,18 +6297,42 @@ export function createContainer(
       (
         unitOfWork: IUnitOfWork,
         deals: IDeals,
+        leads: ILeads,
         stock: IDealerStock,
         profit: DealProfit,
         organisation: IOrganisationSettings,
         scope: BranchScope,
-      ) => new DealerGrossProfit({ unitOfWork, deals, stock, profit, organisation, scope }),
+      ) => new DealerGrossProfit({ unitOfWork, deals, leads, stock, profit, organisation, scope }),
       [
         TYPES.UnitOfWork,
         TYPES.DealRepository,
+        TYPES.LeadRepository,
         TYPES.DealerStockRepository,
         TYPES.DealProfit,
         TYPES.OrganisationSettings,
         TYPES.BranchScope,
+      ],
+    );
+  tenantRepository<IDealerReporting>(
+    TYPES.DealerReportingRepository,
+    (tx) => new PostgresDealerReporting(tx),
+  );
+  container
+    .bind<DealerReports>(TYPES.DealerReports)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        reporting: IDealerReporting,
+        organisation: IOrganisationSettings,
+        scope: BranchScope,
+        calendar: TenantCalendar,
+      ) => new DealerReports({ unitOfWork, reporting, organisation, scope, calendar }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.DealerReportingRepository,
+        TYPES.OrganisationSettings,
+        TYPES.BranchScope,
+        TYPES.TenantCalendar,
       ],
     );
   container.bind<DealerDeals>(TYPES.DealerDeals).toResolvedValue(
@@ -8041,6 +8069,7 @@ export function createContainer(
       dealerDeals: DealerDeals,
       dealerCommissions: DealerCommissions,
       dealerGrossProfit: DealerGrossProfit,
+      dealerReports: DealerReports,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -8205,6 +8234,7 @@ export function createContainer(
           deals: dealerDeals,
           grossProfit: dealerGrossProfit,
         }),
+        ...dealerReportRoutes({ reports: dealerReports }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -8344,6 +8374,7 @@ export function createContainer(
       TYPES.DealerDeals,
       TYPES.DealerCommissions,
       TYPES.DealerGrossProfit,
+      TYPES.DealerReports,
     ],
   );
 

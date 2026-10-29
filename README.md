@@ -590,6 +590,18 @@ accrue at delivery, become payable when the sale is paid, are paid with `POST
 `GET /api/v1/dealer/commissions?period=YYYY-MM` is the statement. Rules: docs/10 §1, §8, docs/13,
 decisions 453–458.
 
+## Dealer reports
+
+With `dashboards.dealer.view`, `GET /api/v1/dashboards/dealer?from&to&branchId` gives the units
+sold and delivered with revenue and days to sell, stock on hand and aged stock, leads won and lost
+with the conversion, and cash collected, owed and held; `/api/v1/dashboards/dealer/price-reductions`
+lists asking-price cuts and `/api/v1/dashboards/dealer/collections` the cash collected on sales by
+method and branch against what sold deals still owe and the deposits held. Stock valuation by
+ageing, status, source, make and branch is `GET /api/v1/dealer/stock/ageing`; gross profit by
+unit, make, seller, lead source and branch `GET /api/v1/dealer/gross-profit`; the lead funnel
+`GET /api/v1/dealer/leads/funnel`; commissions per seller the statement. Periods default to the
+last 30 days. Rules: docs/10 §10, docs/14, decisions 459–462.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

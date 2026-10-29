@@ -205,6 +205,8 @@ export const TYPES = Object.freeze({
   DealProfit: Symbol.for("DealProfit"),
   DealerCommissions: Symbol.for("DealerCommissions"),
   DealerGrossProfit: Symbol.for("DealerGrossProfit"),
+  DealerReportingRepository: Symbol.for("DealerReportingRepository"),
+  DealerReports: Symbol.for("DealerReports"),
   TaxAdministration: Symbol.for("TaxAdministration"),
   FxRateBook: Symbol.for("FxRateBook"),
   ExpenseCategoryAdministration: Symbol.for("ExpenseCategoryAdministration"),

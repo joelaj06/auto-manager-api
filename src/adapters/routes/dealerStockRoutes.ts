@@ -122,7 +122,8 @@ export function dealerStockRoutes(deps: DealerStockRouteDependencies): ApiRoute[
     defineRoute({
       method: "get",
       path: "/api/v1/dealer/stock/ageing",
-      summary: "Stock on the lot by days in stock: 0–30, 31–60, 61–90 and over 90",
+      summary:
+        "Stock on the lot valued at asking price and cost: by days in stock (0–30, 31–60, 61–90, over 90), status, source, make and branch",
       tags,
       access: access.permission("dealer.stock.list"),
       request: { query: z.object({ branchId: uuid.optional() }) },

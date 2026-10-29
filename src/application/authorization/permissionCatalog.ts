@@ -565,6 +565,11 @@ const definitions = {
       "See the maintenance KPIs (cost per vehicle and km, downtime, preventive work, failures) and the compliance dashboard",
     scopes: BRANCH_OR_ALL,
   },
+  "dashboards.dealer.view": {
+    description:
+      "See the dealer reports: sales, stock and leads at a glance, price reductions, cash collected on sales against what they owe and deposits held",
+    scopes: BRANCH_OR_ALL,
+  },
   "dashboards.stats.rebuild": {
     description: "Rebuild the vehicle statistics behind the dashboards",
     scopes: ALL,
