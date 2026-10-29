@@ -15,6 +15,7 @@ import {
   type PlanFrequency,
   type PlanPosition,
 } from "../../../domain/dealer/Deal.js";
+import type { CommissionShare } from "../../../domain/dealer/Commission.js";
 import type { AddOnKind, Financing, Quote } from "../../../domain/dealer/Quote.js";
 import { StockUnit } from "../../../domain/dealer/StockUnit.js";
 import { TRADE_IN_SOURCE, type PaymentMethod } from "../../../domain/finance/Payment.js";
@@ -52,6 +53,9 @@ import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import type { VehicleRegistry } from "../vehicles/VehicleRegistry.js";
 import { AppraisalNotFoundError } from "./Appraisals.js";
+import type { CostOfSales } from "./CostOfSales.js";
+import type { DealerCommissions } from "./DealerCommissions.js";
+import { profitView, type DealProfit, type ProfitView } from "./DealProfit.js";
 import { LeadNotFoundError, noteOnLead, reachesLead } from "./DealerLeads.js";
 import { ADD_ON_WORDS, FINANCING_WORDS } from "./DealerQuotes.js";
 
@@ -135,7 +139,14 @@ export type DealAccount = Readonly<{
 
 export type DealView = Omit<
   DealProps,
-  "priceMinor" | "discountMinor" | "addOns" | "tradeIn" | "loan" | "plan" | "planChargeMinor"
+  | "priceMinor"
+  | "discountMinor"
+  | "addOns"
+  | "tradeIn"
+  | "loan"
+  | "plan"
+  | "planChargeMinor"
+  | "costOfSaleMinor"
 > &
   Readonly<{
     price: MoneyJson;
@@ -186,6 +197,8 @@ export type DealView = Omit<
           }>)
       | null;
     photos?: readonly FileView[];
+    /** Gross profit on the unit once sold (with `dealer.stock.cost.view`). */
+    profit?: ProfitView | null;
   }>;
 
 type Deps = Readonly<{
@@ -203,6 +216,9 @@ type Deps = Readonly<{
   posting: LedgerPosting;
   documents: Documents;
   photos: OwnedDocuments;
+  costOfSales: CostOfSales;
+  commissions: DealerCommissions;
+  profit: DealProfit;
   recipients: IRecipientDirectory;
   organisation: IOrganisationSettings;
   policy: AuthorizationPolicy;
@@ -242,7 +258,7 @@ export class DealerDeals {
   }
 
   get(actor: Principal, id: string): Promise<DealView> {
-    return this.deps.unitOfWork.run(async () => this.detail(await this.reach(actor, id)));
+    return this.deps.unitOfWork.run(async () => this.detail(await this.reach(actor, id), actor));
   }
 
   create(actor: Principal, input: DealInput): Promise<DealView> {
@@ -290,7 +306,7 @@ export class DealerDeals {
           advanceTo: "negotiation",
         });
       await this.audit(actor, "deal.created", deal);
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -312,7 +328,7 @@ export class DealerDeals {
       await deps.deals.update(deal);
       await this.attachTradeIn(deal, previous);
       await this.audit(actor, "deal.revised", deal);
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -326,7 +342,7 @@ export class DealerDeals {
       deal.approve(actor.userId, deps.clock.now());
       await deps.deals.update(deal);
       await this.audit(actor, "deal.approved", deal);
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -340,7 +356,7 @@ export class DealerDeals {
         throw new DealRuleError("The deal is cancelled: record the money in finance");
       await this.pay(actor, deal, money, `Sale ${d.number}`, "dealer.deals.payments.record");
       await this.audit(actor, "deal.payment_recorded", deal, { amount: money.amount });
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -377,7 +393,7 @@ export class DealerDeals {
       await deps.deals.update(deal);
       await this.note(actor, deal, `Reserved until ${holdUntil}`, "reserved");
       await this.audit(actor, "deal.reserved", deal, { holdUntil });
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -420,7 +436,7 @@ export class DealerDeals {
       }
       await this.note(actor, deal, `Bank loan ${input.status}`, `loan_${input.status}`);
       await this.audit(actor, `deal.loan_${input.status}`, deal);
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -528,12 +544,13 @@ export class DealerDeals {
       await this.settle(actor, deal);
       unit.sell(today, now);
       await deps.stock.update(unit);
+      deal.costed(await deps.costOfSales.post(actor, deal.snapshot(), record, today), now);
       await this.moveVehicle(actor, d.vehicleId, "sold", `Sold on deal ${d.number}`, d.id);
       deal.agreementIssued(await this.agreement(actor, deal, record, invoice.number ?? ""), now);
       await deps.deals.update(deal);
       await this.win(actor, deal);
       await this.audit(actor, "deal.sold", deal, { invoiceId: invoice.id });
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -599,6 +616,7 @@ export class DealerDeals {
       const unit = (await deps.stock.lock(d.vehicleId))!;
       unit.deliver(today, now);
       await deps.stock.update(unit);
+      await deps.commissions.accrue(actor, deal, today, paidMinor >= invoicedMinor);
       if (d.leadId !== null) {
         await deps.leads.saveTask({
           id: deps.ids.next(),
@@ -614,7 +632,7 @@ export class DealerDeals {
         await this.note(actor, deal, `Delivered (odometer ${input.odometer})`, "delivered");
       }
       await this.audit(actor, "deal.delivered", deal);
-      return this.detail(deal);
+      return this.detail(deal, actor);
     });
   }
 
@@ -636,7 +654,27 @@ export class DealerDeals {
       }
       await this.note(actor, deal, `Cancelled: ${deal.snapshot().cancelReason}`, "cancelled");
       await this.audit(actor, "deal.cancelled", deal, { reason });
-      return this.detail(deal);
+      return this.detail(deal, actor);
+    });
+  }
+
+  /** Who shares the commission (before delivery, when it accrues). */
+  splitCommission(
+    actor: Principal,
+    id: string,
+    split: readonly CommissionShare[],
+  ): Promise<DealView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const deal = await this.reach(actor, id, true);
+      const d = deal.snapshot();
+      if (actor.grantFor("dealer.commissions.manage") === undefined)
+        throw new DealRuleError("Only those who manage commissions split them");
+      await deps.commissions.checkSplit(d.branchId, split);
+      deal.splitCommission(split, deps.clock.now());
+      await deps.deals.update(deal);
+      await this.audit(actor, "deal.commission_split", deal, { split });
+      return this.detail(deal, actor);
     });
   }
 
@@ -1194,7 +1232,7 @@ export class DealerDeals {
     return view(deal, base, customer?.name ?? "");
   }
 
-  private async detail(deal: Deal): Promise<DealView> {
+  private async detail(deal: Deal, actor: Principal): Promise<DealView> {
     const { deps } = this;
     const d = deal.snapshot();
     const base = await this.base();
@@ -1253,7 +1291,15 @@ export class DealerDeals {
               })),
             },
       photos: await deps.photos.list(d.id),
+      ...(deps.scope.can(actor, "dealer.stock.cost.view", d.branchId)
+        ? { profit: await this.profitOf(d, base) }
+        : {}),
     };
+  }
+
+  private async profitOf(d: DealProps, base: string): Promise<ProfitView | null> {
+    const profit = await this.deps.profit.of(d);
+    return profit === null ? null : profitView(profit, base);
   }
 
   private async audit(
@@ -1317,8 +1363,17 @@ function signers(actor: Principal, customer: DealCustomer) {
 }
 
 export function view(deal: Deal, base: string, customerName: string): DealView {
-  const { priceMinor, discountMinor, addOns, tradeIn, loan, plan, planChargeMinor, ...rest } =
-    deal.snapshot();
+  const {
+    priceMinor,
+    discountMinor,
+    addOns,
+    tradeIn,
+    loan,
+    plan,
+    planChargeMinor,
+    costOfSaleMinor: _cost,
+    ...rest
+  } = deal.snapshot();
   const m = (minor: number) => Money.ofMinor(minor, base).toJSON();
   const t = deal.totals();
   return {

@@ -576,6 +576,20 @@ and its charge invoice and issues the sales agreement; `/deliver` hands the car 
 checklist with the delivery note once what is due is paid; `/cancel` calls off an unsold deal.
 Overdue instalments are reported daily. Rules: docs/10 §6–7, decisions 445–452.
 
+## Dealer commissions, depreciation and cost of sales
+
+Selling a vehicle (`/api/v1/dealer/deals/:id/sell`) also takes its cost out of the books: it is
+depreciated to the day, and its book value goes to 5100 Cost of vehicles sold (a consigned
+vehicle's payout is owed to its consignor). Straight-line vehicles are depreciated to 6000 / 1510
+every month by the daily job. With `dealer.stock.cost.view` a deal shows its gross profit and `GET
+/api/v1/dealer/gross-profit?from&to` lists it per unit. Commission plans (`/api/v1/dealer/commission-plans`)
+pay a percentage of gross profit or price, or a flat amount, in tiers by vehicles delivered in the
+month; `PUT /api/v1/dealer/deals/:id/commission-split` shares a sale between sellers. Commissions
+accrue at delivery, become payable when the sale is paid, are paid with `POST
+/api/v1/dealer/commissions/payouts` and clawed back with `/api/v1/dealer/commissions/:id/clawback`;
+`GET /api/v1/dealer/commissions?period=YYYY-MM` is the statement. Rules: docs/10 §1, §8, docs/13,
+decisions 453–458.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

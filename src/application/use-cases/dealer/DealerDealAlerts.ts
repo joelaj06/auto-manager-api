@@ -6,13 +6,15 @@ import type { INotificationSettingsStore } from "../../ports/INotifications.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { Notifier } from "../notifications/Notifier.js";
+import type { DealerCommissions } from "./DealerCommissions.js";
 import type { DealerDeals } from "./DealerDeals.js";
 
 /**
  * The daily deal jobs (docs/10 §7, decisions 449–450): reservations whose hold ran out go back
  * to drafts with the vehicle back on sale, telling the sales executive (rule `deal_hold_lapsed`);
  * an in-house instalment past its date and not paid is reported once to the sales executive and
- * the branch's staff who take payments on sales (rule `deal_instalment_overdue`).
+ * the branch's staff who take payments on sales (rule `deal_instalment_overdue`); commissions on
+ * sales now paid in full become payable (decision 457).
  */
 export class DealerDealAlerts implements ITenantDailyTask {
   readonly name = "dealer_deals";
@@ -22,6 +24,7 @@ export class DealerDealAlerts implements ITenantDailyTask {
       unitOfWork: IUnitOfWork;
       deals: IDeals;
       sales: DealerDeals;
+      commissions: DealerCommissions;
       organisation: IOrganisationSettings;
       settings: INotificationSettingsStore;
       notifier: Notifier;
@@ -33,6 +36,7 @@ export class DealerDealAlerts implements ITenantDailyTask {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const settings = await deps.settings.get();
+      await deps.commissions.refresh(localDate);
       for (const deal of await deps.sales.lapse(localDate)) {
         const d = deal.snapshot();
         await deps.notifier.users(settings, {

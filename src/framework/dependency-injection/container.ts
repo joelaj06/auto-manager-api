@@ -81,6 +81,18 @@ import { PostgresTestDrives } from "../../infrastructure/dealer/PostgresTestDriv
 import { PostgresQuotes } from "../../infrastructure/dealer/PostgresQuotes.js";
 import { dealerSalesRoutes } from "../../adapters/routes/dealerSalesRoutes.js";
 import { dealerDealRoutes } from "../../adapters/routes/dealerDealRoutes.js";
+import { dealerCommissionRoutes } from "../../adapters/routes/dealerCommissionRoutes.js";
+import { CostOfSales } from "../../application/use-cases/dealer/CostOfSales.js";
+import { DealProfit } from "../../application/use-cases/dealer/DealProfit.js";
+import { DealerCommissions } from "../../application/use-cases/dealer/DealerCommissions.js";
+import { DealerGrossProfit } from "../../application/use-cases/dealer/DealerGrossProfit.js";
+import { VehicleDepreciation } from "../../application/use-cases/finance/VehicleDepreciation.js";
+import type {
+  ICommissions,
+  IDepreciationLedger,
+} from "../../application/ports/IDealerCommissions.js";
+import { PostgresCommissions } from "../../infrastructure/dealer/PostgresCommissions.js";
+import { PostgresDepreciationLedger } from "../../infrastructure/finance/PostgresDepreciationLedger.js";
 import { Appraisals } from "../../application/use-cases/dealer/Appraisals.js";
 import { DealerDeals } from "../../application/use-cases/dealer/DealerDeals.js";
 import { DealerDealAlerts } from "../../application/use-cases/dealer/DealerDealAlerts.js";
@@ -4749,12 +4761,14 @@ export function createContainer(
       stockAlerts: StockAlerts,
       dealerCrmAlerts: DealerCrmAlerts,
       dealerDealAlerts: DealerDealAlerts,
+      depreciation: VehicleDepreciation,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
         recurring,
         remittances,
         workpayArrears,
+        depreciation,
         stats,
         serviceDue,
         maintenanceAlerts,
@@ -4778,6 +4792,7 @@ export function createContainer(
       TYPES.StockAlerts,
       TYPES.DealerCrmAlerts,
       TYPES.DealerDealAlerts,
+      TYPES.VehicleDepreciation,
     ],
   );
 
@@ -6180,6 +6195,118 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  tenantRepository<ICommissions>(TYPES.CommissionRepository, (tx) => new PostgresCommissions(tx));
+  tenantRepository<IDepreciationLedger>(
+    TYPES.DepreciationLedger,
+    (tx) => new PostgresDepreciationLedger(tx),
+  );
+  container
+    .bind<VehicleDepreciation>(TYPES.VehicleDepreciation)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        depreciation: IDepreciationLedger,
+        ledger: ILedger,
+        posting: LedgerPosting,
+      ) => new VehicleDepreciation({ unitOfWork, depreciation, ledger, posting }),
+      [TYPES.UnitOfWork, TYPES.DepreciationLedger, TYPES.Ledger, TYPES.LedgerPosting],
+    );
+  container
+    .bind<CostOfSales>(TYPES.CostOfSales)
+    .toResolvedValue(
+      (
+        posting: LedgerPosting,
+        depreciation: VehicleDepreciation,
+        depreciationLedger: IDepreciationLedger,
+      ) => new CostOfSales({ posting, depreciation, depreciationLedger }),
+      [TYPES.LedgerPosting, TYPES.VehicleDepreciation, TYPES.DepreciationLedger],
+    );
+  container
+    .bind<DealProfit>(TYPES.DealProfit)
+    .toResolvedValue(
+      (
+        stock: IDealerStock,
+        invoices: IInvoiceRepository,
+        commissions: ICommissions,
+        organisation: IOrganisationSettings,
+      ) => new DealProfit({ stock, invoices, commissions, organisation }),
+      [
+        TYPES.DealerStockRepository,
+        TYPES.InvoiceRepository,
+        TYPES.CommissionRepository,
+        TYPES.OrganisationSettings,
+      ],
+    );
+  container.bind<DealerCommissions>(TYPES.DealerCommissions).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      commissions: ICommissions,
+      deals: IDeals,
+      profit: DealProfit,
+      posting: LedgerPosting,
+      recipients: IRecipientDirectory,
+      organisation: IOrganisationSettings,
+      scope: BranchScope,
+      numbering: DocumentNumbering,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new DealerCommissions({
+        unitOfWork,
+        commissions,
+        deals,
+        profit,
+        posting,
+        recipients,
+        organisation,
+        scope,
+        numbering,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.CommissionRepository,
+      TYPES.DealRepository,
+      TYPES.DealProfit,
+      TYPES.LedgerPosting,
+      TYPES.RecipientDirectory,
+      TYPES.OrganisationSettings,
+      TYPES.BranchScope,
+      TYPES.DocumentNumbering,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<DealerGrossProfit>(TYPES.DealerGrossProfit)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        deals: IDeals,
+        stock: IDealerStock,
+        profit: DealProfit,
+        organisation: IOrganisationSettings,
+        scope: BranchScope,
+      ) => new DealerGrossProfit({ unitOfWork, deals, stock, profit, organisation, scope }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.DealRepository,
+        TYPES.DealerStockRepository,
+        TYPES.DealProfit,
+        TYPES.OrganisationSettings,
+        TYPES.BranchScope,
+      ],
+    );
   container.bind<DealerDeals>(TYPES.DealerDeals).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -6196,6 +6323,9 @@ export function createContainer(
       posting: LedgerPosting,
       documents: Documents,
       files: FileService,
+      costOfSales: CostOfSales,
+      commissions: DealerCommissions,
+      profit: DealProfit,
       recipients: IRecipientDirectory,
       organisation: IOrganisationSettings,
       policy: AuthorizationPolicy,
@@ -6222,6 +6352,9 @@ export function createContainer(
         posting,
         documents,
         photos: new OwnedDocuments(files, "vehicle_photo", "dealer_deal", 30),
+        costOfSales,
+        commissions,
+        profit,
         recipients,
         organisation,
         policy,
@@ -6248,6 +6381,9 @@ export function createContainer(
       TYPES.LedgerPosting,
       TYPES.Documents,
       TYPES.TenantFileService,
+      TYPES.CostOfSales,
+      TYPES.DealerCommissions,
+      TYPES.DealProfit,
       TYPES.RecipientDirectory,
       TYPES.OrganisationSettings,
       TYPES.AuthorizationPolicy,
@@ -6260,29 +6396,38 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
-  container
-    .bind<DealerDealAlerts>(TYPES.DealerDealAlerts)
-    .toResolvedValue(
-      (
-        unitOfWork: IUnitOfWork,
-        deals: IDeals,
-        sales: DealerDeals,
-        organisation: IOrganisationSettings,
-        settings: INotificationSettingsStore,
-        notifier: Notifier,
-        clock: IClock,
-      ) =>
-        new DealerDealAlerts({ unitOfWork, deals, sales, organisation, settings, notifier, clock }),
-      [
-        TYPES.UnitOfWork,
-        TYPES.DealRepository,
-        TYPES.DealerDeals,
-        TYPES.OrganisationSettings,
-        TYPES.NotificationSettingsStore,
-        TYPES.Notifier,
-        TYPES.Clock,
-      ],
-    );
+  container.bind<DealerDealAlerts>(TYPES.DealerDealAlerts).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      deals: IDeals,
+      sales: DealerDeals,
+      commissions: DealerCommissions,
+      organisation: IOrganisationSettings,
+      settings: INotificationSettingsStore,
+      notifier: Notifier,
+      clock: IClock,
+    ) =>
+      new DealerDealAlerts({
+        unitOfWork,
+        deals,
+        sales,
+        commissions,
+        organisation,
+        settings,
+        notifier,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.DealRepository,
+      TYPES.DealerDeals,
+      TYPES.DealerCommissions,
+      TYPES.OrganisationSettings,
+      TYPES.NotificationSettingsStore,
+      TYPES.Notifier,
+      TYPES.Clock,
+    ],
+  );
   container.bind<SupplierPayables>(TYPES.SupplierPayables).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -7894,6 +8039,8 @@ export function createContainer(
       dealerQuotes: DealerQuotes,
       appraisals: Appraisals,
       dealerDeals: DealerDeals,
+      dealerCommissions: DealerCommissions,
+      dealerGrossProfit: DealerGrossProfit,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -8053,6 +8200,11 @@ export function createContainer(
         ...dealerStockRoutes({ stock: dealerStock }),
         ...dealerSalesRoutes({ leads: dealerLeads, drives: testDrives, quotes: dealerQuotes }),
         ...dealerDealRoutes({ appraisals, deals: dealerDeals }),
+        ...dealerCommissionRoutes({
+          commissions: dealerCommissions,
+          deals: dealerDeals,
+          grossProfit: dealerGrossProfit,
+        }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -8190,6 +8342,8 @@ export function createContainer(
       TYPES.DealerQuotes,
       TYPES.Appraisals,
       TYPES.DealerDeals,
+      TYPES.DealerCommissions,
+      TYPES.DealerGrossProfit,
     ],
   );
 

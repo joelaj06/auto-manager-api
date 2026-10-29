@@ -12,6 +12,9 @@ export type DealFilter = Readonly<{
   customerId?: string;
   vehicleId?: string;
   leadId?: string;
+  /** Sold on or after / on or before (tenant dates). */
+  soldFrom?: string;
+  soldTo?: string;
   limit: number;
   beforeId?: string;
 }>;

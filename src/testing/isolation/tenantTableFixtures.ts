@@ -1245,6 +1245,51 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     find: `select 1 from dealer_deal_instalments i join dealer_deals d on d.id = i.deal_id
             where d.number = $1`,
   },
+  vehicle_depreciation: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 j as (insert into journal_entries (number, entry_date, description, source_type, source_id)
+                       values ($1, current_date, 'Isolation', 'isolation', gen_random_uuid())
+                       returning id)
+            insert into vehicle_depreciation (vehicle_id, period, amount_minor, journal_id)
+            select v.id, '2026-01', 100, j.id from v, j`,
+      params: [marker, `VD${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from vehicle_depreciation d join vehicles v on v.id = d.vehicle_id
+            where v.code = $1`,
+  },
+  dealer_commission_plans: {
+    insert: (marker) => ({
+      sql: `insert into dealer_commission_plans (name, user_id, basis, tiers, active)
+            values ($1, null, 'flat', '[{"fromUnits":1,"percent":null,"amountMinor":100}]', false)`,
+      params: [marker],
+    }),
+    find: "select 1 from dealer_commission_plans where name = $1",
+  },
+  dealer_commission_payouts: {
+    insert: (marker) => ({
+      sql: `${DEAL},
+                 j as (insert into journal_entries (number, entry_date, description, source_type, source_id)
+                       values ($1, current_date, 'Isolation', 'isolation', gen_random_uuid())
+                       returning id)
+            insert into dealer_commission_payouts (number, user_id, branch_id, period,
+              amount_minor, method, paid_on, journal_id)
+            select $1, u.id, b.id, '2026-01', 100, 'cash', current_date, j.id from u, b, j`,
+      params: [marker, `CP${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_commission_payouts where number = $1",
+  },
+  dealer_commissions: {
+    insert: (marker) => ({
+      sql: `${DEAL}
+            insert into dealer_commissions (deal_id, user_id, branch_id, period, basis, rate,
+              base_minor, share_percent, amount_minor, status, accrued_on, clawback_reason)
+            select d.id, u.id, b.id, '2026-01', 'flat', '100', 100, 100, 100, 'accrued',
+              current_date, $1 from d, u, b`,
+      params: [marker, `DC${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_commissions where clawback_reason = $1",
+  },
   dealer_quotes: {
     insert: (marker) => ({
       sql: `${VEHICLE}

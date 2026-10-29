@@ -336,6 +336,15 @@ const definitions = {
     description: "Hand a sold vehicle over to its buyer",
     scopes: BRANCH_OR_ALL,
   },
+  "dealer.commissions.view": {
+    description: "See sales commission statements (own: your own)",
+    scopes: ["own", "branch", "all"],
+  },
+  "dealer.commissions.manage": {
+    description: "Set commission plans and splits, pay commissions out and claw them back",
+    scopes: ALL,
+    sensitive: true,
+  },
   "settings.vehicles.manage": {
     description: "Edit vehicle settings (required documents, custom fields)",
     scopes: ALL,

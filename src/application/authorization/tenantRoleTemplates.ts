@@ -193,6 +193,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "dealer.deals.approve",
       "dealer.deals.payments.record",
       "dealer.deals.deliver",
+      "dealer.commissions.view",
     ]),
   },
   {
@@ -294,6 +295,7 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       { key: "dealer.leads.view", scope: "own" as const },
       { key: "dealer.leads.update", scope: "own" as const },
       { key: "dealer.deals.view", scope: "own" as const },
+      { key: "dealer.commissions.view", scope: "own" as const },
     ],
   },
   {
@@ -364,6 +366,9 @@ export const TENANT_ROLE_TEMPLATES: readonly TenantRoleTemplate[] = Object.freez
       "dealer.stock.list",
       "dealer.stock.view",
       "dealer.stock.cost.view",
+      "dealer.deals.view",
+      "dealer.commissions.view",
+      "dealer.commissions.manage",
       "billing.view",
     ]),
   },

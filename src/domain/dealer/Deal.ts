@@ -1,3 +1,4 @@
+import { checkSplit, type CommissionShare } from "./Commission.js";
 import { DomainError } from "../errors/DomainError.js";
 import {
   allocate,
@@ -82,6 +83,10 @@ export type DealProps = DealTerms &
     warrantyEndsOn: string | null;
     cancelledAt: Date | null;
     cancelReason: string | null;
+    /** What the vehicle cost the books, set at the sale (decision 453). */
+    costOfSaleMinor: number | null;
+    /** Who shares the commission; empty: the sales executive alone. */
+    commissionSplit: readonly CommissionShare[];
     createdBy: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -182,6 +187,8 @@ export class Deal {
       warrantyEndsOn: null,
       cancelledAt: null,
       cancelReason: null,
+      costOfSaleMinor: null,
+      commissionSplit: [],
       createdBy,
       createdAt: now,
       updatedAt: now,
@@ -328,6 +335,30 @@ export class Deal {
       holdUntil: null,
       updatedAt: now,
     };
+  }
+
+  /** The vehicle's cost taken out of the books at the sale. */
+  costed(costMinor: number, now: Date): void {
+    if (this.props.status !== "sold") throw new DealRuleError("Only a sold deal is costed");
+    if (!Number.isInteger(costMinor) || costMinor < 0)
+      throw new DealRuleError("A cost is not negative");
+    this.props = { ...this.props, costOfSaleMinor: costMinor, updatedAt: now };
+  }
+
+  /** Who shares the commission, until the vehicle is delivered (when it accrues). */
+  splitCommission(split: readonly CommissionShare[], now: Date): void {
+    const p = this.props;
+    if (p.status === "delivered" || p.status === "cancelled")
+      throw new DealRuleError("The commission is settled: claw it back instead");
+    this.props = { ...p, commissionSplit: checkSplit(split), updatedAt: now };
+  }
+
+  /** The commission's shares: the split, or the sales executive alone. */
+  commissionShares(): readonly CommissionShare[] {
+    const p = this.props;
+    return p.commissionSplit.length > 0
+      ? p.commissionSplit
+      : [{ userId: p.salesExecutiveId, percent: 100 }];
   }
 
   agreementIssued(documentId: string, now: Date): void {

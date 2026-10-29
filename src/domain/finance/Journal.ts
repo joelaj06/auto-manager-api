@@ -41,6 +41,11 @@ export type SystemAccountKey =
   | "vehicles"
   | "vehicle_sales"
   | "instalment_charges"
+  | "depreciation"
+  | "accumulated_depreciation"
+  | "vehicle_cogs"
+  | "sales_commissions"
+  | "commissions_payable"
   | `tax_payable:${string}`;
 
 /** The payable account of a tax component (VAT, NHIL, GETFund; anything else: other). */

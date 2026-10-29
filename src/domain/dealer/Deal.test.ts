@@ -162,6 +162,28 @@ describe("Deal", () => {
     expect(draft().dueBeforeDelivery(99_000_00)).toBe(99_000_00);
   });
 
+  it("is costed once sold and shares its commission until delivery", () => {
+    const d = draft();
+    expect(d.commissionShares()).toEqual([{ userId: "u1", percent: 100 }]);
+    expect(() => d.costed(50_000_00, now)).toThrow(/sold/);
+    d.splitCommission(
+      [
+        { userId: "u1", percent: 70 },
+        { userId: "u2", percent: 30 },
+      ],
+      now,
+    );
+    expect(d.commissionShares()).toHaveLength(2);
+    sell(d);
+    d.costed(50_000_00, now);
+    expect(d.snapshot().costOfSaleMinor).toBe(50_000_00);
+    d.deliver(
+      { on: today, odometer: 1, checklist, documentId: "doc", invoicedMinor: 1, paidMinor: 1 },
+      now,
+    );
+    expect(() => d.splitCommission([{ userId: "u2", percent: 100 }], now)).toThrow(/settled/);
+  });
+
   it("is cancelled before the sale", () => {
     const d = draft();
     d.reserve("2026-11-05", today, now);

@@ -11,6 +11,7 @@ import {
   type DealProps,
   type ScheduledInstalment,
 } from "../../domain/dealer/Deal.js";
+import type { CommissionShare } from "../../domain/dealer/Commission.js";
 import type { AddOn } from "../../domain/dealer/Quote.js";
 import { TRADE_IN_SOURCE } from "../../domain/finance/Payment.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
@@ -62,6 +63,8 @@ const COLUMNS = [
   "warranty_ends_on",
   "cancelled_at",
   "cancel_reason",
+  "cost_of_sale_minor",
+  "commission_split",
   "created_by",
   "created_at",
   "updated_at",
@@ -127,6 +130,8 @@ function toRow(p: DealProps): Row {
     warranty_ends_on: p.warrantyEndsOn,
     cancelled_at: p.cancelledAt,
     cancel_reason: p.cancelReason,
+    cost_of_sale_minor: p.costOfSaleMinor,
+    commission_split: JSON.stringify(p.commissionSplit),
     created_by: p.createdBy,
     created_at: p.createdAt,
     updated_at: p.updatedAt,
@@ -192,6 +197,8 @@ const toDeal = (r: Row, addOns: AddOn[]): Deal =>
     warrantyEndsOn: r.warranty_ends_on as string | null,
     cancelledAt: r.cancelled_at as Date | null,
     cancelReason: r.cancel_reason as string | null,
+    costOfSaleMinor: minor(r.cost_of_sale_minor),
+    commissionSplit: r.commission_split as CommissionShare[],
     createdBy: r.created_by as string | null,
     createdAt: r.created_at as Date,
     updatedAt: r.updated_at as Date,
@@ -247,6 +254,8 @@ export class PostgresDeals implements IDeals {
     if (filter.customerId !== undefined) add("d.customer_id = ?", filter.customerId);
     if (filter.vehicleId !== undefined) add("d.vehicle_id = ?", filter.vehicleId);
     if (filter.leadId !== undefined) add("d.lead_id = ?", filter.leadId);
+    if (filter.soldFrom !== undefined) add("d.sold_on >= ?::date", filter.soldFrom);
+    if (filter.soldTo !== undefined) add("d.sold_on <= ?::date", filter.soldTo);
     if (filter.beforeId !== undefined && UUID.test(filter.beforeId))
       add("d.id < ?", filter.beforeId);
     params.push(filter.limit);
