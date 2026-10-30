@@ -93,10 +93,70 @@ import {
 } from "../../application/use-cases/reporting/ReportJobs.js";
 import { Reports } from "../../application/use-cases/reporting/Reports.js";
 import {
+  DealerCollectionsReport,
+  DealerCommissionsReport,
   DealerGrossProfitReport,
+  DealerLeadFunnelReport,
   DealerPriceReductionsReport,
+  DealerSalesSummaryReport,
+  DealerStockValuationReport,
+  PurchasesReport,
+  SupplierPayablesReport,
 } from "../../application/use-cases/reporting/definitions/dealerReportDefinitions.js";
-import { TrialBalanceReport } from "../../application/use-cases/reporting/definitions/financeReportDefinitions.js";
+import {
+  DriverPerformanceReport,
+  DriverStatementReport,
+  RemittanceComplianceReport,
+} from "../../application/use-cases/reporting/definitions/driverReportDefinitions.js";
+import {
+  BusinessOverviewReport,
+  CashFlowReport,
+  FleetProfitabilityReport,
+  ReceivablesAgeingReport,
+  VehiclePnlReport,
+} from "../../application/use-cases/reporting/definitions/executiveReportDefinitions.js";
+import {
+  CashSessionVarianceReport,
+  DayBookReport,
+  PaymentsByMethodReport,
+  PaymentsRegisterReport,
+  TaxReport,
+  TrialBalanceReport,
+} from "../../application/use-cases/reporting/definitions/financeReportDefinitions.js";
+import {
+  ComplianceReport,
+  FleetRegisterReport,
+  FleetUtilisationReport,
+  FuelReport,
+  IncidentsReport,
+  MileageReport,
+} from "../../application/use-cases/reporting/definitions/fleetReportDefinitions.js";
+import {
+  BudgetVsActualReport,
+  DowntimeReport,
+  ExpenseApprovalsReport,
+  ExpenseSummaryReport,
+  MaintenanceCostReport,
+  ServiceDueReport,
+} from "../../application/use-cases/reporting/definitions/maintenanceReportDefinitions.js";
+import {
+  RentalBalancesReport,
+  RentalBookingsReport,
+  RentalDamagesReport,
+  RentalDepositsReport,
+  RentalRevenueReport,
+  RentalScheduleReport,
+  RentalUtilisationReport,
+} from "../../application/use-cases/reporting/definitions/rentalReportDefinitions.js";
+import {
+  WorkPayArrearsReport,
+  WorkPayForecastReport,
+  WorkPayPortfolioReport,
+  WorkPayStatementReport,
+} from "../../application/use-cases/reporting/definitions/workpayReportDefinitions.js";
+import { ReportContext } from "../../application/use-cases/reporting/ReportContext.js";
+import type { IReportQueries } from "../../application/ports/IReportQueries.js";
+import { PostgresReportQueries } from "../../infrastructure/reports/PostgresReportQueries.js";
 import { PostgresReportJobs } from "../../infrastructure/reports/PostgresReportJobs.js";
 import { QueuedReportJobs } from "../../infrastructure/reports/QueuedReportJobs.js";
 import { ReportFileWriter } from "../../infrastructure/reports/ReportFileWriter.js";
@@ -6371,16 +6431,121 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  // --- Report catalogue (P8-2) ---
+  tenantRepository<IReportQueries>(TYPES.ReportQueries, (tx) => new PostgresReportQueries(tx));
   container
-    .bind<ReportDefinition[]>(TYPES.ReportDefinitions)
+    .bind<ReportContext>(TYPES.ReportContext)
     .toResolvedValue(
-      (grossProfit: DealerGrossProfit, dealerReports: DealerReports, ledger: LedgerViews) => [
-        new DealerGrossProfitReport(grossProfit),
-        new DealerPriceReductionsReport(dealerReports),
-        new TrialBalanceReport(ledger),
+      (
+        unitOfWork: IUnitOfWork,
+        queries: IReportQueries,
+        organisation: IOrganisationSettings,
+        posting: LedgerPosting,
+        calendar: TenantCalendar,
+        scope: BranchScope,
+      ) => new ReportContext({ unitOfWork, queries, organisation, posting, calendar, scope }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.ReportQueries,
+        TYPES.OrganisationSettings,
+        TYPES.LedgerPosting,
+        TYPES.TenantCalendar,
+        TYPES.BranchScope,
       ],
-      [TYPES.DealerGrossProfit, TYPES.DealerReports, TYPES.LedgerViews],
     );
+  container.bind<ReportDefinition[]>(TYPES.ReportDefinitions).toResolvedValue(
+    (
+      context: ReportContext,
+      dashboards: Dashboards,
+      maintenance: MaintenanceReports,
+      schedule: ServiceSchedule,
+      expenses: ExpenseAdministration,
+      rentals: RentalReports,
+      workpay: WorkPayReports,
+      driverLedger: DriverLedger,
+      stock: DealerStock,
+      leads: DealerLeads,
+      commissions: DealerCommissions,
+      grossProfit: DealerGrossProfit,
+      dealerReports: DealerReports,
+      purchases: Purchases,
+      payables: SupplierPayables,
+      ledger: LedgerViews,
+    ) => [
+      // Executive
+      new BusinessOverviewReport(dashboards),
+      new VehiclePnlReport(dashboards),
+      new FleetProfitabilityReport(dashboards, context),
+      new CashFlowReport(context),
+      new ReceivablesAgeingReport(context),
+      // Fleet and operations
+      new FleetRegisterReport(context),
+      new FleetUtilisationReport(dashboards),
+      new ComplianceReport(maintenance, context),
+      new FuelReport(dashboards, context),
+      new MileageReport(dashboards),
+      new IncidentsReport(context),
+      // Drivers and remittances
+      new RemittanceComplianceReport(context),
+      new DriverStatementReport(driverLedger),
+      new DriverPerformanceReport(context),
+      // Work & Pay
+      new WorkPayPortfolioReport(workpay),
+      new WorkPayArrearsReport(workpay, context),
+      new WorkPayForecastReport(workpay),
+      new WorkPayStatementReport(workpay),
+      // Rentals
+      new RentalBookingsReport(context),
+      new RentalUtilisationReport(rentals),
+      new RentalRevenueReport(rentals),
+      new RentalScheduleReport(rentals, context),
+      new RentalDepositsReport(rentals, context),
+      new RentalBalancesReport(rentals),
+      new RentalDamagesReport(rentals),
+      // Dealership and purchases
+      new DealerStockValuationReport(stock, context),
+      new DealerGrossProfitReport(grossProfit),
+      new DealerSalesSummaryReport(grossProfit, context),
+      new DealerLeadFunnelReport(leads, context),
+      new DealerCommissionsReport(commissions),
+      new DealerPriceReductionsReport(dealerReports),
+      new DealerCollectionsReport(dealerReports),
+      new PurchasesReport(purchases, context),
+      new SupplierPayablesReport(payables),
+      // Maintenance and expenses
+      new ExpenseSummaryReport(dashboards),
+      new BudgetVsActualReport(expenses, context),
+      new MaintenanceCostReport(maintenance),
+      new DowntimeReport(maintenance),
+      new ServiceDueReport(schedule, context),
+      new ExpenseApprovalsReport(context),
+      // Finance and tax
+      new DayBookReport(context),
+      new PaymentsRegisterReport(context),
+      new PaymentsByMethodReport(context),
+      new CashSessionVarianceReport(context),
+      new TaxReport(context),
+      new TrialBalanceReport(ledger),
+    ],
+    [
+      TYPES.ReportContext,
+      TYPES.Dashboards,
+      TYPES.MaintenanceReports,
+      TYPES.ServiceSchedule,
+      TYPES.ExpenseAdministration,
+      TYPES.RentalReports,
+      TYPES.WorkPayReports,
+      TYPES.DriverLedger,
+      TYPES.DealerStock,
+      TYPES.DealerLeads,
+      TYPES.DealerCommissions,
+      TYPES.DealerGrossProfit,
+      TYPES.DealerReports,
+      TYPES.Purchases,
+      TYPES.SupplierPayables,
+      TYPES.LedgerViews,
+    ],
+  );
   container.bind<Reports>(TYPES.Reports).toResolvedValue(
     (
       definitions: ReportDefinition[],

@@ -211,6 +211,8 @@ export const TYPES = Object.freeze({
   ReportJobQueue: Symbol.for("ReportJobQueue"),
   ReportFiles: Symbol.for("ReportFiles"),
   ReportDefinitions: Symbol.for("ReportDefinitions"),
+  ReportQueries: Symbol.for("ReportQueries"),
+  ReportContext: Symbol.for("ReportContext"),
   Reports: Symbol.for("Reports"),
   TaxAdministration: Symbol.for("TaxAdministration"),
   FxRateBook: Symbol.for("FxRateBook"),

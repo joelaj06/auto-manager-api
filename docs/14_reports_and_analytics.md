@@ -1,5 +1,7 @@
 # 14 — Reports & Analytics
 
+> **Update 2026-10-30 (P8-2):** the catalogue of §3 is implemented as 46 reports in eight categories (tax is a finance report), each a definition run through the engine of §2: they wrap the dashboards of §4–5 and the module reports with their permissions and branch scope, and read the tables directly for the registers no dashboard served (fleet register, incidents, bookings, payments, cash sessions, day book, tax accounts, open invoices). Periods default to the month so far; money is in the base currency. Report ids and rules are in decisions 467–471.
+
 > **Update 2026-10-30 (P8-1):** the report engine of §2 and §7 is implemented: definitions in code with described parameters and a permission, the catalogue filtered by permission (no plan entitlements), JSON answered at once and CSV, XLSX and PDF files built by a background job as the user who asked, kept 7 days with a short-lived download link and a ready notice, four jobs at once per business and two per user. `POST /reports/:id/run` takes `{ params, format }`; jobs are `/reports/jobs` (not report runs of other users). The catalogue of §3 is P8-2, scheduled reports and dashboards P8-3.
 
 ## 1. Today

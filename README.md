@@ -612,6 +612,19 @@ once ready, a short-lived download link; you are told in the app when it is read
 your files (four for the business) are built at once. Reports are defined in code
 (`src/application/use-cases/reporting/definitions`). Rules: docs/14 §2, §7, decisions 463–466.
 
+The catalogue (docs/14 §3, decisions 467–471) has 46 reports: executive (`business_overview`,
+`vehicle_pnl`, `fleet_profitability`, `cash_flow`, `receivables_ageing`), fleet (`fleet_register`,
+`fleet_utilisation`, `compliance`, `fuel`, `mileage`, `incidents`), drivers
+(`remittance_compliance`, `driver_statement`, `driver_performance`), Work & Pay
+(`workpay_portfolio`, `workpay_arrears`, `workpay_forecast`, `workpay_statement`), rentals
+(`rental_bookings`, `rental_utilisation`, `rental_revenue`, `rental_schedule`, `rental_deposits`,
+`rental_balances`, `rental_damages`), dealer (`dealer_stock_valuation`, `dealer_gross_profit`,
+`dealer_sales_summary`, `dealer_lead_funnel`, `dealer_commissions`, `dealer_price_reductions`,
+`dealer_collections`, `purchases_landed_cost`, `supplier_payables`), maintenance
+(`expense_summary`, `budget_vs_actual`, `maintenance_cost`, `downtime`, `service_due`,
+`expense_approvals`) and finance (`day_book`, `payments_register`, `payments_by_method`,
+`cash_session_variance`, `tax_report`, `trial_balance`). Periods default to the month so far.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per
