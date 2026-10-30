@@ -29,7 +29,14 @@ const scope = (filter: BranchFilter) => [
   filter.branchId,
 ];
 
-/** Rows of `daily_vehicle_stats` for every vehicle-day of a range (params: from, to, timezone). */
+/** Income accounts counted as Work & Pay and as the vehicle's sale. */
+const WORKPAY_INCOME = ["workpay_income", "workpay_penalties"];
+const SALES_INCOME = ["vehicle_sales", "instalment_charges"];
+
+/**
+ * Rows of `daily_vehicle_stats` for every vehicle-day of a range (params: from, to, timezone,
+ * Work & Pay and sales income accounts).
+ */
 const REBUILD = `
 with days as (
   select d::date as day from generate_series($1::date, $2::date, interval '1 day') as d
@@ -41,9 +48,19 @@ money as (
          coalesce(sum(l.credit_minor - l.debit_minor)
            filter (where a.type = 'income' and a.system_key = 'rental_income'), 0) as rental,
          coalesce(sum(l.credit_minor - l.debit_minor)
-           filter (where a.type = 'income' and a.system_key is distinct from 'remittance_income'
-                     and a.system_key is distinct from 'rental_income'), 0) as other,
-         coalesce(sum(l.debit_minor - l.credit_minor) filter (where a.type = 'expense'), 0) as cost
+           filter (where a.type = 'income' and a.system_key = any($4::text[])), 0) as workpay,
+         coalesce(sum(l.credit_minor - l.debit_minor)
+           filter (where a.type = 'income' and a.system_key = any($5::text[])), 0) as sales,
+         coalesce(sum(l.credit_minor - l.debit_minor)
+           filter (where a.type = 'income' and coalesce(a.system_key, '') <> all(
+             array['remittance_income', 'rental_income'] || $4::text[] || $5::text[])), 0) as other,
+         -- Depreciation is charged from the vehicle's schedule, not the ledger (decision 472).
+         coalesce(sum(l.debit_minor - l.credit_minor)
+           filter (where a.type = 'expense'
+                     and coalesce(a.system_key, '') not in ('depreciation', 'finance_costs')), 0)
+           as cost,
+         coalesce(sum(l.debit_minor - l.credit_minor)
+           filter (where a.type = 'expense' and a.system_key = 'finance_costs'), 0) as finance
     from ledger_lines l
     join journal_entries e on e.id = l.entry_id
     join ledger_accounts a on a.id = l.account_id
@@ -83,11 +100,13 @@ vehicle_days as (
 )
 insert into daily_vehicle_stats
   (vehicle_id, stat_date, branch_id, status, driver_id, remittance_income_minor,
-   rental_income_minor, other_income_minor, cost_minor, distance, fuel_litres, fuel_cost_minor)
+   rental_income_minor, workpay_income_minor, sales_income_minor, other_income_minor, cost_minor,
+   finance_cost_minor, distance, fuel_litres, fuel_cost_minor)
 select vd.vehicle_id, vd.day, v.branch_id,
        coalesce(latest.to_status, first.from_status, first.to_status, v.status),
        driver.driver_id,
-       coalesce(m.remittance, 0), coalesce(m.rental, 0), coalesce(m.other, 0), coalesce(m.cost, 0),
+       coalesce(m.remittance, 0), coalesce(m.rental, 0), coalesce(m.workpay, 0),
+       coalesce(m.sales, 0), coalesce(m.other, 0), coalesce(m.cost, 0), coalesce(m.finance, 0),
        coalesce(dist.distance, 0), coalesce(f.litres, 0), coalesce(f.amount, 0)
   from vehicle_days vd
   join vehicles v on v.id = vd.vehicle_id
@@ -162,7 +181,7 @@ export class PostgresVehicleStatsStore implements IVehicleStatsStore {
       from,
       to,
     ]);
-    const result = await this.tx.query(REBUILD, [from, to, timezone]);
+    const result = await this.tx.query(REBUILD, [from, to, timezone, WORKPAY_INCOME, SALES_INCOME]);
     return result.rowCount ?? 0;
   }
 
@@ -201,8 +220,11 @@ export class PostgresDashboardQueries implements IDashboardQueries {
       useful_life_months: number | null;
       remittance: string;
       rental: string;
+      workpay: string;
+      sales: string;
       other: string;
       cost: string;
+      finance: string;
       distance: string;
       litres: string;
       fuel_cost: string;
@@ -215,7 +237,9 @@ export class PostgresDashboardQueries implements IDashboardQueries {
               v.acquisition_cost_minor, v.residual_value_minor, v.depreciation_method,
               v.acquisition_date::text as acquisition_date, v.useful_life_months,
               sum(s.remittance_income_minor) as remittance, sum(s.rental_income_minor) as rental,
+              sum(s.workpay_income_minor) as workpay, sum(s.sales_income_minor) as sales,
               sum(s.other_income_minor) as other, sum(s.cost_minor) as cost,
+              sum(s.finance_cost_minor) as finance,
               sum(s.distance) as distance, sum(s.fuel_litres) as litres,
               sum(s.fuel_cost_minor) as fuel_cost,
               count(*) filter (where s.status = any($7::text[])) as working,
@@ -265,8 +289,11 @@ export class PostgresDashboardQueries implements IDashboardQueries {
         asset,
         remittanceIncomeMinor: n(r.remittance),
         rentalIncomeMinor: n(r.rental),
+        workpayIncomeMinor: n(r.workpay),
+        salesIncomeMinor: n(r.sales),
         otherIncomeMinor: n(r.other),
         costMinor: n(r.cost),
+        financeCostMinor: n(r.finance),
         distance: n(r.distance),
         fuelLitres: n(r.litres),
         fuelCostMinor: n(r.fuel_cost),
@@ -282,13 +309,17 @@ export class PostgresDashboardQueries implements IDashboardQueries {
       driver_id: string | null;
       remittance_income_minor: string;
       rental_income_minor: string;
+      workpay_income_minor: string;
+      sales_income_minor: string;
       other_income_minor: string;
       cost_minor: string;
+      finance_cost_minor: string;
       distance: string;
       fuel_litres: string;
     }>(
       `select stat_date::text as day, status, driver_id, remittance_income_minor,
-              rental_income_minor, other_income_minor, cost_minor, distance, fuel_litres
+              rental_income_minor, workpay_income_minor, sales_income_minor, other_income_minor,
+              cost_minor, finance_cost_minor, distance, fuel_litres
          from daily_vehicle_stats
         where vehicle_id = $1 and stat_date between $2 and $3
         order by stat_date`,
@@ -300,8 +331,11 @@ export class PostgresDashboardQueries implements IDashboardQueries {
       driverId: r.driver_id,
       remittanceIncomeMinor: n(r.remittance_income_minor),
       rentalIncomeMinor: n(r.rental_income_minor),
+      workpayIncomeMinor: n(r.workpay_income_minor),
+      salesIncomeMinor: n(r.sales_income_minor),
       otherIncomeMinor: n(r.other_income_minor),
       costMinor: n(r.cost_minor),
+      financeCostMinor: n(r.finance_cost_minor),
       distance: n(r.distance),
       fuelLitres: n(r.fuel_litres),
     }));
@@ -318,6 +352,8 @@ export class PostgresDashboardQueries implements IDashboardQueries {
               case when a.type <> 'income' then null
                    when a.system_key = 'remittance_income' then 'remittances'
                    when a.system_key = 'rental_income' then 'rentals'
+                   when a.system_key = any($5::text[]) then 'workpay'
+                   when a.system_key = any($6::text[]) then 'sales'
                    else 'other' end as source,
               coalesce(sum(l.credit_minor - l.debit_minor) filter (where a.type = 'income'), 0)
                 as income,
@@ -331,7 +367,7 @@ export class PostgresDashboardQueries implements IDashboardQueries {
           and ($4::uuid is null or l.branch_id = $4)
         group by 1, 2
         order by 1`,
-      [from, to, ...scope(filter)],
+      [from, to, ...scope(filter), WORKPAY_INCOME, SALES_INCOME],
     );
     return rows.map((r) => ({
       date: r.day,

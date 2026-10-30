@@ -598,6 +598,11 @@ const definitions = {
     scopes: ALL,
   },
 
+  "reports.schedules.manage": {
+    description:
+      "Send reports on a schedule to users of the business (own: the schedules they set up)",
+    scopes: ["own", "all"],
+  },
   "data.export": {
     description: "Export all the business's data (a zip emailed as a link)",
     scopes: ALL,

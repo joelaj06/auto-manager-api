@@ -269,6 +269,7 @@ const RULES: Readonly<Record<string, Rule>> = {
   REPORT_NOT_FOUND: { status: 404 },
   REPORT_JOB_NOT_FOUND: { status: 404 },
   REPORT_BUSY: { status: 429 },
+  REPORT_SCHEDULE_NOT_FOUND: { status: 404 },
   APPROVAL_LIMIT_EXCEEDED: { status: 403 },
   EXPENSE_SETUP_NOT_FOUND: { status: 404 },
 

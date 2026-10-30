@@ -14,6 +14,8 @@ type Row = {
   format: FileFormat;
   status: ReportJobStatus;
   requested_by: string;
+  schedule_id: string | null;
+  recipients: string[];
   row_count: number | null;
   file_id: string | null;
   error: string | null;
@@ -23,8 +25,8 @@ type Row = {
   expires_at: Date | null;
 };
 
-const COLUMNS = `id, report_id, params, format, status, requested_by, row_count, file_id, error,
-  created_at, started_at, finished_at, expires_at`;
+const COLUMNS = `id, report_id, params, format, status, requested_by, schedule_id, recipients,
+  row_count, file_id, error, created_at, started_at, finished_at, expires_at`;
 
 const toJob = (r: Row) =>
   ReportJob.restore({
@@ -34,6 +36,8 @@ const toJob = (r: Row) =>
     format: r.format,
     status: r.status,
     requestedBy: r.requested_by,
+    scheduleId: r.schedule_id,
+    recipients: r.recipients,
     rowCount: r.row_count,
     fileId: r.file_id,
     error: r.error,
@@ -55,9 +59,20 @@ export class PostgresReportJobs implements IReportJobs {
   async insert(job: ReportJob): Promise<void> {
     const j = job.snapshot();
     await this.tx.query(
-      `insert into report_jobs (id, report_id, params, format, status, requested_by, created_at)
-       values ($1, $2, $3, $4, $5, $6, $7)`,
-      [j.id, j.reportId, JSON.stringify(j.params), j.format, j.status, j.requestedBy, j.createdAt],
+      `insert into report_jobs (id, report_id, params, format, status, requested_by, schedule_id,
+         recipients, created_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        j.id,
+        j.reportId,
+        JSON.stringify(j.params),
+        j.format,
+        j.status,
+        j.requestedBy,
+        j.scheduleId,
+        j.recipients,
+        j.createdAt,
+      ],
     );
   }
 
@@ -91,7 +106,7 @@ export class PostgresReportJobs implements IReportJobs {
 
   async listFor(userId: string, limit: number): Promise<ReportJob[]> {
     const { rows } = await this.tx.query<Row>(
-      `select ${COLUMNS} from report_jobs where requested_by = $1
+      `select ${COLUMNS} from report_jobs where requested_by = $1 or $1 = any(recipients)
         order by created_at desc, id desc limit $2`,
       [userId, limit],
     );

@@ -20,7 +20,7 @@ import {
 } from "../../../domain/reporting/Report.js";
 import { PermissionDeniedError } from "../../errors/AuthErrors.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
-import { Principal } from "../../authorization/Principal.js";
+import type { Principal } from "../../authorization/Principal.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
@@ -36,6 +36,7 @@ import type { Notifier } from "../notifications/Notifier.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import type { ReportDefinition } from "./ReportDefinition.js";
 import type { ReportFiles } from "./ReportFiles.js";
+import { reportPrincipal } from "./reportPrincipal.js";
 
 export class ReportNotFoundError extends ApplicationError {
   readonly code = "REPORT_NOT_FOUND";
@@ -209,17 +210,25 @@ export class Reports {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const jobs = await deps.jobs.listFor(actor.userId, JOBS_LISTED);
-      return Promise.all(jobs.map((j) => this.view(j, false)));
+      return Promise.all(jobs.filter((j) => this.sees(actor, j)).map((j) => this.view(j, false)));
     });
   }
 
-  /** The user's own job, with the download link when it is ready. */
+  /** The user's own job, or a scheduled run sent to them, with the download link when ready. */
   async jobFor(actor: Principal, id: string): Promise<ReportJobView> {
     const { deps } = this;
     const job = await deps.unitOfWork.run(() => deps.jobs.get(id));
-    if (job === null || job.snapshot().requestedBy !== actor.userId)
-      throw new ReportJobNotFoundError();
+    if (job === null || !this.sees(actor, job)) throw new ReportJobNotFoundError();
     return this.view(job);
+  }
+
+  /** The requester sees their job; a recipient while they may still run the report. */
+  private sees(actor: Principal, job: ReportJob): boolean {
+    const j = job.snapshot();
+    if (j.requestedBy === actor.userId) return true;
+    if (!job.isFor(actor.userId)) return false;
+    const definition = this.deps.definitions.find((d) => d.id === j.reportId);
+    return definition !== undefined && actor.grantFor(definition.permission) !== undefined;
   }
 
   /** The worker: builds the file as the user who asked (idempotent). */
@@ -260,16 +269,18 @@ export class Reports {
         const locked = (await deps.jobs.lock(j.id))!;
         locked.complete(stored.id, table.rows.length, deps.clock.now());
         await deps.jobs.update(locked);
-        await deps.notifier.users(await deps.settings.get(), {
-          rule: "report_ready",
-          userIds: [j.requestedBy],
-          dedupeKey: `report_ready:${j.id}`,
-          title: `${definition.title} is ready`,
-          body: `Your ${j.format.toUpperCase()} report (${table.rows.length} rows) can be downloaded for 7 days.`,
-          severity: "info",
-          data: { reportJobId: j.id },
-        });
+        if (j.scheduleId === null)
+          await deps.notifier.users(await deps.settings.get(), {
+            rule: "report_ready",
+            userIds: [j.requestedBy],
+            dedupeKey: `report_ready:${j.id}`,
+            title: `${definition.title} is ready`,
+            body: `Your ${j.format.toUpperCase()} report (${table.rows.length} rows) can be downloaded for 7 days.`,
+            severity: "info",
+            data: { reportJobId: j.id },
+          });
       });
+      if (j.scheduleId !== null) await this.send(j.id, definition, table.rows.length);
     } catch (error) {
       const known = error instanceof DomainError || error instanceof ApplicationError;
       if (!known)
@@ -285,6 +296,35 @@ export class Reports {
         await deps.jobs.update(locked);
       });
     }
+  }
+
+  /**
+   * A scheduled run is sent to its recipients who may still run the report (decision 476): a
+   * notice in the app and by email to sign in and download it within the 7 days (no attachment).
+   */
+  private async send(jobId: string, definition: ReportDefinition, rows: number): Promise<void> {
+    const { deps } = this;
+    const job = await deps.unitOfWork.run(() => deps.jobs.get(jobId));
+    if (job === null) return;
+    const j = job.snapshot();
+    const userIds: string[] = [];
+    for (const userId of j.recipients) {
+      const recipient = await this.actor(userId, j.id);
+      if (recipient !== null && recipient.grantFor(definition.permission) !== undefined)
+        userIds.push(userId);
+    }
+    if (userIds.length === 0) return;
+    await deps.unitOfWork.run(async () =>
+      deps.notifier.users(await deps.settings.get(), {
+        rule: "scheduled_report",
+        userIds,
+        dedupeKey: `scheduled_report:${j.id}`,
+        title: `${definition.title}: your scheduled report`,
+        body: `The ${j.format.toUpperCase()} file (${rows} rows) is ready. Sign in and open Reports to download it within 7 days.`,
+        severity: "info",
+        data: { reportJobId: j.id, reportScheduleId: j.scheduleId ?? "" },
+      }),
+    );
   }
 
   /** Daily: files past their 7 days are removed; jobs lost on the way fail. */
@@ -318,13 +358,8 @@ export class Reports {
   }
 
   /** The requester as they are now (null when disabled or gone). */
-  private async actor(userId: string, jobId: string): Promise<Principal | null> {
-    const { deps } = this;
-    const tenantId = deps.tenantContext.currentTenantId().value;
-    const version = await deps.permissions.currentVersion(tenantId, userId);
-    if (version === null) return null;
-    const grants = await deps.permissions.resolve(tenantId, userId, version);
-    return grants === null ? null : new Principal(userId, tenantId, `report:${jobId}`, grants);
+  private actor(userId: string, jobId: string): Promise<Principal | null> {
+    return reportPrincipal(this.deps, userId, `report:${jobId}`);
   }
 
   private async view(job: ReportJob, withLink = true): Promise<ReportJobView> {
@@ -358,7 +393,7 @@ export class Reports {
   }
 }
 
-function tableView(reportId: string, table: ReportTable): TableView {
+export function tableView(reportId: string, table: ReportTable): TableView {
   const money = new Set(table.columns.filter((c) => c.type === "money").map((c) => c.key));
   const row = (r: Readonly<Record<string, Cell>>) =>
     Object.fromEntries(

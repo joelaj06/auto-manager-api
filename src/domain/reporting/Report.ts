@@ -11,6 +11,7 @@ export class ReportRuleError extends DomainError {
 export const REPORT_FORMATS = ["json", "csv", "xlsx", "pdf"] as const;
 export type ReportFormat = (typeof REPORT_FORMATS)[number];
 export type FileFormat = Exclude<ReportFormat, "json">;
+export const FILE_FORMATS = ["csv", "xlsx", "pdf"] as const satisfies readonly FileFormat[];
 
 export const REPORT_CATEGORIES = [
   "executive",
@@ -119,6 +120,10 @@ export type ReportJobProps = Readonly<{
   format: FileFormat;
   status: ReportJobStatus;
   requestedBy: string;
+  /** The schedule that asked for it (null when a user asked). */
+  scheduleId: string | null;
+  /** Users the schedule sends it to; they may see and download it too. */
+  recipients: readonly string[];
   rowCount: number | null;
   fileId: string | null;
   error: string | null;
@@ -139,11 +144,14 @@ export class ReportJob {
 
   static request(
     input: Pick<ReportJobProps, "id" | "reportId" | "params" | "format" | "requestedBy"> &
+      Partial<Pick<ReportJobProps, "scheduleId" | "recipients">> &
       Readonly<{ now: Date }>,
   ): ReportJob {
-    const { now, ...rest } = input;
+    const { now, scheduleId, recipients, ...rest } = input;
     return new ReportJob({
       ...rest,
+      scheduleId: scheduleId ?? null,
+      recipients: recipients ?? [],
       status: "queued",
       rowCount: null,
       fileId: null,
@@ -169,6 +177,11 @@ export class ReportJob {
 
   snapshot(): ReportJobProps {
     return this.props;
+  }
+
+  /** Who may see the job: whoever asked for it and the schedule's recipients. */
+  isFor(userId: string): boolean {
+    return this.props.requestedBy === userId || this.props.recipients.includes(userId);
   }
 
   /** Taken by the worker; a job left running (a lost attempt) is taken again. */

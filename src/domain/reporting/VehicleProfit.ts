@@ -27,8 +27,14 @@ export function dayClass(status: VehicleStatus): DayClass {
 export type VehicleTotals = Readonly<{
   remittanceIncomeMinor: number;
   rentalIncomeMinor: number;
+  workpayIncomeMinor: number;
+  /** The vehicle's sale (and instalment charges on it). */
+  salesIncomeMinor: number;
   otherIncomeMinor: number;
+  /** Direct costs: every expense on the vehicle but depreciation and finance costs. */
   costMinor: number;
+  /** Loan interest and finance charges. */
+  financeCostMinor: number;
   distance: number;
   fuelLitres: number;
   fuelCostMinor: number;
@@ -39,8 +45,13 @@ export type VehicleProfitFigures = Readonly<{
   incomeMinor: number;
   costMinor: number;
   depreciationMinor: number;
+  financeCostMinor: number;
   profitMinor: number;
-  /** Costs plus depreciation per km (or mile); null without distance. */
+  /** Profit of the period over a year, against what the vehicle cost, in percent; null without a cost. */
+  roiPercent: number | null;
+  /** Months of profit at the period's rate to earn back what the vehicle cost; null without profit. */
+  paybackMonths: number | null;
+  /** Costs, depreciation and finance costs per km (or mile); null without distance. */
   costPerDistanceMinor: number | null;
   /** Distance per litre; null without fuel. */
   distancePerLitre: number | null;
@@ -48,23 +59,46 @@ export type VehicleProfitFigures = Readonly<{
   utilisationPercent: number | null;
 }>;
 
+/** What the vehicle cost and the days of the period, for ROI and payback. */
+export type Investment = Readonly<{ costMinor: number | null; days: number }>;
+
+const DAYS_PER_MONTH = 365.25 / 12;
+
 /**
- * The vehicle P&L v1 (docs/14 §3): income by source − direct costs − depreciation = profit;
- * cost per distance, fuel efficiency and utilisation. Finance costs come with financed vehicles.
+ * The vehicle P&L (docs/14 §3): income by source (remittances, rentals, Work & Pay, its sale,
+ * other) − direct costs − depreciation − finance costs = profit; cost per distance, fuel
+ * efficiency, utilisation, return on investment (annualised) and payback months.
  */
 export function vehicleProfit(
   totals: VehicleTotals,
   depreciationMinor: number,
+  investment: Investment | null = null,
 ): VehicleProfitFigures {
   const incomeMinor =
-    totals.remittanceIncomeMinor + totals.rentalIncomeMinor + totals.otherIncomeMinor;
-  const allCosts = totals.costMinor + depreciationMinor;
+    totals.remittanceIncomeMinor +
+    totals.rentalIncomeMinor +
+    totals.workpayIncomeMinor +
+    totals.salesIncomeMinor +
+    totals.otherIncomeMinor;
+  const allCosts = totals.costMinor + depreciationMinor + totals.financeCostMinor;
+  const profitMinor = incomeMinor - allCosts;
   const fleetDays = totals.days.working + totals.days.idle + totals.days.off_road;
+  const cost = investment?.costMinor ?? null;
+  const perDay = investment === null || investment.days <= 0 ? null : profitMinor / investment.days;
   return {
     incomeMinor,
     costMinor: totals.costMinor,
     depreciationMinor,
-    profitMinor: incomeMinor - allCosts,
+    financeCostMinor: totals.financeCostMinor,
+    profitMinor,
+    roiPercent:
+      cost === null || cost <= 0 || perDay === null
+        ? null
+        : Math.round(((perDay * 365) / cost) * 1000) / 10,
+    paybackMonths:
+      cost === null || cost <= 0 || perDay === null || perDay <= 0
+        ? null
+        : Math.round((cost / (perDay * DAYS_PER_MONTH)) * 10) / 10,
     costPerDistanceMinor: totals.distance > 0 ? Math.round(allCosts / totals.distance) : null,
     distancePerLitre:
       totals.fuelLitres > 0 ? Math.round((totals.distance / totals.fuelLitres) * 100) / 100 : null,

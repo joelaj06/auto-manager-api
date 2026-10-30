@@ -73,6 +73,10 @@ export type JobPayloads = {
   "tenant.rental_reminders": Readonly<{ tenantId: string }>;
   /** Enqueue the rental reminders of every usable tenant. */
   "rentals.reminders_sweep": Readonly<Record<string, never>>;
+  /** Queue the scheduled reports of a tenant that are due. */
+  "tenant.report_schedules": Readonly<{ tenantId: string }>;
+  /** Enqueue the scheduled reports of every usable tenant. */
+  "reports.schedules_sweep": Readonly<Record<string, never>>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -359,6 +363,26 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     expireInSeconds: 900,
     // Hourly: the return reminder (default 2 hours before) goes out 1 to 2 hours ahead.
     cron: "27 * * * *",
+  },
+  "tenant.report_schedules": {
+    description: "Queue the scheduled reports of a tenant that are due",
+    tenantScoped: true,
+    policy: "stately",
+    retryLimit: 2,
+    retryDelaySeconds: 60,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  },
+  "reports.schedules_sweep": {
+    description: "Ask every tenant to queue its scheduled reports that are due",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 600,
+    // Schedules run on the hour; a run waiting for room is tried again a quarter later.
+    cron: "*/15 * * * *",
   },
   "tenant.remittance_cutoff": {
     description: "Remittance cut-off check of a tenant at its cut-off time",

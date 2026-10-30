@@ -9,8 +9,11 @@ describe("vehicle profit", () => {
         {
           remittanceIncomeMinor: 750_000,
           rentalIncomeMinor: 0,
+          workpayIncomeMinor: 0,
+          salesIncomeMinor: 0,
           otherIncomeMinor: 50_000,
           costMinor: 200_000,
+          financeCostMinor: 0,
           distance: 3_000,
           fuelLitres: 250,
           fuelCostMinor: 150_000,
@@ -22,7 +25,10 @@ describe("vehicle profit", () => {
       incomeMinor: 800_000,
       costMinor: 200_000,
       depreciationMinor: 100_000,
+      financeCostMinor: 0,
       profitMinor: 500_000,
+      roiPercent: null,
+      paybackMonths: null,
       costPerDistanceMinor: 100,
       distancePerLitre: 12,
       utilisationPercent: 86.7,
@@ -34,8 +40,11 @@ describe("vehicle profit", () => {
       {
         remittanceIncomeMinor: 0,
         rentalIncomeMinor: 0,
+        workpayIncomeMinor: 0,
+        salesIncomeMinor: 0,
         otherIncomeMinor: 0,
         costMinor: 0,
+        financeCostMinor: 0,
         distance: 0,
         fuelLitres: 0,
         fuelCostMinor: 0,
@@ -48,6 +57,35 @@ describe("vehicle profit", () => {
       figures.distancePerLitre,
       figures.utilisationPercent,
     ]).toEqual([null, null, null]);
+  });
+
+  it("takes finance costs off and works out the annual return and the payback months", () => {
+    const totals = {
+      remittanceIncomeMinor: 300_000,
+      rentalIncomeMinor: 100_000,
+      workpayIncomeMinor: 50_000,
+      salesIncomeMinor: 0,
+      otherIncomeMinor: 0,
+      costMinor: 120_000,
+      financeCostMinor: 30_000,
+      distance: 0,
+      fuelLitres: 0,
+      fuelCostMinor: 0,
+      days: { working: 30, idle: 0, off_road: 0, other: 0 },
+    };
+    // 450,000 in, 120,000 + 50,000 + 30,000 out: 250,000 profit in 30 days on a 6,000,000 vehicle.
+    expect(vehicleProfit(totals, 50_000, { costMinor: 6_000_000, days: 30 })).toMatchObject({
+      incomeMinor: 450_000,
+      financeCostMinor: 30_000,
+      profitMinor: 250_000,
+      roiPercent: 50.7,
+      paybackMonths: 23.7,
+    });
+    // A loss never pays back; an unknown cost has no return.
+    expect(
+      vehicleProfit({ ...totals, costMinor: 1_000_000 }, 0, { costMinor: 6_000_000, days: 30 }),
+    ).toMatchObject({ roiPercent: -117.6, paybackMonths: null });
+    expect(vehicleProfit(totals, 0, { costMinor: null, days: 30 }).roiPercent).toBeNull();
   });
 
   it("classes days by the status at the end of the day", () => {

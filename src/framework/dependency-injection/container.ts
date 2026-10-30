@@ -90,7 +90,14 @@ import { ReportFiles } from "../../application/use-cases/reporting/ReportFiles.j
 import {
   GenerateReport,
   ReportRetention,
+  RunReportSchedules,
+  SweepReportSchedules,
 } from "../../application/use-cases/reporting/ReportJobs.js";
+import { ReportSchedules } from "../../application/use-cases/reporting/ReportSchedules.js";
+import { RoleDashboards } from "../../application/use-cases/reporting/RoleDashboards.js";
+import type { IDashboardLayouts } from "../../application/ports/IDashboardLayouts.js";
+import { PostgresDashboardLayouts } from "../../infrastructure/reporting/PostgresDashboardLayouts.js";
+import type { IReportSchedules } from "../../application/ports/IReportSchedules.js";
 import { Reports } from "../../application/use-cases/reporting/Reports.js";
 import {
   DealerCollectionsReport,
@@ -158,6 +165,7 @@ import { ReportContext } from "../../application/use-cases/reporting/ReportConte
 import type { IReportQueries } from "../../application/ports/IReportQueries.js";
 import { PostgresReportQueries } from "../../infrastructure/reports/PostgresReportQueries.js";
 import { PostgresReportJobs } from "../../infrastructure/reports/PostgresReportJobs.js";
+import { PostgresReportSchedules } from "../../infrastructure/reports/PostgresReportSchedules.js";
 import { QueuedReportJobs } from "../../infrastructure/reports/QueuedReportJobs.js";
 import { ReportFileWriter } from "../../infrastructure/reports/ReportFileWriter.js";
 import { CostOfSales } from "../../application/use-cases/dealer/CostOfSales.js";
@@ -1121,6 +1129,7 @@ export function createContainer(
       dataExports: TenantDataExports,
       complianceDaily: ComplianceDaily,
       reports: Reports,
+      reportSchedules: ReportSchedules,
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -1148,6 +1157,8 @@ export function createContainer(
       dataExports,
       complianceDaily,
       new GenerateReport(reports),
+      new RunReportSchedules(reportSchedules),
+      new SweepReportSchedules({ roster, queue }),
     ],
     [
       TYPES.UnitOfWork,
@@ -1177,6 +1188,7 @@ export function createContainer(
       TYPES.TenantDataExports,
       TYPES.ComplianceDaily,
       TYPES.Reports,
+      TYPES.ReportSchedules,
     ],
   );
 
@@ -6398,6 +6410,10 @@ export function createContainer(
     );
   // --- Report engine (P8-1) ---
   tenantRepository<IReportJobs>(TYPES.ReportJobRepository, (tx) => new PostgresReportJobs(tx));
+  tenantRepository<IReportSchedules>(
+    TYPES.ReportScheduleRepository,
+    (tx) => new PostgresReportSchedules(tx),
+  );
   container
     .bind<IReportJobQueue>(TYPES.ReportJobQueue)
     .toResolvedValue(
@@ -6597,6 +6613,98 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.Logger,
+    ],
+  );
+  tenantRepository<IDashboardLayouts>(
+    TYPES.DashboardLayoutRepository,
+    (tx) => new PostgresDashboardLayouts(tx),
+  );
+  container.bind<RoleDashboards>(TYPES.RoleDashboards).toResolvedValue(
+    (
+      definitions: ReportDefinition[],
+      dashboards: Dashboards,
+      board: OperationsBoard,
+      rentals: RentalReports,
+      leads: DealerLeads,
+      notifications: NotificationCenter,
+      layouts: IDashboardLayouts,
+      calendar: TenantCalendar,
+      unitOfWork: IUnitOfWork,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new RoleDashboards({
+        definitions,
+        dashboards,
+        board,
+        rentals,
+        leads,
+        notifications,
+        layouts,
+        calendar,
+        unitOfWork,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.ReportDefinitions,
+      TYPES.Dashboards,
+      TYPES.OperationsBoard,
+      TYPES.RentalReports,
+      TYPES.DealerLeads,
+      TYPES.NotificationCenter,
+      TYPES.DashboardLayoutRepository,
+      TYPES.TenantCalendar,
+      TYPES.UnitOfWork,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<ReportSchedules>(TYPES.ReportSchedules).toResolvedValue(
+    (
+      definitions: ReportDefinition[],
+      schedules: IReportSchedules,
+      jobs: IReportJobs,
+      queue: IReportJobQueue,
+      permissions: IPermissionResolver,
+      tenantContext: ITenantContext,
+      organisation: IOrganisationSettings,
+      unitOfWork: IUnitOfWork,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new ReportSchedules({
+        definitions,
+        schedules,
+        jobs,
+        queue,
+        permissions,
+        tenantContext,
+        organisation,
+        unitOfWork,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.ReportDefinitions,
+      TYPES.ReportScheduleRepository,
+      TYPES.ReportJobRepository,
+      TYPES.ReportJobQueue,
+      TYPES.PermissionResolver,
+      TYPES.TenantContext,
+      TYPES.OrganisationSettings,
+      TYPES.UnitOfWork,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
     ],
   );
   tenantRepository<IDealerReporting>(
@@ -8357,6 +8465,8 @@ export function createContainer(
       dealerGrossProfit: DealerGrossProfit,
       dealerReports: DealerReports,
       reports: Reports,
+      reportSchedules: ReportSchedules,
+      roleDashboards: RoleDashboards,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -8471,7 +8581,7 @@ export function createContainer(
           board: operationsBoard,
           settings: remittanceSettings,
         }),
-        ...dashboardRoutes({ dashboards }),
+        ...dashboardRoutes({ dashboards, roleDashboards }),
         ...notificationRoutes({ center: notificationCenter, settings: notificationSettings }),
         ...driverAppRoutes({
           app: driverApp,
@@ -8522,7 +8632,7 @@ export function createContainer(
           grossProfit: dealerGrossProfit,
         }),
         ...dealerReportRoutes({ reports: dealerReports }),
-        ...reportRoutes({ reports }),
+        ...reportRoutes({ reports, schedules: reportSchedules }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -8664,6 +8774,8 @@ export function createContainer(
       TYPES.DealerGrossProfit,
       TYPES.DealerReports,
       TYPES.Reports,
+      TYPES.ReportSchedules,
+      TYPES.RoleDashboards,
     ],
   );
 

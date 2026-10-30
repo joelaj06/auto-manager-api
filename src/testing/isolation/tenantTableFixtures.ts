@@ -1300,6 +1300,25 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from report_jobs where params ->> 'marker' = $1",
   },
+  report_schedules: {
+    insert: (marker) => ({
+      sql: `with u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation')
+                       returning id)
+            insert into report_schedules (name, report_id, format, frequency, hour, recipients,
+              owner_id, next_run_at)
+            select $1, 'trial_balance', 'csv', 'daily', 7, array[u.id], u.id, now() from u`,
+      params: [marker],
+    }),
+    find: "select 1 from report_schedules where name = $1",
+  },
+  dashboard_layouts: {
+    insert: (marker) => ({
+      sql: `insert into dashboard_layouts (role, widgets) values ('owner', array[$1])
+            on conflict (role) do update set widgets = excluded.widgets`,
+      params: [marker],
+    }),
+    find: "select 1 from dashboard_layouts where $1 = any(widgets)",
+  },
   dealer_quotes: {
     insert: (marker) => ({
       sql: `${VEHICLE}

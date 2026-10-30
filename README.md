@@ -625,6 +625,22 @@ The catalogue (docs/14 §3, decisions 467–471) has 46 reports: executive (`bus
 `expense_approvals`) and finance (`day_book`, `payments_register`, `payments_by_method`,
 `cash_session_variance`, `tax_report`, `trial_balance`). Periods default to the month so far.
 
+Reports can be sent on a schedule (docs/14 §7, decisions 474–477): `POST /api/v1/reports/schedules`
+with a `reportId`, its `params`, a `period` (`previous_day`, `previous_week`, `previous_month`,
+`week_to_date`, `month_to_date`) worked out on the run day, a `format` (`csv`, `xlsx`, `pdf`), a
+`frequency` (`daily`, `weekly` with a `weekday` 1–7, `monthly` with a `monthDay` 1–28), a local
+`hour` and up to 20 `recipients` (users who may run the report). The run is built as the
+schedule's owner by the `reports.schedules_sweep` job every 15 minutes; recipients are told in the
+app and by email and download it from Reports. `GET`, `PUT` and `DELETE /api/v1/reports/schedules/:id`,
+`POST …/pause`, `…/resume` and `…/run` (now) need `reports.schedules.manage`.
+
+Role dashboards (docs/14 §4, decision 478): `GET /api/v1/dashboards/roles/:role` for `owner`,
+`fleet_manager`, `rental_agent`, `sales_executive` or `accountant` reads the widgets you may see;
+`GET /api/v1/dashboards/roles` lists the layouts and every widget, and
+`PUT /api/v1/dashboards/roles/:role/layout` with `{ "widgets": [ … ] }` (or `DELETE` for the
+defaults) changes a role's widgets with `settings.update`. The vehicle P&L (decisions 472–473)
+splits income by source, keeps finance costs apart and shows ROI and payback.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

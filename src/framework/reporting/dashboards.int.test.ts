@@ -29,12 +29,12 @@ const day = (offset: number) =>
 const today = day(0);
 const range = `from=${day(-6)}&to=${today}`;
 
-const spend = async (amount: string, expenseDate: string) => {
+const spend = async (amount: string, expenseDate: string, categoryId = category) => {
   const created = await api()
     .post("/api/v1/expenses")
     .set(owner())
     .send({
-      categoryId: category,
+      categoryId,
       description: "Tyres",
       payeeType: "supplier",
       payeeId: supplier,
@@ -244,5 +244,27 @@ describe("dashboards", () => {
       .get(`/api/v1/dashboards/overview?from=${today}&to=${day(-1)}`)
       .set(owner());
     expect([res.status, res.body.error.code]).toEqual([422, "REPORT_RANGE"]);
+  });
+});
+
+describe("vehicle P&L complete", () => {
+  it("keeps loan interest apart as finance costs", async () => {
+    const tree = await api().get("/api/v1/expense-categories").set(owner());
+    const finance = (tree.body.data as { code: string; id: string }[]).find(
+      (c) => c.code === "finance_charges",
+    )!.id;
+    await spend("50.00", day(-2), finance);
+    const row = await vehicleRow();
+    expect(row).toMatchObject({
+      income: { total: { amountMinor: 75_000 }, workpay: { amountMinor: 0 } },
+      costs: { amountMinor: 40_000 },
+      financeCosts: { amountMinor: 5_000 },
+      profit: { amountMinor: 30_000 },
+      acquisitionCost: null,
+      roiPercent: null,
+      paybackMonths: null,
+    });
+    const overview = await api().get(`/api/v1/dashboards/overview?${range}`).set(owner());
+    expect(overview.body.data.costs.total.amountMinor).toBeGreaterThanOrEqual(45_000);
   });
 });

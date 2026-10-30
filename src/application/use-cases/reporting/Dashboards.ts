@@ -73,11 +73,22 @@ export type VehicleProfitView = Readonly<{
     total: MoneyJson;
     remittances: MoneyJson;
     rentals: MoneyJson;
+    workpay: MoneyJson;
+    /** The vehicle's sale and instalment charges on it. */
+    sales: MoneyJson;
     other: MoneyJson;
   }>;
+  /** Direct costs (depreciation and finance costs apart). */
   costs: MoneyJson;
   depreciation: MoneyJson;
+  financeCosts: MoneyJson;
   profit: MoneyJson;
+  /** What the vehicle cost (null when not recorded). */
+  acquisitionCost: MoneyJson | null;
+  /** The period's profit over a year against what the vehicle cost, in percent. */
+  roiPercent: number | null;
+  /** Months to earn back what the vehicle cost at the period's profit. */
+  paybackMonths: number | null;
   distance: Readonly<{ value: number; unit: "km" | "mi" }>;
   costPerDistance: MoneyJson | null;
   fuel: Readonly<{ litres: number; cost: MoneyJson; distancePerLitre: number | null }>;
@@ -91,6 +102,7 @@ export type FleetProfitView = Readonly<{
     income: MoneyJson;
     costs: MoneyJson;
     depreciation: MoneyJson;
+    financeCosts: MoneyJson;
     profit: MoneyJson;
     utilisationPercent: number | null;
   }>;
@@ -182,7 +194,13 @@ export class Dashboards {
       const accounts = await this.deps.queries.costsByAccount(range.from, range.to, filter);
       const previous = range.previous();
       const before = await this.deps.queries.ledgerDays(previous.from, previous.to, filter);
-      const bySource: Record<IncomeSource, number> = { remittances: 0, rentals: 0, other: 0 };
+      const bySource: Record<IncomeSource, number> = {
+        remittances: 0,
+        rentals: 0,
+        workpay: 0,
+        sales: 0,
+        other: 0,
+      };
       for (const d of days) if (d.source !== null) bySource[d.source] += d.incomeMinor;
       const revenue = sum(days, (d) => d.incomeMinor);
       const costs = sum(days, (d) => d.costMinor);
@@ -216,6 +234,8 @@ export class Dashboards {
           bySource: {
             remittances: m(bySource.remittances),
             rentals: m(bySource.rentals),
+            workpay: m(bySource.workpay),
+            sales: m(bySource.sales),
             other: m(bySource.other),
           },
         },
@@ -269,6 +289,7 @@ export class Dashboards {
           income: total((v) => v.income.total),
           costs: total((v) => v.costs),
           depreciation: total((v) => v.depreciation),
+          financeCosts: total((v) => v.financeCosts),
           profit: total((v) => v.profit),
           utilisationPercent: fleetDays > 0 ? Math.round((working / fleetDays) * 1000) / 10 : null,
         },
@@ -298,12 +319,18 @@ export class Dashboards {
         range,
         groupBy,
         days.map((d) => {
-          const income = d.remittanceIncomeMinor + d.rentalIncomeMinor + d.otherIncomeMinor;
+          const income =
+            d.remittanceIncomeMinor +
+            d.rentalIncomeMinor +
+            d.workpayIncomeMinor +
+            d.salesIncomeMinor +
+            d.otherIncomeMinor;
+          const costs = d.costMinor + d.financeCostMinor;
           return {
             date: d.date,
             income,
-            costs: d.costMinor,
-            net: income - d.costMinor,
+            costs,
+            net: income - costs,
             distance: d.distance,
             workingDays: dayClass(d.status) === "working" ? 1 : 0,
           };
@@ -451,7 +478,10 @@ export class Dashboards {
     range: DateRange,
     m: (minor: number) => MoneyJson,
   ): VehicleProfitView {
-    const figures = vehicleProfit(row, depreciationBetween(row.asset, range.from, range.to));
+    const figures = vehicleProfit(row, depreciationBetween(row.asset, range.from, range.to), {
+      costMinor: row.asset.acquisitionCostMinor,
+      days: range.days,
+    });
     return {
       vehicleId: row.vehicleId,
       code: row.code,
@@ -463,11 +493,18 @@ export class Dashboards {
         total: m(figures.incomeMinor),
         remittances: m(row.remittanceIncomeMinor),
         rentals: m(row.rentalIncomeMinor),
+        workpay: m(row.workpayIncomeMinor),
+        sales: m(row.salesIncomeMinor),
         other: m(row.otherIncomeMinor),
       },
       costs: m(figures.costMinor),
       depreciation: m(figures.depreciationMinor),
+      financeCosts: m(figures.financeCostMinor),
       profit: m(figures.profitMinor),
+      acquisitionCost:
+        row.asset.acquisitionCostMinor === null ? null : m(row.asset.acquisitionCostMinor),
+      roiPercent: figures.roiPercent,
+      paybackMonths: figures.paybackMonths,
       distance: { value: row.distance, unit: row.mileageUnit },
       costPerDistance:
         figures.costPerDistanceMinor === null ? null : m(figures.costPerDistanceMinor),

@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { Dashboards } from "../../application/use-cases/reporting/Dashboards.js";
+import type { RoleDashboards } from "../../application/use-cases/reporting/RoleDashboards.js";
+import { DASHBOARD_ROLES, MAX_WIDGETS } from "../../domain/reporting/DashboardLayout.js";
 import { GRANULARITIES } from "../../domain/reporting/DateRange.js";
 import { principalOf } from "../middleware/AccessGuard.js";
 import { envelope } from "../presenters/responseEnvelope.js";
@@ -18,11 +20,19 @@ const period = {
 };
 const dashboardQuery = z.object({ ...period, branchId: uuid.optional() });
 
-export type DashboardRouteDependencies = Readonly<{ dashboards: Dashboards }>;
+const role = z.object({ role: z.enum(DASHBOARD_ROLES) });
 
-/** Dashboards v1 (docs/14): overview, vehicle P&L, remittances and expenses. */
+export type DashboardRouteDependencies = Readonly<{
+  dashboards: Dashboards;
+  roleDashboards: RoleDashboards;
+}>;
+
+/**
+ * Dashboards (docs/14): overview, vehicle P&L, remittances and expenses, and the dashboards of
+ * the owner, fleet manager, rental agent, sales executive and accountant built from widgets.
+ */
 export function dashboardRoutes(deps: DashboardRouteDependencies): ApiRoute[] {
-  const { dashboards } = deps;
+  const { dashboards, roleDashboards } = deps;
   return [
     defineRoute({
       method: "get",
@@ -93,6 +103,63 @@ export function dashboardRoutes(deps: DashboardRouteDependencies): ApiRoute[] {
       responses: { 200: { description: "Rows rebuilt" } },
       handler: async (_input, _req, res) => {
         res.json(envelope(await dashboards.rebuildStats()));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/dashboards/roles",
+      summary: "The role dashboards with their widgets, and every widget a dashboard can show",
+      tags: ["dashboards"],
+      access: access.signedIn(),
+      responses: { 200: { description: "Role dashboards and widgets" } },
+      handler: async (_input, _req, res) => {
+        res.json(
+          envelope({
+            roles: await roleDashboards.layouts(),
+            widgets: roleDashboards.catalogue(),
+          }),
+        );
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/dashboards/roles/:role",
+      summary: "A role's dashboard: the widgets you may see, read now",
+      tags: ["dashboards"],
+      access: access.signedIn(),
+      request: { params: role },
+      responses: { 200: { description: "Role dashboard" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await roleDashboards.dashboard(principalOf(res), params.role)));
+      },
+    }),
+    defineRoute({
+      method: "put",
+      path: "/api/v1/dashboards/roles/:role/layout",
+      summary: "Choose the widgets of a role's dashboard, in order",
+      tags: ["dashboards"],
+      access: access.permission("settings.update"),
+      request: {
+        params: role,
+        body: z.object({ widgets: z.array(z.string().min(1).max(60)).min(1).max(MAX_WIDGETS) }),
+      },
+      responses: { 200: { description: "Role layout" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(
+          envelope(await roleDashboards.setLayout(principalOf(res), params.role, body.widgets)),
+        );
+      },
+    }),
+    defineRoute({
+      method: "delete",
+      path: "/api/v1/dashboards/roles/:role/layout",
+      summary: "Go back to the default widgets of a role's dashboard",
+      tags: ["dashboards"],
+      access: access.permission("settings.update"),
+      request: { params: role },
+      responses: { 200: { description: "Role layout" } },
+      handler: async ({ params }, _req, res) => {
+        res.json(envelope(await roleDashboards.resetLayout(principalOf(res), params.role)));
       },
     }),
   ];

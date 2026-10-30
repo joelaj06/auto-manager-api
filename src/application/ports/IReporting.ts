@@ -38,8 +38,11 @@ export type VehicleStatsRow = Readonly<{
   asset: DepreciableAsset;
   remittanceIncomeMinor: number;
   rentalIncomeMinor: number;
+  workpayIncomeMinor: number;
+  salesIncomeMinor: number;
   otherIncomeMinor: number;
   costMinor: number;
+  financeCostMinor: number;
   distance: number;
   fuelLitres: number;
   fuelCostMinor: number;
@@ -52,13 +55,16 @@ export type VehicleStatsDay = Readonly<{
   driverId: string | null;
   remittanceIncomeMinor: number;
   rentalIncomeMinor: number;
+  workpayIncomeMinor: number;
+  salesIncomeMinor: number;
   otherIncomeMinor: number;
   costMinor: number;
+  financeCostMinor: number;
   distance: number;
   fuelLitres: number;
 }>;
 
-export type IncomeSource = "remittances" | "rentals" | "other";
+export type IncomeSource = "remittances" | "rentals" | "workpay" | "sales" | "other";
 
 export type LedgerDay = Readonly<{
   date: string;
