@@ -216,6 +216,8 @@ export const TYPES = Object.freeze({
   Reports: Symbol.for("Reports"),
   ReportScheduleRepository: Symbol.for("ReportScheduleRepository"),
   ReportSchedules: Symbol.for("ReportSchedules"),
+  PlatformAnalyticsQueries: Symbol.for("PlatformAnalyticsQueries"),
+  PlatformAnalytics: Symbol.for("PlatformAnalytics"),
   DashboardLayoutRepository: Symbol.for("DashboardLayoutRepository"),
   RoleDashboards: Symbol.for("RoleDashboards"),
   TaxAdministration: Symbol.for("TaxAdministration"),

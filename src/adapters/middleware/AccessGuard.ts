@@ -119,6 +119,11 @@ export class AccessGuard {
             throw new MaintenanceReadOnlyError(window.title, window.endsAt);
         }
         this.deps.usage?.count(tenant.id);
+        const usage = this.deps.usage;
+        if (usage !== undefined)
+          res.once("finish", () => {
+            if (res.statusCode >= 500) usage.failed(tenant.id);
+          });
         // Read-only tenants: reads only (docs/27 §3.3) — and paying; sign-in routes are
         // `tenant` routes.
         if (

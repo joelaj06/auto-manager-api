@@ -61,6 +61,7 @@ const RULES: Readonly<Record<string, Rule>> = {
   // Tenant resolution
   TENANT_REQUIRED: { status: 400 },
   TENANT_NOT_FOUND: { status: 404 },
+  ANALYTICS_RULE: { status: 422 },
   TENANT_DEACTIVATED: { status: 403 },
   SUPPORT_READ_ONLY: { status: 403 },
   SUPPORT_ACTION_BLOCKED: { status: 403 },

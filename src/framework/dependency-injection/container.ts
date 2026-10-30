@@ -84,6 +84,10 @@ import { dealerDealRoutes } from "../../adapters/routes/dealerDealRoutes.js";
 import { dealerCommissionRoutes } from "../../adapters/routes/dealerCommissionRoutes.js";
 import { dealerReportRoutes } from "../../adapters/routes/dealerReportRoutes.js";
 import { reportRoutes } from "../../adapters/routes/reportRoutes.js";
+import { consoleAnalyticsRoutes } from "../../adapters/routes/consoleAnalyticsRoutes.js";
+import type { IPlatformAnalytics } from "../../application/ports/IPlatformAnalytics.js";
+import { PlatformAnalytics } from "../../application/use-cases/console/PlatformAnalytics.js";
+import { PostgresPlatformAnalytics } from "../../infrastructure/console/PostgresPlatformAnalytics.js";
 import type { IReportJobQueue, IReportJobs } from "../../application/ports/IReportJobs.js";
 import type { ReportDefinition } from "../../application/use-cases/reporting/ReportDefinition.js";
 import { ReportFiles } from "../../application/use-cases/reporting/ReportFiles.js";
@@ -3264,6 +3268,23 @@ export function createContainer(
         TYPES.Clock,
         TYPES.Logger,
       ],
+    );
+
+  // --- Platform analytics (P8-4) ---
+  platformRepository<IPlatformAnalytics>(
+    TYPES.PlatformAnalyticsQueries,
+    (p) => new PostgresPlatformAnalytics(p),
+  );
+  container
+    .bind<PlatformAnalytics>(TYPES.PlatformAnalytics)
+    .toResolvedValue(
+      (
+        analytics: IPlatformAnalytics,
+        audit: IPlatformAuditTrail,
+        requestContext: IRequestContext,
+        clock: IClock,
+      ) => new PlatformAnalytics({ analytics, audit, requestContext, clock }),
+      [TYPES.PlatformAnalyticsQueries, TYPES.PlatformAuditTrail, TYPES.RequestContext, TYPES.Clock],
     );
 
   // --- Legal and operations (P4-8) ---
@@ -8509,6 +8530,9 @@ export function createContainer(
           subscriptions: subscriptionAdministration,
           usage: container.get<TenantUsageHistory>(TYPES.TenantUsageHistory),
           readiness: container.get<LaunchReadiness>(TYPES.LaunchReadiness),
+        }),
+        ...consoleAnalyticsRoutes({
+          analytics: container.get<PlatformAnalytics>(TYPES.PlatformAnalytics),
         }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...mobileRoutes(mobile),

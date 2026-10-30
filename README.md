@@ -726,6 +726,17 @@ overrides at `tenants/:id/entitlements/branches`. **Alerts**: `alerts` (acknowle
 on-call by `ONCALL_EMAILS` / `ONCALL_WEBHOOK_URL`. **Usage**: `tenants/:id/usage` (nightly
 `usage.daily`).
 
+## Platform analytics
+
+Under `/api/platform/v1/analytics` with `platform.analytics.view` (docs/27 §3.16, decisions
+479–485): `funnel` (applications from sign-up to paying, `from`/`to`), `adoption` (modules used
+over 30 days and tenants expected to that do not), `health` (scores 0–100 of live tenants, weakest
+first, `flag=at_risk|expansion_ready|new`), `tenants/:id` (a tenant's score, its parts and its
+onboarding checklist), `cohorts?months=12`, `cost-to-serve` (monthly cost against MRR) with its
+rates at `cost-rates` (`PUT` needs `platform.settings.manage`), `resellers` and `churn`. They read
+the nightly `usage.daily`, which also counts jobs, server errors, the modules used and the
+onboarding milestones.
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

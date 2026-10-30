@@ -12,4 +12,6 @@ export interface IFeatureGate {
 /** Counts tenant API calls per day (`usage_daily`); flushed in the background. */
 export interface IUsageMeter {
   count(tenantId: string): void;
+  /** A call answered with a server error. */
+  failed(tenantId: string): void;
 }

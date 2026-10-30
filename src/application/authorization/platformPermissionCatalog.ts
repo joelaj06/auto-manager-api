@@ -376,6 +376,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.partners.view",
       "platform.partners.commissions.pay",
       "platform.partners.reports.view",
+      "platform.analytics.view",
     ],
   },
   {

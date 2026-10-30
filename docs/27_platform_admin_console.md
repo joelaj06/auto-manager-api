@@ -1,5 +1,7 @@
 # 27 — Platform Admin Console (Super Admin)
 
+> **Update 2026-10-30 (P8-4):** analytics and health scoring (§3.16) are implemented under `/api/platform/v1/analytics`: the growth funnel from sign-up (visits are the marketing site's), feature adoption by module with the tenants to reach out to, a health score 0–100 with at-risk and expansion-ready flags and the onboarding checklist, cohorts by month provisioned, cost to serve against MRR at rates set in the console, reseller performance and churn reasons (decisions 479–485). They read the nightly `usage_daily`, which now also counts jobs, server errors and the modules used, and `tenant_onboarding`; win-back campaigns stay with announcements.
+
 The console used by **us, the owners/managers of the whole system**, to run Autoforce Manager as a business: approve and manage tenants, watch system health, manage billing, support customers, and keep the platform safe.
 
 > Not part of any tenant. Separate web app, separate login, separate API namespace, separate database tables (`autoforce_platform`). Tenant tokens are never accepted here and platform tokens are never accepted on tenant APIs.
