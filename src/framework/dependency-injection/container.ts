@@ -83,6 +83,23 @@ import { dealerSalesRoutes } from "../../adapters/routes/dealerSalesRoutes.js";
 import { dealerDealRoutes } from "../../adapters/routes/dealerDealRoutes.js";
 import { dealerCommissionRoutes } from "../../adapters/routes/dealerCommissionRoutes.js";
 import { dealerReportRoutes } from "../../adapters/routes/dealerReportRoutes.js";
+import { reportRoutes } from "../../adapters/routes/reportRoutes.js";
+import type { IReportJobQueue, IReportJobs } from "../../application/ports/IReportJobs.js";
+import type { ReportDefinition } from "../../application/use-cases/reporting/ReportDefinition.js";
+import { ReportFiles } from "../../application/use-cases/reporting/ReportFiles.js";
+import {
+  GenerateReport,
+  ReportRetention,
+} from "../../application/use-cases/reporting/ReportJobs.js";
+import { Reports } from "../../application/use-cases/reporting/Reports.js";
+import {
+  DealerGrossProfitReport,
+  DealerPriceReductionsReport,
+} from "../../application/use-cases/reporting/definitions/dealerReportDefinitions.js";
+import { TrialBalanceReport } from "../../application/use-cases/reporting/definitions/financeReportDefinitions.js";
+import { PostgresReportJobs } from "../../infrastructure/reports/PostgresReportJobs.js";
+import { QueuedReportJobs } from "../../infrastructure/reports/QueuedReportJobs.js";
+import { ReportFileWriter } from "../../infrastructure/reports/ReportFileWriter.js";
 import { CostOfSales } from "../../application/use-cases/dealer/CostOfSales.js";
 import { DealProfit } from "../../application/use-cases/dealer/DealProfit.js";
 import { DealerCommissions } from "../../application/use-cases/dealer/DealerCommissions.js";
@@ -1043,6 +1060,7 @@ export function createContainer(
       usageHistory: TenantUsageHistory,
       dataExports: TenantDataExports,
       complianceDaily: ComplianceDaily,
+      reports: Reports,
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -1069,6 +1087,7 @@ export function createContainer(
       usageHistory,
       dataExports,
       complianceDaily,
+      new GenerateReport(reports),
     ],
     [
       TYPES.UnitOfWork,
@@ -1097,6 +1116,7 @@ export function createContainer(
       TYPES.TenantUsageHistory,
       TYPES.TenantDataExports,
       TYPES.ComplianceDaily,
+      TYPES.Reports,
     ],
   );
 
@@ -4766,6 +4786,7 @@ export function createContainer(
       dealerCrmAlerts: DealerCrmAlerts,
       dealerDealAlerts: DealerDealAlerts,
       depreciation: VehicleDepreciation,
+      reports: Reports,
     ) =>
       // Stats after the money tasks: they read what those posted.
       [
@@ -4782,6 +4803,7 @@ export function createContainer(
         dealerDealAlerts,
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
+        new ReportRetention(reports),
       ],
     [
       TYPES.RecurringExpenses,
@@ -4797,6 +4819,7 @@ export function createContainer(
       TYPES.DealerCrmAlerts,
       TYPES.DealerDealAlerts,
       TYPES.VehicleDepreciation,
+      TYPES.Reports,
     ],
   );
 
@@ -6313,6 +6336,104 @@ export function createContainer(
         TYPES.BranchScope,
       ],
     );
+  // --- Report engine (P8-1) ---
+  tenantRepository<IReportJobs>(TYPES.ReportJobRepository, (tx) => new PostgresReportJobs(tx));
+  container
+    .bind<IReportJobQueue>(TYPES.ReportJobQueue)
+    .toResolvedValue(
+      (tx: PostgresTransactionContext, tenantContext: ITenantContext, queue: IJobQueue) =>
+        new QueuedReportJobs(tx, tenantContext, queue),
+      [TYPES.PostgresTransactionContext, TYPES.TenantContext, TYPES.JobQueue],
+    );
+  container.bind<ReportFiles>(TYPES.ReportFiles).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      organisation: IOrganisationSettings,
+      pdf: IPdfRenderer,
+      storage: IObjectStorage,
+      logger: ILogger,
+      clock: IClock,
+    ) =>
+      new ReportFiles({
+        writer: new ReportFileWriter(),
+        pdf,
+        unitOfWork,
+        organisation,
+        logo: new BusinessLogo({ storage, logger }),
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.OrganisationSettings,
+      TYPES.PdfRenderer,
+      TYPES.ObjectStorage,
+      TYPES.Logger,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<ReportDefinition[]>(TYPES.ReportDefinitions)
+    .toResolvedValue(
+      (grossProfit: DealerGrossProfit, dealerReports: DealerReports, ledger: LedgerViews) => [
+        new DealerGrossProfitReport(grossProfit),
+        new DealerPriceReductionsReport(dealerReports),
+        new TrialBalanceReport(ledger),
+      ],
+      [TYPES.DealerGrossProfit, TYPES.DealerReports, TYPES.LedgerViews],
+    );
+  container.bind<Reports>(TYPES.Reports).toResolvedValue(
+    (
+      definitions: ReportDefinition[],
+      jobs: IReportJobs,
+      queue: IReportJobQueue,
+      files: FileService,
+      render: ReportFiles,
+      permissions: IPermissionResolver,
+      tenantContext: ITenantContext,
+      notifier: Notifier,
+      settings: INotificationSettingsStore,
+      unitOfWork: IUnitOfWork,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new Reports({
+        definitions,
+        jobs,
+        queue,
+        files,
+        render,
+        permissions,
+        tenantContext,
+        notifier,
+        settings,
+        unitOfWork,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.ReportDefinitions,
+      TYPES.ReportJobRepository,
+      TYPES.ReportJobQueue,
+      TYPES.TenantFileService,
+      TYPES.ReportFiles,
+      TYPES.PermissionResolver,
+      TYPES.TenantContext,
+      TYPES.Notifier,
+      TYPES.NotificationSettingsStore,
+      TYPES.UnitOfWork,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
   tenantRepository<IDealerReporting>(
     TYPES.DealerReportingRepository,
     (tx) => new PostgresDealerReporting(tx),
@@ -8070,6 +8191,7 @@ export function createContainer(
       dealerCommissions: DealerCommissions,
       dealerGrossProfit: DealerGrossProfit,
       dealerReports: DealerReports,
+      reports: Reports,
     ) => {
       const routes = [
         ...healthRoutes(health),
@@ -8235,6 +8357,7 @@ export function createContainer(
           grossProfit: dealerGrossProfit,
         }),
         ...dealerReportRoutes({ reports: dealerReports }),
+        ...reportRoutes({ reports }),
         ...identityRoutes({
           signIn: tenantSignIn,
           refresh,
@@ -8375,6 +8498,7 @@ export function createContainer(
       TYPES.DealerCommissions,
       TYPES.DealerGrossProfit,
       TYPES.DealerReports,
+      TYPES.Reports,
     ],
   );
 

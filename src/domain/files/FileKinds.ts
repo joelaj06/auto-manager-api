@@ -10,11 +10,15 @@ export type FileKindPolicy = Readonly<{
   contentTypes: readonly string[];
   maxBytes: number;
   description: string;
+  /** Written by the server only, never uploaded. */
+  generatedOnly?: boolean;
 }>;
 
 const MB = 1024 * 1024;
 const IMAGES = ["image/png", "image/jpeg", "image/webp"] as const;
 const DOCUMENTS = ["application/pdf", ...IMAGES] as const;
+const CSV = "text/csv";
+const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /**
  * What may be stored (docs/03 §12). SVG is never accepted: it can carry scripts. Modules add
@@ -106,6 +110,14 @@ export const FILE_KINDS = Object.freeze({
     maxBytes: 10 * MB,
     description: "Identity or onboarding document of a driver, guarantor or customer",
   },
+  report_export: {
+    scope: "tenant",
+    visibility: "private",
+    contentTypes: [CSV, XLSX, "application/pdf"],
+    maxBytes: 50 * MB,
+    description: "A report built as a file (CSV, XLSX or PDF), kept 7 days",
+    generatedOnly: true,
+  },
   application_document: {
     scope: "platform",
     visibility: "private",
@@ -149,6 +161,10 @@ export function sniffContentType(head: Uint8Array): string | null {
   )
     return "image/webp";
   if (starts(0x25, 0x50, 0x44, 0x46, 0x2d)) return "application/pdf";
+  // Only report files (generated, never uploaded) are accepted as these: an OOXML workbook is a
+  // ZIP archive, and report CSVs start with a UTF-8 byte-order mark.
+  if (starts(0x50, 0x4b, 0x03, 0x04)) return XLSX;
+  if (starts(0xef, 0xbb, 0xbf)) return CSV;
   return null;
 }
 
@@ -160,6 +176,8 @@ const EXTENSIONS: Readonly<Record<string, string>> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "application/pdf": "pdf",
+  [CSV]: "csv",
+  [XLSX]: "xlsx",
 };
 
 export function extensionFor(contentType: string): string {

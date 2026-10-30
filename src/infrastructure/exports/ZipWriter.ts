@@ -9,10 +9,13 @@ type Entry = Readonly<{
   method: number;
 }>;
 
-/** Folders inside the archive use forward slashes; names are kept short and plain. */
+/**
+ * Folders inside the archive use forward slashes; names are kept short and plain (brackets kept
+ * for the OOXML `[Content_Types].xml`).
+ */
 const safeName = (name: string) =>
   name
-    .replace(/[^\w./-]/g, "_")
+    .replace(/[^\w./[\]-]/g, "_")
     .replace(/^\/+/, "")
     .slice(0, 200);
 

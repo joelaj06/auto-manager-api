@@ -4,7 +4,7 @@ import type { FileView, UploadStarted } from "../../application/use-cases/files/
 import type { TenantFileUploads } from "../../application/use-cases/files/TenantFileUploads.js";
 import type { OrganisationAdministration } from "../../application/use-cases/identity/OrganisationAdministration.js";
 import type { PartnerDocuments } from "../../application/use-cases/partners/PartnerDocuments.js";
-import { FILE_KINDS, type FileKind } from "../../domain/files/FileKinds.js";
+import { FILE_KINDS, type FileKind, type FileKindPolicy } from "../../domain/files/FileKinds.js";
 import { principalOf, staffOf } from "../middleware/AccessGuard.js";
 import { envelope } from "../presenters/responseEnvelope.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
@@ -13,10 +13,11 @@ import { access } from "./RouteAccess.js";
 
 const CONSOLE = "/api/platform/v1";
 const uuid = z.uuid();
-const MAX_BYTES = Math.max(...Object.values(FILE_KINDS).map((k) => k.maxBytes));
-const TENANT_KINDS = (Object.keys(FILE_KINDS) as FileKind[]).filter(
-  (kind) => FILE_KINDS[kind].scope === "tenant",
+const UPLOADABLE = (Object.keys(FILE_KINDS) as FileKind[]).filter(
+  (kind) => !(FILE_KINDS[kind] as FileKindPolicy).generatedOnly,
 );
+const MAX_BYTES = Math.max(...UPLOADABLE.map((kind) => FILE_KINDS[kind].maxBytes));
+const TENANT_KINDS = UPLOADABLE.filter((kind) => FILE_KINDS[kind].scope === "tenant");
 
 const document = z.object({
   filename: z.string().trim().min(1).max(200),

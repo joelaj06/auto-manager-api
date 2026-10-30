@@ -67,6 +67,8 @@ export type PdfDocument = Readonly<{
   }>;
   /** A large diagonal word across each page ("REVERSED", "VOID"). */
   watermark?: string;
+  /** Across the page (wide report tables); portrait by default. */
+  landscape?: boolean;
   blocks: readonly PdfBlock[];
   /** Printed at the foot of every page. */
   footer: string;

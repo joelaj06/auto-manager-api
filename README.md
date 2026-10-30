@@ -602,6 +602,16 @@ unit, make, seller, lead source and branch `GET /api/v1/dealer/gross-profit`; th
 `GET /api/v1/dealer/leads/funnel`; commissions per seller the statement. Periods default to the
 last 30 days. Rules: docs/10 §10, docs/14, decisions 459–462.
 
+## Reports
+
+`GET /api/v1/reports` lists the reports you may run, with their parameters and formats.
+`POST /api/v1/reports/:reportId/run` with `{ "params": { … }, "format": "json" }` answers at once;
+with `csv`, `xlsx` or `pdf` it answers 202 with a report job, built in the background as you (the
+`reports.generate` job) and kept for 7 days. `GET /api/v1/reports/jobs/:id` shows its status and,
+once ready, a short-lived download link; you are told in the app when it is ready. At most two of
+your files (four for the business) are built at once. Reports are defined in code
+(`src/application/use-cases/reporting/definitions`). Rules: docs/14 §2, §7, decisions 463–466.
+
 ## Subscriptions and billing
 
 Every tenant starts on a **standard trial** when provisioned. Staff set the standard price per

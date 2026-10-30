@@ -9,6 +9,9 @@ import type {
 } from "../../application/ports/IPdfRenderer.js";
 
 const MARGIN = 50;
+/** A4 in points. */
+const A4_WIDTH = 595.28;
+const A4_HEIGHT = 841.89;
 const INK = "#1f2933";
 const MUTED = "#6b7280";
 const RULE = "#d1d5db";
@@ -23,9 +26,14 @@ const isJpeg = (b: Uint8Array) => b[0] === 0xff && b[1] === 0xd8;
  * standard Helvetica fonts, so amounts are written with currency codes (GHS), not symbols.
  */
 export class PdfKitRenderer implements IPdfRenderer {
+  /** The page width of the document being drawn (drawing is synchronous, one at a time). */
+  private pageWidth = A4_WIDTH;
+
   render(document: PdfDocument): Promise<Buffer> {
+    this.pageWidth = document.landscape === true ? A4_HEIGHT : A4_WIDTH;
     const pdf = new PDFDocument({
       size: "A4",
+      layout: document.landscape === true ? "landscape" : "portrait",
       margins: { top: MARGIN, bottom: MARGIN + 20, left: MARGIN, right: MARGIN },
       bufferPages: true,
       info: {
@@ -52,7 +60,7 @@ export class PdfKitRenderer implements IPdfRenderer {
   }
 
   private get width() {
-    return 595.28 - 2 * MARGIN;
+    return this.pageWidth - 2 * MARGIN;
   }
 
   private letterhead(pdf: PDFKit.PDFDocument, d: PdfDocument) {
@@ -327,9 +335,14 @@ export class PdfKitRenderer implements IPdfRenderer {
       pdf.switchToPage(i);
       if (d.watermark !== undefined) {
         pdf.save();
-        pdf.rotate(-35, { origin: [297, 420] });
+        const middle = pdf.page.height / 2;
+        pdf.rotate(-35, { origin: [pdf.page.width / 2, middle] });
         pdf.font("Helvetica-Bold").fontSize(90).fillColor("#dc2626").opacity(0.12);
-        pdf.text(d.watermark, 0, 380, { width: 595.28, align: "center", lineBreak: false });
+        pdf.text(d.watermark, 0, middle - 40, {
+          width: pdf.page.width,
+          align: "center",
+          lineBreak: false,
+        });
         pdf.restore();
         pdf.opacity(1);
       }

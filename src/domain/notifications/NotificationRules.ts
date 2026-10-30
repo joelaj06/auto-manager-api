@@ -48,6 +48,7 @@ export const RULE_KEYS = [
   "stock_match",
   "deal_hold_lapsed",
   "deal_instalment_overdue",
+  "report_ready",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -323,6 +324,11 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
   deal_instalment_overdue: {
     description:
       "An in-house instalment on a vehicle sale is overdue: tell the branch's staff who record sale payments",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  report_ready: {
+    description: "A report file someone asked for is ready to download: tell them",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "push"] },
   },

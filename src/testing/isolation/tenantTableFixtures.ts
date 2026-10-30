@@ -1290,6 +1290,16 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from dealer_commissions where clawback_reason = $1",
   },
+  report_jobs: {
+    insert: (marker) => ({
+      sql: `with u as (insert into users (email, name) values ($1 || '@example.com', 'Isolation')
+                       returning id)
+            insert into report_jobs (report_id, params, format, requested_by)
+            select 'trial_balance', jsonb_build_object('marker', $1::text), 'csv', u.id from u`,
+      params: [marker],
+    }),
+    find: "select 1 from report_jobs where params ->> 'marker' = $1",
+  },
   dealer_quotes: {
     insert: (marker) => ({
       sql: `${VEHICLE}

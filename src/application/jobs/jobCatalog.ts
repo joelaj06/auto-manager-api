@@ -47,6 +47,8 @@ export type JobPayloads = {
   "tenant.notification_rules": Readonly<{ tenantId: string; localDate: string }>;
   /** Render and store the PDF of an issued document. */
   "documents.render": Readonly<{ tenantId: string; documentId: string }>;
+  /** Build a report file a user asked for (CSV, XLSX or PDF). */
+  "reports.generate": Readonly<{ tenantId: string; jobId: string }>;
   /** Render and store the signed copy of a fully signed document. */
   "documents.seal": Readonly<{ tenantId: string; documentId: string }>;
   /** Compare yesterday's gateway payments with the provider's transactions. */
@@ -318,6 +320,16 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryDelaySeconds: 30,
     retryBackoff: true,
     expireInSeconds: 300,
+  },
+  "reports.generate": {
+    description: "Build a report file a user asked for",
+    tenantScoped: true,
+    policy: "standard",
+    // Failures are recorded on the job; a retry only covers a lost worker.
+    retryLimit: 1,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 900,
   },
   "documents.seal": {
     description: "Render and store the signed copy of a fully signed document",

@@ -90,7 +90,8 @@ export class FileService {
 
   async startUpload(input: StartUploadInput): Promise<UploadStarted> {
     const { deps } = this;
-    if (fileKindPolicy(input.kind).scope !== deps.scope)
+    const policy = fileKindPolicy(input.kind);
+    if (policy.scope !== deps.scope || policy.generatedOnly === true)
       throw new FileRejectedError(`Files of kind ${input.kind} cannot be uploaded here`);
     const file = StoredFile.start({
       id: deps.ids.next(),

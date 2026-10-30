@@ -1,5 +1,7 @@
 # 14 — Reports & Analytics
 
+> **Update 2026-10-30 (P8-1):** the report engine of §2 and §7 is implemented: definitions in code with described parameters and a permission, the catalogue filtered by permission (no plan entitlements), JSON answered at once and CSV, XLSX and PDF files built by a background job as the user who asked, kept 7 days with a short-lived download link and a ready notice, four jobs at once per business and two per user. `POST /reports/:id/run` takes `{ params, format }`; jobs are `/reports/jobs` (not report runs of other users). The catalogue of §3 is P8-2, scheduled reports and dashboards P8-3.
+
 ## 1. Today
 
 Dashboard summary (sales, rentals, expenses, counts, revenue) + weekly sales in a month (with week-5 bug, H12). Totals are also returned as custom headers on lists (`_meta_total_sales` …).

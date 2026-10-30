@@ -265,6 +265,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   COMMISSION_RULE: { status: 422 },
   COMMISSION_NOT_FOUND: { status: 404 },
   COMMISSION_PLAN_NOT_FOUND: { status: 404 },
+  REPORT_RULE: { status: 422 },
+  REPORT_NOT_FOUND: { status: 404 },
+  REPORT_JOB_NOT_FOUND: { status: 404 },
+  REPORT_BUSY: { status: 429 },
   APPROVAL_LIMIT_EXCEEDED: { status: 403 },
   EXPENSE_SETUP_NOT_FOUND: { status: 404 },
 
