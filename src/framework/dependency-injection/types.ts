@@ -8,6 +8,13 @@ export const TYPES = Object.freeze({
   TenantDatabaseNaming: Symbol.for("TenantDatabaseNaming"),
   PlatformDatabasePool: Symbol.for("PlatformDatabasePool"),
   TenantConnectionPools: Symbol.for("TenantConnectionPools"),
+  /** Where each cluster and tenant database is (decision 491). */
+  ClusterConnections: Symbol.for("ClusterConnections"),
+  ClusterRegistry: Symbol.for("IClusterRegistry"),
+  ClusterProbe: Symbol.for("IClusterProbe"),
+  TenantDatabaseMover: Symbol.for("ITenantDatabaseMover"),
+  ClusterManagement: Symbol.for("ClusterManagement"),
+  MoveTenantToCluster: Symbol.for("MoveTenantToCluster"),
   PostgresTransactionContext: Symbol.for("PostgresTransactionContext"),
   MigrationRunner: Symbol.for("MigrationRunner"),
 

@@ -66,6 +66,8 @@ const RULES: Readonly<Record<string, Rule>> = {
   SUPPORT_READ_ONLY: { status: 403 },
   SUPPORT_ACTION_BLOCKED: { status: 403 },
   MAINTENANCE_READ_ONLY: { status: 503 },
+  TENANT_MOVING: { status: 503 },
+  CLUSTER_RULE: { status: 422 },
   FEATURE_DISABLED: { status: 403 },
   TENANT_MISMATCH: { status: 401, securityAlert: true },
 
@@ -424,6 +426,11 @@ export function presentError(error: unknown, requestId?: string): PresentedError
     },
     logLevel: status >= 500 ? "error" : status === 429 || status === 404 ? "info" : "warn",
     securityAlert: rule?.securityAlert === true,
-    headers: status === 401 ? authenticateHeader(code) : {},
+    headers:
+      status === 401
+        ? authenticateHeader(code)
+        : code === "TENANT_MOVING"
+          ? { "Retry-After": "60" }
+          : {},
   };
 }

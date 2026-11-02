@@ -1,4 +1,8 @@
-import { TenantInactiveError, TenantNotFoundError } from "../errors/TenantErrors.js";
+import {
+  TenantInactiveError,
+  TenantMovingError,
+  TenantNotFoundError,
+} from "../errors/TenantErrors.js";
 import type { TenantStatus, TenantSummary } from "../ports/ITenantDirectory.js";
 
 /** Statuses in which the tenant's users may use the system (docs/25 tenant lifecycle). */
@@ -21,6 +25,7 @@ export function assertTenantUsable(
   tenant: TenantSummary,
   options: Readonly<{ billingOnly?: boolean }> = {},
 ): void {
+  if (tenant.moving === true) throw new TenantMovingError();
   if (USABLE.has(tenant.status)) return;
   if (options.billingOnly === true && tenant.billingOnly === true) return;
   if (NOT_READY.has(tenant.status)) throw new TenantNotFoundError();

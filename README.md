@@ -748,6 +748,19 @@ transaction with `REPORT_STATEMENT_TIMEOUT_MS`, on a streaming replica when
 behind the schema or more than `DATABASE_REPLICA_MAX_LAG_SECONDS` behind is passed over for the
 primary (decision 489).
 
+## Database clusters
+
+Tenant databases live on registered clusters (decision 491). `main` is the server in the
+configuration; another server is prepared with `yarn db:setup` and `yarn db:migrate` pointed at it
+(same roles and passwords, the tenant template at the current version) and then added in the
+console (`POST /api/platform/v1/clusters`), which probes it first. New tenants go to the least
+full active cluster. A tenant is moved with `POST /api/platform/v1/tenants/:id/cluster-move` and a
+second staff member's approval; it is offline (503 `TENANT_MOVING`) while its database is copied
+and checked, and the old copy is kept 14 days (decision 492, `CLUSTER_MOVE_SETTLE_MS`). The
+provisioning sweep records orphan, moved-away, stray and missing databases per cluster; dropping one
+needs a Super Admin's approval after the grace period (decision 493). Existing clusters need
+`yarn db:setup` once more so the migrator may end sessions (`pg_signal_backend`).
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

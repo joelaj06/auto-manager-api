@@ -10,8 +10,8 @@ import { DATABASE_GROUP_ROLES } from "../postgres/databaseRoles.js";
 import { PgErrorCodes, pgErrorCode } from "../postgres/pgErrors.js";
 
 export type TenantDatabaseProvisionerOptions = Readonly<{
-  /** Opens a migrator-role connection to the given database. */
-  connect: (database: string) => Promise<pg.Client>;
+  /** Opens a migrator-role connection to a database on the tenant's cluster. */
+  connect: (database: string, tenantId: TenantId) => Promise<pg.Client>;
   /** Database the migrator connects to for CREATE DATABASE (the platform database). */
   maintenanceDatabase: string;
   templateDatabase: string;
@@ -33,13 +33,13 @@ export class TenantDatabaseProvisioner implements ITenantDatabaseProvisioner {
 
   async provision(tenantId: TenantId): Promise<ProvisionedTenantDatabase> {
     const databaseName = this.options.databaseNameFor(tenantId);
-    const created = await this.cloneTemplate(databaseName);
+    const created = await this.cloneTemplate(tenantId, databaseName);
     await this.stamp(tenantId, databaseName);
     return { databaseName, created };
   }
 
-  private async cloneTemplate(databaseName: string): Promise<boolean> {
-    const maintenance = await this.options.connect(this.options.maintenanceDatabase);
+  private async cloneTemplate(tenantId: TenantId, databaseName: string): Promise<boolean> {
+    const maintenance = await this.options.connect(this.options.maintenanceDatabase, tenantId);
     const retries = this.options.templateBusyRetries ?? 5;
     try {
       let created = false;
@@ -74,7 +74,7 @@ export class TenantDatabaseProvisioner implements ITenantDatabaseProvisioner {
   }
 
   private async stamp(tenantId: TenantId, databaseName: string): Promise<void> {
-    const client = await this.options.connect(databaseName);
+    const client = await this.options.connect(databaseName, tenantId);
     try {
       await client.query(
         "insert into tenant_info (tenant_id) values ($1) on conflict (singleton) do nothing",

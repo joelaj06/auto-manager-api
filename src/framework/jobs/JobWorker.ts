@@ -9,6 +9,9 @@ import type { ITenantDirectory } from "../../application/ports/ITenantDirectory.
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import type { PgBossJobQueue } from "../../infrastructure/jobs/PgBossJobQueue.js";
 
+/** How long a job of a tenant being moved to another cluster waits before it runs again. */
+const MOVING_DEFER_MS = 60_000;
+
 export type JobWorkerOptions = Readonly<{
   queue: PgBossJobQueue;
   handlers: readonly IJobHandler[];
@@ -25,7 +28,8 @@ export type JobWorkerOptions = Readonly<{
  *
  * Each job runs with its own request context (`requestId: job-<id>`, so its log lines can be
  * found together) and, for tenant jobs, inside the tenant's context. Jobs of tenants that are
- * deactivated or gone are completed without running. A thrown error fails the attempt and
+ * deactivated or gone are completed without running; those of a tenant being moved to another
+ * cluster are queued again for a minute later. A thrown error fails the attempt and
  * pg-boss retries it with the queue's backoff.
  */
 export class JobWorker {
@@ -105,6 +109,17 @@ export class JobWorker {
       throw new Error(`Job ${job.name} has no valid tenantId`);
     }
     const tenant = await this.options.tenants.findById(tenantId);
+    if (tenant?.moving === true) {
+      // Its database is being copied to another cluster: run it again once it is back.
+      await this.options.queue.enqueue(job.name as JobName, job.data as never, {
+        startAfter: new Date(Date.now() + MOVING_DEFER_MS),
+      });
+      this.options.logger.info("Job deferred: tenant moving to another cluster", {
+        job: job.name,
+        tenantId,
+      });
+      return false;
+    }
     try {
       if (tenant === null) throw new Error("unknown tenant");
       assertTenantUsable(tenant);

@@ -45,6 +45,8 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
   constructor(
     private readonly deps: Readonly<{
       provisioning: ITenantProvisioning;
+      /** Puts the tenant on a cluster with room before its database is created. */
+      placement: Readonly<{ place(tenantId: string): Promise<string> }>;
       databases: ITenantDatabaseProvisioner;
       schema: ITenantSchemaUpdater;
       catalogue: IPermissionCatalogueSource;
@@ -86,6 +88,7 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
 
     try {
       if (!done("database_created")) {
+        await deps.placement.place(tenantId);
         const { databaseName } = await deps.databases.provision(id);
         await deps.provisioning.setDatabaseName(tenantId, databaseName);
         await advance("database_created");

@@ -1,5 +1,6 @@
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { IUnitOfWork } from "../../application/ports/IUnitOfWork.js";
+import type { TenantId } from "../../domain/value-objects/TenantId.js";
 import type { PostgresTransactionContext } from "./postgres/PostgresTransactionContext.js";
 import type { Queryable } from "./postgres/Queryable.js";
 import type { TenantConnectionPools } from "./postgres/TenantConnectionPools.js";
@@ -8,6 +9,8 @@ export type ReplicaReads = Readonly<{
   /** Pools on the replica, one per tenant database as on the primary. */
   pools: TenantConnectionPools;
   maxLagSeconds: number;
+  /** Whether the replica holds this tenant's database (absent: every tenant's). */
+  serves?: (tenantId: TenantId) => Promise<boolean>;
 }>;
 
 export type ReportReadFallback = Readonly<
@@ -40,7 +43,7 @@ export class PostgresReportUnitOfWork implements IUnitOfWork {
 
     const tenantId = deps.tenantContext.currentTenantId();
     const options = { readOnly: true, statementTimeoutMs: deps.statementTimeoutMs };
-    if (deps.replica !== null) {
+    if (deps.replica !== null && (await (deps.replica.serves?.(tenantId) ?? true))) {
       const { pools, maxLagSeconds } = deps.replica;
       let started = false;
       try {

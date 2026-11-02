@@ -50,6 +50,8 @@ export class ClusterBootstrapper {
     await this.admin.query(`grant ${ident(platformReadWrite)} to ${ident(roles.platform.user)}`);
     await this.admin.query(`grant ${ident(tenantReadWrite)} to ${ident(roles.tenant.user)}`);
     await this.admin.query(`grant ${ident(backupReader)} to ${ident(roles.backup.user)}`);
+    // Ends the app's sessions on a tenant database closed for a move to another cluster.
+    await this.admin.query(`grant pg_signal_backend to ${ident(roles.migrator.user)}`);
     this.log("roles ready");
 
     const platform = options.platformDatabase;

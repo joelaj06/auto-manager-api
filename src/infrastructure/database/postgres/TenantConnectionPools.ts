@@ -5,13 +5,19 @@ import {
   TenantSchemaOutdatedError,
 } from "../../../application/errors/TenantDatabaseErrors.js";
 import type { TenantId } from "../../../domain/value-objects/TenantId.js";
+import type { ClusterEndpoint } from "../clusters/ClusterConnections.js";
 import type { Queryable } from "./Queryable.js";
 import { PostgresTransactionRunner, type TransactionOptions } from "./PostgresTransactionRunner.js";
 
 export type TenantConnectionPoolsOptions = Readonly<{
-  /** Client options (tenant app role) for a given tenant database name. */
-  clientConfigFor: (databaseName: string) => pg.ClientConfig;
+  /** Client options (tenant app role) for a tenant database name on its cluster. */
+  clientConfigFor: (databaseName: string, cluster?: ClusterEndpoint) => pg.ClientConfig;
   databaseNameFor: (tenantId: TenantId) => string;
+  /**
+   * The cluster a tenant's database is on (cached by the caller). A pool opened on another
+   * cluster than the tenant's current one is closed and opened again there. Absent: one server.
+   */
+  clusterFor?: (tenantId: TenantId) => Promise<ClusterEndpoint>;
   /** Upper bound on open pools; least recently used idle pools are closed beyond it. */
   maxPools: number;
   maxConnectionsPerPool: number;
@@ -35,7 +41,7 @@ export type TenantPoolStats = Readonly<{
   waitingRequests: number;
 }>;
 
-type Entry = { pool: pg.Pool; leases: number };
+type Entry = { pool: pg.Pool; leases: number; clusterId: string | null; retired: boolean };
 type Opening = { waiters: number; promise: Promise<Entry> };
 type VerificationRow = { tenant_id: string | null; schema_version: string | null };
 
@@ -70,6 +76,7 @@ export class TenantConnectionPools {
       });
     } finally {
       entry.leases -= 1;
+      if (entry.retired && entry.leases === 0) this.end(entry, tenantId.value);
       this.evictBeyondLimit();
     }
   }
@@ -98,8 +105,15 @@ export class TenantConnectionPools {
     if (this.closed) throw new Error("TenantConnectionPools is closed");
 
     const key = tenantId.value;
+    const cluster = await this.options.clusterFor?.(tenantId);
+    if (this.closed) throw new Error("TenantConnectionPools is closed");
     const cached = this.entries.get(key);
-    if (cached !== undefined) {
+    if (cached !== undefined && cluster !== undefined && cached.clusterId !== cluster.id) {
+      // The tenant moved: the old pool ends once its last lease is back.
+      this.entries.delete(key);
+      cached.retired = true;
+      if (cached.leases === 0) this.end(cached, key);
+    } else if (cached !== undefined) {
       // Re-insert to mark as most recently used; take the lease synchronously.
       this.entries.delete(key);
       this.entries.set(key, cached);
@@ -112,7 +126,7 @@ export class TenantConnectionPools {
     let opening = this.opening.get(key);
     if (opening === undefined) {
       const counter = { waiters: 0 };
-      const promise = this.open(tenantId, () => counter.waiters).finally(() => {
+      const promise = this.open(tenantId, cluster, () => counter.waiters).finally(() => {
         this.opening.delete(key);
       });
       opening = Object.assign(counter, { promise });
@@ -122,10 +136,14 @@ export class TenantConnectionPools {
     return opening.promise;
   }
 
-  private async open(tenantId: TenantId, waiters: () => number): Promise<Entry> {
+  private async open(
+    tenantId: TenantId,
+    cluster: ClusterEndpoint | undefined,
+    waiters: () => number,
+  ): Promise<Entry> {
     const databaseName = this.options.databaseNameFor(tenantId);
     const pool = new pg.Pool({
-      ...this.options.clientConfigFor(databaseName),
+      ...this.options.clientConfigFor(databaseName, cluster),
       max: this.options.maxConnectionsPerPool,
       idleTimeoutMillis: this.options.idleTimeoutMs,
     });
@@ -143,7 +161,12 @@ export class TenantConnectionPools {
       throw new Error("TenantConnectionPools is closed");
     }
 
-    const entry: Entry = { pool, leases: waiters() };
+    const entry: Entry = {
+      pool,
+      leases: waiters(),
+      clusterId: cluster?.id ?? null,
+      retired: false,
+    };
     this.entries.set(tenantId.value, entry);
     this.evictBeyondLimit();
     return entry;
@@ -173,6 +196,12 @@ export class TenantConnectionPools {
     }
   }
 
+  private end(entry: Entry, key: string): void {
+    void entry.pool.end().catch((error: unknown) => {
+      if (error instanceof Error) this.options.onPoolError?.(error, key);
+    });
+  }
+
   private evictBeyondLimit(): void {
     const budget = this.options.maxTotalConnections ?? Number.POSITIVE_INFINITY;
     let connections = 0;
@@ -186,9 +215,7 @@ export class TenantConnectionPools {
       if (busy) continue;
       this.entries.delete(key);
       connections -= entry.pool.totalCount;
-      void entry.pool.end().catch((error: unknown) => {
-        if (error instanceof Error) this.options.onPoolError?.(error, key);
-      });
+      this.end(entry, key);
     }
     // If every pool is busy a limit is exceeded temporarily; it is enforced again on release.
   }

@@ -1,3 +1,4 @@
+import type { ClusterConnections } from "../../infrastructure/database/clusters/ClusterConnections.js";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -68,6 +69,8 @@ runCommand("backup", async () => {
     const catalog = new PostgresBackupCatalog(container.get<pg.Pool>(TYPES.PlatformDatabasePool));
     const service = new DatabaseBackupService({
       connections: container.get<PostgresConnectionFactory>(TYPES.PostgresConnectionFactory),
+      tenantConnections: (tenantId) =>
+        container.get<ClusterConnections>(TYPES.ClusterConnections).ofTenant(tenantId),
       naming: container.get<TenantDatabaseNaming>(TYPES.TenantDatabaseNaming),
       tools: new PgClientTools(config.backup.pgTools),
       storage: new LocalBackupStorage(config.backup.directory),

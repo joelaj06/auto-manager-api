@@ -24,6 +24,12 @@ const APPLICATION_NAME = "autoforce-api";
 export class PostgresConnectionFactory {
   constructor(private readonly config: DatabaseConfig) {}
 
+  /** The same roles and settings on another server (every cluster has the same roles). */
+  at(server: Readonly<{ host: string; port: number }>): PostgresConnectionFactory {
+    if (server.host === this.config.host && server.port === this.config.port) return this;
+    return new PostgresConnectionFactory({ ...this.config, host: server.host, port: server.port });
+  }
+
   settings(role: DatabaseRole, database: string): ConnectionSettings {
     const credentials: DatabaseRoleCredentials = this.config.roles[role];
     return {

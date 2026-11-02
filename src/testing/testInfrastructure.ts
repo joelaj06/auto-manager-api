@@ -34,17 +34,30 @@ export type StartedTestInfrastructure = Readonly<{
   stop: () => Promise<void>;
 }>;
 
-export async function startTestInfrastructure(): Promise<StartedTestInfrastructure> {
-  const started: StartedTestContainer[] = [];
-  try {
-    const postgres = await new GenericContainer(POSTGRES_IMAGE)
+/**
+ * A throw-away PostgreSQL server (superuser `autoforce` / POSTGRES_PASSWORD); also a second
+ * cluster for the cluster tests.
+ */
+export function startPostgresContainer(): Promise<StartedTestContainer> {
+  return (
+    new GenericContainer(POSTGRES_IMAGE)
       .withEnvironment({ POSTGRES_USER: "autoforce", POSTGRES_PASSWORD })
       .withExposedPorts(5432)
       // Data on tmpfs: faster, and gone with the container.
       .withTmpFs({ "/var/lib/postgresql": "rw" })
       // The entrypoint restarts the server once after initialisation.
       .withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2))
-      .start();
+      .start()
+  );
+}
+
+/** The superuser password of startPostgresContainer()'s servers. */
+export const TEST_POSTGRES_PASSWORD = POSTGRES_PASSWORD;
+
+export async function startTestInfrastructure(): Promise<StartedTestInfrastructure> {
+  const started: StartedTestContainer[] = [];
+  try {
+    const postgres = await startPostgresContainer();
     started.push(postgres);
 
     const mailpit = await new GenericContainer(MAILPIT_IMAGE)

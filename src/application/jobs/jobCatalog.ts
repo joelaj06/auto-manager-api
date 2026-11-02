@@ -33,6 +33,8 @@ export type JobPayloads = {
   "tenant.provision": Readonly<{ tenantId: string }>;
   /** Re-queue stalled provisioning and report orphan databases. */
   "provisioning.sweep": Readonly<Record<string, never>>;
+  /** Copy a tenant's database to another cluster and switch it there (an approved move). */
+  "tenant.cluster_move": Readonly<{ moveId: string }>;
   /** Bring one tenant's permissions and system roles to the current catalogue. */
   "tenant.catalogue_sync": Readonly<{ tenantId: string; version: number }>;
   /** Enqueue a catalogue sync for every tenant behind the current catalogue version. */
@@ -167,8 +169,19 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryBackoff: true,
     expireInSeconds: 600,
   },
+  "tenant.cluster_move": {
+    description: "Move a tenant's database to another cluster (offline while it is copied)",
+    tenantScoped: false,
+    policy: "standard",
+    // A failed move is recorded and undone, not retried; retries cover a lost worker only.
+    retryLimit: 2,
+    retryDelaySeconds: 30,
+    retryBackoff: false,
+    expireInSeconds: 3_600,
+  },
   "provisioning.sweep": {
-    description: "Re-queue stalled provisioning and report orphan databases",
+    description:
+      "Re-queue stalled provisioning and sweep every cluster for orphan and missing databases",
     tenantScoped: false,
     policy: "stately",
     retryLimit: 1,

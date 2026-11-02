@@ -57,10 +57,12 @@ export class PostgresTenantDirectory implements ITenantDirectory {
       slug: string;
       status: TenantStatus;
       billing_only: boolean;
+      moving: boolean;
     }>(
       `select id, slug::text as slug, status,
               (status = 'deactivated' and deactivation_reason in ('non_payment', 'trial_expired'))
-                as billing_only
+                as billing_only,
+              moving_since is not null as moving
          from tenants where ${condition}`,
       [value],
     );
@@ -71,6 +73,7 @@ export class PostgresTenantDirectory implements ITenantDirectory {
       slug: row.slug,
       status: row.status,
       ...(row.billing_only ? { billingOnly: true } : {}),
+      ...(row.moving ? { moving: true } : {}),
     };
   }
 }

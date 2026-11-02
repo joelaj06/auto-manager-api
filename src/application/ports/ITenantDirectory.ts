@@ -17,6 +17,8 @@ export type TenantSummary = Readonly<{
    * in and pay; nothing else works (docs/25 §5.4).
    */
   billingOnly?: boolean;
+  /** Its database is being moved to another cluster: nothing works until it is back. */
+  moving?: boolean;
 }>;
 
 /** Read-only lookup of tenants in the platform registry (cached by the implementation). */

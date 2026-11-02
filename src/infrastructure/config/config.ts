@@ -210,6 +210,11 @@ const envSchema = z
     REFUND_APPROVAL_THRESHOLD_MINOR: z.coerce.number().int().min(0).default(100_000),
     /** Announcement emails to more tenants than this need a Super Admin's approval. */
     BULK_MESSAGE_APPROVAL_TENANTS: z.coerce.number().int().min(0).default(50),
+    /**
+     * Moving a tenant between clusters: how long to wait until every process has seen the tenant
+     * go offline and come back (its directory and routing caches live 5 s).
+     */
+    CLUSTER_MOVE_SETTLE_MS: z.coerce.number().int().min(0).max(60_000).default(6_000),
 
     // --- Object storage (S3-compatible; files service) ---
     // Development defaults match compose.yaml (RustFS). Production sets everything explicitly;
@@ -519,6 +524,7 @@ export type OperationsConfig = Readonly<{
   onCallMinSeverity: "info" | "warning" | "critical";
   refundApprovalThresholdMinor: number;
   bulkMessageApprovalTenants: number;
+  clusterMoveSettleMs: number;
 }>;
 
 export type BillingGatewayConfig = Readonly<{
@@ -659,6 +665,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       onCallMinSeverity: e.ONCALL_MIN_SEVERITY,
       refundApprovalThresholdMinor: e.REFUND_APPROVAL_THRESHOLD_MINOR,
       bulkMessageApprovalTenants: e.BULK_MESSAGE_APPROVAL_TENANTS,
+      clusterMoveSettleMs: e.CLUSTER_MOVE_SETTLE_MS,
     }),
     push: Object.freeze({
       provider: e.PUSH_PROVIDER,

@@ -85,6 +85,7 @@ import { dealerCommissionRoutes } from "../../adapters/routes/dealerCommissionRo
 import { dealerReportRoutes } from "../../adapters/routes/dealerReportRoutes.js";
 import { reportRoutes } from "../../adapters/routes/reportRoutes.js";
 import { consoleAnalyticsRoutes } from "../../adapters/routes/consoleAnalyticsRoutes.js";
+import { consoleClusterRoutes } from "../../adapters/routes/consoleClusterRoutes.js";
 import type { IPlatformAnalytics } from "../../application/ports/IPlatformAnalytics.js";
 import { PlatformAnalytics } from "../../application/use-cases/console/PlatformAnalytics.js";
 import { PostgresPlatformAnalytics } from "../../infrastructure/console/PostgresPlatformAnalytics.js";
@@ -658,6 +659,19 @@ import { PostgresConnectionFactory } from "../../infrastructure/database/postgre
 import { PostgresTransactionContext } from "../../infrastructure/database/postgres/PostgresTransactionContext.js";
 import { TenantConnectionPools } from "../../infrastructure/database/postgres/TenantConnectionPools.js";
 import { TenantDatabaseNaming } from "../../infrastructure/database/postgres/TenantDatabaseNaming.js";
+import { setTimeout as sleep } from "node:timers/promises";
+import type { IClusterProbe, IClusterRegistry } from "../../application/ports/IClusterRegistry.js";
+import type { ITenantDatabaseMover } from "../../application/ports/ITenantDatabaseMover.js";
+import { PgClientTools } from "../../infrastructure/backup/PgClientTools.js";
+import { ClusterManagement } from "../../application/use-cases/console/ClusterManagement.js";
+import { MoveTenantToCluster } from "../../application/use-cases/console/MoveTenantToCluster.js";
+import { PostgresClusterProbe } from "../../infrastructure/database/clusters/PostgresClusterProbe.js";
+import { PostgresClusterRegistry } from "../../infrastructure/database/clusters/PostgresClusterRegistry.js";
+import { PostgresTenantDatabaseMover } from "../../infrastructure/database/clusters/PostgresTenantDatabaseMover.js";
+import {
+  ClusterConnections,
+  MAIN_CLUSTER,
+} from "../../infrastructure/database/clusters/ClusterConnections.js";
 import { PostgresReportUnitOfWork } from "../../infrastructure/database/PostgresReportUnitOfWork.js";
 import { PostgresTenantUnitOfWork } from "../../infrastructure/database/PostgresTenantUnitOfWork.js";
 import { TenantDatabaseProvisioner } from "../../infrastructure/database/provisioning/TenantDatabaseProvisioner.js";
@@ -936,6 +950,14 @@ export function createContainer(
     .onDeactivation((pool) => pool.end());
 
   container
+    .bind<ClusterConnections>(TYPES.ClusterConnections)
+    .toResolvedValue(
+      (pool: pg.Pool, factory: PostgresConnectionFactory) =>
+        new ClusterConnections(pool, factory, { host: db.host, port: db.port }),
+      [TYPES.PlatformDatabasePool, TYPES.PostgresConnectionFactory],
+    );
+
+  container
     .bind<TenantConnectionPools>(TYPES.TenantConnectionPools)
     .toResolvedValue(
       (
@@ -943,10 +965,16 @@ export function createContainer(
         naming: TenantDatabaseNaming,
         sets: MigrationSets,
         logger: ILogger,
+        clusters: ClusterConnections,
       ) =>
         new TenantConnectionPools({
-          clientConfigFor: (databaseName) => factory.clientConfig("tenant", databaseName),
+          clientConfigFor: (databaseName, cluster) =>
+            (cluster === undefined ? factory : factory.at(cluster)).clientConfig(
+              "tenant",
+              databaseName,
+            ),
           databaseNameFor: (tenantId) => naming.databaseNameFor(tenantId),
+          clusterFor: (tenantId) => clusters.endpointOf(tenantId.value),
           maxPools: db.tenantPools.maxPools,
           maxConnectionsPerPool: db.tenantPools.maxConnections,
           maxTotalConnections: db.tenantPools.maxTotalConnections,
@@ -961,6 +989,7 @@ export function createContainer(
         TYPES.TenantDatabaseNaming,
         TYPES.MigrationSets,
         TYPES.Logger,
+        TYPES.ClusterConnections,
       ],
     )
     .onDeactivation((pools) => pools.closeAll());
@@ -1009,6 +1038,7 @@ export function createContainer(
         sets: MigrationSets,
         tx: PostgresTransactionContext,
         logger: ILogger,
+        clusters: ClusterConnections,
       ) => {
         const replica = db.replica;
         return new PostgresReportUnitOfWork({
@@ -1035,6 +1065,9 @@ export function createContainer(
                       logger.warn("Replica database pool error", { tenantId, error }),
                   }),
                   maxLagSeconds: replica.maxLagSeconds,
+                  // The configured replica is the main cluster's.
+                  serves: async (tenantId) =>
+                    (await clusters.clusterOf(tenantId.value)) === MAIN_CLUSTER,
                 },
           transactions: tx,
           statementTimeoutMs: db.reportStatementTimeoutMs,
@@ -1055,6 +1088,7 @@ export function createContainer(
         TYPES.MigrationSets,
         TYPES.PostgresTransactionContext,
         TYPES.Logger,
+        TYPES.ClusterConnections,
       ],
     )
     .onDeactivation((unitOfWork) => unitOfWork.close());
@@ -1288,14 +1322,16 @@ export function createContainer(
   );
 
   container.bind<ITenantDatabaseProvisioner>(TYPES.TenantDatabaseProvisioner).toResolvedValue(
-    (factory: PostgresConnectionFactory, naming: TenantDatabaseNaming) =>
+    (clusters: ClusterConnections, naming: TenantDatabaseNaming) =>
       new TenantDatabaseProvisioner({
-        connect: (database) => factory.connect("migrator", database),
+        // On the cluster the tenant was given.
+        connect: async (database, tenantId) =>
+          (await clusters.ofTenant(tenantId.value)).connect("migrator", database),
         maintenanceDatabase: db.platformDatabase,
         templateDatabase: db.tenantTemplateDatabase,
         databaseNameFor: (tenantId) => naming.databaseNameFor(tenantId),
       }),
-    [TYPES.PostgresConnectionFactory, TYPES.TenantDatabaseNaming],
+    [TYPES.ClusterConnections, TYPES.TenantDatabaseNaming],
   );
 
   // --- Security and identity ---
@@ -2021,24 +2057,25 @@ export function createContainer(
     TYPES.UserDirectory,
     (p) => new HmacUserDirectory(p, auth.otpSecret),
   );
-  container
-    .bind<IOrphanDatabases>(TYPES.OrphanDatabases)
-    .toResolvedValue(
-      (platformDb: PlatformDb, naming: TenantDatabaseNaming) =>
-        new PostgresOrphanDatabases(platformDb, naming, db.tenantDatabasePrefix),
-      [TYPES.PlatformDb, TYPES.TenantDatabaseNaming],
-    );
+  container.bind<IOrphanDatabases>(TYPES.OrphanDatabases).toResolvedValue(
+    (platformDb: PlatformDb, naming: TenantDatabaseNaming, clusters: ClusterConnections) =>
+      new PostgresOrphanDatabases(platformDb, naming, clusters, {
+        prefix: db.tenantDatabasePrefix,
+        maintenanceDatabase: db.platformDatabase,
+      }),
+    [TYPES.PlatformDb, TYPES.TenantDatabaseNaming, TYPES.ClusterConnections],
+  );
   container
     .bind<ITenantSchemaUpdater>(TYPES.TenantSchemaUpdater)
     .toResolvedValue(
       (
-        factory: PostgresConnectionFactory,
+        clusters: ClusterConnections,
         naming: TenantDatabaseNaming,
         runner: MigrationRunner,
         sets: MigrationSets,
-      ) => new MigratorTenantSchemaUpdater(factory, naming, runner, sets.tenant),
+      ) => new MigratorTenantSchemaUpdater(clusters, naming, runner, sets.tenant),
       [
-        TYPES.PostgresConnectionFactory,
+        TYPES.ClusterConnections,
         TYPES.TenantDatabaseNaming,
         TYPES.MigrationRunner,
         TYPES.MigrationSets,
@@ -2076,15 +2113,17 @@ export function createContainer(
       directory: IUserDirectory,
       notifications: NotificationService,
       audit: IPlatformAuditTrail,
-      orphans: IOrphanDatabases,
+      clusters: ClusterManagement,
       queue: IJobQueue,
       clock: IClock,
       logger: ILogger,
       subscriptions: SubscriptionAdministration,
+      move: MoveTenantToCluster,
     ): IJobHandler[] => [
       new ProvisionTenant({
         subscriptions,
         provisioning,
+        placement: clusters,
         databases,
         schema,
         catalogue,
@@ -2103,7 +2142,8 @@ export function createContainer(
           defaultBranch: DEFAULT_BRANCH,
         },
       }),
-      new SweepProvisioning({ provisioning, orphans, queue, audit, clock, logger }),
+      new SweepProvisioning({ provisioning, clusters, queue, clock, logger }),
+      move,
       new SweepCatalogue({ provisioning, catalogue, queue }),
       new SyncTenantCatalogue({ catalogue, unitOfWork, seeder, provisioning, logger }),
     ],
@@ -2119,11 +2159,12 @@ export function createContainer(
       TYPES.UserDirectory,
       TYPES.NotificationService,
       TYPES.PlatformAuditTrail,
-      TYPES.OrphanDatabases,
+      TYPES.ClusterManagement,
       TYPES.JobQueue,
       TYPES.Clock,
       TYPES.Logger,
       TYPES.SubscriptionAdministration,
+      TYPES.MoveTenantToCluster,
     ],
   );
 
@@ -3237,6 +3278,115 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.MaintenanceState,
+    ],
+  );
+  // --- Cluster management (P9-1) ---
+  platformRepository<IClusterRegistry>(
+    TYPES.ClusterRegistry,
+    (p) => new PostgresClusterRegistry(p),
+  );
+  container.bind<IClusterProbe>(TYPES.ClusterProbe).toResolvedValue(
+    (clusters: ClusterConnections, factory: PostgresConnectionFactory, sets: MigrationSets) =>
+      new PostgresClusterProbe({
+        clusters,
+        factory,
+        maintenanceDatabase: db.platformDatabase,
+        templateDatabase: db.tenantTemplateDatabase,
+        tenantDatabasePrefix: db.tenantDatabasePrefix,
+        requiredTemplateVersion: sets.tenant.latestVersion,
+        timeoutMs: 5_000,
+      }),
+    [TYPES.ClusterConnections, TYPES.PostgresConnectionFactory, TYPES.MigrationSets],
+  );
+  container.bind<ITenantDatabaseMover>(TYPES.TenantDatabaseMover).toResolvedValue(
+    (clusters: ClusterConnections, naming: TenantDatabaseNaming) =>
+      new PostgresTenantDatabaseMover({
+        clusters,
+        naming,
+        tools: new PgClientTools(config.backup.pgTools),
+        maintenanceDatabase: db.platformDatabase,
+        tenantUser: db.roles.tenant.user,
+      }),
+    [TYPES.ClusterConnections, TYPES.TenantDatabaseNaming],
+  );
+  container.bind<ClusterManagement>(TYPES.ClusterManagement).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      registry: IClusterRegistry,
+      probes: IClusterProbe,
+      orphans: IOrphanDatabases,
+      routing: ClusterConnections,
+      approvals: ApprovalWorkflow,
+      queue: IJobQueue,
+      audit: IPlatformAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+      logger: ILogger,
+    ) => {
+      const clusters = new ClusterManagement({
+        unitOfWork,
+        registry,
+        probes,
+        orphans,
+        routing,
+        approvals,
+        queue,
+        alerts: lazyAlerts,
+        audit,
+        requestContext,
+        clock,
+        logger,
+      });
+      approvals.register(clusters.moveExecutor());
+      approvals.register(clusters.dropExecutor());
+      return clusters;
+    },
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.ClusterRegistry,
+      TYPES.ClusterProbe,
+      TYPES.OrphanDatabases,
+      TYPES.ClusterConnections,
+      TYPES.ApprovalWorkflow,
+      TYPES.JobQueue,
+      TYPES.PlatformAuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<MoveTenantToCluster>(TYPES.MoveTenantToCluster).toResolvedValue(
+    (
+      registry: IClusterRegistry,
+      mover: ITenantDatabaseMover,
+      directory: ITenantDirectory,
+      routing: ClusterConnections,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new MoveTenantToCluster({
+        registry,
+        mover,
+        directory,
+        routing,
+        audit,
+        alerts: lazyAlerts,
+        clock,
+        logger,
+        settleMs: operations.clusterMoveSettleMs,
+        wait: async (ms) => {
+          await sleep(ms);
+        },
+      }),
+    [
+      TYPES.ClusterRegistry,
+      TYPES.TenantDatabaseMover,
+      TYPES.TenantDirectory,
+      TYPES.ClusterConnections,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+      TYPES.Logger,
     ],
   );
   container.bind<AnnouncementMailer>(TYPES.AnnouncementMailer).toResolvedValue(
@@ -8603,6 +8753,9 @@ export function createContainer(
         }),
         ...consoleAnalyticsRoutes({
           analytics: container.get<PlatformAnalytics>(TYPES.PlatformAnalytics),
+        }),
+        ...consoleClusterRoutes({
+          clusters: container.get<ClusterManagement>(TYPES.ClusterManagement),
         }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...mobileRoutes(mobile),

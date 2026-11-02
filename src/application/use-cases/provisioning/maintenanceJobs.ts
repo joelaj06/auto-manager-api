@@ -3,9 +3,7 @@ import type { JobPayloads } from "../../jobs/jobCatalog.js";
 import type { IClock } from "../../ports/IClock.js";
 import type { IJobQueue } from "../../ports/IJobQueue.js";
 import type { ILogger } from "../../ports/ILogger.js";
-import type { IOrphanDatabases } from "../../ports/IOrphanDatabases.js";
 import type { IPermissionCatalogueSource } from "../../ports/IPermissionCatalogueSource.js";
-import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { ITenantProvisioning } from "../../ports/ITenantProvisioning.js";
 import type { ITenantSeeder } from "../../ports/ITenantSeeder.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
@@ -14,7 +12,8 @@ const STALLED_AFTER_MS = 15 * 60_000;
 
 /**
  * Safety net for provisioning: re-queues sagas that stopped making progress (lost job, crash) and
- * reports tenant databases that have no tenant record. Orphans are only reported — never dropped.
+ * sweeps every cluster for tenant databases that belong to no tenant there and tenants whose
+ * database is missing (decision 493). Orphans are only reported — never dropped.
  */
 export class SweepProvisioning implements IJobHandler<"provisioning.sweep"> {
   readonly job = "provisioning.sweep" as const;
@@ -22,9 +21,9 @@ export class SweepProvisioning implements IJobHandler<"provisioning.sweep"> {
   constructor(
     private readonly deps: Readonly<{
       provisioning: ITenantProvisioning;
-      orphans: IOrphanDatabases;
+      /** The cluster sweep, recorded with its alerts (ClusterManagement). */
+      clusters: Readonly<{ sweep(): Promise<unknown> }>;
       queue: IJobQueue;
-      audit: IPlatformAuditTrail;
       clock: IClock;
       logger: ILogger;
     }>,
@@ -41,16 +40,7 @@ export class SweepProvisioning implements IJobHandler<"provisioning.sweep"> {
     if (stalled.length > 0)
       deps.logger.warn("Re-queued stalled provisioning", { tenants: stalled });
 
-    const orphans = await deps.orphans.find();
-    if (orphans.length > 0) {
-      deps.logger.warn("Tenant databases without a tenant record", { databases: orphans });
-      await deps.audit.record({
-        actorType: "system",
-        action: "provisioning.orphan_databases_found",
-        entityType: "cluster",
-        after: { databases: orphans },
-      });
-    }
+    await deps.clusters.sweep();
   }
 }
 

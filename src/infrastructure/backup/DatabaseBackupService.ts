@@ -14,6 +14,8 @@ import type { BackupKind, BackupRecord, PostgresBackupCatalog } from "./Postgres
 
 export type BackupServiceOptions = Readonly<{
   connections: PostgresConnectionFactory;
+  /** Connections to the cluster a tenant's database is on (absent: `connections`). */
+  tenantConnections?: (tenantId: string) => Promise<PostgresConnectionFactory>;
   naming: TenantDatabaseNaming;
   tools: PgClientTools;
   storage: LocalBackupStorage;
@@ -64,12 +66,14 @@ export class DatabaseBackupService {
   }
 
   backupPlatform(): Promise<BackupRecord> {
-    return this.backup("platform", null, this.options.platformDatabase);
+    return this.backup("platform", null, this.options.platformDatabase, this.options.connections);
   }
 
-  backupTenant(tenantId: string): Promise<BackupRecord> {
+  async backupTenant(tenantId: string): Promise<BackupRecord> {
     const id = TenantId.from(tenantId);
-    return this.backup("tenant", id.value, this.options.naming.databaseNameFor(id));
+    const connections =
+      (await this.options.tenantConnections?.(id.value)) ?? this.options.connections;
+    return this.backup("tenant", id.value, this.options.naming.databaseNameFor(id), connections);
   }
 
   /** Backs up every tenant with a database; one failure does not stop the others. */
@@ -156,8 +160,9 @@ export class DatabaseBackupService {
     kind: BackupKind,
     tenantId: string | null,
     database: string,
+    connections: PostgresConnectionFactory,
   ): Promise<BackupRecord> {
-    const { publicKey, catalog, connections, storage, tools } = this.options;
+    const { publicKey, catalog, storage, tools } = this.options;
     if (publicKey === null) throw new Error("BACKUP_PUBLIC_KEY_FILE is required to create backups");
 
     const id = await catalog.start(kind, tenantId, database);
@@ -321,7 +326,7 @@ export class DatabaseBackupService {
   }
 }
 
-async function countRows(client: pg.ClientBase): Promise<Record<string, number>> {
+export async function countRows(client: pg.ClientBase): Promise<Record<string, number>> {
   const { rows: tables } = await client.query<{ tablename: string }>(
     "select tablename from pg_tables where schemaname = 'public' order by tablename",
   );
@@ -335,7 +340,7 @@ async function countRows(client: pg.ClientBase): Promise<Record<string, number>>
   return counts;
 }
 
-async function schemaVersionOf(client: pg.ClientBase): Promise<string | null> {
+export async function schemaVersionOf(client: pg.ClientBase): Promise<string | null> {
   const { rows } = await client.query<{ version: string | null }>(
     "select max(version) as version from schema_migrations",
   );

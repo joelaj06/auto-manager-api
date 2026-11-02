@@ -56,6 +56,17 @@ export class MaintenanceReadOnlyError extends ApplicationError {
   }
 }
 
+/** The tenant's database is being moved to another cluster: back within minutes (503). */
+export class TenantMovingError extends ApplicationError {
+  readonly code = "TENANT_MOVING";
+
+  constructor() {
+    super(
+      "This business account is being moved to a new server. Please try again in a few minutes.",
+    );
+  }
+}
+
 /** The feature is switched off for this business (403). */
 export class FeatureDisabledError extends ApplicationError {
   readonly code = "FEATURE_DISABLED";

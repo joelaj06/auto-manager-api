@@ -139,6 +139,13 @@ const definitions = {
   },
   "platform.data.migrations.run": { description: "Run schema migrations", sensitive: true },
   "platform.data.jobs.manage": { description: "Retry and cancel background jobs" },
+  "platform.data.clusters.view": {
+    description: "View database clusters, their capacity, tenant moves and orphan databases",
+  },
+  "platform.data.clusters.manage": {
+    description: "Add and change database clusters; ask to drop an orphan database",
+    sensitive: true,
+  },
   "platform.data.scripts.run": {
     description: "Run curated one-off data scripts",
     sensitive: true,
@@ -410,6 +417,8 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.data.migrations.view",
       "platform.data.migrations.run",
       "platform.data.jobs.manage",
+      "platform.data.clusters.view",
+      "platform.data.clusters.manage",
       "platform.mobile.view",
     ],
   },

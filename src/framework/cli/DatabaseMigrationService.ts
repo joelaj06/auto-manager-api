@@ -9,6 +9,7 @@ import {
   TenantSchemaMigrator,
   type TenantMigrationReport,
 } from "../../infrastructure/database/migrations/TenantSchemaMigrator.js";
+import type { ClusterConnections } from "../../infrastructure/database/clusters/ClusterConnections.js";
 import type { PostgresConnectionFactory } from "../../infrastructure/database/postgres/PostgresConnectionFactory.js";
 import { JobQueueInstaller } from "../../infrastructure/jobs/JobQueueInstaller.js";
 import { PlatformCatalogueSync } from "../../infrastructure/platform/PlatformCatalogueSync.js";
@@ -24,7 +25,7 @@ export type MigrationReport = Readonly<{
 
 /**
  * Migrates the platform database (SQL files, then the pg-boss job queue schema and queues), then
- * the tenant template, then every tenant database.
+ * the tenant template on every cluster, then every tenant database on its cluster.
  */
 export class DatabaseMigrationService {
   constructor(
@@ -32,6 +33,7 @@ export class DatabaseMigrationService {
     private readonly migrations: MigrationSets,
     private readonly connections: PostgresConnectionFactory,
     private readonly runner: MigrationRunner,
+    private readonly clusters: ClusterConnections,
     private readonly log: (message: string) => void,
   ) {}
 
@@ -41,6 +43,7 @@ export class DatabaseMigrationService {
       container.get<MigrationSets>(TYPES.MigrationSets),
       container.get<PostgresConnectionFactory>(TYPES.PostgresConnectionFactory),
       container.get<MigrationRunner>(TYPES.MigrationRunner),
+      container.get<ClusterConnections>(TYPES.ClusterConnections),
       log,
     );
   }
@@ -71,7 +74,8 @@ export class DatabaseMigrationService {
       );
 
       const tenantMigrator = new TenantSchemaMigrator(this.runner, {
-        connect: (database) => this.connections.connect("migrator", database),
+        connect: async (database, clusterId) =>
+          (await this.clusters.on(clusterId)).connect("migrator", database),
         templateDatabase: db.tenantTemplateDatabase,
         ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
         log: this.log,
