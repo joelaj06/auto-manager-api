@@ -737,6 +737,17 @@ rates at `cost-rates` (`PUT` needs `platform.settings.manage`), `resellers` and 
 the nightly `usage.daily`, which also counts jobs, server errors, the modules used and the
 onboarding milestones.
 
+## Performance
+
+Every foreign key has an index but the who-did-it columns (decision 486, kept by
+`src/framework/performance/performance.int.test.ts`). The ledger is rolled up nightly by day,
+account and branch into `ledger_daily_totals`; `ledger_activity` adds the lines posted since, and
+the trial balance and tax report read it (decision 488). Catalogue reports read in a read-only
+transaction with `REPORT_STATEMENT_TIMEOUT_MS`, on a streaming replica when
+`DATABASE_REPLICA_HOST` (and `DATABASE_REPLICA_PORT`) is set; a replica that is unreachable,
+behind the schema or more than `DATABASE_REPLICA_MAX_LAG_SECONDS` behind is passed over for the
+primary (decision 489).
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

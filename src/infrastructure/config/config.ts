@@ -114,6 +114,15 @@ const envSchema = z
     TENANT_POOL_MAX_TOTAL_CONNECTIONS: z.coerce.number().int().min(1).max(10_000).default(60),
     TENANT_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1_000).default(300_000),
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).default(15_000),
+    /** Catalogue reports read for longer than a request (decision 489). */
+    REPORT_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(600_000).default(60_000),
+
+    // --- Read replica for reports (optional, decision 489) ---
+    /** A streaming replica of the tenant databases; catalogue reports read there when set. */
+    DATABASE_REPLICA_HOST: z.string().min(1).optional(),
+    DATABASE_REPLICA_PORT: z.coerce.number().int().min(1).max(65_535).optional(),
+    /** Further behind than this, reports read the primary instead. */
+    DATABASE_REPLICA_MAX_LAG_SECONDS: z.coerce.number().int().min(1).max(3_600).default(30),
 
     MIGRATIONS_DIR: z.string().min(1).default("db/migrations"),
 
@@ -396,6 +405,9 @@ export type DatabaseConfig = Readonly<{
     idleTimeoutMs: number;
   }>;
   statementTimeoutMs: number;
+  reportStatementTimeoutMs: number;
+  /** Where catalogue reports read; null: the primary. */
+  replica: Readonly<{ host: string; port: number; maxLagSeconds: number }> | null;
   migrationsDir: string;
 }>;
 
@@ -694,6 +706,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         idleTimeoutMs: e.TENANT_POOL_IDLE_TIMEOUT_MS,
       }),
       statementTimeoutMs: e.DB_STATEMENT_TIMEOUT_MS,
+      reportStatementTimeoutMs: e.REPORT_STATEMENT_TIMEOUT_MS,
+      replica:
+        e.DATABASE_REPLICA_HOST === undefined
+          ? null
+          : Object.freeze({
+              host: e.DATABASE_REPLICA_HOST,
+              port: e.DATABASE_REPLICA_PORT ?? e.DATABASE_PORT,
+              maxLagSeconds: e.DATABASE_REPLICA_MAX_LAG_SECONDS,
+            }),
       migrationsDir: e.MIGRATIONS_DIR,
     }),
   });

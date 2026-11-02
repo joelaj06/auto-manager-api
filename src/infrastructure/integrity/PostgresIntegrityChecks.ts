@@ -28,6 +28,22 @@ const CHECKS: readonly Check[] = [
           having coalesce(sum(debit_minor), 0) <> coalesce(sum(credit_minor), 0)`,
   },
   {
+    name: "ledger daily totals",
+    description: "The ledger rolled up by day, account and branch adds up to the lines it holds",
+    sql: `with rolled as (
+            select l.account_id, l.branch_id, e.entry_date as day,
+                   sum(l.debit_minor) as debit, sum(l.credit_minor) as credit
+              from journal_entries e join ledger_lines l on l.entry_id = e.id
+             where e.created_at < (select rolled_until from ledger_rollup)
+             group by 1, 2, 3)
+          select coalesce(t.day, r.day) || ' ' || coalesce(t.account_id, r.account_id)
+                   as offender
+            from ledger_daily_totals t
+            full join rolled r on r.account_id = t.account_id and r.day = t.day
+                 and r.branch_id is not distinct from t.branch_id
+           where t.debit_minor is distinct from r.debit or t.credit_minor is distinct from r.credit`,
+  },
+  {
     name: "payment allocations",
     description: "A payment's allocated amount is what its open invoice allocations add up to",
     sql: `select p.number || ': ' || p.allocated_minor || ' vs ' || coalesce(sum(a.amount_minor), 0)

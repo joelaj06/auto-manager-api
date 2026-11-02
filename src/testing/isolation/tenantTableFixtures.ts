@@ -206,6 +206,24 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from ledger_lines where memo = $1",
   },
+  ledger_daily_totals: {
+    // No text column: the marker's hash stands in the line count.
+    insert: (marker) => ({
+      sql: `insert into ledger_daily_totals (day, account_id, debit_minor, lines)
+            select current_date, id, 100, abs(hashtext($1)) from ledger_accounts where code = '1000'`,
+      params: [marker],
+    }),
+    find: "select 1 from ledger_daily_totals where lines = abs(hashtext($1))",
+  },
+  ledger_rollup: {
+    // Singleton created by its migration: the marker's hash stands in the watermark.
+    insert: (marker) => ({
+      sql: `insert into ledger_rollup (rolled_until) values (to_timestamp(abs(hashtext($1))))
+            on conflict (id) do update set rolled_until = excluded.rolled_until`,
+      params: [marker],
+    }),
+    find: "select 1 from ledger_rollup where rolled_until = to_timestamp(abs(hashtext($1)))",
+  },
   invoices: {
     insert: (marker) => ({
       sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)

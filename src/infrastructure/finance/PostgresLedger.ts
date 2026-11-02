@@ -167,9 +167,7 @@ export class PostgresLedger implements ILedger {
       `select a.id, a.code, a.name, a.type, a.system_key, a.active,
               coalesce(sum(l.debit_minor), 0) as debit, coalesce(sum(l.credit_minor), 0) as credit
          from ledger_accounts a
-         left join ledger_lines l on l.account_id = a.id
-              and ($1::date is null or exists (select 1 from journal_entries e
-                                              where e.id = l.entry_id and e.entry_date <= $1))
+         left join ledger_activity l on l.account_id = a.id and ($1::date is null or l.day <= $1)
         group by a.id
         order by a.code`,
       [asOf],
@@ -186,6 +184,46 @@ export class PostgresLedger implements ILedger {
         balanceMinor: debitNature ? debitMinor - creditMinor : creditMinor - debitMinor,
       };
     });
+  }
+
+  async rollUp(settleSeconds: number): Promise<number> {
+    // Up to `settleSeconds` ago, and never past the start of a transaction still open in this
+    // database: entries it posts are created at its start and committed later.
+    const { rows } = await this.tx.query<{ since: string; until: string; due: boolean }>(
+      `select rolled_until::text as since, b.until::text as until, b.until > rolled_until as due
+         from ledger_rollup,
+              lateral (select least(now() - make_interval(secs => $1),
+                                    (select min(xact_start) from pg_stat_activity
+                                      where datname = current_database()
+                                        and pid <> pg_backend_pid()
+                                        and xact_start is not null)) as until) b
+          for update of ledger_rollup`,
+      [settleSeconds],
+    );
+    const bounds = rows[0];
+    if (bounds === undefined || !bounds.due) return 0;
+    const rolled = await this.tx.query<{ lines: string }>(
+      `with day_totals as (
+         select e.entry_date as day, l.account_id, l.branch_id, sum(l.debit_minor) as debit,
+                sum(l.credit_minor) as credit, count(*) as lines
+           from journal_entries e
+           join ledger_lines l on l.entry_id = e.id
+          where e.created_at >= $1::timestamptz and e.created_at < $2::timestamptz
+          group by 1, 2, 3
+       ), added as (
+         insert into ledger_daily_totals as t
+                (day, account_id, branch_id, debit_minor, credit_minor, lines)
+         select day, account_id, branch_id, debit, credit, lines from day_totals
+         on conflict on constraint ledger_daily_totals_key do update
+            set debit_minor = t.debit_minor + excluded.debit_minor,
+                credit_minor = t.credit_minor + excluded.credit_minor,
+                lines = t.lines + excluded.lines
+       )
+       select coalesce(sum(lines), 0) as lines from day_totals`,
+      [bounds.since, bounds.until],
+    );
+    await this.tx.query("update ledger_rollup set rolled_until = $1::timestamptz", [bounds.until]);
+    return Number(rolled.rows[0]?.lines ?? 0);
   }
 
   async lines(filter: LedgerLineFilter): Promise<LedgerLineView[]> {

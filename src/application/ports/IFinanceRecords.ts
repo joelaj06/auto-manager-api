@@ -65,6 +65,12 @@ export interface ILedger {
   /** Entries of a source not cancelled by a reversal (newest first). */
   openEntries(sourceType: string, sourceId: string): Promise<PostedEntry[]>;
   balances(asOf: string | null): Promise<AccountBalance[]>;
+  /**
+   * Adds the lines of entries posted since the last roll-up, up to `settleSeconds` ago, to the
+   * daily totals (decision 488), leaving out those of transactions still open; returns the lines
+   * rolled up.
+   */
+  rollUp(settleSeconds: number): Promise<number>;
   lines(filter: LedgerLineFilter): Promise<LedgerLineView[]>;
   /** Σ(debit − credit) for a party on an account, in base minor units. */
   partyBalance(

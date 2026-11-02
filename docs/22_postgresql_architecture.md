@@ -3,6 +3,7 @@
 > Supersedes the MongoDB-specific parts of docs 03, 04, 05 and 17.
 > Where those docs say "collection", read "table". Business content (fields, rules, lifecycles) in docs 05–15 still applies.
 > **Revision 2 (2026-10-13):** decision 26 — **every tenant gets its own PostgreSQL database.** The first draft of this doc proposed shared tables with Row-Level Security; that is withdrawn. Sections below reflect database-per-tenant.
+> **Update 2026-11-02 (P8-5):** the performance notes (§11) are worked through: every foreign key has an index but the who-did-it columns (decision 486), the growing tables are vacuumed sooner (487), the ledger is rolled up by day behind the trial balance and tax report (488), and catalogue reports can read a streaming replica with fallback to the primary (489). Monthly partitions and pool warm-up are not taken for now; keyset paging was already in place (490).
 > Status: proposal for approval. Versions and tool choices are recommendations to confirm before implementation.
 
 ## 1. Why PostgreSQL helps this product

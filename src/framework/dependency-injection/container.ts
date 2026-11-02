@@ -348,6 +348,7 @@ import type {
   IRemittanceSettingsStore,
 } from "../../application/ports/IRemittanceRecords.js";
 import { DriverLedger } from "../../application/use-cases/remittances/DriverLedger.js";
+import { LedgerRollup } from "../../application/use-cases/finance/LedgerRollup.js";
 import { OperationsBoard } from "../../application/use-cases/remittances/OperationsBoard.js";
 import { RemittancePaymentListener } from "../../application/use-cases/remittances/RemittancePaymentListener.js";
 import { RemittancePaymentPurpose } from "../../application/use-cases/remittances/RemittancePaymentPurpose.js";
@@ -657,6 +658,7 @@ import { PostgresConnectionFactory } from "../../infrastructure/database/postgre
 import { PostgresTransactionContext } from "../../infrastructure/database/postgres/PostgresTransactionContext.js";
 import { TenantConnectionPools } from "../../infrastructure/database/postgres/TenantConnectionPools.js";
 import { TenantDatabaseNaming } from "../../infrastructure/database/postgres/TenantDatabaseNaming.js";
+import { PostgresReportUnitOfWork } from "../../infrastructure/database/PostgresReportUnitOfWork.js";
 import { PostgresTenantUnitOfWork } from "../../infrastructure/database/PostgresTenantUnitOfWork.js";
 import { TenantDatabaseProvisioner } from "../../infrastructure/database/provisioning/TenantDatabaseProvisioner.js";
 import { PostgresAuditTrail } from "../../infrastructure/database/repositories/PostgresAuditTrail.js";
@@ -995,6 +997,67 @@ export function createContainer(
         TYPES.Logger,
       ],
     );
+
+  container
+    .bind<PostgresReportUnitOfWork>(TYPES.ReportUnitOfWork)
+    .toResolvedValue(
+      (
+        tenantContext: ITenantContext,
+        primary: TenantConnectionPools,
+        factory: PostgresConnectionFactory,
+        naming: TenantDatabaseNaming,
+        sets: MigrationSets,
+        tx: PostgresTransactionContext,
+        logger: ILogger,
+      ) => {
+        const replica = db.replica;
+        return new PostgresReportUnitOfWork({
+          tenantContext,
+          primary,
+          replica:
+            replica === null
+              ? null
+              : {
+                  pools: new TenantConnectionPools({
+                    clientConfigFor: (databaseName) => ({
+                      ...factory.clientConfig("tenant", databaseName),
+                      host: replica.host,
+                      port: replica.port,
+                    }),
+                    databaseNameFor: (tenantId) => naming.databaseNameFor(tenantId),
+                    maxPools: db.tenantPools.maxPools,
+                    maxConnectionsPerPool: db.tenantPools.maxConnections,
+                    maxTotalConnections: db.tenantPools.maxTotalConnections,
+                    idleTimeoutMs: db.tenantPools.idleTimeoutMs,
+                    statementTimeoutMs: db.reportStatementTimeoutMs,
+                    requiredSchemaVersion: sets.tenant.latestVersion,
+                    onPoolError: (error, tenantId) =>
+                      logger.warn("Replica database pool error", { tenantId, error }),
+                  }),
+                  maxLagSeconds: replica.maxLagSeconds,
+                },
+          transactions: tx,
+          statementTimeoutMs: db.reportStatementTimeoutMs,
+          onFallback: (fallback) =>
+            logger.warn("Report read the primary instead of the replica", {
+              reason: fallback.reason,
+              ...(fallback.reason === "lagging"
+                ? { lagSeconds: fallback.lagSeconds }
+                : { error: fallback.error }),
+            }),
+        });
+      },
+      [
+        TYPES.TenantContext,
+        TYPES.TenantConnectionPools,
+        TYPES.PostgresConnectionFactory,
+        TYPES.TenantDatabaseNaming,
+        TYPES.MigrationSets,
+        TYPES.PostgresTransactionContext,
+        TYPES.Logger,
+      ],
+    )
+    .onDeactivation((unitOfWork) => unitOfWork.close());
 
   container
     .bind<ISequenceGenerator>(TYPES.SequenceGenerator)
@@ -4880,13 +4943,17 @@ export function createContainer(
       dealerDealAlerts: DealerDealAlerts,
       depreciation: VehicleDepreciation,
       reports: Reports,
+      unitOfWork: IUnitOfWork,
+      ledger: ILedger,
+      logger: ILogger,
     ) =>
-      // Stats after the money tasks: they read what those posted.
+      // Stats and the ledger roll-up after the money tasks: they read what those posted.
       [
         recurring,
         remittances,
         workpayArrears,
         depreciation,
+        new LedgerRollup({ unitOfWork, ledger, logger }),
         stats,
         serviceDue,
         maintenanceAlerts,
@@ -4913,6 +4980,9 @@ export function createContainer(
       TYPES.DealerDealAlerts,
       TYPES.VehicleDepreciation,
       TYPES.Reports,
+      TYPES.UnitOfWork,
+      TYPES.Ledger,
+      TYPES.Logger,
     ],
   );
 
@@ -6482,7 +6552,7 @@ export function createContainer(
         scope: BranchScope,
       ) => new ReportContext({ unitOfWork, queries, organisation, posting, calendar, scope }),
       [
-        TYPES.UnitOfWork,
+        TYPES.ReportUnitOfWork,
         TYPES.ReportQueries,
         TYPES.OrganisationSettings,
         TYPES.LedgerPosting,

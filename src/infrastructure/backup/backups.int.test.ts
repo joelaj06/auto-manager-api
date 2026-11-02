@@ -104,6 +104,7 @@ describe("tenant backups", () => {
       "foreign keys valid",
       "integrity: journal entries balanced",
       "integrity: trial balance",
+      "integrity: ledger daily totals",
       "integrity: payment allocations",
       "integrity: invoice payments",
       "integrity: work and pay allocations",

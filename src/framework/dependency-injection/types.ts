@@ -23,6 +23,8 @@ export const TYPES = Object.freeze({
   // Application ports
   TenantContext: Symbol.for("ITenantContext"),
   UnitOfWork: Symbol.for("IUnitOfWork"),
+  /** Read-only, for catalogue reports: on the read replica when one is set (decision 489). */
+  ReportUnitOfWork: Symbol.for("ReportUnitOfWork"),
   SequenceGenerator: Symbol.for("ISequenceGenerator"),
   AuditTrail: Symbol.for("IAuditTrail"),
   Outbox: Symbol.for("IOutbox"),

@@ -466,11 +466,10 @@ export class PostgresReportQueries implements IReportQueries {
       `select a.code, a.name, a.system_key,
               coalesce(sum(l.debit_minor), 0) as debit, coalesce(sum(l.credit_minor), 0) as credit
          from ledger_accounts a
-         left join ledger_lines l on l.account_id = a.id
+         left join ledger_activity l on l.account_id = a.id
               and ($1::uuid[] is null or l.branch_id = any($1::uuid[]))
               and ($2::uuid is null or l.branch_id = $2)
-              and exists (select 1 from journal_entries e
-                           where e.id = l.entry_id and e.entry_date between $3 and $4)
+              and l.day between $3 and $4
         where a.system_key like 'tax_payable:%' or a.system_key in ('input_tax', 'withholding_tax')
         group by a.id
         order by a.code`,
