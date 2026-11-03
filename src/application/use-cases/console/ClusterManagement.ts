@@ -197,9 +197,13 @@ export class ClusterManagement {
       if (tenant === null) throw new ClusterRuleError("Unknown tenant");
       if (tenant.hasDatabase) return tenant.clusterId;
       const loads = await deps.registry.lockLoads();
-      // Its own row already counts towards the cluster it was registered on.
+      // Its own row already counts towards the cluster it was registered on (an archived
+      // tenant's does not: it is coming back from cold archive).
+      const counted = tenant.status !== "archived";
       const id = pickCluster(
-        loads.map((l) => (l.id === tenant.clusterId ? { ...l, tenants: l.tenants - 1 } : l)),
+        loads.map((l) =>
+          counted && l.id === tenant.clusterId ? { ...l, tenants: l.tenants - 1 } : l,
+        ),
       );
       if (id === null) return null;
       await deps.registry.place(tenantId, id);

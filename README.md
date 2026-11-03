@@ -761,6 +761,27 @@ provisioning sweep records orphan, moved-away, stray and missing databases per c
 needs a Super Admin's approval after the grace period (decision 493). Existing clusters need
 `yarn db:setup` once more so the migrator may end sessions (`pg_signal_backend`).
 
+## Cold archive and erasure
+
+A tenant deactivated for at least a year is moved to cold archive with
+`POST /api/platform/v1/tenants/:id/cold-archive` and a second staff member's approval: its
+database is dumped encrypted, checked while it is written, and dropped (decision 495;
+`GET /api/platform/v1/archives`). Bringing it back is asked with
+`POST /api/platform/v1/tenants/:id/cold-archive/restore`, approved, and carried out by an operator
+with the private key (decision 496):
+
+```
+BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn archive list
+BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn archive restore --private-key <file> --tenant <id> --operator <name>
+BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn archive verify --private-key <file> --due      # yearly restore test
+BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn archive rekey --private-key <old key file>     # after a key rotation
+```
+
+A person's data is erased by anonymisation: preview with
+`GET /api/platform/v1/tenants/:id/erasures/preview`, ask with `POST …/erasures` and a Super Admin
+approves; the erasure ledger (`GET /api/platform/v1/erasures`) is applied again to every restored
+archive or backup (decision 498). Runbook: [docs/31 §11](docs/31_backup_restore_runbooks.md).
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

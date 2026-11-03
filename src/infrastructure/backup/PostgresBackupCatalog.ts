@@ -2,10 +2,13 @@ import type pg from "pg";
 
 export type BackupKind = "tenant" | "platform";
 export type BackupStatus = "running" | "succeeded" | "failed";
+/** Archive dumps are kept indefinitely (decision 495). */
+export type BackupPurpose = "routine" | "archive";
 
 export type BackupRecord = Readonly<{
   id: string;
   kind: BackupKind;
+  purpose: BackupPurpose;
   tenantId: string | null;
   databaseName: string;
   status: BackupStatus;
@@ -25,6 +28,7 @@ export type BackupRecord = Readonly<{
 type Row = {
   id: string;
   kind: BackupKind;
+  purpose: BackupPurpose;
   tenant_id: string | null;
   database_name: string;
   status: BackupStatus;
@@ -41,12 +45,13 @@ type Row = {
   verification: Record<string, unknown> | null;
 };
 
-const COLUMNS = `id, kind, tenant_id, database_name, status, started_at, finished_at, location,
+const COLUMNS = `id, kind, purpose, tenant_id, database_name, status, started_at, finished_at, location,
   size_bytes, sha256, key_fingerprint, schema_version, row_counts, error, verified_at, verification`;
 
 const toRecord = (row: Row): BackupRecord => ({
   id: row.id,
   kind: row.kind,
+  purpose: row.purpose,
   tenantId: row.tenant_id,
   databaseName: row.database_name,
   status: row.status,
@@ -67,10 +72,16 @@ const toRecord = (row: Row): BackupRecord => ({
 export class PostgresBackupCatalog {
   constructor(private readonly platform: pg.Pool) {}
 
-  async start(kind: BackupKind, tenantId: string | null, databaseName: string): Promise<string> {
+  async start(
+    kind: BackupKind,
+    tenantId: string | null,
+    databaseName: string,
+    purpose: BackupPurpose = "routine",
+  ): Promise<string> {
     const { rows } = await this.platform.query<{ id: string }>(
-      "insert into backups (kind, tenant_id, database_name) values ($1, $2, $3) returning id",
-      [kind, tenantId, databaseName],
+      `insert into backups (kind, tenant_id, database_name, purpose) values ($1, $2, $3, $4)
+       returning id`,
+      [kind, tenantId, databaseName, purpose],
     );
     return rows[0]!.id;
   }
@@ -148,7 +159,7 @@ export class PostgresBackupCatalog {
        union all
        (select ${COLUMNS} from (
           select distinct on (tenant_id) * from backups
-           where kind = 'tenant' and status = 'succeeded'
+           where kind = 'tenant' and status = 'succeeded' and purpose = 'routine'
            order by tenant_id, started_at desc) latest
          order by random() limit $1)`,
       [tenants],
@@ -156,11 +167,15 @@ export class PostgresBackupCatalog {
     return rows.map(toRecord);
   }
 
-  /** Tenants that should be backed up: every tenant with a database (deactivated included). */
+  /**
+   * Tenants that should be backed up: every tenant with a database (deactivated included; an
+   * archived tenant has none, its archive is its backup).
+   */
   async tenantsToBackUp(): Promise<string[]> {
     const { rows } = await this.platform.query<{ id: string }>(
       `select id from tenants
-        where status not in ('provisioning', 'provisioning_failed')
+        where status not in ('provisioning', 'provisioning_failed', 'archived')
+          and database_name is not null
         order by id`,
     );
     return rows.map((r) => r.id);

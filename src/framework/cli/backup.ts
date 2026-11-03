@@ -1,4 +1,8 @@
-import type { ClusterConnections } from "../../infrastructure/database/clusters/ClusterConnections.js";
+import type { PersonalDataErasure } from "../../application/use-cases/console/PersonalDataErasure.js";
+import {
+  MAIN_CLUSTER,
+  type ClusterConnections,
+} from "../../infrastructure/database/clusters/ClusterConnections.js";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -30,8 +34,8 @@ const USAGE = `yarn backup <command>
           [--all-tenants]                   (no option: platform + all tenants)
   verify  --private-key <file>              Automated restore test into a scratch database
           (--id <backup id> | --sample <n>) (--sample: latest platform + n random tenants)
-  restore --private-key <file> --id <id>    Restore into a NEW database (never overwrites)
-          --into <database>
+  restore --private-key <file> --id <id>    Restore into a NEW database (never overwrites);
+          --into <database>                 a tenant's gets the erasure ledger applied again
   list    [--limit <n>]                     Recent backups and their verification status`;
 
 const PASSPHRASE_ENV = "BACKUP_PRIVATE_KEY_PASSPHRASE";
@@ -134,6 +138,17 @@ runCommand("backup", async () => {
           return 2;
         }
         await service.restore(values.id, await readPrivateKey(values["private-key"]), values.into);
+        // People erased since the backup must not come back (decision 498).
+        const restored = await catalog.find(values.id);
+        if (restored?.kind === "tenant" && restored.tenantId !== null) {
+          const erasures = await container
+            .get<PersonalDataErasure>(TYPES.PersonalDataErasure)
+            .reapply({
+              tenantId: restored.tenantId,
+              database: { clusterId: MAIN_CLUSTER, name: values.into },
+            });
+          console.info(`Erasure ledger applied again: ${erasures.reapplied} erasure(s).`);
+        }
         console.info(
           `Restored into ${values.into}. Check it, then follow docs/31 to switch over or copy rows back.`,
         );

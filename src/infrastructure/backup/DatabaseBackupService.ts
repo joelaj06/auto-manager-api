@@ -1,6 +1,7 @@
 import { PostgresIntegrityChecks } from "../integrity/PostgresIntegrityChecks.js";
 import { randomBytes, type KeyObject } from "node:crypto";
 import pg from "pg";
+import { PassThrough, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import { mapWithConcurrency } from "../concurrency/mapWithConcurrency.js";
@@ -10,7 +11,12 @@ import type { TenantDatabaseNaming } from "../database/postgres/TenantDatabaseNa
 import { BackupDecryptStream, BackupEncryptStream, keyFingerprint } from "./BackupCipher.js";
 import type { LocalBackupStorage } from "./LocalBackupStorage.js";
 import type { PgClientTools } from "./PgClientTools.js";
-import type { BackupKind, BackupRecord, PostgresBackupCatalog } from "./PostgresBackupCatalog.js";
+import type {
+  BackupKind,
+  BackupPurpose,
+  BackupRecord,
+  PostgresBackupCatalog,
+} from "./PostgresBackupCatalog.js";
 
 export type BackupServiceOptions = Readonly<{
   connections: PostgresConnectionFactory;
@@ -27,11 +33,41 @@ export type BackupServiceOptions = Readonly<{
   log?: (message: string) => void;
 }>;
 
+export type Check = Readonly<{ name: string; passed: boolean; detail?: string }>;
+
 export type VerificationReport = Readonly<{
   backupId: string;
   passed: boolean;
-  checks: readonly Readonly<{ name: string; passed: boolean; detail?: string }>[];
+  checks: readonly Check[];
   durationMs: number;
+  /** The dump's schema version, and the one it was migrated to (when asked). */
+  schemaVersion: string | null;
+  migratedTo: string | null;
+}>;
+
+/** Brings a restored tenant database to this release's schema; returns its version. */
+export type MigrateForward = (client: pg.ClientBase) => Promise<string | null>;
+
+/** A file the tenant's records point at (the files manifest of an archive). */
+export type ManifestFile = Readonly<{
+  key: string;
+  visibility: "public" | "private";
+  sizeBytes: number;
+  contentType: string;
+}>;
+
+export type ArchiveDump = Readonly<{
+  record: BackupRecord;
+  /** The dump restored into a scratch database as it was written, compared with the database. */
+  checks: readonly Check[];
+  files: readonly ManifestFile[];
+  manifestLocation: string;
+}>;
+
+export type RestoredTenant = Readonly<{
+  checks: readonly Check[];
+  schemaVersion: string | null;
+  migratedTo: string | null;
 }>;
 
 export type BulkBackupResult = Readonly<{
@@ -92,30 +128,46 @@ export class DatabaseBackupService {
     return { succeeded, failed };
   }
 
-  async verify(backupId: string, privateKey: KeyObject): Promise<VerificationReport> {
+  /**
+   * The restore test: restores into a throw-away database (on `connections`, the main cluster by
+   * default) and compares it with the catalogue. With `migrate`, the restored database is then
+   * brought to this release's schema and its books checked again (archives, decision 497).
+   */
+  async verify(
+    backupId: string,
+    privateKey: KeyObject,
+    options: Readonly<{ connections?: PostgresConnectionFactory; migrate?: MigrateForward }> = {},
+  ): Promise<VerificationReport> {
     const started = Date.now();
+    const connections = options.connections ?? this.options.connections;
     const record = await this.requireRestorable(backupId);
-    const checks: { name: string; passed: boolean; detail?: string }[] = [];
+    const checks: Check[] = [];
     const scratch = `rv_${randomBytes(6).toString("hex")}`;
+    let migratedTo: string | null = null;
 
     const stored = await this.options.storage.inspect(record.location!);
     checks.push({
       name: "file checksum",
       passed: stored.sha256 === record.sha256 && stored.sizeBytes === record.sizeBytes,
     });
-    if (!checks[0]!.passed) return this.finishVerification(record, checks, started);
+    if (!checks[0]!.passed) return this.finishVerification(record, checks, started, null);
 
-    await this.createDatabase(scratch);
+    await this.createDatabase(scratch, connections);
     try {
-      await this.restoreInto(record, privateKey, scratch);
+      await this.restoreInto(record, privateKey, scratch, connections);
       checks.push({ name: "restore", passed: true });
-      checks.push(...(await this.inspectRestored(record, scratch)));
+      checks.push(...(await this.inspectRestored(record, scratch, connections)));
+      if (options.migrate !== undefined && checks.every((c) => c.passed)) {
+        const migrated = await this.migrateForward(record, scratch, connections, options.migrate);
+        checks.push(...migrated.checks);
+        migratedTo = migrated.version;
+      }
     } catch (error) {
       checks.push({ name: "restore", passed: false, detail: describe(error) });
     } finally {
-      await this.dropScratchDatabase(scratch);
+      await this.dropScratchDatabase(scratch, connections);
     }
-    return this.finishVerification(record, checks, started);
+    return this.finishVerification(record, checks, started, migratedTo);
   }
 
   /**
@@ -132,26 +184,141 @@ export class DatabaseBackupService {
       throw new Error("Refusing to restore over the platform or template database");
     }
     const record = await this.requireRestorable(backupId);
-    const stored = await this.options.storage.inspect(record.location!);
-    if (stored.sha256 !== record.sha256) {
-      throw new Error("Backup file checksum does not match the catalogue; refusing to restore");
-    }
+    await this.assertChecksum(record);
 
     await this.createDatabase(intoDatabase); // fails if it exists
     await this.restoreInto(record, privateKey, intoDatabase);
-    const groups =
-      record.kind === "tenant"
-        ? [DATABASE_GROUP_ROLES.tenantReadWrite, DATABASE_GROUP_ROLES.backupReader]
-        : [DATABASE_GROUP_ROLES.platformReadWrite, DATABASE_GROUP_ROLES.backupReader];
-    await this.withMaintenance(async (client) => {
-      await client.query(
-        `revoke connect, temporary on database ${ident(intoDatabase)} from public`,
-      );
-      await client.query(
-        `grant connect on database ${ident(intoDatabase)} to ${groups.map(ident).join(", ")}`,
-      );
-    });
+    await this.grantAccess(record.kind, intoDatabase, this.options.connections);
     this.log(`restored backup ${record.id} into ${intoDatabase}`);
+  }
+
+  // --- archives (decisions 495–497) ---
+
+  /**
+   * The cold archive dump of a tenant's (closed) database: like a backup, kept indefinitely, and
+   * restored into a scratch database while it is written, so the bytes stored are known to
+   * restore and to match the database — without the private key, which the server never has.
+   * The files its records point at are listed in an encrypted manifest next to it.
+   */
+  async archiveTenant(
+    tenantId: string,
+    connections: PostgresConnectionFactory,
+  ): Promise<ArchiveDump> {
+    const { publicKey, storage, catalog } = this.options;
+    if (publicKey === null) throw new Error("BACKUP_PUBLIC_KEY_FILE is required to archive");
+    const id = TenantId.from(tenantId);
+    const scratch = `rv_${randomBytes(6).toString("hex")}`;
+    const started = Date.now();
+    let files: ManifestFile[] = [];
+    await this.createDatabase(scratch, connections);
+    try {
+      const record = await this.backup(
+        "tenant",
+        id.value,
+        this.options.naming.databaseNameFor(id),
+        connections,
+        {
+          purpose: "archive",
+          restoreInto: scratch,
+          onSnapshot: async (client) => {
+            files = await manifestOf(client);
+          },
+        },
+      );
+      const checks: Check[] = [
+        { name: "restore while written", passed: true },
+        ...(await this.inspectRestored(record, scratch, connections)),
+      ];
+      await this.finishVerification(record, checks, started, null);
+      const manifestLocation = `archives/${id.value}/${record.id}.files.json.afbk`;
+      const manifest = Buffer.from(
+        JSON.stringify({ tenantId: id.value, backupId: record.id, files }),
+      );
+      await storage.write(
+        manifestLocation,
+        Readable.from([manifest]).pipe(new BackupEncryptStream(publicKey)),
+      );
+      return { record: (await catalog.find(record.id))!, checks, files, manifestLocation };
+    } finally {
+      await this.dropScratchDatabase(scratch, connections);
+    }
+  }
+
+  /**
+   * Restores a tenant's backup or archive as the tenant's own database on `connections` (which
+   * must not exist), migrated to this release and open to the app. The checks are returned; a
+   * database whose checks failed is left for the caller to drop.
+   */
+  async restoreTenant(
+    backupId: string,
+    privateKey: KeyObject,
+    tenantId: string,
+    connections: PostgresConnectionFactory,
+    migrate: MigrateForward,
+  ): Promise<RestoredTenant> {
+    const record = await this.requireRestorable(backupId);
+    if (record.kind !== "tenant" || record.tenantId !== tenantId)
+      throw new Error(`Backup ${backupId} is not one of tenant ${tenantId}`);
+    await this.assertChecksum(record);
+    const database = this.options.naming.databaseNameFor(TenantId.from(tenantId));
+    await this.createDatabase(database, connections); // fails if it exists
+    await this.restoreInto(record, privateKey, database, connections);
+    const checks: Check[] = [
+      { name: "restore", passed: true },
+      ...(await this.inspectRestored(record, database, connections)),
+    ];
+    let migratedTo: string | null = null;
+    if (checks.every((c) => c.passed)) {
+      const migrated = await this.migrateForward(record, database, connections, migrate);
+      checks.push(...migrated.checks);
+      migratedTo = migrated.version;
+    }
+    if (checks.every((c) => c.passed)) await this.grantAccess("tenant", database, connections);
+    this.log(`restored ${record.id} as ${database}`);
+    return { checks, schemaVersion: record.schemaVersion, migratedTo };
+  }
+
+  /**
+   * Encrypts a tenant's archive dump again for the current public key (keys are rotated,
+   * docs/26 §8): decrypted and encrypted again as it streams, stored under a new backup; the old
+   * file stays (storage has no delete).
+   */
+  async rekey(backupId: string, privateKey: KeyObject): Promise<BackupRecord> {
+    const { publicKey, storage, catalog } = this.options;
+    if (publicKey === null) throw new Error("BACKUP_PUBLIC_KEY_FILE is required to rekey");
+    const record = await this.requireRestorable(backupId);
+    if (record.kind !== "tenant") throw new Error("Only tenant archives are encrypted again");
+    await this.assertChecksum(record);
+    const id = await catalog.start("tenant", record.tenantId, record.databaseName, record.purpose);
+    try {
+      const location = `archives/${record.tenantId}/${datePath()}/${id}.dump.afbk`;
+      const out = new PassThrough();
+      const piping = pipeline(
+        storage.read(record.location!),
+        new BackupDecryptStream(privateKey),
+        new BackupEncryptStream(publicKey),
+        out,
+      );
+      const [stored] = await Promise.all([storage.write(location, out), piping]);
+      await catalog.succeed(id, {
+        location,
+        sizeBytes: stored.sizeBytes,
+        sha256: stored.sha256,
+        keyFingerprint: keyFingerprint(publicKey),
+        schemaVersion: record.schemaVersion,
+        rowCounts: record.rowCounts ?? {},
+      });
+      if (record.verification !== null)
+        await catalog.recordVerification(id, record.verifiedAt !== null, {
+          ...record.verification,
+          rekeyedFrom: record.id,
+        });
+      this.log(`archive ${record.id} encrypted again as ${id}`);
+      return (await catalog.find(id))!;
+    } catch (error) {
+      await catalog.fail(id, describe(error));
+      throw error;
+    }
   }
 
   // --- backup ---
@@ -161,15 +328,24 @@ export class DatabaseBackupService {
     tenantId: string | null,
     database: string,
     connections: PostgresConnectionFactory,
+    options: Readonly<{
+      purpose?: BackupPurpose;
+      /** A scratch database the dump is also restored into as it streams. */
+      restoreInto?: string;
+      onSnapshot?: (client: pg.ClientBase) => Promise<void>;
+    }> = {},
   ): Promise<BackupRecord> {
     const { publicKey, catalog, storage, tools } = this.options;
     if (publicKey === null) throw new Error("BACKUP_PUBLIC_KEY_FILE is required to create backups");
 
-    const id = await catalog.start(kind, tenantId, database);
+    const purpose = options.purpose ?? "routine";
+    const id = await catalog.start(kind, tenantId, database, purpose);
     const location =
-      kind === "tenant"
-        ? `tenants/${tenantId}/${datePath()}/${id}.dump.afbk`
-        : `platform/${datePath()}/${id}.dump.afbk`;
+      kind === "platform"
+        ? `platform/${datePath()}/${id}.dump.afbk`
+        : purpose === "archive"
+          ? `archives/${tenantId}/${datePath()}/${id}.dump.afbk`
+          : `tenants/${tenantId}/${datePath()}/${id}.dump.afbk`;
     let snapshotClient: pg.Client | undefined;
     try {
       snapshotClient = await connections.connect("backup", database);
@@ -181,14 +357,28 @@ export class DatabaseBackupService {
       const rowCounts = await countRows(snapshotClient);
       const schemaVersion = await schemaVersionOf(snapshotClient);
       if (kind === "tenant") await assertTenantIdentity(snapshotClient, tenantId!);
+      await options.onSnapshot?.(snapshotClient);
 
       const dump = tools.dump(connections.settings("backup", database), { snapshot });
       dump.exited.catch(() => undefined); // awaited below; avoid an unhandled rejection meanwhile
+      const restore =
+        options.restoreInto === undefined
+          ? null
+          : tools.restore(connections.settings("migrator", options.restoreInto));
+      if (restore !== null) {
+        restore.exited.catch(() => undefined);
+        // pg_restore failing closes its input early; its exit status says why.
+        restore.stream.on("error", () => undefined);
+        dump.stream.pipe(restore.stream);
+      }
       const stored = await storage.write(
         location,
         dump.stream.pipe(new BackupEncryptStream(publicKey)),
         {
-          beforeCommit: () => dump.exited,
+          beforeCommit: async () => {
+            await dump.exited;
+            await restore?.exited;
+          },
         },
       );
       await snapshotClient.query("commit");
@@ -225,8 +415,20 @@ export class DatabaseBackupService {
     return record;
   }
 
-  private async restoreInto(record: BackupRecord, privateKey: KeyObject, database: string) {
-    const { storage, tools, connections } = this.options;
+  private async assertChecksum(record: BackupRecord): Promise<void> {
+    const stored = await this.options.storage.inspect(record.location!);
+    if (stored.sha256 !== record.sha256) {
+      throw new Error("Backup file checksum does not match the catalogue; refusing to restore");
+    }
+  }
+
+  private async restoreInto(
+    record: BackupRecord,
+    privateKey: KeyObject,
+    database: string,
+    connections: PostgresConnectionFactory = this.options.connections,
+  ) {
+    const { storage, tools } = this.options;
     const restore = tools.restore(connections.settings("migrator", database));
     await Promise.all([
       pipeline(storage.read(record.location!), new BackupDecryptStream(privateKey), restore.stream),
@@ -234,9 +436,13 @@ export class DatabaseBackupService {
     ]);
   }
 
-  private async inspectRestored(record: BackupRecord, database: string) {
-    const checks: { name: string; passed: boolean; detail?: string }[] = [];
-    const client = await this.options.connections.connect("migrator", database);
+  private async inspectRestored(
+    record: BackupRecord,
+    database: string,
+    connections: PostgresConnectionFactory = this.options.connections,
+  ): Promise<Check[]> {
+    const checks: Check[] = [];
+    const client = await connections.connect("migrator", database);
     try {
       const version = await schemaVersionOf(client);
       checks.push({
@@ -273,38 +479,75 @@ export class DatabaseBackupService {
       checks.push({ name: "foreign keys valid", passed: Number(fks[0]?.invalid) === 0 });
 
       // The tenant's money still adds up (docs/26 §7).
-      if (record.kind === "tenant")
-        for (const check of await new PostgresIntegrityChecks(() => client).run())
-          checks.push({
-            name: `integrity: ${check.name}`,
-            passed: check.passed,
-            ...(check.detail === null ? {} : { detail: check.detail }),
-          });
+      if (record.kind === "tenant") checks.push(...(await integrity(client, "integrity")));
     } finally {
       await client.end();
     }
     return checks;
   }
 
+  /** Migrates a restored tenant database to this release and checks its books again. */
+  private async migrateForward(
+    record: BackupRecord,
+    database: string,
+    connections: PostgresConnectionFactory,
+    migrate: MigrateForward,
+  ): Promise<Readonly<{ checks: Check[]; version: string | null }>> {
+    const client = await connections.connect("migrator", database);
+    try {
+      const version = await migrate(client);
+      return {
+        version,
+        checks: [
+          {
+            name: "migrated to this release",
+            passed: true,
+            detail: `${record.schemaVersion ?? "none"} → ${version ?? "none"}`,
+          },
+          ...(await integrity(client, "integrity after migration")),
+        ],
+      };
+    } catch (error) {
+      return {
+        version: null,
+        checks: [{ name: "migrated to this release", passed: false, detail: describe(error) }],
+      };
+    } finally {
+      await client.end();
+    }
+  }
+
   private async finishVerification(
     record: BackupRecord,
-    checks: { name: string; passed: boolean; detail?: string }[],
+    checks: Check[],
     started: number,
+    migratedTo: string | null,
   ): Promise<VerificationReport> {
     const passed = checks.every((check) => check.passed);
     const durationMs = Date.now() - started;
-    await this.options.catalog.recordVerification(record.id, passed, { checks, durationMs });
+    await this.options.catalog.recordVerification(record.id, passed, {
+      checks,
+      durationMs,
+      ...(migratedTo === null ? {} : { migratedTo }),
+    });
     this.log(`verify ${record.id}: ${passed ? "passed" : "FAILED"} in ${durationMs} ms`);
-    return { backupId: record.id, passed, checks, durationMs };
+    return {
+      backupId: record.id,
+      passed,
+      checks,
+      durationMs,
+      schemaVersion: record.schemaVersion,
+      migratedTo,
+    };
   }
 
   // --- databases ---
 
-  private async withMaintenance<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-    const client = await this.options.connections.connect(
-      "migrator",
-      this.options.platformDatabase,
-    );
+  private async withMaintenance<T>(
+    work: (client: pg.Client) => Promise<T>,
+    connections: PostgresConnectionFactory = this.options.connections,
+  ): Promise<T> {
+    const client = await connections.connect("migrator", this.options.platformDatabase);
     try {
       return await work(client);
     } finally {
@@ -312,18 +555,68 @@ export class DatabaseBackupService {
     }
   }
 
-  private createDatabase(name: string): Promise<void> {
+  private createDatabase(
+    name: string,
+    connections: PostgresConnectionFactory = this.options.connections,
+  ): Promise<void> {
     return this.withMaintenance(async (client) => {
       await client.query(`create database ${ident(name)} template template0`);
-    });
+    }, connections);
   }
 
-  private dropScratchDatabase(name: string): Promise<void> {
+  private grantAccess(
+    kind: BackupKind,
+    database: string,
+    connections: PostgresConnectionFactory,
+  ): Promise<void> {
+    const groups =
+      kind === "tenant"
+        ? [DATABASE_GROUP_ROLES.tenantReadWrite, DATABASE_GROUP_ROLES.backupReader]
+        : [DATABASE_GROUP_ROLES.platformReadWrite, DATABASE_GROUP_ROLES.backupReader];
+    return this.withMaintenance(async (client) => {
+      await client.query(`revoke connect, temporary on database ${ident(database)} from public`);
+      await client.query(
+        `grant connect on database ${ident(database)} to ${groups.map(ident).join(", ")}`,
+      );
+    }, connections);
+  }
+
+  private dropScratchDatabase(
+    name: string,
+    connections: PostgresConnectionFactory = this.options.connections,
+  ): Promise<void> {
     if (!SCRATCH_DATABASE.test(name)) throw new Error(`Refusing to drop ${name}`);
     return this.withMaintenance(async (client) => {
       await client.query(`drop database if exists ${ident(name)} with (force)`);
-    });
+    }, connections);
   }
+}
+
+async function integrity(client: pg.ClientBase, prefix: string): Promise<Check[]> {
+  return (await new PostgresIntegrityChecks(() => client).run()).map((check) => ({
+    name: `${prefix}: ${check.name}`,
+    passed: check.passed,
+    ...(check.detail === null ? {} : { detail: check.detail }),
+  }));
+}
+
+/** The files a tenant's records point at, from the snapshot of the dump. */
+async function manifestOf(client: pg.ClientBase): Promise<ManifestFile[]> {
+  const { rows } = await client.query<{
+    storage_key: string;
+    visibility: "public" | "private";
+    size_bytes: string;
+    content_type: string;
+  }>(
+    `select storage_key, visibility, size_bytes, content_type from files
+      where status = 'ready' order by storage_key`,
+  );
+  return rows.map((r) => ({
+    key: r.storage_key,
+    visibility: r.visibility,
+    sizeBytes: Number(r.size_bytes),
+    contentType: r.content_type,
+  }));
 }
 
 export async function countRows(client: pg.ClientBase): Promise<Record<string, number>> {

@@ -23,6 +23,7 @@
     "db:status": "tsx --env-file-if-exists=.env src/framework/cli/dbStatus.ts",
     "db:load-test": "tsx --env-file-if-exists=.env src/framework/cli/dbLoadTest.ts",
     "platform:invite-admin": "tsx --env-file-if-exists=.env src/framework/cli/platformInviteAdmin.ts",
+    "archive": "tsx --env-file-if-exists=.env src/framework/cli/archive.ts",
     "backup": "tsx --env-file-if-exists=.env src/framework/cli/backup.ts",
     "storage:setup": "tsx --env-file-if-exists=.env src/framework/cli/storageSetup.ts",
     "mobile:keygen": "tsx src/framework/cli/mobileKeygen.ts",

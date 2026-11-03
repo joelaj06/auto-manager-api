@@ -1,5 +1,7 @@
 # 26 — Backup & Disaster Recovery
 
+> **Update 2026-11-03 (P9-2):** cold archive (§8) is implemented: a four-eyes archive of a tenant deactivated for a year, dumped encrypted and checked by a restore into a scratch database while it is written (the server holds only the public key), with a files manifest and the live database dropped (decision 495); restores approved in the console and carried out with the private key by `yarn archive restore` (496); the yearly restore test migrated to the current release and rekeying after a key rotation through `yarn archive` (497); erasure by anonymisation with the erasure ledger applied again to every restored archive and backup (498); limits in 499. Runbook: docs/31 §11.
+
 Decision 29: **backups are essential.** This doc makes them a P0 deliverable, not an afterthought. It assumes database-per-tenant PostgreSQL on a VPS (doc 22).
 
 ## 1. Targets

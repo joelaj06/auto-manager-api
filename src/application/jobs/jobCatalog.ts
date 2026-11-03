@@ -35,6 +35,10 @@ export type JobPayloads = {
   "provisioning.sweep": Readonly<Record<string, never>>;
   /** Copy a tenant's database to another cluster and switch it there (an approved move). */
   "tenant.cluster_move": Readonly<{ moveId: string }>;
+  /** An approved cold archive of a tenant (decision 495). */
+  "tenant.archive": Readonly<{ archiveId: string }>;
+  /** An approved erasure applied to a tenant's database (decision 498). */
+  "tenant.erasure": Readonly<{ erasureId: string }>;
   /** Bring one tenant's permissions and system roles to the current catalogue. */
   "tenant.catalogue_sync": Readonly<{ tenantId: string; version: number }>;
   /** Enqueue a catalogue sync for every tenant behind the current catalogue version. */
@@ -178,6 +182,25 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryDelaySeconds: 30,
     retryBackoff: false,
     expireInSeconds: 3_600,
+  },
+  "tenant.archive": {
+    description: "Move a long-deactivated tenant to cold archive (dump, check, drop the database)",
+    tenantScoped: false,
+    policy: "standard",
+    // A failed archive is recorded and the database reopened; retries cover a lost worker.
+    retryLimit: 2,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 6 * 3_600,
+  },
+  "tenant.erasure": {
+    description: "Anonymise a person's personal data in a tenant's database (approved erasure)",
+    tenantScoped: false,
+    policy: "standard",
+    retryLimit: 5,
+    retryDelaySeconds: 120,
+    retryBackoff: true,
+    expireInSeconds: 1_800,
   },
   "provisioning.sweep": {
     description:

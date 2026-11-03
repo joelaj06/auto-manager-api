@@ -50,6 +50,23 @@ describe("TenantLifecycle", () => {
     expect(t.clearReadOnly(now)).toMatchObject({ from: "read_only", to: "active" });
   });
 
+  it("moves a deactivated tenant to cold archive and back", () => {
+    const t = tenant("active");
+    t.deactivate("other", "Closed", true, now);
+    expect(t.archive(now)).toMatchObject({ from: "deactivated", to: "archived" });
+    expect(t.snapshot()).toMatchObject({
+      status: "archived",
+      previousStatus: "active",
+      deactivationReason: "other",
+      autoRestoreLocked: true,
+    });
+    expect(() => t.reactivate(now)).toThrow(TenantStateError);
+    expect(t.unarchive(now)).toMatchObject({ from: "archived", to: "deactivated" });
+    expect(t.reactivate(now).to).toBe("active");
+    expect(() => tenant("active").archive(now)).toThrow(TenantStateError);
+    expect(() => tenant("deactivated").unarchive(now)).toThrow(TenantStateError);
+  });
+
   it("refuses impossible transitions", () => {
     expect(() => tenant("provisioning").deactivate("other", null, true, now)).toThrow(
       TenantStateError,

@@ -85,6 +85,7 @@ import { dealerCommissionRoutes } from "../../adapters/routes/dealerCommissionRo
 import { dealerReportRoutes } from "../../adapters/routes/dealerReportRoutes.js";
 import { reportRoutes } from "../../adapters/routes/reportRoutes.js";
 import { consoleAnalyticsRoutes } from "../../adapters/routes/consoleAnalyticsRoutes.js";
+import { consoleArchiveRoutes } from "../../adapters/routes/consoleArchiveRoutes.js";
 import { consoleClusterRoutes } from "../../adapters/routes/consoleClusterRoutes.js";
 import type { IPlatformAnalytics } from "../../application/ports/IPlatformAnalytics.js";
 import { PlatformAnalytics } from "../../application/use-cases/console/PlatformAnalytics.js";
@@ -630,7 +631,6 @@ import {
   PostgresTenantTags,
 } from "../../infrastructure/console/PostgresTenantNotes.js";
 import { PostgresTenantUsage } from "../../infrastructure/console/PostgresTenantUsage.js";
-import { readFileSync } from "node:fs";
 import type { Express } from "express";
 import { Container } from "inversify";
 import type pg from "pg";
@@ -659,6 +659,25 @@ import { PostgresConnectionFactory } from "../../infrastructure/database/postgre
 import { PostgresTransactionContext } from "../../infrastructure/database/postgres/PostgresTransactionContext.js";
 import { TenantConnectionPools } from "../../infrastructure/database/postgres/TenantConnectionPools.js";
 import { TenantDatabaseNaming } from "../../infrastructure/database/postgres/TenantDatabaseNaming.js";
+import { readFileSync } from "node:fs";
+import type { IColdArchiveVault } from "../../application/ports/IColdArchiveVault.js";
+import type { IErasureLedger } from "../../application/ports/IErasureLedger.js";
+import type { IPersonalDataEraser } from "../../application/ports/IPersonalDataEraser.js";
+import type { ITenantArchives } from "../../application/ports/ITenantArchives.js";
+import { ArchiveTenant } from "../../application/use-cases/console/ArchiveTenant.js";
+import { ColdArchives } from "../../application/use-cases/console/ColdArchives.js";
+import {
+  ApplyErasure,
+  PersonalDataErasure,
+} from "../../application/use-cases/console/PersonalDataErasure.js";
+import { ColdArchiveVault } from "../../infrastructure/archive/ColdArchiveVault.js";
+import { PostgresTenantArchives } from "../../infrastructure/archive/PostgresTenantArchives.js";
+import { loadBackupPublicKey } from "../../infrastructure/backup/BackupCipher.js";
+import { DatabaseBackupService } from "../../infrastructure/backup/DatabaseBackupService.js";
+import { LocalBackupStorage } from "../../infrastructure/backup/LocalBackupStorage.js";
+import { PostgresBackupCatalog } from "../../infrastructure/backup/PostgresBackupCatalog.js";
+import { PostgresErasureLedger } from "../../infrastructure/privacy/PostgresErasureLedger.js";
+import { PostgresPersonalDataEraser } from "../../infrastructure/privacy/PostgresPersonalDataEraser.js";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { IClusterProbe, IClusterRegistry } from "../../application/ports/IClusterRegistry.js";
 import type { ITenantDatabaseMover } from "../../application/ports/ITenantDatabaseMover.js";
@@ -2119,6 +2138,8 @@ export function createContainer(
       logger: ILogger,
       subscriptions: SubscriptionAdministration,
       move: MoveTenantToCluster,
+      archive: ArchiveTenant,
+      erasure: ApplyErasure,
     ): IJobHandler[] => [
       new ProvisionTenant({
         subscriptions,
@@ -2144,6 +2165,8 @@ export function createContainer(
       }),
       new SweepProvisioning({ provisioning, clusters, queue, clock, logger }),
       move,
+      archive,
+      erasure,
       new SweepCatalogue({ provisioning, catalogue, queue }),
       new SyncTenantCatalogue({ catalogue, unitOfWork, seeder, provisioning, logger }),
     ],
@@ -2165,6 +2188,8 @@ export function createContainer(
       TYPES.Logger,
       TYPES.SubscriptionAdministration,
       TYPES.MoveTenantToCluster,
+      TYPES.ArchiveTenant,
+      TYPES.ApplyErasure,
     ],
   );
 
@@ -3389,6 +3414,178 @@ export function createContainer(
       TYPES.Logger,
     ],
   );
+  // --- Cold archive and erasure (P9-2) ---
+  platformRepository<ITenantArchives>(TYPES.TenantArchives, (p) => new PostgresTenantArchives(p));
+  platformRepository<IErasureLedger>(TYPES.ErasureLedger, (p) => new PostgresErasureLedger(p));
+  container
+    .bind<IPersonalDataEraser>(TYPES.PersonalDataEraser)
+    .toResolvedValue(
+      (
+        clusters: ClusterConnections,
+        naming: TenantDatabaseNaming,
+        platform: pg.Pool,
+        storage: IObjectStorage,
+      ) => new PostgresPersonalDataEraser({ clusters, naming, platform, storage }),
+      [
+        TYPES.ClusterConnections,
+        TYPES.TenantDatabaseNaming,
+        TYPES.PlatformDatabasePool,
+        TYPES.ObjectStorage,
+      ],
+    );
+  container.bind<DatabaseBackupService>(TYPES.DatabaseBackupService).toResolvedValue(
+    (
+      connections: PostgresConnectionFactory,
+      clusters: ClusterConnections,
+      naming: TenantDatabaseNaming,
+      platform: pg.Pool,
+      logger: ILogger,
+    ) =>
+      new DatabaseBackupService({
+        connections,
+        tenantConnections: (tenantId) => clusters.ofTenant(tenantId),
+        naming,
+        tools: new PgClientTools(config.backup.pgTools),
+        storage: new LocalBackupStorage(config.backup.directory),
+        catalog: new PostgresBackupCatalog(platform),
+        platformDatabase: db.platformDatabase,
+        tenantTemplateDatabase: db.tenantTemplateDatabase,
+        // The server writes archives with the public key; it never holds the private one.
+        publicKey:
+          config.backup.publicKeyFile === undefined
+            ? null
+            : loadBackupPublicKey(readFileSync(config.backup.publicKeyFile, "utf8")),
+        log: (message) => logger.info(message),
+      }),
+    [
+      TYPES.PostgresConnectionFactory,
+      TYPES.ClusterConnections,
+      TYPES.TenantDatabaseNaming,
+      TYPES.PlatformDatabasePool,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<IColdArchiveVault>(TYPES.ColdArchiveVault).toResolvedValue(
+    (
+      backups: DatabaseBackupService,
+      clusters: ClusterConnections,
+      naming: TenantDatabaseNaming,
+      storage: IObjectStorage,
+    ) =>
+      new ColdArchiveVault({
+        backups,
+        clusters,
+        naming,
+        storage,
+        maintenanceDatabase: db.platformDatabase,
+      }),
+    [
+      TYPES.DatabaseBackupService,
+      TYPES.ClusterConnections,
+      TYPES.TenantDatabaseNaming,
+      TYPES.ObjectStorage,
+    ],
+  );
+  container.bind<ColdArchives>(TYPES.ColdArchives).toResolvedValue(
+    (archives: ITenantArchives, approvals: ApprovalWorkflow, queue: IJobQueue, clock: IClock) => {
+      const coldArchives = new ColdArchives({ archives, approvals, queue, clock });
+      approvals.register(coldArchives.archiveExecutor());
+      approvals.register(coldArchives.restoreExecutor());
+      return coldArchives;
+    },
+    [TYPES.TenantArchives, TYPES.ApprovalWorkflow, TYPES.JobQueue, TYPES.Clock],
+  );
+  container.bind<PersonalDataErasure>(TYPES.PersonalDataErasure).toResolvedValue(
+    (
+      ledger: IErasureLedger,
+      eraser: IPersonalDataEraser,
+      archives: ITenantArchives,
+      approvals: ApprovalWorkflow,
+      queue: IJobQueue,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+      logger: ILogger,
+    ) => {
+      const erasure = new PersonalDataErasure({
+        ledger,
+        eraser,
+        archives,
+        approvals,
+        queue,
+        audit,
+        clock,
+        logger,
+      });
+      approvals.register(erasure.executor());
+      return erasure;
+    },
+    [
+      TYPES.ErasureLedger,
+      TYPES.PersonalDataEraser,
+      TYPES.TenantArchives,
+      TYPES.ApprovalWorkflow,
+      TYPES.JobQueue,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<ArchiveTenant>(TYPES.ArchiveTenant).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      archives: ITenantArchives,
+      mover: ITenantDatabaseMover,
+      vault: IColdArchiveVault,
+      lifecycle: TenantLifecycleService,
+      routing: ClusterConnections,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new ArchiveTenant({
+        unitOfWork,
+        archives,
+        mover,
+        vault,
+        lifecycle,
+        routing,
+        audit,
+        alerts: lazyAlerts,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.TenantArchives,
+      TYPES.TenantDatabaseMover,
+      TYPES.ColdArchiveVault,
+      TYPES.TenantLifecycleService,
+      TYPES.ClusterConnections,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container
+    .bind<ApplyErasure>(TYPES.ApplyErasure)
+    .toResolvedValue(
+      (
+        ledger: IErasureLedger,
+        eraser: IPersonalDataEraser,
+        archives: ITenantArchives,
+        audit: IPlatformAuditTrail,
+        clock: IClock,
+        logger: ILogger,
+      ) => new ApplyErasure({ ledger, eraser, archives, audit, clock, logger }),
+      [
+        TYPES.ErasureLedger,
+        TYPES.PersonalDataEraser,
+        TYPES.TenantArchives,
+        TYPES.PlatformAuditTrail,
+        TYPES.Clock,
+        TYPES.Logger,
+      ],
+    );
   container.bind<AnnouncementMailer>(TYPES.AnnouncementMailer).toResolvedValue(
     (
       store: ICommunicationsRepository,
@@ -3652,24 +3849,33 @@ export function createContainer(
       ) => new RestoreDrills({ drills, unitOfWork, audit, requestContext, ids, clock }),
       [TYPES.RestoreDrillRepository, ...platformDeps],
     );
-  container
-    .bind<ComplianceDaily>(TYPES.ComplianceDaily)
-    .toResolvedValue(
-      (
-        drills: RestoreDrills,
-        requests: DataProtectionRequests,
-        exports: TenantDataExports,
-        clock: IClock,
-        logger: ILogger,
-      ) => new ComplianceDaily({ drills, requests, exports, alerts: lazyAlerts, clock, logger }),
-      [
-        TYPES.RestoreDrills,
-        TYPES.DataProtectionRequests,
-        TYPES.TenantDataExports,
-        TYPES.Clock,
-        TYPES.Logger,
-      ],
-    );
+  container.bind<ComplianceDaily>(TYPES.ComplianceDaily).toResolvedValue(
+    (
+      drills: RestoreDrills,
+      requests: DataProtectionRequests,
+      exports: TenantDataExports,
+      archives: ColdArchives,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new ComplianceDaily({
+        drills,
+        requests,
+        exports,
+        archives,
+        alerts: lazyAlerts,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.RestoreDrills,
+      TYPES.DataProtectionRequests,
+      TYPES.TenantDataExports,
+      TYPES.ColdArchives,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
 
   // --- Launch readiness (P4-9) ---
   container.bind<LaunchReadiness>(TYPES.LaunchReadiness).toResolvedValue(
@@ -8756,6 +8962,10 @@ export function createContainer(
         }),
         ...consoleClusterRoutes({
           clusters: container.get<ClusterManagement>(TYPES.ClusterManagement),
+        }),
+        ...consoleArchiveRoutes({
+          archives: container.get<ColdArchives>(TYPES.ColdArchives),
+          erasure: container.get<PersonalDataErasure>(TYPES.PersonalDataErasure),
         }),
         ...fileRoutes({ tenantFiles, organisation, applicationDocuments, partnerDocuments }),
         ...mobileRoutes(mobile),

@@ -11,7 +11,10 @@ import type { PlatformDb } from "../platform/PlatformDb.js";
 
 type Registry = Readonly<{
   /** Tenant id and cluster by database name. */
-  byName: ReadonlyMap<string, { tenantId: string; clusterId: string; hasDatabase: boolean }>;
+  byName: ReadonlyMap<
+    string,
+    { tenantId: string; clusterId: string; hasDatabase: boolean; provisioning: boolean }
+  >;
   /** `tenantId:cluster` of completed moves away from a cluster. */
   movedFrom: ReadonlySet<string>;
   /** `tenantId:cluster` of moves under way to a cluster. */
@@ -83,7 +86,9 @@ export class PostgresOrphanDatabases implements IOrphanDatabases {
     const findings: DatabaseFinding[] = [];
     for (const [name, sizeBytes] of databases) {
       const tenant = registry.byName.get(name);
-      if (tenant?.clusterId === clusterId) continue;
+      // Its own database; one still being created (provisioning) has no name recorded yet. An
+      // archived tenant's database left behind is a stray copy.
+      if (tenant?.clusterId === clusterId && (tenant.hasDatabase || tenant.provisioning)) continue;
       const key = tenant === undefined ? "" : `${tenant.tenantId}:${clusterId}`;
       // The copy of a move under way is expected.
       if (registry.movingTo.has(key)) continue;
@@ -138,7 +143,8 @@ export class PostgresOrphanDatabases implements IOrphanDatabases {
       id: string;
       cluster_id: string;
       database_name: string | null;
-    }>("select id, cluster_id, database_name from tenants");
+      status: string;
+    }>("select id, cluster_id, database_name, status from tenants");
     const moves = await this.db.query<{
       tenant_id: string;
       from_cluster: string;
@@ -149,7 +155,12 @@ export class PostgresOrphanDatabases implements IOrphanDatabases {
       byName: new Map(
         tenants.rows.map((t) => [
           this.naming.databaseNameFor(TenantId.from(t.id)),
-          { tenantId: t.id, clusterId: t.cluster_id, hasDatabase: t.database_name !== null },
+          {
+            tenantId: t.id,
+            clusterId: t.cluster_id,
+            hasDatabase: t.database_name !== null,
+            provisioning: t.status === "provisioning" || t.status === "provisioning_failed",
+          },
         ]),
       ),
       movedFrom: new Set(

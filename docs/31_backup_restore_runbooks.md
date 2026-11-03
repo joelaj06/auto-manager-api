@@ -144,4 +144,37 @@ Local only (decision 63): the timings say nothing yet about restores across a ne
 - L1: pgBackRest or WAL-G with continuous WAL archiving; monthly PITR drill.
 - Schedules: nightly tenant dumps (staggered, concurrency 2), hourly + nightly platform dumps, weekly `verify --sample`.
 - Retention per doc 26 §3, alerts per doc 26 §4 (no backup in 36 h, restore test failed), daily backup report.
-- Cold archive (doc 26 §8) and the erasure ledger re-applied after restores.
+
+## 11. Cold archive
+
+Decisions 495–499. Archiving runs on the server; everything that reads an archive needs the
+private key and runs on an operator's machine with the platform database and clusters reachable.
+
+**Archive a tenant** (deactivated ≥ 365 days): ask in the console
+(`POST /api/platform/v1/tenants/:id/cold-archive`), a second staff member approves, the
+`tenant.archive` job does the rest. Check `GET /api/platform/v1/archives?tenantId=…`: `archived`
+with every check passed and `files.missing` 0. On `failed` (alert `archive.failed:<id>`) the tenant
+database was reopened untouched: read the error, fix the cause, ask again.
+
+**Restore a tenant**
+
+1. Ask in the console (`POST …/tenants/:id/cold-archive/restore`) with the reason; another staff
+   member approves.
+2. `BACKUP_PRIVATE_KEY_PASSPHRASE=… yarn archive restore --private-key <file> --tenant <id> --operator <your name>`
+3. It prints the cluster, the checks and the erasures applied again. The tenant is `deactivated`;
+   check it (§8 validation queries) and restore it in the console as usual.
+4. On failure nothing is left behind and the archive stays `archived`; the error is in its
+   `restoreReport`. An approved restore not done in 2 days raises `archive.restore_waiting:<id>`.
+
+**Yearly restore test** (alert `archive.verification_due:<yyyy-mm>`):
+`yarn archive verify --private-key <file> --due` (or `--id <archive>`). A failed check raises
+`archive.verification_failed:<id>` (critical): verify again, then compare with an older archive
+backup of the tenant; record the result in the drill log (§9).
+
+**Key rotation**: after a new key pair (§2) is configured, run
+`yarn archive rekey --private-key <old private key>`; `yarn archive list` shows each archive's key
+fingerprint. Keep the old private key until every archive shows the new fingerprint.
+
+**Erasure**: preview, ask and have a Super Admin approve in the console (§3.15 of doc 27). The
+ledger is applied again by `yarn archive restore` and `yarn backup restore` (a tenant backup);
+after restoring a tenant database any other way, apply it before opening the tenant.

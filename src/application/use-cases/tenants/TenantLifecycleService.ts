@@ -109,6 +109,18 @@ export class TenantLifecycleService {
       await this.notifyOwner(tenant, "tenant.restored", null);
   }
 
+  /** Moved to cold archive by the archive job, once approved (docs/27 §3.3). */
+  async archive(tenantId: string, reason: string): Promise<void> {
+    await this.transition(tenantId, null, reason, "tenant.archived", (t, now) => t.archive(now));
+  }
+
+  /** Back from cold archive: deactivated, for staff to restore. */
+  async unarchive(tenantId: string, reason: string): Promise<void> {
+    await this.transition(tenantId, null, reason, "tenant.unarchived", (t, now) =>
+      t.unarchive(now),
+    );
+  }
+
   // --- billing automation (docs/25 §5): the system acts, staff only through extensions ---
 
   /** The invoice is overdue: past due, full access. */

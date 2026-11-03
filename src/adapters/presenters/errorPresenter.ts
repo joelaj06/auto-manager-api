@@ -68,6 +68,8 @@ const RULES: Readonly<Record<string, Rule>> = {
   MAINTENANCE_READ_ONLY: { status: 503 },
   TENANT_MOVING: { status: 503 },
   CLUSTER_RULE: { status: 422 },
+  ARCHIVE_RULE: { status: 422 },
+  ERASURE_RULE: { status: 422 },
   FEATURE_DISABLED: { status: 403 },
   TENANT_MISMATCH: { status: 401, securityAlert: true },
 

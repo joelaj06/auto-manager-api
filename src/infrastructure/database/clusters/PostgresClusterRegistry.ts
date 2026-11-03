@@ -20,7 +20,8 @@ const LIVE = `('trialing', 'active', 'past_due', 'read_only')`;
 
 const CLUSTERS = `
   select c.*,
-         (select count(*) from tenants t where t.cluster_id = c.id) as tenants,
+         (select count(*) from tenants t where t.cluster_id = c.id and t.status <> 'archived')
+           as tenants,
          (select count(*) from tenants t where t.cluster_id = c.id and t.status in ${LIVE})
            as live_tenants
     from clusters c`;
@@ -138,7 +139,8 @@ export class PostgresClusterRegistry implements IClusterRegistry {
   async lockLoads(): Promise<ClusterLoad[]> {
     const { rows } = await this.db.query<Row>(
       `select c.id, c.status, c.max_tenants,
-              (select count(*) from tenants t where t.cluster_id = c.id) as tenants
+              (select count(*) from tenants t
+                where t.cluster_id = c.id and t.status <> 'archived') as tenants
          from clusters c order by c.id for update of c`,
     );
     return rows.map((r) => ({

@@ -60,7 +60,7 @@ type Deps = Readonly<{
 /**
  * The data-protection request tracker (docs/27 §3.15): access, correction, erasure and objection
  * requests with a deadline (30 days by default), an owner, every step taken, and the outcome.
- * Erasure itself is anonymisation by a four-eyes action still to come; the tracker keeps the
+ * Erasure itself is anonymisation by a four-eyes action (PersonalDataErasure); the tracker keeps the
  * evidence. Deadlines reach the alerts centre.
  */
 export class DataProtectionRequests {
@@ -459,6 +459,14 @@ export class ComplianceDaily implements IJobHandler<"compliance.daily"> {
       drills: RestoreDrills;
       requests: DataProtectionRequests;
       exports: Readonly<{ expire(): Promise<number> }>;
+      archives: Readonly<{
+        attention(): Promise<
+          Readonly<{
+            verificationDue: readonly Readonly<{ id: string; slug: string; tenantId: string }>[];
+            restoresWaiting: readonly Readonly<{ id: string; slug: string; tenantId: string }>[];
+          }>
+        >;
+      }>;
       alerts: IAlerts;
       clock: IClock;
       logger: ILogger;
@@ -502,7 +510,32 @@ export class ComplianceDaily implements IJobHandler<"compliance.daily"> {
         tenantId: r.tenantId,
       });
     }
+    // Cold archives (docs/26 §8): the yearly restore test, and restores waiting for an operator.
+    const archives = await deps.archives.attention();
+    if (archives.verificationDue.length > 0)
+      await deps.alerts.raise({
+        key: `archive.verification_due:${date.slice(0, 7)}`,
+        severity: "warning",
+        source: "backups",
+        title: `${archives.verificationDue.length} cold archive(s) are due their yearly restore test`,
+        detail: { archives: archives.verificationDue.map((a) => a.slug).slice(0, 20) },
+        runbook: "docs/31 cold archive (yarn archive verify --due)",
+      });
+    for (const a of archives.restoresWaiting)
+      await deps.alerts.raise({
+        key: `archive.restore_waiting:${a.id}`,
+        severity: "warning",
+        source: "backups",
+        title: `The approved restore of ${a.slug} from cold archive is waiting for an operator`,
+        detail: { archiveId: a.id },
+        tenantId: a.tenantId,
+        runbook: "docs/31 cold archive (yarn archive restore)",
+      });
     const removed = await deps.exports.expire();
-    deps.logger.info("Compliance chores done", { drillDue: drill.dueOn, exportsRemoved: removed });
+    deps.logger.info("Compliance chores done", {
+      drillDue: drill.dueOn,
+      exportsRemoved: removed,
+      archivesDue: archives.verificationDue.length,
+    });
   }
 }

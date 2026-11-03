@@ -55,6 +55,7 @@ const OPERATING: ReadonlySet<TenantLifecycleStatus> = new Set(["trialing", "acti
  *
  *   trialing | active | past_due | read_only → deactivated → (restore) previous status
  *   trialing | active | past_due → read_only → (clear) previous status
+ *   deactivated → archived (cold archive) → deactivated
  *
  * There is no "suspended" state and no deletion (decisions 36, 39). A manual deactivation is
  * locked against automatic restore by billing.
@@ -133,6 +134,35 @@ export class TenantLifecycle {
       return this.reactivate(now);
     }
     return null;
+  }
+
+  /**
+   * Moved to cold archive (docs/27 §3.3): from deactivated, keeping where it would be restored
+   * to and why it was deactivated. Billing stops; nobody signs in.
+   */
+  archive(now: Date): StatusTransition {
+    const from = this.props.status;
+    if (from !== "deactivated") throw new TenantStateError("archive", from);
+    this.props = {
+      ...this.props,
+      status: "archived",
+      autoRestoreLocked: true,
+      statusChangedAt: now,
+    };
+    return { from, to: "archived", reasonCategory: this.props.deactivationReason, message: null };
+  }
+
+  /** Back from cold archive: deactivated as before, until staff restore it. */
+  unarchive(now: Date): StatusTransition {
+    const from = this.props.status;
+    if (from !== "archived") throw new TenantStateError("bring back from archive", from);
+    this.props = { ...this.props, status: "deactivated", statusChangedAt: now };
+    return {
+      from,
+      to: "deactivated",
+      reasonCategory: this.props.deactivationReason,
+      message: null,
+    };
   }
 
   /** An unpaid invoice past its due date (docs/25 §5.1): full access, status past due. */
