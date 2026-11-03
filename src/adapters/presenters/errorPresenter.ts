@@ -254,6 +254,7 @@ const RULES: Readonly<Record<string, Rule>> = {
   FX_RATE_OVERRIDE_DENIED: { status: 403 },
   CASH_SESSION_REQUIRED: { status: 409 },
   FINANCE_RULE: { status: 422 },
+  STATEMENT_NOT_FOUND: { status: 404 },
 
   // Expenses
   EXPENSE_NOT_FOUND: { status: 404 },

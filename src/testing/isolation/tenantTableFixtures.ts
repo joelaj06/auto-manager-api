@@ -59,6 +59,16 @@ const TRACKER = `with tc as (insert into telematics_connections (name, provider,
                  td as (insert into telematics_devices (connection_id, identifier)
                         select tc.id, $1 from tc returning id)`;
 
+/** A statement of the Bank account (file name = marker); `$2` = fingerprint. */
+const STATEMENT = `with si as (insert into statement_imports (account_id, file_name, from_date,
+                          to_date, lines)
+                        select id, $1, current_date, current_date, 1 from ledger_accounts
+                         where system_key = 'bank' returning id, account_id),
+                 sl as (insert into statement_lines (import_id, account_id, line_no, value_date,
+                          description, amount_minor, fingerprint)
+                        select id, account_id, 1, current_date, $1, 100, $2 from si
+                        returning id)`;
+
 /** A draft work and pay agreement (number = marker) for a driver and vehicle; `$2` = branch code. */
 const WORKPAY = `${DRIVER},
                  v as (insert into vehicles (code, make, model, status, branch_id)
@@ -1554,6 +1564,58 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
       params: [marker, `TE${letters(marker).toUpperCase().slice(0, 12)}`],
     }),
     find: "select 1 from telematics_events where note = $1",
+  },
+  accounting_account_mappings: {
+    insert: (marker) => ({
+      sql: `insert into accounting_account_mappings (account_id, target, external)
+            select id, 'xero', $1 from ledger_accounts where code = '1000'`,
+      params: [marker],
+    }),
+    find: "select 1 from accounting_account_mappings where external = $1",
+  },
+  accounting_exports: {
+    // No text column: the marker's hash stands in the line count.
+    insert: (marker) => ({
+      sql: `insert into accounting_exports (format, detail, from_date, to_date, entries, lines,
+              total_debit_minor)
+            values ('csv', 'entry', current_date, current_date, 1, abs(hashtext($1)), 100)`,
+      params: [marker],
+    }),
+    find: "select 1 from accounting_exports where lines = abs(hashtext($1))",
+  },
+  statement_imports: {
+    insert: (marker) => ({
+      sql: `insert into statement_imports (account_id, file_name, from_date, to_date, lines)
+            select id, $1, current_date, current_date, 1 from ledger_accounts
+             where system_key = 'bank'`,
+      params: [marker],
+    }),
+    find: "select 1 from statement_imports where file_name = $1",
+  },
+  statement_lines: {
+    insert: (marker) => ({
+      sql: `${STATEMENT} select 1`,
+      params: [marker, `SL ${marker}`],
+    }),
+    find: "select 1 from statement_lines where description = $1",
+  },
+  statement_matches: {
+    insert: (marker) => ({
+      sql: `${STATEMENT},
+                 e as (insert into journal_entries (number, entry_date, description, source_type,
+                         source_id)
+                       values ($1, current_date, $1, 'manual', gen_random_uuid()) returning id),
+                 ll as (insert into ledger_lines (entry_id, account_id, debit_minor, credit_minor)
+                        select e.id, a.id, case when a.code = '1020' then 100 else 0 end,
+                               case when a.code = '4900' then 100 else 0 end
+                          from e, ledger_accounts a where a.code in ('1020', '4900')
+                        returning id, debit_minor)
+            insert into statement_matches (statement_line_id, ledger_line_id)
+            select sl.id, ll.id from sl, ll where ll.debit_minor > 0`,
+      params: [marker, `SM ${marker}`],
+    }),
+    find: `select 1 from statement_matches m join statement_lines l on l.id = m.statement_line_id
+            where l.description = $1`,
   },
   tax_codes: {
     insert: (marker) => ({

@@ -28,6 +28,11 @@ export function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
+/** The cells of every row as they stand, for files whose header is not the first line. */
+export function parseCsvRows(text: string): string[][] {
+  return parseRows(text.replace(/^\uFEFF/, "")).map((row) => row.map(unescapeFormula));
+}
+
 function unescapeFormula(cell: string): string {
   return cell.startsWith("'") && FORMULA_START.has(cell.charAt(1)) ? cell.slice(1) : cell;
 }

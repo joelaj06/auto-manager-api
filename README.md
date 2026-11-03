@@ -809,6 +809,22 @@ daily run purges old positions and syncs odometers (507). `PUBLIC_API_URL` sets 
 shown (default `WEB_APP_URL`) and `TELEMATICS_RATE_LIMIT_MAX` the webhook's requests a minute
 (6,000).
 
+## Accounting export and reconciliation
+
+`GET /api/v1/accounting/export?format=quickbooks|xero|csv&from=&to=&detail=entry|day|month` gives
+the journals as a file to import into the package; set the package's account names or codes first
+with `PUT /api/v1/accounting/mappings`. Use `detail=day` or `month` to stay within what a package
+takes in one import, and map receivables and payables to a clearing account in QuickBooks when
+summarising (decisions 510–511). `X-Export-Overlaps` and `GET /api/v1/accounting/exports` tell
+periods exported before or changed since.
+
+Bank and mobile money statements go to `POST /api/v1/reconciliation/imports` as CSV: without
+`commit` it shows what it read (name the columns in `columns` if it finds none), with `commit` it
+imports and matches (decisions 512–513). Work through `GET /api/v1/reconciliation/lines`:
+`POST /api/v1/reconciliation/match`, or `…/lines/:id/post` for what the books lack, such as bank
+charges, or `…/lines/:id/ignore`. `GET /api/v1/reconciliation/summary` and the
+`bank_reconciliation` report give the difference (decision 514).
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

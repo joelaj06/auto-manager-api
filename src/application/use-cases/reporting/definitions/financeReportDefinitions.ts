@@ -4,6 +4,8 @@ import {
   type ReportTable,
 } from "../../../../domain/reporting/Report.js";
 import type { Principal } from "../../../authorization/Principal.js";
+import type { MoneyJson } from "../../../../domain/money/Money.js";
+import type { BankReconciliation } from "../../finance/BankReconciliation.js";
 import type { LedgerViews } from "../../finance/LedgerViews.js";
 import { PERIOD_PARAMS, type ReportDefinition } from "../ReportDefinition.js";
 import type { ReportContext } from "../ReportContext.js";
@@ -414,5 +416,63 @@ export class TaxReport implements ReportDefinition {
         ],
       };
     });
+  }
+}
+
+/** Statement against books for an account (docs/13 §4, decision 514). */
+export class BankReconciliationReport implements ReportDefinition {
+  readonly id = "bank_reconciliation";
+  readonly title = "Bank reconciliation";
+  readonly description =
+    "A bank or mobile money account's statement balance against its books, with what is unmatched on either side";
+  readonly category = "finance" as const;
+  readonly permission = "finance.reconcile" as const;
+  readonly params = [
+    { key: "accountId", label: "Account", type: "uuid", required: true },
+    { key: "asOf", label: "As of", type: "date", required: false },
+  ] as const;
+
+  constructor(private readonly reconciliation: BankReconciliation) {}
+
+  async run(_actor: Principal, params: ParamValues): Promise<ReportTable> {
+    const s = await this.reconciliation.summary(params.accountId!, params.asOf ?? null);
+    const row = (item: string, lines: number | null, amount: MoneyJson | null) => ({
+      item,
+      lines,
+      amount: amount?.amountMinor ?? null,
+    });
+    return {
+      title: this.title,
+      subtitle: `${s.account.code} ${s.account.name} as of ${s.asOf}`,
+      currency: s.ledgerBalance.currency,
+      columns: [
+        { key: "item", header: "Item", type: "text", width: 3 },
+        { key: "lines", header: "Lines", type: "number" },
+        { key: "amount", header: "Amount", type: "money", width: 1.2 },
+      ],
+      rows: [
+        row("Balance in the books", null, s.ledgerBalance),
+        row(
+          "On the statement, money in not in the books",
+          s.unmatchedStatement.lines,
+          s.unmatchedStatement.in,
+        ),
+        row("On the statement, money out not in the books", null, s.unmatchedStatement.out),
+        row("On the statement, marked as needing no entry", s.ignored.lines, s.ignored.amount),
+        row("Balance on the statement", null, s.statementBalance),
+        row(
+          "In the books, money in not on a statement",
+          s.unmatchedLedger.lines,
+          s.unmatchedLedger.in,
+        ),
+        row("In the books, money out not on a statement", null, s.unmatchedLedger.out),
+      ],
+      totals: null,
+      summary: [
+        { label: "Difference", value: s.difference?.formatted ?? "No statement balance" },
+        { label: "Reconciled", value: s.reconciled ? "Yes" : "No" },
+        { label: "Matched, then reversed", value: String(s.matchedThenReversed) },
+      ],
+    };
   }
 }

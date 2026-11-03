@@ -307,6 +307,11 @@ export const TYPES = Object.freeze({
   PaymentRecording: Symbol.for("PaymentRecording"),
   CashSessions: Symbol.for("CashSessions"),
   LedgerViews: Symbol.for("LedgerViews"),
+  /** Accounting export and bank reconciliation (decisions 510–514). */
+  AccountingExportRepository: Symbol.for("IAccountingExports"),
+  ReconciliationRepository: Symbol.for("IReconciliation"),
+  AccountingExports: Symbol.for("AccountingExports"),
+  BankReconciliation: Symbol.for("BankReconciliation"),
   FinanceSettingsService: Symbol.for("FinanceSettingsService"),
 
   // Expenses (P2-6)

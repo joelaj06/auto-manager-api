@@ -44,6 +44,18 @@ const CHECKS: readonly Check[] = [
            where t.debit_minor is distinct from r.debit or t.credit_minor is distinct from r.credit`,
   },
   {
+    name: "statement matches",
+    description: "A matched statement line equals the ledger lines it is matched to",
+    sql: `select s.id::text || ': ' || s.amount_minor || ' vs '
+                   || coalesce(sum(l.debit_minor - l.credit_minor), 0) as offender
+            from statement_lines s
+            left join statement_matches m on m.statement_line_id = s.id
+            left join ledger_lines l on l.id = m.ledger_line_id
+           where s.status = 'matched'
+           group by s.id, s.amount_minor
+          having s.amount_minor <> coalesce(sum(l.debit_minor - l.credit_minor), 0)`,
+  },
+  {
     name: "payment allocations",
     description: "A payment's allocated amount is what its open invoice allocations add up to",
     sql: `select p.number || ': ' || p.allocated_minor || ' vs ' || coalesce(sum(a.amount_minor), 0)

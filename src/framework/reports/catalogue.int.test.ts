@@ -167,8 +167,18 @@ describe("report catalogue", () => {
     );
     expect(catalogue.length).toBeGreaterThanOrEqual(46);
 
+    const accounts = await api().get("/api/v1/ledger/accounts").set(owner());
+    const bank = (accounts.body.data as { id: string; systemKey: string | null }[]).find(
+      (a) => a.systemKey === "bank",
+    )!.id;
     const value = (key: string, type: string) =>
-      key === "driverId" ? driver : type === "month" ? today.slice(0, 7) : period[key as "from"];
+      key === "driverId"
+        ? driver
+        : key === "accountId"
+          ? bank
+          : type === "month"
+            ? today.slice(0, 7)
+            : period[key as "from"];
     for (const report of catalogue) {
       if (report.id === "workpay_statement") continue;
       const params = Object.fromEntries(

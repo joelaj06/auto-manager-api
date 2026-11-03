@@ -1,5 +1,7 @@
 # 13 — Finance, Ledger & Payments
 
+> **Update 2026-11-03 (P9-5):** the accounting export (§2.4) and reconciliation (§4) are built, with decisions 510–514. The file is imported into the package by the tenant; there is no live connection to QuickBooks or Xero. Statements match ledger lines of their account, and the API in §8 became `GET /accounting/export`, `GET /accounting/exports`, `GET` and `PUT /accounting/mappings`, `POST` and `GET /reconciliation/imports`, `GET /reconciliation/lines` and `/ledger-lines`, `POST /reconciliation/match` and `/auto-match`, `POST /reconciliation/lines/:id/post`, `/ignore` and `/unmatch`, and `GET /reconciliation/summary`.
+
 > **Update 2026-10-13 (decision 16): tenants do not perform transactions through the system — they only *record* them.** Out of scope for tenants: payment gateways, payment links, Paystack/Hubtel webhooks, per-tenant provider keys, MoMo prompts, automatic confirmation (§3, and the `provider`/`pending` payment flow in §2.2). Kept: invoices, receipts, payment *recording* (cash, MoMo, bank, cheque noted by staff), allocations, ledger, cash sessions, optional reconciliation by importing a statement for comparison, multi-currency (doc 20). The gateway used for **our own** subscription billing is a separate platform concern, now designed in [25](25_platform_billing_and_subscriptions.md) (decision 27). Payment `status` is therefore `recorded → reversed`, and a recorded payment can carry the payer's MoMo/bank reference as free text. Revised VAT approach in §6.
 
 ## 1. Why a shared finance layer

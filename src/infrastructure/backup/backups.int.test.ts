@@ -105,6 +105,7 @@ describe("tenant backups", () => {
       "integrity: journal entries balanced",
       "integrity: trial balance",
       "integrity: ledger daily totals",
+      "integrity: statement matches",
       "integrity: payment allocations",
       "integrity: invoice payments",
       "integrity: work and pay allocations",

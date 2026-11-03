@@ -95,6 +95,16 @@ const definitions = {
     sensitive: true,
   },
   "finance.accounts.manage": { description: "Add ledger accounts", scopes: ALL },
+  "finance.export": {
+    description: "Export journals for an accounting package and map its accounts",
+    scopes: ALL,
+    sensitive: true,
+  },
+  "finance.reconcile": {
+    description: "Import bank and mobile money statements, match them and post what the books lack",
+    scopes: ALL,
+    sensitive: true,
+  },
   "finance.period.lock": {
     description: "Lock and unlock accounting periods",
     scopes: ALL,

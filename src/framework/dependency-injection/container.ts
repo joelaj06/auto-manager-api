@@ -143,6 +143,7 @@ import {
   PaymentsByMethodReport,
   PaymentsRegisterReport,
   TaxReport,
+  BankReconciliationReport,
   TrialBalanceReport,
 } from "../../application/use-cases/reporting/definitions/financeReportDefinitions.js";
 import {
@@ -394,6 +395,15 @@ import {
   PostgresFuelLogs,
   PostgresRecurringExpenses,
 } from "../../infrastructure/expenses/PostgresExpenses.js";
+import { accountingRoutes } from "../../adapters/routes/accountingRoutes.js";
+import type {
+  IAccountingExports,
+  IReconciliation,
+} from "../../application/ports/IAccountingRecords.js";
+import { AccountingExports } from "../../application/use-cases/finance/AccountingExports.js";
+import { BankReconciliation } from "../../application/use-cases/finance/BankReconciliation.js";
+import { PostgresAccountingExports } from "../../infrastructure/finance/PostgresAccountingExports.js";
+import { PostgresReconciliation } from "../../infrastructure/finance/PostgresReconciliation.js";
 import { financeRoutes } from "../../adapters/routes/financeRoutes.js";
 import type {
   IFinanceQueries,
@@ -5224,6 +5234,81 @@ export function createContainer(
     TYPES.IntegrityChecks,
     (tx) => new PostgresIntegrityChecks(() => tx.current()),
   );
+  tenantRepository<IAccountingExports>(
+    TYPES.AccountingExportRepository,
+    (tx) => new PostgresAccountingExports(tx),
+  );
+  tenantRepository<IReconciliation>(
+    TYPES.ReconciliationRepository,
+    (tx) => new PostgresReconciliation(tx),
+  );
+  container.bind<AccountingExports>(TYPES.AccountingExports).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      exports: IAccountingExports,
+      ledger: ILedger,
+      posting: LedgerPosting,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new AccountingExports({
+        unitOfWork,
+        exports,
+        ledger,
+        posting,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.AccountingExportRepository,
+      TYPES.Ledger,
+      TYPES.LedgerPosting,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<BankReconciliation>(TYPES.BankReconciliation).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      reconciliation: IReconciliation,
+      ledger: ILedger,
+      posting: LedgerPosting,
+      calendar: TenantCalendar,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new BankReconciliation({
+        unitOfWork,
+        reconciliation,
+        ledger,
+        posting,
+        calendar,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.ReconciliationRepository,
+      TYPES.Ledger,
+      TYPES.LedgerPosting,
+      TYPES.TenantCalendar,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
   container.bind<LedgerViews>(TYPES.LedgerViews).toResolvedValue(
     (
       unitOfWork: IUnitOfWork,
@@ -7279,6 +7364,7 @@ export function createContainer(
       dealerReports: DealerReports,
       purchases: Purchases,
       payables: SupplierPayables,
+      bankReconciliationForReports: BankReconciliation,
       ledger: LedgerViews,
       telematicsViews: TelematicsViews,
     ) => [
@@ -7337,6 +7423,7 @@ export function createContainer(
       new CashSessionVarianceReport(context),
       new TaxReport(context),
       new TrialBalanceReport(ledger),
+      new BankReconciliationReport(bankReconciliationForReports),
     ],
     [
       TYPES.ReportContext,
@@ -7354,6 +7441,7 @@ export function createContainer(
       TYPES.DealerReports,
       TYPES.Purchases,
       TYPES.SupplierPayables,
+      TYPES.BankReconciliation,
       TYPES.LedgerViews,
       TYPES.TelematicsViews,
     ],
@@ -9196,6 +9284,8 @@ export function createContainer(
       invoicing: Invoicing,
       paymentRecording: PaymentRecording,
       cashSessions: CashSessions,
+      accountingExports: AccountingExports,
+      bankReconciliation: BankReconciliation,
       ledgerViews: LedgerViews,
       financeSettings: FinanceSettingsService,
       expenses: Expenses,
@@ -9373,6 +9463,7 @@ export function createContainer(
           driverSettings,
         }),
         ...assignmentRoutes({ assignments: vehicleAssignments, settings: assignmentSettings }),
+        ...accountingRoutes({ exports: accountingExports, reconciliation: bankReconciliation }),
         ...financeRoutes({
           invoices: invoicing,
           payments: paymentRecording,
@@ -9525,6 +9616,8 @@ export function createContainer(
       TYPES.Invoicing,
       TYPES.PaymentRecording,
       TYPES.CashSessions,
+      TYPES.AccountingExports,
+      TYPES.BankReconciliation,
       TYPES.LedgerViews,
       TYPES.FinanceSettingsService,
       TYPES.Expenses,
