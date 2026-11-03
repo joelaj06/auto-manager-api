@@ -1,5 +1,7 @@
 # 35 — Support process
 
+> **Update 2026-11-03 (P9-3):** tickets and their SLA timers are in the console (decision 500): priorities map to the severities of §2 (urgent = S1, around the clock; high = S2; normal = S3; low = S4, counted in the support hours of §1), breaches raise an alert, and a ticket waiting on the customer stops its resolution clock.
+
 How tenants get help once they pay, who answers, how fast, and with which tools. The console tools are in doc 27; the runbooks for incidents, on-call and data protection are in doc 33.
 
 > **Status (2026-10-24): agreed process, local tooling.** Channels and hours below are proposals for the first paying tenants; confirm them before go-live (doc 36 §7). Every tool named here exists in the API today.

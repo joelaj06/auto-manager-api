@@ -26,6 +26,7 @@ type Row = {
   tin: string | null;
   registration_number: string | null;
   trial_days: number;
+  demo_ends_at: Date | null;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,10 +59,12 @@ export class PostgresTenantProvisioning implements ITenantProvisioning {
               p.status, p.step, p.attempts, p.last_error, p.started_at, p.updated_at, p.completed_at,
               a.id as application_id, a.contact_name, a.contact_email::text as contact_email,
               a.contact_phone, a.country, a.tin, a.registration_number,
-              coalesce((a.approval_options->>'trialDays')::int, 14) as trial_days
+              coalesce((a.approval_options->>'trialDays')::int, 14) as trial_days,
+              d.expires_at as demo_ends_at
          from tenant_provisioning p
          join tenants t on t.id = p.tenant_id
          join tenant_applications a on a.id = t.application_id
+         left join demo_tenants d on d.tenant_id = p.tenant_id
         where p.tenant_id = $1`,
       [tenantId],
     );
@@ -80,6 +83,7 @@ export class PostgresTenantProvisioning implements ITenantProvisioning {
       startedAt: r.started_at,
       updatedAt: r.updated_at,
       completedAt: r.completed_at,
+      demoEndsAt: r.demo_ends_at,
       application: {
         id: r.application_id,
         contactName: r.contact_name,

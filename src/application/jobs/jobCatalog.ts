@@ -83,6 +83,14 @@ export type JobPayloads = {
   "tenant.report_schedules": Readonly<{ tenantId: string }>;
   /** Enqueue the scheduled reports of every usable tenant. */
   "reports.schedules_sweep": Readonly<Record<string, never>>;
+  /** Support tickets: SLA breaches, quiet tickets resolved and closed (decision 500). */
+  "support.sweep": Readonly<Record<string, never>>;
+  /** The onboarding concierge's tasks for new tenants, ticked off by their progress. */
+  "onboarding.sweep": Readonly<Record<string, never>>;
+  /** Fill a new demo tenant with sample data. */
+  "tenant.demo_seed": Readonly<{ tenantId: string }>;
+  /** Expire demo tenants at their end and purge them a week later. */
+  "demos.sweep": Readonly<Record<string, never>>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -428,6 +436,46 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryDelaySeconds: 300,
     retryBackoff: true,
     expireInSeconds: 1_800,
+  },
+  "support.sweep": {
+    description: "Record support SLA breaches, resolve and close quiet tickets",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 60,
+    retryBackoff: false,
+    expireInSeconds: 600,
+    cron: "*/15 * * * *",
+  },
+  "onboarding.sweep": {
+    description: "Give new tenants their concierge tasks and tick off those their progress did",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 1,
+    retryDelaySeconds: 300,
+    retryBackoff: false,
+    expireInSeconds: 900,
+    // Hourly; the milestones themselves are refreshed nightly by usage.daily.
+    cron: "33 * * * *",
+  },
+  "tenant.demo_seed": {
+    description: "Fill a new demo tenant with sample data through the API",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 3,
+    retryDelaySeconds: 120,
+    retryBackoff: true,
+    expireInSeconds: 1_800,
+  },
+  "demos.sweep": {
+    description: "Expire demo tenants at their end and purge them a week later",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 2,
+    retryDelaySeconds: 600,
+    retryBackoff: false,
+    expireInSeconds: 1_800,
+    cron: "53 * * * *",
   },
 } satisfies Record<JobName, JobDefinition>);
 

@@ -612,6 +612,10 @@ const definitions = {
     description: "Accept new terms and privacy policy for the business",
     scopes: ALL,
   },
+  "support.tickets.view_all": {
+    description: "See every support ticket of the business, not only your own",
+    scopes: ALL,
+  },
 
   "billing.view": { description: "View subscription and invoices", scopes: ALL },
   "billing.manage": {

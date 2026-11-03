@@ -70,6 +70,10 @@ const RULES: Readonly<Record<string, Rule>> = {
   CLUSTER_RULE: { status: 422 },
   ARCHIVE_RULE: { status: 422 },
   ERASURE_RULE: { status: 422 },
+  SUPPORT_RULE: { status: 422 },
+  SUPPORT_TICKET_NOT_FOUND: { status: 404 },
+  DEMO_RULE: { status: 422 },
+  ONBOARDING_RULE: { status: 422 },
   FEATURE_DISABLED: { status: 403 },
   TENANT_MISMATCH: { status: 401, securityAlert: true },
 

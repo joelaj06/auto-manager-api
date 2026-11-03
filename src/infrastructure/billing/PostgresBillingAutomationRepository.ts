@@ -141,6 +141,8 @@ export class PostgresBillingAutomationRepository implements IBillingAutomationRe
                         and pi.recurrence = 'monthly')))
           and s.status in ('trialing', 'active', 'past_due')
           and t.status in ('trialing', 'active', 'past_due', 'read_only')
+          -- Demo tenants are never billed (decision 501).
+          and not t.demo
           and ${NEXT_START} <= $2::date
           -- One invoice per period: none open, and staff did not void this period's.
           and not exists (select 1 from billing_invoices i

@@ -20,6 +20,7 @@ type ListRow = {
   contact_name: string | null;
   contact_email: string | null;
   source: "self" | "assisted" | null;
+  demo: boolean;
   tags: string[];
 };
 
@@ -33,7 +34,7 @@ export class PostgresConsoleTenantQueries implements IConsoleTenantQueries {
   async list(filter: TenantListFilter): Promise<TenantListItem[]> {
     const { rows } = await this.db.query<ListRow>(
       `select t.id, t.slug, t.name, t.status, t.created_at, t.trial_ends_at, t.status_changed_at,
-              a.contact_name, a.contact_email::text as contact_email, a.source,
+              a.contact_name, a.contact_email::text as contact_email, a.source, t.demo,
               coalesce((select array_agg(tg.tag order by tg.tag) from tenant_tags tg
                          where tg.tenant_id = t.id), '{}') as tags
          from tenants t
@@ -72,6 +73,7 @@ export class PostgresConsoleTenantQueries implements IConsoleTenantQueries {
       ownerName: r.contact_name,
       ownerEmail: r.contact_email,
       source: r.source,
+      demo: r.demo,
       tags: r.tags,
     }));
   }

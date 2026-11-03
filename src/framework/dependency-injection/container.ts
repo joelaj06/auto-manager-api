@@ -86,6 +86,7 @@ import { dealerReportRoutes } from "../../adapters/routes/dealerReportRoutes.js"
 import { reportRoutes } from "../../adapters/routes/reportRoutes.js";
 import { consoleAnalyticsRoutes } from "../../adapters/routes/consoleAnalyticsRoutes.js";
 import { consoleArchiveRoutes } from "../../adapters/routes/consoleArchiveRoutes.js";
+import { supportDeskRoutes } from "../../adapters/routes/supportDeskRoutes.js";
 import { consoleClusterRoutes } from "../../adapters/routes/consoleClusterRoutes.js";
 import type { IPlatformAnalytics } from "../../application/ports/IPlatformAnalytics.js";
 import { PlatformAnalytics } from "../../application/use-cases/console/PlatformAnalytics.js";
@@ -671,6 +672,28 @@ import {
   PersonalDataErasure,
 } from "../../application/use-cases/console/PersonalDataErasure.js";
 import { ColdArchiveVault } from "../../infrastructure/archive/ColdArchiveVault.js";
+import type { ISupportDesk } from "../../application/ports/ISupportDesk.js";
+import type { IDemoSampleData, IDemoTenants } from "../../application/ports/IDemoTenants.js";
+import type { IOnboardingTasks } from "../../application/ports/IOnboardingTasks.js";
+import {
+  SupportDesk,
+  SweepSupportTickets,
+} from "../../application/use-cases/console/SupportDesk.js";
+import {
+  DemoTenants,
+  SeedDemoTenant,
+  SweepDemoTenants,
+} from "../../application/use-cases/console/DemoTenants.js";
+import {
+  OnboardingConcierge,
+  SweepOnboarding,
+} from "../../application/use-cases/console/OnboardingConcierge.js";
+import { PostgresSupportDesk } from "../../infrastructure/console/PostgresSupportDesk.js";
+import { PostgresDemoTenants } from "../../infrastructure/console/PostgresDemoTenants.js";
+import { PostgresOnboardingTasks } from "../../infrastructure/console/PostgresOnboardingTasks.js";
+import { PostgresDemoSampleUser } from "../../infrastructure/console/PostgresDemoSampleUser.js";
+import { ApiDemoSampleData } from "../demo/ApiDemoSampleData.js";
+import { TenantId } from "../../domain/value-objects/TenantId.js";
 import { PostgresTenantArchives } from "../../infrastructure/archive/PostgresTenantArchives.js";
 import { loadBackupPublicKey } from "../../infrastructure/backup/BackupCipher.js";
 import { DatabaseBackupService } from "../../infrastructure/backup/DatabaseBackupService.js";
@@ -1250,6 +1273,7 @@ export function createContainer(
       complianceDaily: ComplianceDaily,
       reports: Reports,
       reportSchedules: ReportSchedules,
+      supportHandlers: IJobHandler[],
     ): IJobHandler[] => [
       new DrainOutbox({ unitOfWork, outbox, handlers, queue, clock }),
       new SweepOutboxes({ roster, queue }),
@@ -1279,6 +1303,7 @@ export function createContainer(
       new GenerateReport(reports),
       new RunReportSchedules(reportSchedules),
       new SweepReportSchedules({ roster, queue }),
+      ...supportHandlers,
     ],
     [
       TYPES.UnitOfWork,
@@ -1309,6 +1334,7 @@ export function createContainer(
       TYPES.ComplianceDaily,
       TYPES.Reports,
       TYPES.ReportSchedules,
+      TYPES.SupportJobHandlers,
     ],
   );
 
@@ -2140,6 +2166,8 @@ export function createContainer(
       move: MoveTenantToCluster,
       archive: ArchiveTenant,
       erasure: ApplyErasure,
+      demos: DemoTenants,
+      concierge: OnboardingConcierge,
     ): IJobHandler[] => [
       new ProvisionTenant({
         subscriptions,
@@ -2155,6 +2183,12 @@ export function createContainer(
         directory,
         notifications,
         audit,
+        // A demo gets its sample data; any other new tenant its concierge task list.
+        afterProvisioned: {
+          provisioned: async (tenantId) => {
+            if (!(await demos.provisioned(tenantId))) await concierge.start(tenantId, clock.now());
+          },
+        },
         clock,
         logger,
         settings: {
@@ -2190,6 +2224,8 @@ export function createContainer(
       TYPES.MoveTenantToCluster,
       TYPES.ArchiveTenant,
       TYPES.ApplyErasure,
+      TYPES.DemoTenants,
+      TYPES.OnboardingConcierge,
     ],
   );
 
@@ -3561,6 +3597,168 @@ export function createContainer(
       TYPES.ColdArchiveVault,
       TYPES.TenantLifecycleService,
       TYPES.ClusterConnections,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  platformRepository<ISupportDesk>(TYPES.SupportDeskRepository, (p) => new PostgresSupportDesk(p));
+  platformRepository<IDemoTenants>(TYPES.DemoTenantsRepository, (p) => new PostgresDemoTenants(p));
+  platformRepository<IOnboardingTasks>(
+    TYPES.OnboardingTasks,
+    (p) => new PostgresOnboardingTasks(p),
+  );
+  container.bind<SupportDesk>(TYPES.SupportDesk).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      desk: ISupportDesk,
+      notifications: NotificationService,
+      audit: IPlatformAuditTrail,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      users: ITenantUserAccounts,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new SupportDesk({
+        unitOfWork,
+        desk,
+        notifications,
+        audit,
+        clock,
+        logger,
+        requesterOf: (tenantId, userId) =>
+          tenantContext.runAs(TenantId.from(tenantId), () =>
+            tenantUnitOfWork.run(async () => {
+              const user = await users.lockById(userId);
+              return user === null
+                ? null
+                : { name: user.name, email: user.email, phone: user.phone };
+            }),
+          ),
+        ticketUrl: (slug, id) => `${config.public.webAppUrl}/${slug}/support/tickets/${id}`,
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.SupportDeskRepository,
+      TYPES.NotificationService,
+      TYPES.PlatformAuditTrail,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TenantUserAccounts,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<DemoTenants>(TYPES.DemoTenants).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      demos: IDemoTenants,
+      provisioning: ITenantProvisioning,
+      lifecycle: TenantLifecycleService,
+      queue: IJobQueue,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+    ) =>
+      new DemoTenants({
+        unitOfWork,
+        demos,
+        provisioning,
+        lifecycle,
+        queue,
+        audit,
+        clock,
+        timezone: DEFAULT_TENANT_TIMEZONE,
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.DemoTenantsRepository,
+      TYPES.TenantProvisioning,
+      TYPES.TenantLifecycleService,
+      TYPES.JobQueue,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<IDemoSampleData>(TYPES.DemoSampleData).toResolvedValue(
+    (
+      tokens: IAccessTokenService,
+      tenantContext: ITenantContext,
+      tenantUnitOfWork: IUnitOfWork,
+      transactions: PostgresTransactionContext,
+      hasher: IPasswordHasher,
+      clock: IClock,
+    ) => {
+      const users = new PostgresDemoSampleUser(transactions, hasher);
+      const inDemo = <T>(tenantId: string, work: () => Promise<T>) =>
+        tenantContext.runAs(TenantId.from(tenantId), () => tenantUnitOfWork.run(work));
+      return new ApiDemoSampleData({
+        app: () => container.get<Express>(TYPES.HttpApp),
+        tokens,
+        user: {
+          open: (tenantId) => inDemo(tenantId, () => users.open()),
+          close: (tenantId, userId) => inDemo(tenantId, () => users.close(userId)),
+        },
+        now: () => clock.now(),
+      });
+    },
+    [
+      TYPES.AccessTokenService,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.PostgresTransactionContext,
+      TYPES.PasswordHasher,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<OnboardingConcierge>(TYPES.OnboardingConcierge)
+    .toResolvedValue(
+      (tasks: IOnboardingTasks, audit: IPlatformAuditTrail, clock: IClock) =>
+        new OnboardingConcierge({ tasks, audit, clock }),
+      [TYPES.OnboardingTasks, TYPES.PlatformAuditTrail, TYPES.Clock],
+    );
+  container.bind<IJobHandler[]>(TYPES.SupportJobHandlers).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      desk: ISupportDesk,
+      demos: IDemoTenants,
+      sampleData: IDemoSampleData,
+      lifecycle: TenantLifecycleService,
+      vault: IColdArchiveVault,
+      routing: ClusterConnections,
+      concierge: OnboardingConcierge,
+      tasks: IOnboardingTasks,
+      queue: IJobQueue,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+      logger: ILogger,
+    ): IJobHandler[] => [
+      new SweepSupportTickets({ unitOfWork, desk, alerts: lazyAlerts, clock, logger }),
+      new SeedDemoTenant({ demos, sampleData, audit, logger }),
+      new SweepDemoTenants({
+        demos,
+        lifecycle,
+        databases: vault,
+        routing,
+        queue,
+        audit,
+        clock,
+        logger,
+      }),
+      new SweepOnboarding({ concierge, tasks, clock, logger }),
+    ],
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.SupportDeskRepository,
+      TYPES.DemoTenantsRepository,
+      TYPES.DemoSampleData,
+      TYPES.TenantLifecycleService,
+      TYPES.ColdArchiveVault,
+      TYPES.ClusterConnections,
+      TYPES.OnboardingConcierge,
+      TYPES.OnboardingTasks,
+      TYPES.JobQueue,
       TYPES.PlatformAuditTrail,
       TYPES.Clock,
       TYPES.Logger,
@@ -8962,6 +9160,11 @@ export function createContainer(
         }),
         ...consoleClusterRoutes({
           clusters: container.get<ClusterManagement>(TYPES.ClusterManagement),
+        }),
+        ...supportDeskRoutes({
+          desk: container.get<SupportDesk>(TYPES.SupportDesk),
+          demos: container.get<DemoTenants>(TYPES.DemoTenants),
+          concierge: container.get<OnboardingConcierge>(TYPES.OnboardingConcierge),
         }),
         ...consoleArchiveRoutes({
           archives: container.get<ColdArchives>(TYPES.ColdArchives),

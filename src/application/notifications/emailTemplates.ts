@@ -65,6 +65,37 @@ export type EmailTemplateData = {
     paragraphs: readonly string[];
     billingUrl: string;
   }>;
+  /** Support desk (docs/27 §3.13): received, answered, resolved; `url` for tickets raised in the app. */
+  "support.ticket_received": Readonly<{
+    name: string;
+    number: string;
+    subject: string;
+    answerBy: string;
+    url: string | null;
+  }>;
+  "support.ticket_reply": Readonly<{
+    name: string;
+    number: string;
+    subject: string;
+    staffName: string;
+    body: string;
+    url: string | null;
+  }>;
+  "support.ticket_resolved": Readonly<{
+    name: string;
+    number: string;
+    subject: string;
+    url: string | null;
+  }>;
+  /** A demo tenant is ready (docs/27 §5.2). */
+  "tenant.welcome_demo": Readonly<{
+    ownerName: string;
+    businessName: string;
+    slug: string;
+    setPasswordUrl: string;
+    expiresInHours: number;
+    demoEndsOn: string;
+  }>;
   /** The owner's full data export is ready (docs/26 §6). */
   "tenant.data_export_ready": Readonly<{ name: string; url: string; expiresOn: string }>;
   /** A platform announcement to a tenant owner (docs/27 §3.12). */
@@ -259,6 +290,37 @@ const renderers: { [K in EmailTemplateKey]: (data: EmailTemplateData[K]) => Rend
       greeting(data.name),
       `The export of all your business's data is ready. Sign in and download it from ${data.url} until ${data.expiresOn}.`,
       "If you did not ask for it, tell us at once: reply to this email.",
+    ]),
+  "support.ticket_received": (data) =>
+    simple(`[${data.number}] We received your request`, [
+      greeting(data.name),
+      `Thank you for contacting ${PRODUCT} support about "${data.subject}". Your reference is ${data.number}.`,
+      `We will answer by ${data.answerBy} (Accra time) at the latest.`,
+      data.url === null
+        ? "Reply to this email if you have anything to add."
+        : `Follow it and add to it in the app: ${data.url}`,
+    ]),
+  "support.ticket_reply": (data) =>
+    simple(`[${data.number}] ${data.subject}`, [
+      greeting(data.name),
+      `${data.staffName} from ${PRODUCT} support replied:`,
+      ...data.body.split(/\n{2,}/),
+      data.url === null ? "Reply to this email to answer." : `Answer in the app: ${data.url}`,
+    ]),
+  "support.ticket_resolved": (data) =>
+    simple(`[${data.number}] Resolved: ${data.subject}`, [
+      greeting(data.name),
+      `We have marked your request ${data.number} as resolved. If it is not, reply within 7 days and we will pick it up again.`,
+      data.url === null
+        ? "Thank you for your patience."
+        : `Tell us how we did (1 to 5) in the app: ${data.url}`,
+    ]),
+  "tenant.welcome_demo": (data) =>
+    simple(`Your ${PRODUCT} demo — ${data.businessName} is ready`, [
+      greeting(data.ownerName),
+      `A demo business, ${data.businessName}, is ready for you with sample vehicles, drivers, customers and bookings. Its address is "${data.slug}". It is for trying things out: nothing in it is real, and it ends on ${data.demoEndsOn}.`,
+      `Set your password and sign in: ${data.setPasswordUrl}`,
+      `The link works once and expires in ${data.expiresInHours} hours.`,
     ]),
   "platform.announcement": (data) =>
     simple(data.title, [greeting(data.name), ...data.body.split(/\n{2,}/)]),

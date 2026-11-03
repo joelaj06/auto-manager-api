@@ -62,7 +62,9 @@ export class PostgresPlatformAnalytics implements IPlatformAnalytics {
          from tenant_applications a
          left join tenants t on t.application_id = a.id
          left join tenant_onboarding o on o.tenant_id = t.id
-        where a.created_at >= $1 and a.created_at < $2`,
+        where a.created_at >= $1 and a.created_at < $2
+          -- Demo tenants are not sign-ups (decision 501).
+          and not coalesce((a.approval_options->>'demo')::boolean, false)`,
       [from, until],
     );
     const r = rows[0]!;
@@ -128,7 +130,7 @@ export class PostgresPlatformAnalytics implements IPlatformAnalytics {
          left join recent r on r.tenant_id = t.id
          left join latest l on l.tenant_id = t.id
          left join before b on b.tenant_id = t.id
-        where t.status in ${LIVE}
+        where t.status in ${LIVE} and not t.demo
         order by t.name, t.id`,
       [day, now],
     );
@@ -182,7 +184,7 @@ export class PostgresPlatformAnalytics implements IPlatformAnalytics {
          from tenants t
          left join subscriptions s on s.tenant_id = t.id
          left join plans p on p.id = s.plan_id
-        where t.provisioned_at >= ($1 || '-01')::date
+        where t.provisioned_at >= ($1 || '-01')::date and not t.demo
         order by t.provisioned_at`,
       [fromMonth],
     );
@@ -220,7 +222,7 @@ export class PostgresPlatformAnalytics implements IPlatformAnalytics {
          left join plans p on p.id = s.plan_id
          left join month m on m.tenant_id = t.id
          left join latest l on l.tenant_id = t.id
-        where t.status in ${LIVE}
+        where t.status in ${LIVE} and not t.demo
         order by t.name, t.id`,
       [day],
     );
@@ -294,13 +296,15 @@ export class PostgresPlatformAnalytics implements IPlatformAnalytics {
         `select coalesce(reason_category, 'other') as reason, count(*) as n
            from tenant_status_history
           where to_status = 'deactivated' and created_at >= $1 and created_at < $2
+            and not exists (select 1 from tenants t where t.id = tenant_id and t.demo)
           group by 1 order by 2 desc, 1`,
         [from, until],
       ),
       this.db.query<{ n: string }>(
         `select count(*) as n from tenant_status_history
           where from_status = 'deactivated' and to_status <> 'archived'
-            and created_at >= $1 and created_at < $2`,
+            and created_at >= $1 and created_at < $2
+            and not exists (select 1 from tenants t where t.id = tenant_id and t.demo)`,
         [from, until],
       ),
     ]);

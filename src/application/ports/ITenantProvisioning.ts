@@ -30,6 +30,8 @@ export type ProvisioningRecord = Readonly<{
   startedAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
+  /** A demo tenant (docs/27 §5.2): when it ends. */
+  demoEndsAt: Date | null;
   application: Readonly<{
     id: string;
     contactName: string;

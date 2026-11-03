@@ -59,6 +59,8 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
       audit: IPlatformAuditTrail;
       /** Starts the trial subscription (idempotent). */
       subscriptions: Readonly<{ startTrial(tenantId: string, trialEndsAt: Date): Promise<void> }>;
+      /** What follows a new tenant: the concierge's tasks, or a demo's sample data. */
+      afterProvisioned?: Readonly<{ provisioned(tenantId: string): Promise<void> }>;
       clock: IClock;
       logger: ILogger;
       settings: ProvisioningSettings;
@@ -142,20 +144,39 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
             expiresAt: new Date(deps.clock.now().getTime() + deps.settings.ownerInvitationTtlMs),
           }),
         );
-        await deps.notifications.sendEmail({
-          to: record.application.contactEmail,
-          template: "tenant.welcome_owner",
-          data: {
-            ownerName: owner.name,
-            businessName: record.name,
-            slug: record.slug,
-            setPasswordUrl: `${deps.settings.webAppUrl.replace(/\/$/, "")}/${record.slug}/accept-invitation#token=${token}`,
-            expiresInHours: Math.round(deps.settings.ownerInvitationTtlMs / 3_600_000),
-            trialDays: record.application.trialDays,
-          },
-          idempotencyKey: `tenant-welcome:${tenantId}:${invitationId}`,
-          tenantId,
-        });
+        const setPasswordUrl = `${deps.settings.webAppUrl.replace(/\/$/, "")}/${record.slug}/accept-invitation#token=${token}`;
+        const expiresInHours = Math.round(deps.settings.ownerInvitationTtlMs / 3_600_000);
+        await deps.notifications.sendEmail(
+          record.demoEndsAt === null
+            ? {
+                to: record.application.contactEmail,
+                template: "tenant.welcome_owner",
+                data: {
+                  ownerName: owner.name,
+                  businessName: record.name,
+                  slug: record.slug,
+                  setPasswordUrl,
+                  expiresInHours,
+                  trialDays: record.application.trialDays,
+                },
+                idempotencyKey: `tenant-welcome:${tenantId}:${invitationId}`,
+                tenantId,
+              }
+            : {
+                to: record.application.contactEmail,
+                template: "tenant.welcome_demo",
+                data: {
+                  ownerName: owner.name,
+                  businessName: record.name,
+                  slug: record.slug,
+                  setPasswordUrl,
+                  expiresInHours,
+                  demoEndsOn: record.demoEndsAt.toISOString().slice(0, 10),
+                },
+                idempotencyKey: `tenant-welcome:${tenantId}:${invitationId}`,
+                tenantId,
+              },
+        );
         await advance("welcomed");
       }
       const trialEndsAt = new Date(
@@ -175,6 +196,12 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
         after: { slug: record.slug, catalogueVersion: catalogue.version },
       });
       deps.logger.info("Tenant provisioned", { tenantId, slug: record.slug });
+      // Never fails the saga: the onboarding and demo sweeps catch up.
+      await deps.afterProvisioned
+        ?.provisioned(tenantId)
+        .catch((error: unknown) =>
+          deps.logger.warn("After-provisioning step failed", { tenantId, error }),
+        );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await deps.provisioning.fail(tenantId, `${step}: ${message}`.slice(0, 2_000));

@@ -24,6 +24,15 @@ export const TYPES = Object.freeze({
   PersonalDataErasure: Symbol.for("PersonalDataErasure"),
   ArchiveTenant: Symbol.for("ArchiveTenant"),
   ApplyErasure: Symbol.for("ApplyErasure"),
+  /** The support desk, demo tenants and the onboarding concierge (decisions 500–503). */
+  SupportDeskRepository: Symbol.for("ISupportDesk"),
+  SupportDesk: Symbol.for("SupportDesk"),
+  DemoTenantsRepository: Symbol.for("IDemoTenants"),
+  DemoTenants: Symbol.for("DemoTenants"),
+  DemoSampleData: Symbol.for("IDemoSampleData"),
+  OnboardingTasks: Symbol.for("IOnboardingTasks"),
+  OnboardingConcierge: Symbol.for("OnboardingConcierge"),
+  SupportJobHandlers: Symbol.for("SupportJobHandlers"),
   PostgresTransactionContext: Symbol.for("PostgresTransactionContext"),
   MigrationRunner: Symbol.for("MigrationRunner"),
 

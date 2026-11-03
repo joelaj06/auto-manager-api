@@ -23,6 +23,8 @@ export type TenantListItem = Readonly<{
   ownerName: string | null;
   ownerEmail: string | null;
   source: "self" | "assisted" | null;
+  /** A demo or sandbox tenant (docs/27 §5.2). */
+  demo: boolean;
   tags: readonly string[];
 }>;
 

@@ -782,6 +782,19 @@ A person's data is erased by anonymisation: preview with
 approves; the erasure ledger (`GET /api/platform/v1/erasures`) is applied again to every restored
 archive or backup (decision 498). Runbook: [docs/31 §11](docs/31_backup_restore_runbooks.md).
 
+## Support desk, demos and onboarding
+
+Tenants ask for help in the app (`/api/v1/support/tickets`); staff answer, log calls and messages,
+escalate and resolve under `/api/platform/v1/support/tickets`, with canned responses
+(`…/support/canned-responses`), SLA targets per priority in support hours (`…/support/sla`) and
+`GET …/support/summary`. `support.sweep` alerts on SLA breaches every 15 minutes (decision 500).
+
+A demo tenant with sample data is one call, `POST /api/platform/v1/demo-tenants`; it ends after
+14 days unless extended (`…/:id/extend`, `…/:id/end`) and its database is dropped a week later
+(decision 501). Each new tenant gets the concierge's task list
+(`GET /api/platform/v1/tenants/:id/onboarding-tasks`, `GET …/onboarding/tasks?assigneeId=me`),
+completed as the tenant reaches its milestones or by staff (decision 502).
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

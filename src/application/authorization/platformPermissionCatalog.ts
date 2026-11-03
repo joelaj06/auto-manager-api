@@ -65,6 +65,9 @@ const definitions = {
     fourEyes: true,
   },
   "platform.tenants.rename_slug": { description: "Change a tenant's slug", sensitive: true },
+  "platform.tenants.demos.manage": {
+    description: "Create demo and sandbox tenants with sample data, extend and end them",
+  },
 
   "platform.branches.view": { description: "View tenant branches" },
   "platform.branches.manage": { description: "Create, deactivate and reactivate branches" },
@@ -106,6 +109,17 @@ const definitions = {
   },
   "platform.support.incidents.manage": {
     description: "Open incidents and post updates on the public status page",
+  },
+  "platform.support.tickets.view": { description: "View support tickets and their messages" },
+  "platform.support.tickets.manage": {
+    description: "Log, answer, escalate and resolve support tickets",
+  },
+  "platform.support.canned_responses.manage": { description: "Write and retire canned responses" },
+  "platform.support.settings.manage": {
+    description: "Set the support SLA targets and the onboarding task templates",
+  },
+  "platform.support.onboarding.manage": {
+    description: "Work the onboarding concierge's tasks for new tenants",
   },
 
   "platform.flags.manage": {
@@ -343,6 +357,9 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.support.access_tenant_write",
       "platform.support.sessions.view",
       "platform.support.maintenance.manage",
+      "platform.support.tickets.view",
+      "platform.support.settings.manage",
+      "platform.support.onboarding.manage",
       "platform.alerts.manage",
       "platform.partners.view",
       "platform.reference.manage",
@@ -364,6 +381,10 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.support.announcements.manage",
       "platform.support.sessions.view",
       "platform.support.incidents.manage",
+      "platform.support.tickets.view",
+      "platform.support.tickets.manage",
+      "platform.support.canned_responses.manage",
+      "platform.support.onboarding.manage",
       "platform.security.dsr.manage",
       "platform.legal.view",
       "platform.health.view",
@@ -396,6 +417,9 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.applications.create_assisted",
       "platform.tenants.view",
       "platform.tenants.notes",
+      "platform.tenants.demos.manage",
+      "platform.support.tickets.view",
+      "platform.support.onboarding.manage",
       "platform.partners.view",
       "platform.partners.manage",
       "platform.analytics.view",
@@ -412,6 +436,8 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.flags.manage",
       "platform.support.maintenance.manage",
       "platform.support.incidents.manage",
+      "platform.support.tickets.view",
+      "platform.support.tickets.manage",
       "platform.data.drills.manage",
       "platform.data.backups.view",
       "platform.data.migrations.view",
@@ -431,6 +457,7 @@ export const PLATFORM_ROLE_TEMPLATES: readonly PlatformRoleTemplate[] = Object.f
       "platform.security.audit.view",
       "platform.security.access_review.view",
       "platform.support.sessions.view",
+      "platform.support.tickets.view",
       "platform.legal.view",
       "platform.staff.view",
       "platform.analytics.view",

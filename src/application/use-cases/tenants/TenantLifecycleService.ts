@@ -121,6 +121,26 @@ export class TenantLifecycleService {
     );
   }
 
+  /** A demo ended (docs/27 §5.2): deactivated, sessions ended, no email (it is not a customer). */
+  async endDemo(tenantId: string): Promise<void> {
+    const { deps } = this;
+    await this.transition(tenantId, null, "The demo ended", "tenant.deactivated", (t, now) =>
+      t.deactivate("other", "This demo has ended.", true, now),
+    );
+    await deps.tenantContext.runAs(TenantId.from(tenantId), () =>
+      deps.tenantUnitOfWork.run(() =>
+        deps.sessions.revokeAll("tenant_deactivated", deps.clock.now()),
+      ),
+    );
+  }
+
+  /** An ended demo extended by staff before its purge: usable again. */
+  async reopenDemo(tenantId: string, actor: PlatformPrincipal): Promise<void> {
+    await this.transition(tenantId, actor, "Demo extended", "tenant.restored", (t, now) =>
+      t.reactivate(now),
+    );
+  }
+
   // --- billing automation (docs/25 §5): the system acts, staff only through extensions ---
 
   /** The invoice is overdue: past due, full access. */
