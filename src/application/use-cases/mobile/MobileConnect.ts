@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   CONNECT_LINK_VERSION,
   CONNECT_PATH,
@@ -9,6 +10,8 @@ import {
   type ConnectPayload,
   type HostAllowList,
 } from "../../../domain/mobile/ConnectLink.js";
+import { deferredCode, normaliseDeferredCode } from "../../../domain/mobile/DeferredLink.js";
+import { ApplicationError } from "../../errors/ApplicationError.js";
 import { TenantNotFoundForStaffError } from "../../errors/TenantErrors.js";
 import type { IClock } from "../../ports/IClock.js";
 import type {
@@ -16,7 +19,37 @@ import type {
   IConnectLinkSigner,
   IQrCodeRenderer,
 } from "../../ports/IConnectLinkSigner.js";
+import type { IDeferredConnectLinks } from "../../ports/IDeferredConnectLinks.js";
+import type { ISecretBox } from "../../ports/ISecretBox.js";
 import type { ITenantDirectory } from "../../ports/ITenantDirectory.js";
+
+/** Unknown, used or expired: the same answer for all three (404). */
+export class DeferredLinkNotFoundError extends ApplicationError {
+  readonly code = "DEFERRED_LINK_NOT_FOUND";
+  constructor() {
+    super("This code cannot be used; scan the QR code or open your link again");
+  }
+}
+
+/** A hold lasts a day, and never past the link's own expiry. */
+const HOLD_MS = 24 * 3_600_000;
+
+export type DeferredHold = Readonly<{
+  /** XXXXX-XXXXX, shown once; only its hash is kept. */
+  code: string;
+  /** Opens the app on the code; what the page puts on the clipboard. */
+  resumeUrl: string;
+  iosStoreUrl: string | null;
+  expiresAt: Date;
+  tenantSlug: string;
+}>;
+
+export type DeferredClaim = Readonly<{
+  /** The connect link the app handles as if it had been opened. */
+  url: string;
+  appUrl: string;
+  tenantSlug: string;
+}>;
 
 export type MobileAppSettings = Readonly<{
   /** This backend's base URL as the app must call it (ends with "/"). */
@@ -35,6 +68,11 @@ export type MobileAppSettings = Readonly<{
   minVersion: string | null;
   latestVersion: string | null;
 }>;
+
+const hashOf = (code: string | null) =>
+  createHash("sha256")
+    .update(code ?? "")
+    .digest("hex");
 
 export type ConnectLinkView = Readonly<{
   /** HTTPS link (opens the app through app links, or the landing page). Put this in the QR. */
@@ -62,6 +100,8 @@ export type LandingPage = Readonly<{
   androidStoreUrl: string | null;
   iosStoreUrl: string | null;
   tenantSlug: string | null;
+  /** The link's query, for keeping it through an iPhone install. */
+  query?: string;
 }>;
 
 /**
@@ -76,6 +116,8 @@ export class MobileConnect {
       qr: IQrCodeRenderer;
       directory: ITenantDirectory;
       clock: IClock;
+      deferred: IDeferredConnectLinks;
+      secrets: ISecretBox;
       settings: MobileAppSettings;
     }>,
   ) {}
@@ -203,6 +245,7 @@ export class MobileConnect {
     return {
       valid: true,
       appUrl: this.appLink(params),
+      query: params,
       androidStoreUrl:
         settings.android.storeUrl === null
           ? null
@@ -210,6 +253,66 @@ export class MobileConnect {
       iosStoreUrl: settings.ios.storeUrl,
       tenantSlug: check.payload.tenantSlug,
     };
+  }
+
+  /**
+   * Holds a connect link for a phone without the app (docs/23 §7, decision 518): iOS has no install
+   * referrer and third-party attribution would hand invitation tokens to someone else, so the link
+   * waits here behind a code the person carries through the App Store. Null for a bad link.
+   */
+  async hold(query: string): Promise<DeferredHold | null> {
+    const { deps } = this;
+    const { settings } = deps;
+    const check = await this.verify(`${settings.linkBaseUrl}${CONNECT_PATH}?${query}`);
+    if (!check.valid) return null;
+    const now = deps.clock.now();
+    const linkEnds =
+      check.payload.expiresAt === undefined ? Infinity : check.payload.expiresAt * 1_000;
+    const expiresAt = new Date(Math.min(now.getTime() + HOLD_MS, linkEnds));
+    const code = deferredCode();
+    await deps.deferred.hold({
+      codeHash: hashOf(normaliseDeferredCode(code)),
+      sealedQuery: deps.secrets.seal(new URLSearchParams(query).toString()),
+      tenantSlug: check.payload.tenantSlug,
+      expiresAt,
+      now,
+    });
+    return {
+      code,
+      resumeUrl: this.resumeUrl(code),
+      iosStoreUrl: settings.ios.storeUrl,
+      expiresAt,
+      tenantSlug: check.payload.tenantSlug,
+    };
+  }
+
+  /** What the page shows for a resume link when the app is still not installed. */
+  held(code: string): Pick<DeferredHold, "code" | "resumeUrl" | "iosStoreUrl"> {
+    return {
+      code,
+      resumeUrl: this.resumeUrl(code),
+      iosStoreUrl: this.deps.settings.ios.storeUrl,
+    };
+  }
+
+  /** The app takes the held link, once. */
+  async claim(code: string): Promise<DeferredClaim> {
+    const { deps } = this;
+    const normal = normaliseDeferredCode(code);
+    if (normal === null) throw new DeferredLinkNotFoundError();
+    const held = await deps.deferred.claim(hashOf(normal), deps.clock.now());
+    if (held === null) throw new DeferredLinkNotFoundError();
+    const query = deps.secrets.open(held.sealedQuery);
+    return {
+      url: `${deps.settings.linkBaseUrl}${CONNECT_PATH}?${query}`,
+      appUrl: this.appLink(query),
+      tenantSlug: held.tenantSlug,
+    };
+  }
+
+  private resumeUrl(code: string): string {
+    const { linkBaseUrl } = this.deps.settings;
+    return `${linkBaseUrl}${CONNECT_PATH}?hold=${encodeURIComponent(code)}`;
   }
 
   /** The `app` section of the public tenant-config (force update, store links). */

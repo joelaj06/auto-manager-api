@@ -3,6 +3,7 @@ import type { ExpenseAdministration } from "../../application/use-cases/expenses
 import type { Expenses } from "../../application/use-cases/expenses/Expenses.js";
 import type { FuelLogs } from "../../application/use-cases/expenses/FuelLogs.js";
 import type { RecurringExpenses } from "../../application/use-cases/expenses/RecurringExpenses.js";
+import type { ReceiptReadings } from "../../application/use-cases/receipts/ReceiptReadings.js";
 import { EXPENSE_STATUSES } from "../../domain/expenses/Expense.js";
 import { FILE_KINDS } from "../../domain/files/FileKinds.js";
 import { PAYMENT_METHODS } from "../../domain/finance/Payment.js";
@@ -92,6 +93,7 @@ export type ExpenseRouteDependencies = Readonly<{
   fuel: FuelLogs;
   administration: ExpenseAdministration;
   recurring: RecurringExpenses;
+  receiptReadings: ReceiptReadings;
 }>;
 
 /**
@@ -99,7 +101,7 @@ export type ExpenseRouteDependencies = Readonly<{
  * fuel logs per vehicle; approval rules, budgets, recurring expenses and expense settings.
  */
 export function expenseRoutes(deps: ExpenseRouteDependencies): ApiRoute[] {
-  const { expenses, fuel, administration, recurring } = deps;
+  const { expenses, fuel, administration, recurring, receiptReadings } = deps;
   const action = (
     name: "submit" | "approve",
     permission: "expenses.create" | "expenses.approve",
@@ -524,9 +526,10 @@ export function expenseRoutes(deps: ExpenseRouteDependencies): ApiRoute[] {
       request: { params: z.object({ id: uuid, fileId: uuid }) },
       responses: { 200: { description: "File" } },
       handler: async ({ params }, _req, res) => {
-        res.json(
-          envelope(await expenses.completeReceipt(principalOf(res), params.id, params.fileId)),
-        );
+        const actor = principalOf(res);
+        const file = await expenses.completeReceipt(actor, params.id, params.fileId);
+        await receiptReadings.afterUpload(actor, params.id, params.fileId);
+        res.json(envelope(file));
       },
     }),
     defineRoute({

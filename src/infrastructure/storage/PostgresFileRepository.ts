@@ -91,6 +91,14 @@ export class PostgresFileRepository implements IFileRepository {
     return rows.map(toEntity);
   }
 
+  async reassign(id: string, ownerType: string, ownerId: string): Promise<void> {
+    await this.db().query(`update ${this.table} set owner_type = $2, owner_id = $3 where id = $1`, [
+      id,
+      ownerType,
+      ownerId,
+    ]);
+  }
+
   async save(file: StoredFile): Promise<void> {
     const s = file.snapshot();
     await this.db().query(

@@ -4,6 +4,8 @@ import type {
   RuleConfig,
   RuleKey,
 } from "../../domain/notifications/NotificationRules.js";
+import type { WhatsAppStatus } from "../../domain/notifications/WhatsAppWebhook.js";
+import type { WhatsAppAccount } from "./IWhatsApp.js";
 
 // --- the tenant's SMS account (decision 17) ---
 
@@ -65,7 +67,9 @@ export interface IPushDevices {
 
 export type NotificationSettings = Readonly<{
   sms: SmsAccount | null;
-  /** No SMS in this window (local time); messages wait for its end. */
+  /** The business's own WhatsApp account; rules choose it per rule, with an approved template. */
+  whatsapp: WhatsAppAccount | null;
+  /** No SMS or WhatsApp in this window (local time); messages wait for its end. */
   quietHours: QuietHours | null;
   /** Local time of the remittance cut-off check (HH:MM). */
   remittanceCutoff: string;
@@ -125,7 +129,7 @@ export type Delivery = Readonly<{
   rule: RuleKey | "test" | "driver_invitation" | "signing_code";
   recipientType: RecipientType;
   recipientId: string;
-  /** Phone (E.164) for SMS, email address, or the user id for push. */
+  /** Phone (E.164) for SMS and WhatsApp, email address, or the user id for push. */
   address: string;
   title: string | null;
   body: string;
@@ -135,6 +139,9 @@ export type Delivery = Readonly<{
   attempts: number;
   provider: string | null;
   providerMessageId: string | null;
+  /** What the provider said later (WhatsApp: delivered, read or failed). */
+  providerStatus: WhatsAppStatus | null;
+  providerStatusAt: Date | null;
   error: string | null;
   sentAt: Date | null;
   createdAt: Date;
@@ -163,6 +170,13 @@ export interface INotificationDeliveries {
   /** `retryAt` null: failed for good. */
   failed(id: string, error: string, retryAt: Date | null): Promise<void>;
   skipped(id: string, reason: string): Promise<void>;
+  /** Records what the provider said of a WhatsApp message; null when it changes nothing. */
+  providerStatus(
+    messageId: string,
+    status: WhatsAppStatus,
+    at: Date,
+    error: string | null,
+  ): Promise<Delivery | null>;
   list(
     filter: Readonly<{
       channel?: DeliveryChannel;

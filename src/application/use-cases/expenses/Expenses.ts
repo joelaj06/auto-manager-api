@@ -8,6 +8,7 @@ import {
   type PayeeType,
 } from "../../../domain/expenses/Expense.js";
 import { matchingRule } from "../../../domain/expenses/ExpenseRules.js";
+import type { ExpenseFigures } from "../../../domain/expenses/ReceiptReading.js";
 import { Postings } from "../../../domain/finance/Postings.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { IExpenseRepository } from "../../../domain/repositories/IExpenseRepository.js";
@@ -489,6 +490,44 @@ export class Expenses {
   async completeReceipt(actor: Principal, id: string, fileId: string): Promise<FileView> {
     await this.deps.unitOfWork.run(() => this.reach(actor, id, "expenses.create"));
     return this.deps.receipts.complete(id, fileId);
+  }
+
+  /** What a receipt reading is compared with, if the actor may reach the expense. */
+  async forReading(
+    actor: Principal,
+    id: string,
+    permission: "expenses.view" | "expenses.create",
+  ): Promise<ExpenseFigures> {
+    const view = await this.deps.unitOfWork.run(async () =>
+      expenseView((await this.reach(actor, id, permission)).snapshot(), await this.base()),
+    );
+    return {
+      status: view.status,
+      amount: view.amount.formatted,
+      amountMinor: view.amount.amountMinor,
+      currency: view.amount.currency,
+      date: view.expenseDate,
+    };
+  }
+
+  /** Attaches a scanned receipt to a draft (or rejected) expense. */
+  async adoptReceipt(
+    actor: Principal,
+    id: string,
+    fileId: string,
+    from: OwnedDocuments,
+    fromId: string,
+  ): Promise<void> {
+    const expense = await this.deps.unitOfWork.run(() => this.reach(actor, id, "expenses.create"));
+    const { status } = expense.snapshot();
+    if (status !== "draft" && status !== "rejected")
+      throw new ExpenseRuleError("Receipts are added to drafts and rejected expenses");
+    await this.deps.receipts.adopt(id, fileId, from, fromId);
+  }
+
+  /** The receipts of an expense in the same place as the ones the service keeps. */
+  receiptOf(id: string, fileId: string): Promise<FileView> {
+    return this.deps.receipts.get(id, fileId);
   }
 
   async removeReceipt(actor: Principal, id: string, fileId: string): Promise<void> {

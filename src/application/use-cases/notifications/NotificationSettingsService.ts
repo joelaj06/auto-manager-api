@@ -2,6 +2,7 @@ import {
   quietHours,
   RULE_KEYS,
   RULES,
+  ruleChannels,
   ruleConfig,
   senderId,
   timeOfDay,
@@ -12,7 +13,11 @@ import {
   NotificationRuleError,
 } from "../../../domain/notifications/NotificationRules.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { SmsNotConfiguredError, SmsProviderError } from "../../errors/NotificationErrors.js";
+import {
+  SmsNotConfiguredError,
+  SmsProviderError,
+  WhatsAppNotConfiguredError,
+} from "../../errors/NotificationErrors.js";
 import type { Page } from "../../dto/Page.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -28,8 +33,15 @@ import {
   type SmsProvider,
 } from "../../ports/INotifications.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
+import type { ITenantContext } from "../../ports/ITenantContext.js";
+import type { ITenantDirectory } from "../../ports/ITenantDirectory.js";
 import type { ISecretBox } from "../../ports/ISecretBox.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
+import type {
+  IWhatsAppGateway,
+  WhatsAppCredentials,
+  WhatsAppMessage,
+} from "../../ports/IWhatsApp.js";
 import { PageCursor } from "../../services/PageCursor.js";
 import { recordUserAction } from "../reference/userAudit.js";
 
@@ -44,6 +56,13 @@ export type RuleView = RuleConfig &
 export type NotificationSettingsView = Readonly<{
   /** The SMS account without its credentials. */
   sms: Readonly<{ provider: SmsProvider; senderId: string; updatedAt: string }> | null;
+  /** The WhatsApp account without its credentials, and the address to give Meta. */
+  whatsapp: Readonly<{
+    phoneNumberId: string;
+    displayNumber: string;
+    updatedAt: string;
+    webhookUrl: string;
+  }> | null;
   quietHours: QuietHours | null;
   remittanceCutoff: string;
   rules: readonly RuleView[];
@@ -61,6 +80,9 @@ export type SmsAccountInput = Readonly<{
   credentials: Readonly<Record<string, string>>;
 }>;
 
+export type WhatsAppAccountInput = WhatsAppCredentials &
+  Readonly<{ phoneNumberId: string; displayNumber: string }>;
+
 const E164 = /^\+[1-9]\d{7,14}$/;
 
 /**
@@ -77,6 +99,11 @@ export class NotificationSettingsService {
       deliveries: INotificationDeliveries;
       secrets: ISecretBox;
       gateways: readonly ISmsGateway[];
+      whatsapp: IWhatsAppGateway;
+      tenants: ITenantDirectory;
+      tenantContext: ITenantContext;
+      /** This backend's public address, for the webhook shown to the business. */
+      publicApiUrl: string;
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
       clock: IClock;
@@ -84,7 +111,9 @@ export class NotificationSettingsService {
   ) {}
 
   get(): Promise<NotificationSettingsView> {
-    return this.deps.unitOfWork.run(async () => view(await this.deps.settings.get()));
+    return this.deps.unitOfWork.run(async () =>
+      view(await this.deps.settings.get(), await this.webhookUrl()),
+    );
   }
 
   async update(
@@ -119,7 +148,7 @@ export class NotificationSettingsService {
         before: withoutSms(before),
         after: withoutSms(after),
       });
-      return view(after);
+      return view(after, await this.webhookUrl());
     });
   }
 
@@ -152,7 +181,7 @@ export class NotificationSettingsService {
         before: { provider: before.sms?.provider ?? null, senderId: before.sms?.senderId ?? null },
         after: { provider: input.provider, senderId: after.sms!.senderId },
       });
-      return view(after);
+      return view(after, await this.webhookUrl());
     });
   }
 
@@ -168,8 +197,116 @@ export class NotificationSettingsService {
         before: { provider: before.sms?.provider ?? null },
         after: { provider: null },
       });
-      return view(after);
+      return view(after, await this.webhookUrl());
     });
+  }
+
+  /** Sets (or replaces) the WhatsApp account; the credentials are sealed. */
+  async setWhatsAppAccount(
+    actor: Principal,
+    input: WhatsAppAccountInput,
+  ): Promise<NotificationSettingsView> {
+    const { deps } = this;
+    if (!E164.test(input.displayNumber))
+      throw new NotificationRuleError("Give the WhatsApp number as +233…");
+    const credentials: WhatsAppCredentials = {
+      accessToken: input.accessToken,
+      appSecret: input.appSecret,
+      verifyToken: input.verifyToken,
+    };
+    return deps.unitOfWork.run(async () => {
+      const before = await deps.settings.get();
+      const after: NotificationSettings = {
+        ...before,
+        whatsapp: {
+          phoneNumberId: input.phoneNumberId,
+          displayNumber: input.displayNumber,
+          sealedCredentials: deps.secrets.seal(JSON.stringify(credentials)),
+          updatedAt: deps.clock.now().toISOString(),
+        },
+      };
+      await deps.settings.set(after);
+      await recordUserAction(deps, actor.userId, {
+        action: "settings.whatsapp_account_set",
+        entityType: "organisation",
+        before: { phoneNumberId: before.whatsapp?.phoneNumberId ?? null },
+        after: { phoneNumberId: input.phoneNumberId, displayNumber: input.displayNumber },
+      });
+      return view(after, await this.webhookUrl());
+    });
+  }
+
+  async removeWhatsAppAccount(actor: Principal): Promise<NotificationSettingsView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const before = await deps.settings.get();
+      const after = { ...before, whatsapp: null };
+      await deps.settings.set(after);
+      await recordUserAction(deps, actor.userId, {
+        action: "settings.whatsapp_account_removed",
+        entityType: "organisation",
+        before: { phoneNumberId: before.whatsapp?.phoneNumberId ?? null },
+        after: { phoneNumberId: null },
+      });
+      return view(after, await this.webhookUrl());
+    });
+  }
+
+  /** Sends an approved template without parameters now, to check the account works. */
+  async testWhatsApp(
+    actor: Principal,
+    to: string,
+    message: Pick<WhatsAppMessage, "template" | "language">,
+  ): Promise<Delivery> {
+    const { deps } = this;
+    if (!E164.test(to)) throw new NotificationRuleError("Give the number as +233…");
+    const { account, deliveryId } = await deps.unitOfWork.run(async () => {
+      const settings = await deps.settings.get();
+      if (settings.whatsapp === null) throw new WhatsAppNotConfiguredError();
+      const now = deps.clock.now();
+      const id = await deps.deliveries.queue({
+        channel: "whatsapp",
+        rule: "test",
+        recipientType: "user",
+        recipientId: actor.userId,
+        address: to,
+        title: null,
+        body: `Test of the WhatsApp template ${message.template}`,
+        data: {},
+        dedupeKey: `test:${now.toISOString()}`,
+        // Never picked up by the send job: this request sends it.
+        sendAfter: new Date(now.getTime() + 3_600_000),
+      });
+      return { account: settings.whatsapp, deliveryId: id! };
+    });
+    const { accessToken } = JSON.parse(
+      deps.secrets.open(account.sealedCredentials),
+    ) as WhatsAppCredentials;
+    let outcome: Readonly<{ messageId: string } | { error: string }>;
+    try {
+      outcome = await deps.whatsapp.send(
+        { phoneNumberId: account.phoneNumberId, accessToken },
+        to,
+        { ...message, parameters: [] },
+      );
+    } catch (error) {
+      if (!(error instanceof SmsProviderError)) throw error;
+      outcome = { error: error.message };
+    }
+    const delivery = await deps.unitOfWork.run(async () => {
+      if ("messageId" in outcome)
+        await deps.deliveries.sent(deliveryId, "whatsapp", outcome.messageId, deps.clock.now());
+      else await deps.deliveries.failed(deliveryId, outcome.error, null);
+      return deps.deliveries.find(deliveryId);
+    });
+    if ("error" in outcome) throw new SmsProviderError(outcome.error, true);
+    return delivery!;
+  }
+
+  private async webhookUrl(): Promise<string> {
+    const { deps } = this;
+    const tenant = await deps.tenants.findById(deps.tenantContext.currentTenantId().value);
+    return `${deps.publicApiUrl}/api/v1/webhooks/whatsapp/${tenant?.slug ?? ""}`;
   }
 
   /** Sends a test SMS now through the configured account; the result goes to the log too. */
@@ -254,8 +391,17 @@ export class NotificationSettingsService {
   }
 }
 
-function view(settings: NotificationSettings): NotificationSettingsView {
+function view(settings: NotificationSettings, webhookUrl: string): NotificationSettingsView {
   return {
+    whatsapp:
+      settings.whatsapp === null
+        ? null
+        : {
+            phoneNumberId: settings.whatsapp.phoneNumberId,
+            displayNumber: settings.whatsapp.displayNumber,
+            updatedAt: settings.whatsapp.updatedAt,
+            webhookUrl,
+          },
     sms:
       settings.sms === null
         ? null
@@ -269,7 +415,7 @@ function view(settings: NotificationSettings): NotificationSettingsView {
     rules: RULE_KEYS.map((key) => ({
       key,
       description: RULES[key].description,
-      availableChannels: RULES[key].channels,
+      availableChannels: ruleChannels(key),
       placeholders: RULES[key].placeholders ?? [],
       ...settings.rules[key],
     })),
@@ -277,7 +423,7 @@ function view(settings: NotificationSettings): NotificationSettingsView {
 }
 
 function withoutSms(settings: NotificationSettings) {
-  const { sms: _sms, ...rest } = settings;
+  const { sms: _sms, whatsapp: _whatsapp, ...rest } = settings;
   return rest;
 }
 

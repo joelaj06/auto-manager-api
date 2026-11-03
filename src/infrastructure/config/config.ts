@@ -70,6 +70,11 @@ const envSchema = z
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(30),
     /** Telematics ingestion per client IP and window (providers push for many vehicles). */
     TELEMATICS_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(6_000),
+    // Each business's WhatsApp account is its own; this is only where Meta's API lives.
+    WHATSAPP_API_URL: z.url().default("https://graph.facebook.com/v24.0"),
+    // Reading receipts: without a key it is not offered at all.
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    RECEIPT_READER_MODEL: z.string().min(1).default("claude-opus-5-5"),
     HTTP_BODY_LIMIT_KB: z.coerce.number().int().min(1).max(10_240).default(1_024),
     /** Serve /api/v1/openapi.json (defaults to on outside production). */
     EXPOSE_OPENAPI: booleanFlag.optional(),
@@ -452,6 +457,9 @@ export type AuthConfig = Readonly<{
   }>;
 }>;
 
+export type WhatsAppConfig = Readonly<{ apiUrl: string }>;
+export type ReceiptReadingConfig = Readonly<{ apiKey: string | null; model: string }>;
+
 export type PublicConfig = Readonly<{ webAppUrl: string; apiUrl: string; smsProvider: "log" }>;
 
 export type BackupConfig = Readonly<{
@@ -511,6 +519,8 @@ export type AppConfig = Readonly<{
   logFormat: "json" | "pretty";
   shutdownTimeoutMs: number;
   http: HttpConfig;
+  whatsapp: WhatsAppConfig;
+  receiptReading: ReceiptReadingConfig;
   database: DatabaseConfig;
   auth: AuthConfig;
   jobs: JobsConfig;
@@ -691,6 +701,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     jobs: Object.freeze({ workerConcurrency: e.JOB_WORKER_CONCURRENCY, poolMax: e.JOB_POOL_MAX }),
     storage: storageConfig(e),
     mobile: mobileConfig(e),
+    whatsapp: Object.freeze({ apiUrl: e.WHATSAPP_API_URL.replace(/\/+$/, "") }),
+    receiptReading: Object.freeze({
+      apiKey: e.ANTHROPIC_API_KEY ?? null,
+      model: e.RECEIPT_READER_MODEL,
+    }),
     email: Object.freeze({
       smtp: Object.freeze({
         host: e.SMTP_HOST ?? "localhost",

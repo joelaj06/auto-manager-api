@@ -327,12 +327,31 @@ import {
 import { NotificationSettingsService } from "../../application/use-cases/notifications/NotificationSettingsService.js";
 import { Notifier } from "../../application/use-cases/notifications/Notifier.js";
 import { ReminderRules } from "../../application/use-cases/notifications/ReminderRules.js";
+import { WhatsAppWebhook } from "../../application/use-cases/notifications/WhatsAppWebhook.js";
+import type { IWhatsAppGateway, IWhatsAppOptOuts } from "../../application/ports/IWhatsApp.js";
+import { CloudApiWhatsAppGateway } from "../../infrastructure/notifications/CloudApiWhatsAppGateway.js";
+import type { IDeferredConnectLinks } from "../../application/ports/IDeferredConnectLinks.js";
+import { PostgresDeferredConnectLinks } from "../../infrastructure/platform/PostgresDeferredConnectLinks.js";
+import type { IReceiptReader } from "../../application/ports/IReceiptReader.js";
+import type { IReceiptReadings } from "../../application/ports/IReceiptReadings.js";
+import {
+  PurgeUnattachedScans,
+  ReadReceipt,
+  ReceiptReadings,
+} from "../../application/use-cases/receipts/ReceiptReadings.js";
+import {
+  ClaudeReceiptReader,
+  NoReceiptReader,
+} from "../../infrastructure/receipts/ClaudeReceiptReader.js";
+import { PostgresReceiptReadings } from "../../infrastructure/receipts/PostgresReceiptReadings.js";
+import { receiptReadingRoutes } from "../../adapters/routes/receiptReadingRoutes.js";
 import { SendNotifications } from "../../application/use-cases/notifications/SendNotifications.js";
 import {
   PostgresNotificationDeliveries,
   PostgresNotificationInbox,
   PostgresNotificationQueries,
   PostgresNotificationSettingsStore,
+  PostgresWhatsAppOptOuts,
   PostgresPushDevices,
   PostgresRecipientDirectory,
 } from "../../infrastructure/notifications/PostgresNotifications.js";
@@ -1280,6 +1299,7 @@ export function createContainer(
       platformFiles: FileService,
       tasks: ITenantDailyTask[],
       notificationHandlers: IJobHandler[],
+      receiptHandlers: IJobHandler[],
       documentHandlers: IJobHandler[],
       reconciliation: GatewayReconciliation,
       automation: BillingAutomation,
@@ -1309,6 +1329,7 @@ export function createContainer(
       new SweepAbandonedFiles({ files: platformFiles, logger }),
       ...provisioningHandlers,
       ...notificationHandlers,
+      ...receiptHandlers,
       ...documentHandlers,
       reconciliation,
       automation,
@@ -1341,6 +1362,7 @@ export function createContainer(
       TYPES.PlatformFileService,
       TYPES.TenantDailyTasks,
       TYPES.NotificationJobHandlers,
+      TYPES.ReceiptJobHandlers,
       TYPES.DocumentJobHandlers,
       TYPES.GatewayReconciliation,
       TYPES.BillingAutomation,
@@ -5594,6 +5616,7 @@ export function createContainer(
       ledger: ILedger,
       logger: ILogger,
       telematicsDaily: TelematicsDaily,
+      receiptScans: PurgeUnattachedScans,
     ) =>
       // Stats and the ledger roll-up after the money tasks: they read what those posted.
       [
@@ -5614,6 +5637,7 @@ export function createContainer(
         new PendingDocumentRenders(documents),
         new SigningMaintenance(signing),
         new ReportRetention(reports),
+        receiptScans,
       ],
     [
       TYPES.RecurringExpenses,
@@ -5634,8 +5658,99 @@ export function createContainer(
       TYPES.Ledger,
       TYPES.Logger,
       TYPES.TelematicsDaily,
+      TYPES.PurgeUnattachedScans,
     ],
   );
+  // --- Reading receipts (decisions 520–522) ---
+  tenantRepository<IReceiptReadings>(
+    TYPES.ReceiptReadingsRepository,
+    (tx) => new PostgresReceiptReadings(tx),
+  );
+  container
+    .bind<IReceiptReader>(TYPES.ReceiptReader)
+    .toResolvedValue(
+      (clock: IClock) =>
+        config.receiptReading.apiKey === null
+          ? new NoReceiptReader()
+          : new ClaudeReceiptReader(
+              config.receiptReading.apiKey,
+              config.receiptReading.model,
+              clock,
+            ),
+      [TYPES.Clock],
+    );
+  container
+    .bind<OwnedDocuments>(TYPES.ReceiptScans)
+    .toResolvedValue(
+      (files: FileService) => new OwnedDocuments(files, "expense_receipt", "receipt_reading", 1),
+      [TYPES.TenantFileService],
+    );
+  container.bind<ReceiptReadings>(TYPES.ReceiptReadings).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      readings: IReceiptReadings,
+      expenses: Expenses,
+      scans: OwnedDocuments,
+      reader: IReceiptReader,
+      queue: IJobQueue,
+      tenantContext: ITenantContext,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+    ) =>
+      new ReceiptReadings({
+        unitOfWork,
+        readings,
+        expenses,
+        scans,
+        reader,
+        queue,
+        tenantContext,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.ReceiptReadingsRepository,
+      TYPES.Expenses,
+      TYPES.ReceiptScans,
+      TYPES.ReceiptReader,
+      TYPES.JobQueue,
+      TYPES.TenantContext,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<IJobHandler[]>(TYPES.ReceiptJobHandlers)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        readings: IReceiptReadings,
+        files: FileService,
+        reader: IReceiptReader,
+        clock: IClock,
+      ): IJobHandler[] => [new ReadReceipt({ unitOfWork, readings, files, reader, clock })],
+      [
+        TYPES.UnitOfWork,
+        TYPES.ReceiptReadingsRepository,
+        TYPES.TenantFileService,
+        TYPES.ReceiptReader,
+        TYPES.Clock,
+      ],
+    );
+  container
+    .bind<PurgeUnattachedScans>(TYPES.PurgeUnattachedScans)
+    .toResolvedValue(
+      (unitOfWork: IUnitOfWork, readings: IReceiptReadings, scans: OwnedDocuments, clock: IClock) =>
+        new PurgeUnattachedScans({ unitOfWork, readings, scans, clock }),
+      [TYPES.UnitOfWork, TYPES.ReceiptReadingsRepository, TYPES.ReceiptScans, TYPES.Clock],
+    );
 
   // --- Remittances and the driver ledger ---
   tenantRepository<PostgresRemittances>(TYPES.RemittanceStore, (tx) => new PostgresRemittances(tx));
@@ -8772,6 +8887,9 @@ export function createContainer(
       deliveries: INotificationDeliveries,
       secrets: ISecretBox,
       gateways: ISmsGateway[],
+      whatsapp: IWhatsAppGateway,
+      tenants: ITenantDirectory,
+      tenantContext: ITenantContext,
       auditTrail: IAuditTrail,
       requestContext: IRequestContext,
       clock: IClock,
@@ -8782,6 +8900,10 @@ export function createContainer(
         deliveries,
         secrets,
         gateways,
+        whatsapp,
+        tenants,
+        tenantContext,
+        publicApiUrl: config.public.apiUrl,
         auditTrail,
         requestContext,
         clock,
@@ -8792,8 +8914,50 @@ export function createContainer(
       TYPES.NotificationDeliveries,
       TYPES.CredentialsSecretBox,
       TYPES.SmsGateways,
+      TYPES.WhatsAppGateway,
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
       TYPES.AuditTrail,
       TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<IWhatsAppGateway>(TYPES.WhatsAppGateway)
+    .toDynamicValue(() => new CloudApiWhatsAppGateway(config.whatsapp.apiUrl));
+  tenantRepository<IWhatsAppOptOuts>(
+    TYPES.WhatsAppOptOuts,
+    (tx) => new PostgresWhatsAppOptOuts(tx),
+  );
+  container.bind<WhatsAppWebhook>(TYPES.WhatsAppWebhook).toResolvedValue(
+    (
+      tenants: ITenantDirectory,
+      tenantContext: ITenantContext,
+      unitOfWork: IUnitOfWork,
+      settings: INotificationSettingsStore,
+      deliveries: INotificationDeliveries,
+      optOuts: IWhatsAppOptOuts,
+      secrets: ISecretBox,
+      clock: IClock,
+    ) =>
+      new WhatsAppWebhook({
+        tenants,
+        tenantContext,
+        unitOfWork,
+        settings,
+        deliveries,
+        optOuts,
+        secrets,
+        clock,
+      }),
+    [
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.NotificationSettingsStore,
+      TYPES.NotificationDeliveries,
+      TYPES.WhatsAppOptOuts,
+      TYPES.CredentialsSecretBox,
       TYPES.Clock,
     ],
   );
@@ -8805,6 +8969,8 @@ export function createContainer(
       organisation: IOrganisationSettings,
       secrets: ISecretBox,
       gateways: ISmsGateway[],
+      whatsapp: IWhatsAppGateway,
+      optOuts: IWhatsAppOptOuts,
       push: IPushSender,
       devices: IPushDevices,
       emails: IEmailDeliveries,
@@ -8822,6 +8988,8 @@ export function createContainer(
         organisation,
         secrets,
         gateways,
+        whatsapp,
+        optOuts,
         push,
         devices,
         emails,
@@ -8842,6 +9010,8 @@ export function createContainer(
       TYPES.OrganisationSettings,
       TYPES.CredentialsSecretBox,
       TYPES.SmsGateways,
+      TYPES.WhatsAppGateway,
+      TYPES.WhatsAppOptOuts,
       TYPES.PushSender,
       TYPES.PushDevices,
       TYPES.EmailDeliveries,
@@ -8922,12 +9092,20 @@ export function createContainer(
     return Ed25519ConnectLinkSigner.fromSeed(DEVELOPMENT_KEY_SEED);
   });
   container.bind<MobileConnect>(TYPES.MobileConnect).toResolvedValue(
-    (signer: IConnectLinkSigner, directory: ITenantDirectory, clock: IClock) =>
+    (
+      signer: IConnectLinkSigner,
+      directory: ITenantDirectory,
+      clock: IClock,
+      deferred: IDeferredConnectLinks,
+      secrets: ISecretBox,
+    ) =>
       new MobileConnect({
         signer,
         qr: new QrcodeSvgRenderer(),
         directory,
         clock,
+        deferred,
+        secrets,
         settings: {
           apiBaseUrl: config.mobile.apiBaseUrl,
           linkBaseUrl: config.mobile.linkBaseUrl,
@@ -8939,7 +9117,17 @@ export function createContainer(
           latestVersion: config.mobile.latestVersion,
         },
       }),
-    [TYPES.ConnectLinkSigner, TYPES.TenantDirectory, TYPES.Clock],
+    [
+      TYPES.ConnectLinkSigner,
+      TYPES.TenantDirectory,
+      TYPES.Clock,
+      TYPES.DeferredConnectLinks,
+      TYPES.CredentialsSecretBox,
+    ],
+  );
+  platformRepository<IDeferredConnectLinks>(
+    TYPES.DeferredConnectLinks,
+    (p) => new PostgresDeferredConnectLinks(p),
   );
 
   // --- Files (object storage, tenant and platform file records) ---
@@ -9299,6 +9487,8 @@ export function createContainer(
       dashboards: Dashboards,
       notificationCenter: NotificationCenter,
       notificationSettings: NotificationSettingsService,
+      whatsappWebhook: WhatsAppWebhook,
+      receiptReadings: ReceiptReadings,
       driverApp: DriverApp,
       driverAppAccess: DriverAppAccess,
       vehicleIssues: VehicleIssues,
@@ -9476,6 +9666,7 @@ export function createContainer(
           fuel: fuelLogs,
           administration: expenseAdministration,
           recurring: recurringExpenses,
+          receiptReadings,
         }),
         ...remittanceRoutes({
           remittances: remittanceBook,
@@ -9484,7 +9675,12 @@ export function createContainer(
           settings: remittanceSettings,
         }),
         ...dashboardRoutes({ dashboards, roleDashboards }),
-        ...notificationRoutes({ center: notificationCenter, settings: notificationSettings }),
+        ...notificationRoutes({
+          center: notificationCenter,
+          settings: notificationSettings,
+          whatsapp: whatsappWebhook,
+        }),
+        ...receiptReadingRoutes(receiptReadings),
         ...driverAppRoutes({
           app: driverApp,
           access: driverAppAccess,
@@ -9631,6 +9827,8 @@ export function createContainer(
       TYPES.Dashboards,
       TYPES.NotificationCenter,
       TYPES.NotificationSettingsService,
+      TYPES.WhatsAppWebhook,
+      TYPES.ReceiptReadings,
       TYPES.DriverApp,
       TYPES.DriverAppAccess,
       TYPES.VehicleIssues,

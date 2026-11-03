@@ -23,11 +23,14 @@ import {
   type RuleConfig,
   type RuleKey,
 } from "../../domain/notifications/NotificationRules.js";
+import type { IWhatsAppOptOuts } from "../../application/ports/IWhatsApp.js";
+import type { WhatsAppStatus } from "../../domain/notifications/WhatsAppWebhook.js";
 import { OFF_FLEET_STATUSES } from "../../domain/vehicles/VehicleStatus.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
 
 const DEFAULTS: Omit<NotificationSettings, "rules"> = Object.freeze({
   sms: null,
+  whatsapp: null,
   quietHours: Object.freeze({ start: "21:00", end: "07:00" }),
   remittanceCutoff: "20:00",
 });
@@ -56,6 +59,32 @@ export class PostgresNotificationSettingsStore implements INotificationSettingsS
         "update organisation set settings = jsonb_set(settings, '{notifications}', $1::jsonb), updated_at = now()",
         [JSON.stringify(settings)],
       );
+  }
+}
+
+/** Numbers that replied STOP. */
+export class PostgresWhatsAppOptOuts implements IWhatsAppOptOuts {
+  constructor(private readonly transactions: PostgresTransactionContext) {}
+
+  async isOptedOut(phone: string): Promise<boolean> {
+    const { rowCount } = await this.transactions
+      .current()
+      .query("select 1 from whatsapp_opt_outs where phone = $1", [phone]);
+    return rowCount === 1;
+  }
+
+  async optOut(phone: string, now: Date): Promise<void> {
+    await this.transactions.current().query(
+      `insert into whatsapp_opt_outs (phone, opted_out_at) values ($1, $2)
+         on conflict (phone) do nothing`,
+      [phone, now],
+    );
+  }
+
+  async optIn(phone: string): Promise<void> {
+    await this.transactions
+      .current()
+      .query("delete from whatsapp_opt_outs where phone = $1", [phone]);
   }
 }
 
@@ -157,6 +186,8 @@ type DeliveryRow = {
   attempts: number;
   provider: string | null;
   provider_message_id: string | null;
+  provider_status: WhatsAppStatus | null;
+  provider_status_at: Date | null;
   error: string | null;
   sent_at: Date | null;
   created_at: Date;
@@ -177,6 +208,8 @@ const toDelivery = (r: DeliveryRow): Delivery => ({
   attempts: r.attempts,
   provider: r.provider,
   providerMessageId: r.provider_message_id,
+  providerStatus: r.provider_status,
+  providerStatusAt: r.provider_status_at,
   error: r.error,
   sentAt: r.sent_at,
   createdAt: r.created_at,
@@ -279,6 +312,28 @@ export class PostgresNotificationDeliveries implements INotificationDeliveries {
         where id = $1`,
       [id, error.slice(0, 1_000), retryAt],
     );
+  }
+
+  /** Statuses can arrive out of order: a later one never gives way to an earlier one. */
+  async providerStatus(
+    messageId: string,
+    status: WhatsAppStatus,
+    at: Date,
+    error: string | null,
+  ): Promise<Delivery | null> {
+    const { rows } = await this.tx.query<DeliveryRow>(
+      `update notification_deliveries
+          set provider_status = $2, provider_status_at = $3, error = coalesce($4, error),
+              status = case when $2 = 'failed' then 'failed' else status end,
+              sent_at = case when $2 = 'failed' then null else sent_at end
+        where provider_message_id = $1 and channel = 'whatsapp'
+          and (provider_status is null or provider_status_at <= $3 or $2 = 'failed')
+          and provider_status is distinct from 'failed'
+          and provider_status is distinct from $2
+        returning *`,
+      [messageId, status, at, error],
+    );
+    return rows[0] === undefined ? null : toDelivery(rows[0]);
   }
 
   async skipped(id: string, reason: string): Promise<void> {

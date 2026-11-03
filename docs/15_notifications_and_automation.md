@@ -1,5 +1,7 @@
 # 15 — Notifications & Automation
 
+> **Update 2026-11-03 (P9-6, decisions 515–517):** WhatsApp runs on the **business's own account on Meta's Cloud API directly**, not through 360dialog or Twilio, and a rule uses it with an approved template. It goes instead of SMS, with SMS behind it when a message cannot get through; messages with one-time links stay on SMS, and STOP is honoured. Sending documents as attachments is left out for now.
+
 > **Update 2026-10-13 (decision 17):** SMS runs on the **tenant's own provider account**. Each tenant stores provider (e.g. Hubtel, Arkesel, mNotify, Twilio), sender ID and API credentials (encrypted at rest; settings permission `settings.notifications.manage`). The platform does **not** sell SMS credits and does not meter SMS usage; delivery status/cost come from the tenant's provider response. If a tenant has no SMS provider configured, SMS rules are skipped and the in-app/email fallback is used. Platform-level emails (invitations, password reset, billing notices) use our own email provider. WhatsApp likewise uses the tenant's own business account when added.
 
 ## 1. Channels

@@ -43,6 +43,7 @@
     "verify": "yarn typecheck && yarn lint && yarn format:check && yarn test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.4.0",
     "@aws-sdk/client-s3": "3.1146.0",
     "@aws-sdk/s3-request-presigner": "3.1146.0",
     "argon2": "^0.45.1",

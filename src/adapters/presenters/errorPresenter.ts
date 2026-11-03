@@ -331,6 +331,12 @@ const RULES: Readonly<Record<string, Rule>> = {
   // Notifications
   NOTIFICATION_RULE: { status: 422 },
   SMS_NOT_CONFIGURED: { status: 409 },
+  WHATSAPP_NOT_CONFIGURED: { status: 409 },
+  DEFERRED_LINK_NOT_FOUND: { status: 404 },
+  RECEIPT_READING_OFF: { status: 409 },
+  RECEIPT_READING_LIMIT: { status: 409 },
+  RECEIPT_READING_NOT_FOUND: { status: 404 },
+  WHATSAPP_WEBHOOK_REFUSED: { status: 401 },
   SMS_PROVIDER_FAILED: { status: 502 },
 
   // Files

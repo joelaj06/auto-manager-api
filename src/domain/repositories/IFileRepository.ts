@@ -13,4 +13,6 @@ export interface IFileRepository {
   /** Pending uploads started before `before` (abandoned). */
   abandoned(before: Date, limit: number): Promise<StoredFile[]>;
   save(file: StoredFile): Promise<void>;
+  /** Moves a file to another owner (a scanned receipt to its expense). */
+  reassign(id: string, ownerType: string, ownerId: string): Promise<void>;
 }

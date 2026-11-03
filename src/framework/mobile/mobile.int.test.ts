@@ -223,6 +223,87 @@ describe("landing page and app-link files", () => {
   });
 });
 
+describe("deferred links for iPhone", () => {
+  const INVITATION = "s".repeat(43);
+  const invitation = () =>
+    signed({
+      version: 1,
+      apiBaseUrl: "http://localhost:3000/",
+      tenantSlug: t.slug,
+      invitationToken: INVITATION,
+      expiresAt: Math.floor(Date.now() / 1_000) + 3_600,
+      keyId: signer.keyId,
+    });
+  const hold = async (query: string) => api().post("/connect").type("form").send({ q: query });
+  const codeOf = (html: string) => /([0-9A-Z]{5}-[0-9A-Z]{5})/.exec(html)?.[1];
+
+  it("offers to keep the link on the page", async () => {
+    const query = (
+      await api().get("/api/v1/mobile/connect-link").set(as(t.ownerAccessToken))
+    ).body.data.url.split("?")[1] as string;
+    const res = await hold(query);
+    expect(res.status).toBe(200);
+    expect(codeOf(res.text)).toBeDefined();
+    expect(res.headers["content-security-policy"]).toContain("script-src 'nonce-");
+  });
+
+  it("gives the app the link once, keeping nothing of it afterwards", async () => {
+    const link = invitation();
+    const held = await hold(link.split("?")[1]!);
+    const code = codeOf(held.text)!;
+    expect(held.text).not.toContain(INVITATION);
+    const claim = await api()
+      .post("/api/v1/public/mobile/deferred-links/claim")
+      .send({ code: code.toLowerCase() });
+    expect(claim.status, JSON.stringify(claim.body)).toBe(200);
+    expect(claim.body.data.appUrl).toContain(INVITATION);
+    expect(claim.body.data.tenantSlug).toBe(t.slug);
+    const again = await api().post("/api/v1/public/mobile/deferred-links/claim").send({ code });
+    expect(again.status).toBe(404);
+    const { rows } = await platform.query<{ sealed_query: string }>(
+      "select sealed_query from deferred_connect_links order by created_at desc limit 1",
+    );
+    expect(rows[0]!.sealed_query).toBe("");
+  });
+
+  it("takes the code in the resume link the clipboard carried", async () => {
+    const code = codeOf((await hold(invitation().split("?")[1]!)).text)!;
+    const claim = await api()
+      .post("/api/v1/public/mobile/deferred-links/claim")
+      .send({ code: `https://go.autoforce.test/connect?hold=${code}` });
+    expect(claim.status).toBe(200);
+  });
+
+  it("keeps nothing readable: the code as a hash, the link sealed", async () => {
+    const code = codeOf((await hold(invitation().split("?")[1]!)).text)!;
+    const { rows } = await platform.query<{ code_hash: string; sealed_query: string }>(
+      "select code_hash, sealed_query from deferred_connect_links order by created_at desc limit 1",
+    );
+    expect(rows[0]!.code_hash).not.toContain(code.replace("-", ""));
+    expect(rows[0]!.sealed_query).not.toContain(INVITATION);
+  });
+
+  it("will not hold a link that is not ours", async () => {
+    const res = await hold("v=1&api=https://evil.example/&t=acme&k=x&sig=abc");
+    expect(res.text).toContain("This link cannot be used");
+    expect(codeOf(res.text)).toBeUndefined();
+  });
+
+  it("refuses a code it does not know, with the same answer as a used one", async () => {
+    const res = await api()
+      .post("/api/v1/public/mobile/deferred-links/claim")
+      .send({ code: "00000-00000" });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("DEFERRED_LINK_NOT_FOUND");
+  });
+
+  it("shows the code when a resume link opens in the browser", async () => {
+    const res = await api().get("/connect?hold=ABCDE-FGHJK");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("ABCDE-FGHJK");
+  });
+});
+
 describe("without app registration", () => {
   it("answers 404 for the app-link files", async () => {
     const plain = await createTestContainer();

@@ -1,4 +1,7 @@
-import type { LandingPage } from "../../application/use-cases/mobile/MobileConnect.js";
+import type {
+  DeferredHold,
+  LandingPage,
+} from "../../application/use-cases/mobile/MobileConnect.js";
 
 const escape = (value: string) =>
   value
@@ -15,7 +18,8 @@ const button = (href: string, label: string) =>
 
 /**
  * The page a phone shows for a connect link when the app does not open it (docs/23 §3): open
- * the app, or get it. No scripts; every value is escaped.
+ * the app, or get it, or on iPhone keep the link for after installing. No scripts; every value
+ * is escaped.
  */
 export function connectLandingPage(page: LandingPage): string {
   const body: string[] = [];
@@ -37,9 +41,46 @@ export function connectLandingPage(page: LandingPage): string {
   if (page.iosStoreUrl !== null) body.push(button(page.iosStoreUrl, "Download on the App Store"));
   if (page.androidStoreUrl === null && page.iosStoreUrl === null)
     body.push("<p>The app will be available in the stores soon.</p>");
+  if (page.valid && page.iosStoreUrl !== null)
+    body.push(
+      `<form method="post" action="/connect"><input type="hidden" name="q" value="${escape(page.query ?? "")}">`,
+      '<button style="display:block;width:100%;margin:12px 0;padding:14px;border-radius:8px;border:1px solid #0f5132;background:#fff;color:#0f5132;font:inherit;font-weight:600">',
+      "On iPhone? Keep this link for after installing</button></form>",
+    );
+  return page_(body);
+}
+
+/**
+ * The code that carries a connect link through the App Store (decision 518). A small script (with
+ * the response's own nonce) puts the resume link on the clipboard as the button is tapped, so the
+ * app can pick it up when it first opens; without it the button still goes to the store and the
+ * code can be typed.
+ */
+export function connectHoldPage(
+  hold: Pick<DeferredHold, "code" | "resumeUrl" | "iosStoreUrl">,
+  nonce: string,
+): string {
+  const body = [
+    '<h1 style="font-size:22px">Your connect code</h1>',
+    `<p style="font-size:28px;font-weight:700;letter-spacing:2px;text-align:center;user-select:all">${escape(hold.code)}</p>`,
+    "<p>Install the app, then open it: it picks this up by itself, or enter the code. It works once, for a day.</p>",
+  ];
+  if (hold.iosStoreUrl !== null)
+    body.push(
+      button(hold.iosStoreUrl, "Copy and go to the App Store").replace(
+        "<a ",
+        `<a id="store" data-copy="${escape(hold.resumeUrl)}" `,
+      ),
+    );
+  body.push(button(hold.resumeUrl, "I have the app: open it"));
   body.push(
-    '<p style="color:#555;font-size:14px">After installing on iPhone, scan the QR code again.</p>',
+    `<script nonce="${escape(nonce)}">document.getElementById("store")?.addEventListener("click",function(e){` +
+      "var a=e.currentTarget;navigator.clipboard&&navigator.clipboard.writeText(a.dataset.copy).catch(function(){});});</script>",
   );
+  return page_(body);
+}
+
+function page_(body: readonly string[]): string {
   return [
     "<!doctype html>",
     '<html lang="en"><head><meta charset="utf-8">',

@@ -91,6 +91,8 @@ export type JobPayloads = {
   "tenant.demo_seed": Readonly<{ tenantId: string }>;
   /** Expire demo tenants at their end and purge them a week later. */
   "demos.sweep": Readonly<Record<string, never>>;
+  /** Read one queued receipt. */
+  "tenant.receipt_read": Readonly<{ tenantId: string; readingId: string }>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -457,6 +459,15 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     expireInSeconds: 900,
     // Hourly; the milestones themselves are refreshed nightly by usage.daily.
     cron: "33 * * * *",
+  },
+  "tenant.receipt_read": {
+    description: "Read one queued receipt with the outside provider",
+    tenantScoped: true,
+    policy: "standard",
+    retryLimit: 3,
+    retryDelaySeconds: 60,
+    retryBackoff: true,
+    expireInSeconds: 300,
   },
   "tenant.demo_seed": {
     description: "Fill a new demo tenant with sample data through the API",

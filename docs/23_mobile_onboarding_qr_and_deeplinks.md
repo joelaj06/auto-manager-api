@@ -2,6 +2,8 @@
 
 Decision 18: shared domain; the web portal shows a **QR code containing the backend URL**; scanning it also triggers a **deep link** that opens the app, or sends the user to download it.
 
+> **Update 2026-11-03 (P9-6, decisions 518–519):** deferred deep links on iOS are built without a provider. The landing page holds the connect link behind a one-time code, carried through the App Store on the clipboard or typed, and the app claims it at first launch. The code is kept as a hash, the link sealed; it lasts a day. Scanning again still works.
+
 ## 1. Interpretation to confirm (open question in doc 19)
 
 "Shared domain" is read here as: **one API domain serves all tenants** (e.g. `api.<domain>`), the tenant is identified by the token / an `X-Tenant` header rather than by a per-tenant API host. The web portal may still use `<slug>.<domain>` for the browser UI. If you intended per-tenant API subdomains (`<slug>.api.<domain>`), the flows below still work — only the URL in the QR changes.

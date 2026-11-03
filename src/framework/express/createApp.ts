@@ -46,6 +46,8 @@ export function createApp(deps: AppDependencies): Express {
       },
     }),
   );
+  // The connect page's one form; held links are claimed through /api with the tight budget below.
+  app.use("/connect", express.urlencoded({ extended: false, limit: "4kb" }));
   // Telematics providers push for many vehicles from few addresses: a budget of their own.
   const general = rateLimiter(deps.http.rateLimit);
   const telematics = rateLimiter({
@@ -63,6 +65,8 @@ export function createApp(deps: AppDependencies): Express {
     if (req.method === "POST") credentialLimiter(req, res, next);
     else next();
   });
+  app.post("/connect", credentialLimiter);
+  app.use("/api/v1/public/mobile/deferred-links", credentialLimiter);
   // Signup writes (apply, verify, resend, reply) share the tight budget; status reads do not.
   app.use("/api/v1/applications", (req, res, next) => {
     if (req.method === "POST") credentialLimiter(req, res, next);

@@ -825,6 +825,31 @@ imports and matches (decisions 512–513). Work through `GET /api/v1/reconciliat
 charges, or `…/lines/:id/ignore`. `GET /api/v1/reconciliation/summary` and the
 `bank_reconciliation` report give the difference (decision 514).
 
+## WhatsApp, iOS deferred links and receipt reading
+
+**WhatsApp** runs on each business's own WhatsApp Business account (decision 515). Set it up in `PUT /api/v1/settings/notifications/whatsapp`, give Meta the `webhookUrl` the settings show and the verify token you chose, then add the `whatsapp` channel to a rule with its approved template:
+
+```json
+{
+  "rules": {
+    "rental_confirmed": {
+      "channels": ["sms", "email", "whatsapp"],
+      "whatsappTemplate": {
+        "name": "booking_confirmed",
+        "language": "en",
+        "parameters": ["customerName", "pickupAt"]
+      }
+    }
+  }
+}
+```
+
+`parameters` are the rule's placeholders in the order of the template's `{{1}}`, `{{2}}`. WhatsApp goes instead of SMS, and SMS follows only if the message cannot get through and the rule also sends SMS. Delivered, read and failed show in `GET /api/v1/notification-deliveries`. `POST …/whatsapp/test` sends a template without parameters to check the account.
+
+**iOS deferred links** need nothing from a third party (decisions 518–519). The `/connect` page offers iPhone users a code that carries the link through the App Store. On first launch the app should check the pasteboard for a `/connect?hold=` link (or ask for the code) and call `POST /api/v1/public/mobile/deferred-links/claim` with `{ "code": "…" }`, then handle the `appUrl` it gets back like any connect link. Set `MOBILE_IOS_STORE_URL` for the option to show.
+
+**Receipt reading** (decisions 520–522) needs `ANTHROPIC_API_KEY`, and each business then switches it on in `PUT /api/v1/settings/receipt-reading`, since receipts leave for an outside provider. Scan first with `POST /api/v1/receipt-readings`, upload, `POST …/:id/complete`, poll `GET …/:id` for the figures, enter the expense, then `POST …/:id/attach`. Receipts attached the ordinary way are read too, and `GET /api/v1/expenses/:id/receipts/:fileId/reading` shows where they disagree with the expense. A reading never changes an expense.
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

@@ -7,8 +7,11 @@ export class NotificationRuleError extends DomainError {
   }
 }
 
-/** In-app inbox, push to the staff app, email to staff, SMS through the tenant's provider. */
-export const CHANNELS = ["in_app", "push", "email", "sms"] as const;
+/**
+ * In-app inbox, push to the staff app, email to staff, SMS through the tenant's provider, and
+ * WhatsApp through the tenant's own business account.
+ */
+export const CHANNELS = ["in_app", "push", "email", "sms", "whatsapp"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
 export const RULE_KEYS = [
@@ -69,6 +72,16 @@ export type RuleDefinition = Readonly<{
   usesAfterDays?: boolean;
 }>;
 
+/**
+ * The template Meta approved for a rule: WhatsApp refuses free text to someone who has not written
+ * first. `parameters` are the rule's placeholders, in the order of the template's {{1}}, {{2}} ….
+ */
+export type WhatsAppTemplate = Readonly<{
+  name: string;
+  language: string;
+  parameters: readonly string[];
+}>;
+
 export type RuleConfig = Readonly<{
   enabled: boolean;
   channels: readonly Channel[];
@@ -78,6 +91,8 @@ export type RuleConfig = Readonly<{
   afterDays?: number;
   /** Custom SMS text with {{placeholders}}; null: the standard text. */
   smsTemplate?: string | null;
+  /** The approved template sent on WhatsApp; required once the rule uses the channel. */
+  whatsappTemplate?: WhatsAppTemplate | null;
 }>;
 
 const STAFF: readonly Channel[] = ["in_app", "push", "email"];
@@ -367,12 +382,51 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const PLACEHOLDER = /\{\{\s*([a-zA-Z]+)\s*\}\}/g;
 
 /** One rule's configuration, checked against what the rule allows. */
+/** The channels a rule can use: WhatsApp wherever a text goes to a person by SMS. */
+export function ruleChannels(key: RuleKey): readonly Channel[] {
+  const rule = RULES[key];
+  return rule.placeholders !== undefined && rule.channels.includes("sms")
+    ? [...rule.channels, "whatsapp"]
+    : rule.channels;
+}
+
+const TEMPLATE_NAME = /^[a-z0-9_]{1,512}$/;
+const TEMPLATE_LANGUAGE = /^[a-z]{2,3}(_[A-Z]{2})?$/;
+
+function whatsappTemplate(
+  key: RuleKey,
+  template: WhatsAppTemplate | null | undefined,
+): WhatsAppTemplate | null {
+  if (template === null || template === undefined) return null;
+  const placeholders = RULES[key].placeholders ?? [];
+  if (!TEMPLATE_NAME.test(template.name))
+    throw new NotificationRuleError("A template name is lower case letters, digits and _");
+  if (!TEMPLATE_LANGUAGE.test(template.language))
+    throw new NotificationRuleError("A template language is a code like en or en_US");
+  if (template.parameters.length > 20)
+    throw new NotificationRuleError("A template has at most 20 parameters here");
+  for (const parameter of template.parameters)
+    if (!placeholders.includes(parameter))
+      throw new NotificationRuleError(
+        `Unknown parameter ${parameter}; use ${placeholders.join(", ")}`,
+      );
+  return {
+    name: template.name,
+    language: template.language,
+    parameters: [...template.parameters],
+  };
+}
+
 export function ruleConfig(key: RuleKey, config: RuleConfig): RuleConfig {
   const rule = RULES[key];
   const channels = [...new Set(config.channels)];
+  const available = ruleChannels(key);
   for (const channel of channels)
-    if (!rule.channels.includes(channel))
+    if (!available.includes(channel))
       throw new NotificationRuleError(`${key} cannot use the ${channel} channel`);
+  const template = whatsappTemplate(key, config.whatsappTemplate);
+  if (channels.includes("whatsapp") && template === null)
+    throw new NotificationRuleError(`Give the approved WhatsApp template ${key} sends`);
   let daysBefore: number[] | undefined;
   if (rule.usesDays) {
     daysBefore = [...new Set(config.daysBefore ?? rule.defaults.daysBefore ?? [])].sort(
@@ -407,6 +461,7 @@ export function ruleConfig(key: RuleKey, config: RuleConfig): RuleConfig {
     ...(daysBefore === undefined ? {} : { daysBefore }),
     ...(afterDays === undefined ? {} : { afterDays }),
     ...(rule.placeholders === undefined ? {} : { smsTemplate }),
+    ...(template === null ? {} : { whatsappTemplate: template }),
   };
 }
 

@@ -194,6 +194,12 @@ export class FileService {
   }
 
   /** The bytes of a ready file (generated documents: small). */
+  /** Gives a file to another owner. */
+  reassign(fileId: string, owner: Readonly<{ type: string; id: string }>): Promise<void> {
+    const { deps } = this;
+    return deps.unitOfWork.run(() => deps.files.reassign(fileId, owner.type, owner.id));
+  }
+
   async read(fileId: string): Promise<Uint8Array> {
     const file = await this.find(fileId);
     if (file.status !== "ready") throw new FileNotFoundError();

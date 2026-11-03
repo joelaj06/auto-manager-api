@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import type { Response } from "express";
 import type { MobileConnect } from "../../application/use-cases/mobile/MobileConnect.js";
 import { tenantOf } from "../middleware/AccessGuard.js";
-import { connectLandingPage } from "../presenters/connectLandingPage.js";
+import { connectHoldPage, connectLandingPage } from "../presenters/connectLandingPage.js";
 import { envelope } from "../presenters/responseEnvelope.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
 import { access } from "./RouteAccess.js";
@@ -12,6 +14,18 @@ import { access } from "./RouteAccess.js";
  * page shown when the app is not installed.
  */
 export function mobileRoutes(mobile: MobileConnect): ApiRoute[] {
+  const holdPage = (res: Response, hold: Parameters<typeof connectHoldPage>[0]) => {
+    const nonce = randomBytes(16).toString("base64");
+    res
+      .status(200)
+      .type("html")
+      .set({
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+        "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'`,
+      })
+      .send(connectHoldPage(hold, nonce));
+  };
   return [
     defineRoute({
       method: "get",
@@ -86,12 +100,51 @@ export function mobileRoutes(mobile: MobileConnect): ApiRoute[] {
       access: access.public(),
       responses: { 200: { description: "HTML page" } },
       handler: async (_input, req, res) => {
+        const { hold } = req.query;
+        if (typeof hold === "string" && hold.length <= 20) {
+          holdPage(res, mobile.held(hold));
+          return;
+        }
         const query = req.originalUrl.split("?")[1] ?? "";
         res
           .status(200)
           .type("html")
           .set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" })
           .send(connectLandingPage(await mobile.landingPage(query)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/connect",
+      summary: "Holds a connect link behind a code for after installing on iPhone",
+      tags: ["mobile"],
+      access: access.public(),
+      request: { body: z.object({ q: z.string().max(2_000) }) },
+      responses: { 200: { description: "HTML page with the code" } },
+      handler: async ({ body }, _req, res) => {
+        const hold = await mobile.hold(body.q);
+        if (hold !== null) holdPage(res, hold);
+        else
+          res
+            .status(200)
+            .type("html")
+            .set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" })
+            .send(connectLandingPage(await mobile.landingPage(body.q)));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/public/mobile/deferred-links/claim",
+      summary: "The app takes a held connect link with its code (once)",
+      tags: ["public"],
+      access: access.public(),
+      request: { body: z.object({ code: z.string().trim().min(10).max(120) }) },
+      responses: {
+        200: { description: "The connect link" },
+        404: { description: "Unknown, used or expired" },
+      },
+      handler: async ({ body }, _req, res) => {
+        res.set("Cache-Control", "no-store").json(envelope(await mobile.claim(body.code)));
       },
     }),
   ];

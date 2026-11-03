@@ -1,9 +1,11 @@
 import { z } from "zod";
 import type { NotificationCenter } from "../../application/use-cases/notifications/NotificationCenter.js";
 import type { NotificationSettingsService } from "../../application/use-cases/notifications/NotificationSettingsService.js";
+import type { WhatsAppWebhook } from "../../application/use-cases/notifications/WhatsAppWebhook.js";
 import { SMS_PROVIDERS } from "../../application/ports/INotifications.js";
 import { CHANNELS, RULE_KEYS } from "../../domain/notifications/NotificationRules.js";
 import { principalOf } from "../middleware/AccessGuard.js";
+import type { RawBodyRequest } from "../middleware/rawBody.js";
 import { envelope } from "../presenters/responseEnvelope.js";
 import { defineRoute, type ApiRoute } from "./ApiRoute.js";
 import { access } from "./RouteAccess.js";
@@ -13,21 +15,29 @@ const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "HH:MM, e.g. 21:00");
 const rule = z
   .object({
     enabled: z.boolean(),
-    channels: z.array(z.enum(CHANNELS)).max(4),
+    channels: z.array(z.enum(CHANNELS)).max(CHANNELS.length),
     daysBefore: z.array(z.number().int().min(0).max(365)).min(1).max(6),
     afterDays: z.number().int().min(1).max(365),
     smsTemplate: z.string().max(459).nullable(),
+    whatsappTemplate: z
+      .object({
+        name: z.string().max(512),
+        language: z.string().max(10),
+        parameters: z.array(z.string().max(40)).max(20).default([]),
+      })
+      .nullable(),
   })
   .partial();
 
 export type NotificationRouteDependencies = Readonly<{
   center: NotificationCenter;
   settings: NotificationSettingsService;
+  whatsapp: WhatsAppWebhook;
 }>;
 
 /** Notifications (docs/15): the staff inbox and push devices, settings, SMS account and log. */
 export function notificationRoutes(deps: NotificationRouteDependencies): ApiRoute[] {
-  const { center, settings } = deps;
+  const { center, settings, whatsapp } = deps;
   return [
     defineRoute({
       method: "get",
@@ -176,6 +186,97 @@ export function notificationRoutes(deps: NotificationRouteDependencies): ApiRout
       },
     }),
     defineRoute({
+      method: "put",
+      path: "/api/v1/settings/notifications/whatsapp",
+      summary: "Set the business's own WhatsApp Business account (Cloud API)",
+      tags: ["settings"],
+      access: access.permission("settings.notifications.manage"),
+      request: {
+        body: z.object({
+          phoneNumberId: z
+            .string()
+            .trim()
+            .regex(/^\d{5,30}$/),
+          displayNumber: z.string().trim().max(20),
+          accessToken: z.string().trim().min(20).max(1_000),
+          appSecret: z.string().trim().min(16).max(200),
+          verifyToken: z.string().trim().min(16).max(200),
+        }),
+      },
+      responses: {
+        200: { description: "Settings with the webhook address (credentials are never returned)" },
+      },
+      handler: async ({ body }, _req, res) => {
+        res.json(envelope(await settings.setWhatsAppAccount(principalOf(res), body)));
+      },
+    }),
+    defineRoute({
+      method: "delete",
+      path: "/api/v1/settings/notifications/whatsapp",
+      summary: "Remove the WhatsApp account (rules go back to SMS where they also send it)",
+      tags: ["settings"],
+      access: access.permission("settings.notifications.manage"),
+      responses: { 200: { description: "Settings" } },
+      handler: async (_input, _req, res) => {
+        res.json(envelope(await settings.removeWhatsAppAccount(principalOf(res))));
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/settings/notifications/whatsapp/test",
+      summary: "Send an approved template without parameters now, to check the account",
+      tags: ["settings"],
+      access: access.permission("settings.notifications.manage"),
+      request: {
+        body: z.object({
+          to: z.string().max(20),
+          template: z.string().regex(/^[a-z0-9_]{1,512}$/),
+          language: z.string().regex(/^[a-z]{2,3}(_[A-Z]{2})?$/),
+        }),
+      },
+      responses: { 200: { description: "Delivery" }, 502: { description: "Provider refused" } },
+      handler: async ({ body }, _req, res) => {
+        const { to, ...message } = body;
+        res.json(envelope(await settings.testWhatsApp(principalOf(res), to, message)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/webhooks/whatsapp/:tenant",
+      summary: "Meta's handshake when the business sets up its webhook",
+      tags: ["settings"],
+      access: access.public(),
+      request: { params: z.object({ tenant: z.string().min(1).max(63) }) },
+      responses: { 200: { description: "The challenge" }, 401: { description: "Refused" } },
+      handler: async ({ params }, req, res) => {
+        const q = req.query;
+        const challenge = await whatsapp.verify(
+          params.tenant,
+          q["hub.mode"],
+          q["hub.verify_token"],
+          q["hub.challenge"],
+        );
+        res.type("text/plain").send(challenge);
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/webhooks/whatsapp/:tenant",
+      summary: "How WhatsApp messages fared and what people replied (signed by Meta)",
+      tags: ["settings"],
+      access: access.public(),
+      request: {
+        params: z.object({ tenant: z.string().min(1).max(63) }),
+        body: z.record(z.string(), z.unknown()),
+      },
+      responses: { 200: { description: "Received" }, 401: { description: "Refused" } },
+      handler: async ({ params, body }, req, res) => {
+        const raw = (req as unknown as RawBodyRequest).rawBody ?? Buffer.from(JSON.stringify(body));
+        await whatsapp.receive(params.tenant, raw, req.header("x-hub-signature-256"), body);
+        res.status(200).end();
+      },
+    }),
+    defineRoute({
       method: "get",
       path: "/api/v1/notification-deliveries",
       summary: "Log of SMS, push and email notifications sent, newest first",
@@ -183,7 +284,7 @@ export function notificationRoutes(deps: NotificationRouteDependencies): ApiRout
       access: access.permission("notifications.deliveries.view"),
       request: {
         query: z.object({
-          channel: z.enum(["sms", "push", "email"]).optional(),
+          channel: z.enum(["sms", "push", "email", "whatsapp"]).optional(),
           status: z.enum(["queued", "sent", "failed", "skipped"]).optional(),
           recipientId: uuid.optional(),
           cursor: z.string().max(300).optional(),

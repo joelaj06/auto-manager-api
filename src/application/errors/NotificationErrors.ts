@@ -14,6 +14,14 @@ export class SmsProviderError extends ApplicationError {
   }
 }
 
+/** The business has no WhatsApp account set up (409). */
+export class WhatsAppNotConfiguredError extends ApplicationError {
+  readonly code = "WHATSAPP_NOT_CONFIGURED";
+  constructor() {
+    super("Set up your WhatsApp account first (Settings › Notifications)");
+  }
+}
+
 /** The business has no SMS provider set up (409). */
 export class SmsNotConfiguredError extends ApplicationError {
   readonly code = "SMS_NOT_CONFIGURED";

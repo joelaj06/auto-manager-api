@@ -52,6 +52,20 @@ export class OwnedDocuments {
     return this.files.remove(fileId, this.ownedBy(ownerId));
   }
 
+  /** Brings a file over from `from` (kept in the same kind), within this owner's cap. */
+  async adopt(
+    ownerId: string,
+    fileId: string,
+    from: OwnedDocuments,
+    fromId: string,
+  ): Promise<void> {
+    await from.get(fromId, fileId);
+    const owner = { type: this.ownerType, id: ownerId };
+    if ((await this.files.countByOwner(owner)) >= this.maxPerOwner)
+      throw new FileStateError(`At most ${this.maxPerOwner} documents can be attached`);
+    await this.files.reassign(fileId, owner);
+  }
+
   private ownedBy(ownerId: string) {
     return (file: StoredFile): void => {
       if (file.kind !== this.kind || !file.belongsTo({ type: this.ownerType, id: ownerId }))

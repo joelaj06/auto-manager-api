@@ -326,6 +326,16 @@ export const TYPES = Object.freeze({
   ExpenseAdministration: Symbol.for("ExpenseAdministration"),
   RecurringExpenses: Symbol.for("RecurringExpenses"),
   TenantDailyTasks: Symbol.for("ITenantDailyTask[]"),
+  WhatsAppGateway: Symbol.for("IWhatsAppGateway"),
+  WhatsAppOptOuts: Symbol.for("IWhatsAppOptOuts"),
+  WhatsAppWebhook: Symbol.for("WhatsAppWebhook"),
+  DeferredConnectLinks: Symbol.for("IDeferredConnectLinks"),
+  ReceiptReadingsRepository: Symbol.for("IReceiptReadings"),
+  ReceiptReader: Symbol.for("IReceiptReader"),
+  ReceiptScans: Symbol.for("ReceiptScans"),
+  ReceiptReadings: Symbol.for("ReceiptReadings"),
+  ReceiptJobHandlers: Symbol.for("ReceiptJobHandlers"),
+  PurgeUnattachedScans: Symbol.for("PurgeUnattachedScans"),
 
   // Remittances and the driver ledger (P2-7)
   RemittanceStore: Symbol.for("IRemittanceRecords"),

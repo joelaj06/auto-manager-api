@@ -1478,6 +1478,36 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from vehicle_blocks where note = $1",
   },
+  whatsapp_opt_outs: {
+    // The marker's hash stands in the digits of a phone number.
+    insert: (marker) => ({
+      sql: `insert into whatsapp_opt_outs (phone)
+            values ('+1' || lpad(abs(hashtext($1))::text, 10, '0'))`,
+      params: [marker],
+    }),
+    find: "select 1 from whatsapp_opt_outs where phone = '+1' || lpad(abs(hashtext($1))::text, 10, '0')",
+  },
+  receipt_reading_settings: {
+    // Singleton created by its migration: the marker's hash stands in the update time.
+    insert: (marker) => ({
+      sql: `insert into receipt_reading_settings (updated_at) values (to_timestamp(abs(hashtext($1))))
+            on conflict (id) do update set updated_at = excluded.updated_at`,
+      params: [marker],
+    }),
+    find: "select 1 from receipt_reading_settings where updated_at = to_timestamp(abs(hashtext($1)))",
+  },
+  receipt_readings: {
+    insert: (marker) => ({
+      sql: `with f as (
+              insert into files (kind, storage_key, visibility, filename, content_type, size_bytes)
+              values ('expense_receipt', $1, 'private', 'r.png', 'image/png', 1) returning id
+            )
+            insert into receipt_readings (file_id) select id from f`,
+      params: [marker],
+    }),
+    find: `select 1 from receipt_readings r join files f on f.id = r.file_id
+            where f.storage_key = $1`,
+  },
   telematics_settings: {
     // Singleton created by its migration: the marker's hash stands in the update time.
     insert: (marker) => ({

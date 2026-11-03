@@ -137,8 +137,8 @@ export class Notifier {
   }
 
   /**
-   * A customer (docs/07 §10): SMS when the rule sends SMS, a provider is set up and they have a
-   * phone (held for quiet hours); email when the rule sends email and they have an address.
+   * A customer (docs/07 §10): WhatsApp or SMS as the rule says when they have a phone (held for
+   * quiet hours); email when the rule sends email and they have an address.
    * Returns whether anything new was queued.
    */
   async customer(
@@ -223,14 +223,26 @@ export class Notifier {
     return fresh;
   }
 
-  /** Queues the SMS; false when the rule does not send SMS, no provider is set up, or it was sent. */
+  /**
+   * Queues the text; false when the rule sends nothing this way or it was sent. WhatsApp goes
+   * first when the rule uses it and the business's account is set up (a message that cannot get
+   * through falls back to SMS), except messages carrying a one-time link: those stay on SMS,
+   * where the text is erased once sent.
+   */
   async sms(
     settings: NotificationSettings,
     timezone: string,
     message: DriverSms,
   ): Promise<boolean> {
     const rule = settings.rules[message.rule];
-    if (!rule.enabled || !rule.channels.includes("sms") || settings.sms === null) return false;
+    if (!rule.enabled) return false;
+    const template = rule.whatsappTemplate ?? null;
+    const whatsapp =
+      rule.channels.includes("whatsapp") &&
+      settings.whatsapp !== null &&
+      template !== null &&
+      message.sensitive !== true;
+    if (!whatsapp && (!rule.channels.includes("sms") || settings.sms === null)) return false;
     const now = this.deps.clock.now();
     const local = localDateTime(now, timezone);
     const wait =
@@ -238,14 +250,22 @@ export class Notifier {
         ? 0
         : quietDelay(local.hour * 60 + local.minute, settings.quietHours);
     const id = await this.deps.deliveries.queue({
-      channel: "sms",
+      channel: whatsapp ? "whatsapp" : "sms",
       rule: message.rule,
       recipientType: message.recipientType ?? "driver",
       recipientId: message.driverId,
       address: message.phone,
       title: null,
       body: renderTemplate(rule.smsTemplate ?? message.standardText, message.values),
-      data: {},
+      data: whatsapp
+        ? {
+            template: template.name,
+            language: template.language,
+            parameters: JSON.stringify(
+              template.parameters.map((name) => message.values[name] ?? ""),
+            ),
+          }
+        : {},
       dedupeKey: message.dedupeKey,
       sendAfter: new Date(now.getTime() + wait * 60_000),
       ...(message.sensitive === true ? { sensitive: true } : {}),

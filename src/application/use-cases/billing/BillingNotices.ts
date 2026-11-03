@@ -174,7 +174,9 @@ export class BillingNotices {
           // Always on, on the channels the policy chose (tenants cannot switch them off).
           const rule = {
             ...RULES.billing_notices.defaults,
-            channels: RULES.billing_notices.channels.filter((c) => wanted.has(c)),
+            channels: RULES.billing_notices.channels.filter(
+              (c) => c !== "whatsapp" && wanted.has(c),
+            ),
           };
           await deps.notifier.staff(
             { ...settings, rules: { ...settings.rules, billing_notices: rule } },

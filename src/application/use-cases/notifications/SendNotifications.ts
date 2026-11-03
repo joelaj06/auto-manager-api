@@ -18,6 +18,12 @@ import type {
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
 import type { ISecretBox } from "../../ports/ISecretBox.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
+import type {
+  IWhatsAppGateway,
+  IWhatsAppOptOuts,
+  WhatsAppCredentials,
+} from "../../ports/IWhatsApp.js";
+import { fallBackToSms } from "./whatsappFallback.js";
 
 /** Messages per run; a full run asks for another. */
 const BATCH = 50;
@@ -25,7 +31,8 @@ const BATCH = 50;
 const MAX_ATTEMPTS = 5;
 
 /**
- * Sends a tenant's due messages (SMS through its provider, push, email), each in its own short
+ * Sends a tenant's due messages (SMS through its provider, WhatsApp through its own account,
+ * push, email), each in its own short
  * transaction so a failure never resends the others. Provider refusals that retrying cannot fix
  * (credentials, sender ID, balance) fail at once; others are retried with back-off. Messages
  * waiting for the end of quiet hours get a run scheduled for then.
@@ -41,6 +48,8 @@ export class SendNotifications implements IJobHandler<"notifications.send"> {
       organisation: IOrganisationSettings;
       secrets: ISecretBox;
       gateways: readonly ISmsGateway[];
+      whatsapp: IWhatsAppGateway;
+      optOuts: IWhatsAppOptOuts;
       push: IPushSender;
       devices: IPushDevices;
       emails: IEmailDeliveries;
@@ -104,6 +113,8 @@ export class SendNotifications implements IJobHandler<"notifications.send"> {
           delivery.body,
         );
         await deps.deliveries.sent(delivery.id, gateway.provider, result.messageId, now);
+      } else if (delivery.channel === "whatsapp") {
+        await this.whatsapp(delivery, settings, now);
       } else if (delivery.channel === "push") {
         const tokens = await deps.devices.tokensOf(delivery.recipientId);
         if (tokens.length === 0) {
@@ -142,6 +153,8 @@ export class SendNotifications implements IJobHandler<"notifications.send"> {
           ? null
           : new Date(now.getTime() + 4 ** (attempt - 1) * 60_000);
       await deps.deliveries.failed(delivery.id, message, retryAt);
+      if (delivery.channel === "whatsapp" && retryAt === null)
+        await fallBackToSms(deps.deliveries, settings, delivery, now);
       deps.logger.warn("Notification not delivered", {
         tenantId,
         deliveryId: delivery.id,
@@ -151,5 +164,33 @@ export class SendNotifications implements IJobHandler<"notifications.send"> {
         error: message,
       });
     }
+  }
+
+  private async whatsapp(
+    delivery: Delivery,
+    settings: NotificationSettings,
+    now: Date,
+  ): Promise<void> {
+    const { deps } = this;
+    const elsewhere = async (reason: string) => {
+      await deps.deliveries.skipped(delivery.id, reason);
+      await fallBackToSms(deps.deliveries, settings, delivery, now);
+    };
+    if (settings.whatsapp === null) return elsewhere("No WhatsApp account is set up");
+    if (await deps.optOuts.isOptedOut(delivery.address))
+      return elsewhere("This number replied STOP");
+    const { accessToken } = JSON.parse(
+      deps.secrets.open(settings.whatsapp.sealedCredentials),
+    ) as WhatsAppCredentials;
+    const result = await deps.whatsapp.send(
+      { phoneNumberId: settings.whatsapp.phoneNumberId, accessToken },
+      delivery.address,
+      {
+        template: delivery.data.template ?? "",
+        language: delivery.data.language ?? "en",
+        parameters: JSON.parse(delivery.data.parameters ?? "[]") as string[],
+      },
+    );
+    await deps.deliveries.sent(delivery.id, "whatsapp", result.messageId, now);
   }
 }
