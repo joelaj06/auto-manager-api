@@ -55,6 +55,7 @@ describe("loadConfig", () => {
       corsAllowedOrigins: [],
       rateLimit: { windowMs: 60_000, max: 300 },
       authRateLimitMax: 30,
+      telematicsRateLimitMax: 6_000,
       bodyLimitKb: 1_024,
       exposeOpenApi: true,
     });

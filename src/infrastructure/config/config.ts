@@ -68,6 +68,8 @@ const envSchema = z
     RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(300),
     /** Sign-in and other credential endpoints: requests per client IP per 15 minutes. */
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(30),
+    /** Telematics ingestion per client IP and window (providers push for many vehicles). */
+    TELEMATICS_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(6_000),
     HTTP_BODY_LIMIT_KB: z.coerce.number().int().min(1).max(10_240).default(1_024),
     /** Serve /api/v1/openapi.json (defaults to on outside production). */
     EXPOSE_OPENAPI: booleanFlag.optional(),
@@ -166,6 +168,8 @@ const envSchema = z
     // --- Public web app and platform SMS ---
     /** Public web app origin: applicant status links (signup). */
     WEB_APP_URL: z.url().default("http://localhost:5174"),
+    /** This API's public address, given to telematics providers (default: WEB_APP_URL). */
+    PUBLIC_API_URL: z.url().optional(),
     /**
      * Platform SMS provider for signup phone verification. `log` writes messages to the log and
      * is refused at startup in production; a real provider is added once chosen.
@@ -424,6 +428,8 @@ export type HttpConfig = Readonly<{
   rateLimit: Readonly<{ windowMs: number; max: number }>;
   /** Stricter limit for credential endpoints (per 15 minutes). */
   authRateLimitMax: number;
+  /** Telematics ingestion, instead of the general limit. */
+  telematicsRateLimitMax: number;
   bodyLimitKb: number;
   exposeOpenApi: boolean;
 }>;
@@ -446,7 +452,7 @@ export type AuthConfig = Readonly<{
   }>;
 }>;
 
-export type PublicConfig = Readonly<{ webAppUrl: string; smsProvider: "log" }>;
+export type PublicConfig = Readonly<{ webAppUrl: string; apiUrl: string; smsProvider: "log" }>;
 
 export type BackupConfig = Readonly<{
   directory: string;
@@ -631,6 +637,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       corsAllowedOrigins: Object.freeze([...e.CORS_ALLOWED_ORIGINS]),
       rateLimit: Object.freeze({ windowMs: e.RATE_LIMIT_WINDOW_MS, max: e.RATE_LIMIT_MAX }),
       authRateLimitMax: e.AUTH_RATE_LIMIT_MAX,
+      telematicsRateLimitMax: e.TELEMATICS_RATE_LIMIT_MAX,
       bodyLimitKb: e.HTTP_BODY_LIMIT_KB,
       exposeOpenApi: e.EXPOSE_OPENAPI ?? e.NODE_ENV !== "production",
     }),
@@ -651,7 +658,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         sessionMaxHours: e.PLATFORM_SESSION_MAX_HOURS,
       }),
     }),
-    public: Object.freeze({ webAppUrl: e.WEB_APP_URL, smsProvider: e.SMS_PROVIDER }),
+    public: Object.freeze({
+      webAppUrl: e.WEB_APP_URL,
+      apiUrl: (e.PUBLIC_API_URL ?? e.WEB_APP_URL).replace(/\/+$/, ""),
+      smsProvider: e.SMS_PROVIDER,
+    }),
     billing: Object.freeze({
       gateway: e.BILLING_GATEWAY,
       paystackSecretKey: e.PAYSTACK_SECRET_KEY ?? null,

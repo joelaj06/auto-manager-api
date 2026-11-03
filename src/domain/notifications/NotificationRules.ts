@@ -50,6 +50,9 @@ export const RULE_KEYS = [
   "deal_instalment_overdue",
   "report_ready",
   "scheduled_report",
+  "telematics_geofence",
+  "telematics_overspeed",
+  "telematics_silent",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -337,6 +340,24 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
     description: "A scheduled report was built: tell the users it is sent to",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app", "email"] },
+  },
+  telematics_geofence: {
+    description:
+      "A vehicle entered or left a geofence that alerts on it: tell the branch's staff who see telematics",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  telematics_overspeed: {
+    description:
+      "A vehicle stayed above the speed limit set for telematics: tell the branch's staff who see telematics",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "push"] },
+  },
+  telematics_silent: {
+    description:
+      "A vehicle's tracker has sent nothing for longer than the hours set: tell the branch's staff who see telematics",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app"] },
   },
 });
 

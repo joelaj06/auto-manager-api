@@ -53,6 +53,12 @@ const EXPENSE = `with b as (insert into branches (code, name) values ($2, $1) re
                        select 'draft', c.id, $1, b.id, current_date, 100, 100, 'GHS', 100, 100, 0
                          from b, c returning id)`;
 
+/** A connection and its tracker (identifier = marker); `$2` = connection name. */
+const TRACKER = `with tc as (insert into telematics_connections (name, provider, token_hash, token_hint)
+                        values ($2, 'generic', $1, 'iso') returning id),
+                 td as (insert into telematics_devices (connection_id, identifier)
+                        select tc.id, $1 from tc returning id)`;
+
 /** A draft work and pay agreement (number = marker) for a driver and vehicle; `$2` = branch code. */
 const WORKPAY = `${DRIVER},
                  v as (insert into vehicles (code, make, model, status, branch_id)
@@ -1461,6 +1467,93 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
       params: [marker, `VB${letters(marker).toUpperCase().slice(0, 12)}`],
     }),
     find: "select 1 from vehicle_blocks where note = $1",
+  },
+  telematics_settings: {
+    // Singleton created by its migration: the marker's hash stands in the update time.
+    insert: (marker) => ({
+      sql: `insert into telematics_settings (updated_at) values (to_timestamp(abs(hashtext($1))))
+            on conflict (id) do update set updated_at = excluded.updated_at`,
+      params: [marker],
+    }),
+    find: "select 1 from telematics_settings where updated_at = to_timestamp(abs(hashtext($1)))",
+  },
+  telematics_connections: {
+    insert: (marker) => ({
+      sql: `insert into telematics_connections (name, provider, token_hash, token_hint)
+            values ($1, 'generic', $2, 'iso')`,
+      params: [marker, marker],
+    }),
+    find: "select 1 from telematics_connections where name = $1",
+  },
+  telematics_devices: {
+    insert: (marker) => ({
+      sql: `${TRACKER} select 1`,
+      params: [marker, `TD ${marker}`],
+    }),
+    find: "select 1 from telematics_devices where identifier = $1",
+  },
+  telematics_positions: {
+    insert: (marker) => ({
+      sql: `${TRACKER}
+            insert into telematics_positions (device_id, recorded_at, latitude, longitude, attributes)
+            select td.id, now(), 5.6, -0.2, jsonb_build_object('marker', $1::text) from td`,
+      params: [marker, `TP ${marker}`],
+    }),
+    find: "select 1 from telematics_positions where attributes ->> 'marker' = $1",
+  },
+  telematics_trips: {
+    insert: (marker) => ({
+      sql: `${TRACKER}
+            insert into telematics_trips (device_id, started_at, start_latitude, start_longitude,
+              last_position_at)
+            select td.id, now(), 5.6, -0.2, now() from td`,
+      params: [marker, `TT ${marker}`],
+    }),
+    find: `select 1 from telematics_trips t join telematics_devices d on d.id = t.device_id
+            where d.identifier = $1`,
+  },
+  telematics_daily: {
+    insert: (marker) => ({
+      sql: `${VEHICLE}
+            insert into telematics_daily (vehicle_id, day, engine_seconds) select v.id, current_date, 60 from v`,
+      params: [marker, `TY${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: `select 1 from telematics_daily t join vehicles v on v.id = t.vehicle_id
+            where v.code = $1`,
+  },
+  geofences: {
+    insert: (marker) => ({
+      sql: `insert into geofences (name, kind, latitude, longitude, radius_m)
+            values ($1, 'circle', 5.6, -0.2, 1000)`,
+      params: [marker],
+    }),
+    find: "select 1 from geofences where name = $1",
+  },
+  telematics_geofence_states: {
+    insert: (marker) => ({
+      sql: `${TRACKER},
+                 g as (insert into geofences (name, kind, latitude, longitude, radius_m)
+                       values ($1, 'circle', 5.6, -0.2, 1000) returning id)
+            insert into telematics_geofence_states (device_id, geofence_id, inside, since)
+            select td.id, g.id, true, now() from td, g`,
+      params: [marker, `TG ${marker}`],
+    }),
+    find: `select 1 from telematics_geofence_states s join geofences g on g.id = s.geofence_id
+            where g.name = $1`,
+  },
+  telematics_events: {
+    insert: (marker) => ({
+      sql: `${VEHICLE},
+                 tc as (insert into telematics_connections (name, provider, token_hash, token_hint)
+                        values ('TE ' || $1, 'generic', $1, 'iso') returning id),
+                 td as (insert into telematics_devices (connection_id, identifier)
+                        select tc.id, $1 from tc returning id)
+            insert into telematics_events (kind, device_id, vehicle_id, branch_id, started_at,
+              latitude, longitude, limit_kmh, note)
+            select 'overspeed', td.id, v.id, b.id, now(), 5.6, -0.2, 100, $1 from td, v, b`,
+      params: [marker, `TE${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from telematics_events where note = $1",
   },
   tax_codes: {
     insert: (marker) => ({

@@ -795,6 +795,20 @@ A demo tenant with sample data is one call, `POST /api/platform/v1/demo-tenants`
 (`GET /api/platform/v1/tenants/:id/onboarding-tasks`, `GET …/onboarding/tasks?assigneeId=me`),
 completed as the tenant reaches its milestones or by staff (decision 502).
 
+## Telematics and GPS
+
+Each provider gets a connection (`POST /api/v1/telematics/connections`, provider `generic`,
+`flespi` or `traccar`); its token is shown once and its address,
+`POST /api/v1/webhooks/telematics/<tenant>/<connection>`, takes the token as
+`Authorization: Bearer` or `X-Telematics-Token`. In Flespi add an HTTP stream to that address;
+in Traccar set `forward.url`, `forward.json` true and the token in `forward.header`. Trackers
+not yet known are added unlinked (`GET /api/v1/telematics/devices?unlinked=true`) and linked
+with `PATCH /api/v1/telematics/devices/:id` (decision 504). Trips, over-speed and geofence events,
+the live map, tracks and utilisation are under `/api/v1/telematics` (decisions 505–506); the
+daily run purges old positions and syncs odometers (507). `PUBLIC_API_URL` sets the address
+shown (default `WEB_APP_URL`) and `TELEMATICS_RATE_LIMIT_MAX` the webhook's requests a minute
+(6,000).
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

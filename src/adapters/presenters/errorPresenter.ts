@@ -74,6 +74,9 @@ const RULES: Readonly<Record<string, Rule>> = {
   SUPPORT_TICKET_NOT_FOUND: { status: 404 },
   DEMO_RULE: { status: 422 },
   ONBOARDING_RULE: { status: 422 },
+  TELEMATICS_RULE: { status: 422 },
+  TELEMATICS_NOT_FOUND: { status: 404 },
+  TELEMATICS_UNAUTHORIZED: { status: 401 },
   FEATURE_DISABLED: { status: 403 },
   TENANT_MISMATCH: { status: 401, securityAlert: true },
 

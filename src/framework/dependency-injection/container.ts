@@ -54,6 +54,14 @@ import type { IParts } from "../../application/ports/IParts.js";
 import { PartsInventory } from "../../application/use-cases/maintenance/PartsInventory.js";
 import { PostgresParts } from "../../infrastructure/maintenance/PostgresParts.js";
 import { incidentRoutes } from "../../adapters/routes/incidentRoutes.js";
+import { telematicsRoutes } from "../../adapters/routes/telematicsRoutes.js";
+import type { ITelematics } from "../../application/ports/ITelematics.js";
+import { TelematicsDaily } from "../../application/use-cases/telematics/TelematicsDaily.js";
+import { TelematicsIngestion } from "../../application/use-cases/telematics/TelematicsIngestion.js";
+import { TelematicsSetup } from "../../application/use-cases/telematics/TelematicsSetup.js";
+import { TelematicsViews } from "../../application/use-cases/telematics/TelematicsViews.js";
+import { TelematicsUtilisationReport } from "../../application/use-cases/reporting/definitions/telematicsReportDefinitions.js";
+import { PostgresTelematics } from "../../infrastructure/telematics/PostgresTelematics.js";
 import type { IIncidents } from "../../application/ports/IIncidents.js";
 import { FuelAnomalies } from "../../application/use-cases/incidents/FuelAnomalies.js";
 import { Incidents } from "../../application/use-cases/incidents/Incidents.js";
@@ -5500,6 +5508,7 @@ export function createContainer(
       unitOfWork: IUnitOfWork,
       ledger: ILedger,
       logger: ILogger,
+      telematicsDaily: TelematicsDaily,
     ) =>
       // Stats and the ledger roll-up after the money tasks: they read what those posted.
       [
@@ -5508,6 +5517,8 @@ export function createContainer(
         workpayArrears,
         depreciation,
         new LedgerRollup({ unitOfWork, ledger, logger }),
+        // Before the stats: the odometer it records feeds the day's mileage.
+        telematicsDaily,
         stats,
         serviceDue,
         maintenanceAlerts,
@@ -5537,6 +5548,7 @@ export function createContainer(
       TYPES.UnitOfWork,
       TYPES.Ledger,
       TYPES.Logger,
+      TYPES.TelematicsDaily,
     ],
   );
 
@@ -6431,6 +6443,142 @@ export function createContainer(
       TYPES.Clock,
     ],
   );
+  // --- Telematics and GPS (docs/06 §9) ---
+  tenantRepository<ITelematics>(TYPES.TelematicsRepository, (tx) => new PostgresTelematics(tx));
+  container.bind<TelematicsIngestion>(TYPES.TelematicsIngestion).toResolvedValue(
+    (
+      tenants: ITenantDirectory,
+      tenantContext: ITenantContext,
+      unitOfWork: IUnitOfWork,
+      telematics: ITelematics,
+      organisation: IOrganisationSettings,
+      notificationSettings: INotificationSettingsStore,
+      notifier: Notifier,
+      features: FeatureFlags,
+      clock: IClock,
+    ) =>
+      new TelematicsIngestion({
+        tenants,
+        tenantContext,
+        unitOfWork,
+        telematics,
+        organisation,
+        notificationSettings,
+        notifier,
+        features,
+        clock,
+      }),
+    [
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.TelematicsRepository,
+      TYPES.OrganisationSettings,
+      TYPES.NotificationSettingsStore,
+      TYPES.Notifier,
+      TYPES.FeatureFlags,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<TelematicsSetup>(TYPES.TelematicsSetup).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      telematics: ITelematics,
+      vehicleAccess: VehicleAccess,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      ids: IIdGenerator,
+      clock: IClock,
+      tenantContext: ITenantContext,
+      tenants: ITenantDirectory,
+    ) =>
+      new TelematicsSetup({
+        unitOfWork,
+        telematics,
+        vehicleAccess,
+        auditTrail,
+        requestContext,
+        ids,
+        clock,
+        // The address names the business by its slug: the provider sends no other header.
+        ingestUrl: async (connectionId) => {
+          const tenant = await tenants.findById(tenantContext.currentTenantId().value);
+          return `${config.public.apiUrl}/api/v1/webhooks/telematics/${tenant?.slug ?? ""}/${connectionId}`;
+        },
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TelematicsRepository,
+      TYPES.VehicleAccess,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.IdGenerator,
+      TYPES.Clock,
+      TYPES.TenantContext,
+      TYPES.TenantDirectory,
+    ],
+  );
+  container.bind<TelematicsViews>(TYPES.TelematicsViews).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      telematics: ITelematics,
+      vehicleAccess: VehicleAccess,
+      organisation: IOrganisationSettings,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new TelematicsViews({
+        unitOfWork,
+        telematics,
+        vehicleAccess,
+        organisation,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TelematicsRepository,
+      TYPES.VehicleAccess,
+      TYPES.OrganisationSettings,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<TelematicsDaily>(TYPES.TelematicsDaily).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      telematics: ITelematics,
+      vehicles: IVehicleRepository,
+      odometer: OdometerLog,
+      notificationSettings: INotificationSettingsStore,
+      notifier: Notifier,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new TelematicsDaily({
+        unitOfWork,
+        telematics,
+        vehicles,
+        odometer,
+        notificationSettings,
+        notifier,
+        clock,
+        logger,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.TelematicsRepository,
+      TYPES.VehicleRepository,
+      TYPES.OdometerLog,
+      TYPES.NotificationSettingsStore,
+      TYPES.Notifier,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
   // --- Incidents, insurance claims, traffic offences and fuel anomalies (docs/06 §7–8) ---
   tenantRepository<IIncidents>(TYPES.VehicleIncidentRepository, (tx) => new PostgresIncidents(tx));
   container.bind<Incidents>(TYPES.Incidents).toResolvedValue(
@@ -7132,6 +7280,7 @@ export function createContainer(
       purchases: Purchases,
       payables: SupplierPayables,
       ledger: LedgerViews,
+      telematicsViews: TelematicsViews,
     ) => [
       // Executive
       new BusinessOverviewReport(dashboards),
@@ -7146,6 +7295,7 @@ export function createContainer(
       new FuelReport(dashboards, context),
       new MileageReport(dashboards),
       new IncidentsReport(context),
+      new TelematicsUtilisationReport(telematicsViews, context),
       // Drivers and remittances
       new RemittanceComplianceReport(context),
       new DriverStatementReport(driverLedger),
@@ -7205,6 +7355,7 @@ export function createContainer(
       TYPES.Purchases,
       TYPES.SupplierPayables,
       TYPES.LedgerViews,
+      TYPES.TelematicsViews,
     ],
   );
   container.bind<Reports>(TYPES.Reports).toResolvedValue(
@@ -9280,6 +9431,11 @@ export function createContainer(
         ...workOrderRoutes({ orders: workOrders }),
         ...partRoutes({ parts: partsInventory }),
         ...incidentRoutes({ incidents, offences: trafficOffences, anomalies: fuelAnomalies }),
+        ...telematicsRoutes({
+          ingestion: container.get<TelematicsIngestion>(TYPES.TelematicsIngestion),
+          setup: container.get<TelematicsSetup>(TYPES.TelematicsSetup),
+          views: container.get<TelematicsViews>(TYPES.TelematicsViews),
+        }),
         ...maintenanceReportRoutes({ reports: maintenanceReports }),
         ...payablesRoutes({ payables: supplierPayables }),
         ...purchaseRoutes({ purchases }),

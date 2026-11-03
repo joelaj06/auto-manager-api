@@ -372,6 +372,12 @@ export const TYPES = Object.freeze({
   PartRepository: Symbol.for("IParts"),
   PartsInventory: Symbol.for("PartsInventory"),
   VehicleIncidentRepository: Symbol.for("IIncidents"),
+  /** Telematics and GPS (decisions 504–509). */
+  TelematicsRepository: Symbol.for("ITelematics"),
+  TelematicsIngestion: Symbol.for("TelematicsIngestion"),
+  TelematicsSetup: Symbol.for("TelematicsSetup"),
+  TelematicsViews: Symbol.for("TelematicsViews"),
+  TelematicsDaily: Symbol.for("TelematicsDaily"),
   Incidents: Symbol.for("Incidents"),
   TrafficOffences: Symbol.for("TrafficOffences"),
   FuelAnomalies: Symbol.for("FuelAnomalies"),

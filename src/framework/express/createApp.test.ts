@@ -28,6 +28,7 @@ const defaultHttp: HttpConfig = {
   corsAllowedOrigins: ["https://*.autoforce.app"],
   rateLimit: { windowMs: 60_000, max: 1_000 },
   authRateLimitMax: 1_000,
+  telematicsRateLimitMax: 1_000,
   bodyLimitKb: 1,
   exposeOpenApi: true,
 };

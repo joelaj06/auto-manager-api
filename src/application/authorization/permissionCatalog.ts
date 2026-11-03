@@ -223,6 +223,20 @@ const definitions = {
       "Report and close incidents, run insurance claims, record and settle traffic offences and review fuel anomalies",
     scopes: BRANCH_OR_ALL,
   },
+  "telematics.view": {
+    description:
+      "See trackers on the live map, vehicles' tracks and trips, telematics events and utilisation from ignition",
+    scopes: BRANCH_OR_ALL,
+  },
+  "telematics.events.manage": {
+    description: "Acknowledge geofence and over-speed events",
+    scopes: BRANCH_OR_ALL,
+  },
+  "telematics.manage": {
+    description:
+      "Connect telematics providers, link trackers to vehicles, set the speed limit and retention, and manage geofences",
+    scopes: ALL,
+  },
   "parts.manage": {
     description:
       "Manage the parts catalogue and the branch's stock (opening, purchases, counts, transfers)",

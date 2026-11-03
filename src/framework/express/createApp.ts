@@ -46,7 +46,16 @@ export function createApp(deps: AppDependencies): Express {
       },
     }),
   );
-  app.use("/api", rateLimiter(deps.http.rateLimit));
+  // Telematics providers push for many vehicles from few addresses: a budget of their own.
+  const general = rateLimiter(deps.http.rateLimit);
+  const telematics = rateLimiter({
+    windowMs: deps.http.rateLimit.windowMs,
+    max: deps.http.telematicsRateLimitMax,
+  });
+  app.use("/api", (req, res, next) => {
+    if (req.path.startsWith("/v1/webhooks/telematics/")) telematics(req, res, next);
+    else general(req, res, next);
+  });
   // Credential endpoints: a much tighter budget per client (brute force, credential stuffing).
   const credentialLimiter = rateLimiter({ windowMs: 15 * 60_000, max: deps.http.authRateLimitMax });
   app.use("/api/platform/v1/auth", credentialLimiter);

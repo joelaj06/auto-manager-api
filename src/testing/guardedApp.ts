@@ -33,6 +33,7 @@ const http: HttpConfig = {
   corsAllowedOrigins: [],
   rateLimit: { windowMs: 60_000, max: 1_000 },
   authRateLimitMax: 1_000,
+  telematicsRateLimitMax: 1_000,
   bodyLimitKb: 16,
   exposeOpenApi: false,
 };
