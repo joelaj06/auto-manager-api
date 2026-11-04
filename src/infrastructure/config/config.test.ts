@@ -23,6 +23,7 @@ const productionEmail = {
   MOBILE_API_BASE_URL: "https://api.example.com",
   MOBILE_LINK_BASE_URL: "https://go.example.com",
   MOBILE_ALLOWED_API_HOSTS: "api.example.com",
+  TENANT_BASE_DOMAIN: "example.com",
   BILLING_GATEWAY: "paystack",
   PAYSTACK_SECRET_KEY: "sk_live_example_0123456789",
   MOBILE_CONNECT_PRIVATE_KEY: String(
@@ -52,7 +53,7 @@ describe("loadConfig", () => {
     expect(config.shutdownTimeoutMs).toBe(15_000);
     expect(config.http).toEqual({
       trustProxyHops: 0,
-      corsAllowedOrigins: [],
+      corsAllowedOrigins: ["http://*.localhost:5174"],
       rateLimit: { windowMs: 60_000, max: 300 },
       authRateLimitMax: 30,
       telematicsRateLimitMax: 6_000,
@@ -106,6 +107,7 @@ describe("loadConfig", () => {
       "https://admin.autoforce.app",
       "https://*.autoforce.app",
       "http://localhost:5173",
+      "http://*.localhost:5174",
     ]);
   });
 
@@ -255,6 +257,7 @@ describe("loadConfig", () => {
       expect.stringMatching(/^FILES_PUBLIC_BASE_URL:/),
       expect.stringMatching(/^MOBILE_API_BASE_URL:/),
       expect.stringMatching(/^MOBILE_LINK_BASE_URL:/),
+      expect.stringMatching(/^TENANT_BASE_DOMAIN:/),
       expect.stringMatching(/^BILLING_GATEWAY:/),
       expect.stringMatching(/^MOBILE_CONNECT_KEY_FILE:/),
       expect.stringMatching(/^MOBILE_ALLOWED_API_HOSTS:/),
@@ -314,7 +317,7 @@ describe("loadConfig", () => {
   it("uses the fake gateway outside production and needs Paystack's key to use Paystack", () => {
     expect(loadConfig(requiredSecrets).billing).toMatchObject({
       gateway: "fake",
-      returnUrl: "http://localhost:5174/billing/return",
+      returnUrl: null,
     });
     const issues = issuesOf(() => loadConfig({ ...requiredSecrets, BILLING_GATEWAY: "paystack" }));
     expect(issues).toEqual([expect.stringMatching(/^PAYSTACK_SECRET_KEY:/)]);

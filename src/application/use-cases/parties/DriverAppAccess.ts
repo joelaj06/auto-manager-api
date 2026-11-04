@@ -25,6 +25,7 @@ import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { IUserDirectory } from "../../ports/IUserDirectory.js";
 import type { IUserInvitations } from "../../ports/IUserInvitations.js";
 import type { IUserMemberships } from "../../ports/IUserMemberships.js";
+import type { TenantAddressing } from "../../../domain/value-objects/TenantAddressing.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import type { DriverAdministration, IDriverStatusListener } from "./DriverAdministration.js";
 
@@ -81,7 +82,7 @@ export class DriverAppAccess implements IDriverStatusListener {
       ids: IIdGenerator;
       clock: IClock;
       settings: Readonly<{
-        webAppUrl: string;
+        addresses: Pick<TenantAddressing, "urlOf">;
         invitationTtlMs: number;
         appInvitationLink?: (tenantSlug: string, token: string, expiresAt: Date) => string;
       }>;
@@ -280,7 +281,7 @@ export class DriverAppAccess implements IDriverStatusListener {
   }
 
   private webUrl(tenantSlug: string, token: string): string {
-    return `${this.deps.settings.webAppUrl.replace(/\/$/, "")}/${tenantSlug}/accept-invitation#token=${token}`;
+    return this.deps.settings.addresses.urlOf(tenantSlug, `/accept-invitation#token=${token}`);
   }
 
   private validity(): string {

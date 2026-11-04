@@ -347,6 +347,8 @@ export const TYPES = Object.freeze({
   WebhookHousekeeping: Symbol.for("WebhookHousekeeping"),
   TenantDomains: Symbol.for("ITenantDomains"),
   TenantDomainLookup: Symbol.for("ITenantDomainLookup"),
+  TenantFromRequest: Symbol.for("TenantFromRequest"),
+  TenantLinks: Symbol.for("TenantLinks"),
   DnsResolver: Symbol.for("IDnsResolver"),
   CustomDomains: Symbol.for("CustomDomains"),
   TenantIntegrations: Symbol.for("TenantIntegrations"),

@@ -43,11 +43,11 @@ function accessDocumentation(access: RouteAccess) {
   const tenantHeader = {
     name: "X-Tenant",
     in: "header",
-    required: access.kind === "tenant",
+    required: false,
     description:
       access.kind === "tenant"
-        ? "Business account (tenant slug)"
-        : "Business account (tenant slug); when sent it must match the access token",
+        ? "Business account (tenant slug); needed unless the request's Origin or Host is the business's own address"
+        : "Business account (tenant slug); when sent it must match the access token and the request's address",
     schema: { type: "string" },
   };
   if (access.kind === "tenant") return { parameters: [tenantHeader], operation: {} };

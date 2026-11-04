@@ -15,6 +15,7 @@ import {
   type ITenantProvisioning,
   type ProvisioningStep,
 } from "../../ports/ITenantProvisioning.js";
+import type { TenantAddressing } from "../../../domain/value-objects/TenantAddressing.js";
 import type { ITenantSchemaUpdater } from "../../ports/ITenantSchemaUpdater.js";
 import type { ITenantSeeder } from "../../ports/ITenantSeeder.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
@@ -22,7 +23,7 @@ import type { IUserDirectory } from "../../ports/IUserDirectory.js";
 import type { IUserInvitations } from "../../ports/IUserInvitations.js";
 
 export type ProvisioningSettings = Readonly<{
-  webAppUrl: string;
+  addresses: Pick<TenantAddressing, "urlOf">;
   ownerInvitationTtlMs: number;
   defaultBranch: Readonly<{ code: string; name: string }>;
 }>;
@@ -144,7 +145,10 @@ export class ProvisionTenant implements IJobHandler<"tenant.provision"> {
             expiresAt: new Date(deps.clock.now().getTime() + deps.settings.ownerInvitationTtlMs),
           }),
         );
-        const setPasswordUrl = `${deps.settings.webAppUrl.replace(/\/$/, "")}/${record.slug}/accept-invitation#token=${token}`;
+        const setPasswordUrl = deps.settings.addresses.urlOf(
+          record.slug,
+          `/accept-invitation#token=${token}`,
+        );
         const expiresInHours = Math.round(deps.settings.ownerInvitationTtlMs / 3_600_000);
         await deps.notifications.sendEmail(
           record.demoEndsAt === null

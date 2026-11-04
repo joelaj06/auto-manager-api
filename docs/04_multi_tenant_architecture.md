@@ -2,6 +2,8 @@
 
 > **Platform operations** (approval, lifecycle, branches, billing admin, impersonation) are specified in [27_platform_admin_console.md](27_platform_admin_console.md); tenant roles/permissions seeding in [28](28_tenant_roles_permissions_and_seeding.md).
 
+> **Update 2026-11-04 (decisions 533–536):** each business lives at `<slug>.<TENANT_BASE_DOMAIN>`. A request names its business by `X-Tenant`, by its `Host`, or by its browser `Origin` (for a portal calling the shared `api.<domain>`); those present must agree, else `TENANT_MISMATCH`. Links to a business go to that address. Addressing proves nothing: the token must still belong to the business.
+
 > **Update 2026-11-04 (P9-7, decisions 523–532):** custom domains, dedicated clusters and API keys are implemented. `Host` resolves through `tenant_domains`, held in memory, and must agree with `X-Tenant` when both are sent. There is no per-request database lookup and no subdomain routing. An API key carries its tenant, so it needs neither. A dedicated cluster is `clusters.dedicated_to`.
 
 > **Update 2026-10-13 (revision 2):** this doc's **database-per-tenant** design is **back in force** (decision 26), now on **PostgreSQL** — see [22](22_postgresql_architecture.md), which overrides the Mongo-specific mechanics: connection management (§8 → LRU of pools + PgBouncer), provisioning (§6 → `CREATE DATABASE … TEMPLATE tenant_template`, idempotent saga), migrations (§7 → SQL migration runner with fan-out), `useDb`, `databaseUri` and Mongo transactions are obsolete. Tenant resolution (§3) is refined by [23](23_mobile_onboarding_qr_and_deeplinks.md). Billing (§10) is detailed in [25](25_platform_billing_and_subscriptions.md); pricing is per branch (doc 02 §6). Backups: [26](26_backup_and_disaster_recovery.md).

@@ -13,7 +13,7 @@ import type {
 import type { TenantPublicConfig } from "../../application/use-cases/tenants/TenantPublicConfig.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { ITenantDirectory } from "../../application/ports/ITenantDirectory.js";
-import type { ITenantDomainLookup } from "../../application/ports/ITenantDomains.js";
+import type { TenantFromRequest } from "../middleware/TenantFromRequest.js";
 import { TenantNotFoundForStaffError } from "../../application/errors/TenantErrors.js";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import { principalOf, staffOf } from "../middleware/AccessGuard.js";
@@ -62,8 +62,8 @@ export type LifecycleRouteDependencies = Readonly<{
   branches: BranchLifecycle;
   reconciliation: BranchReconciliation;
   publicConfig: TenantPublicConfig;
-  /** Which business a custom domain belongs to. */
-  domains?: ITenantDomainLookup;
+  /** Which business a request's address names. */
+  addresses?: TenantFromRequest;
   tenantContext: ITenantContext;
   directory: ITenantDirectory;
 }>;
@@ -103,10 +103,11 @@ export function lifecycleRoutes(deps: LifecycleRouteDependencies): ApiRoute[] {
         404: { description: "Unknown business" },
       },
       handler: async ({ query }, req, res) => {
-        // On a custom domain the host name says which business it is.
-        const slug = query.slug ?? (await deps.domains?.slugOf(req.hostname)) ?? "";
+        // On a business's own address the host or the page's origin says which it is.
+        const slug = query.slug ?? (await deps.addresses?.slugOf(req)) ?? "";
         res
           .set("Cache-Control", "public, max-age=60")
+          .vary("Origin")
           .json(envelope(await deps.publicConfig.get(slug)));
       },
     }),

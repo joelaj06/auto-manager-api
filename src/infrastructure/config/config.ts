@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { HostAllowList } from "../../domain/mobile/ConnectLink.js";
+import { TenantAddressing } from "../../domain/value-objects/TenantAddressing.js";
 import { z } from "zod";
 
 /**
@@ -173,8 +174,15 @@ const envSchema = z
     BACKUP_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
 
     // --- Public web app and platform SMS ---
-    /** Public web app origin: applicant status links (signup). */
+    /** Public web app origin: applicant status links (signup); tenants take its scheme and port. */
     WEB_APP_URL: z.url().default("http://localhost:5174"),
+    /** A business lives at <slug>.<this>. Default: the WEB_APP_URL host; required in production. */
+    TENANT_BASE_DOMAIN: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*$/, "must be a host name like example.com")
+      .optional(),
     /** This API's public address, given to telematics providers (default: WEB_APP_URL). */
     PUBLIC_API_URL: z.url().optional(),
     /**
@@ -321,6 +329,7 @@ const envSchema = z
         "FILES_PUBLIC_BASE_URL",
         "MOBILE_API_BASE_URL",
         "MOBILE_LINK_BASE_URL",
+        "TENANT_BASE_DOMAIN",
       ] as const) {
         if (env[variable] === undefined) {
           ctx.addIssue({ code: "custom", path: [variable], message: "must be set in production" });
@@ -464,6 +473,7 @@ export type ReceiptReadingConfig = Readonly<{ apiKey: string | null; model: stri
 
 export type PublicConfig = Readonly<{
   webAppUrl: string;
+  tenantBaseDomain: string;
   apiUrl: string;
   smsProvider: "log";
   customDomainTarget: string | null;
@@ -555,7 +565,8 @@ export type BillingGatewayConfig = Readonly<{
   paystackSecretKey: string | null;
   paystackBaseUrl: string;
   fakeWebhookSecret: string;
-  returnUrl: string;
+  /** Where the payment page sends people back; null: the business's own /billing/return. */
+  returnUrl: string | null;
 }>;
 
 export type PushConfig = Readonly<{
@@ -641,6 +652,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   const e = parsed.data;
+  const tenantBaseDomain = e.TENANT_BASE_DOMAIN ?? new URL(e.WEB_APP_URL).hostname;
 
   return Object.freeze({
     env: e.NODE_ENV,
@@ -651,7 +663,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     shutdownTimeoutMs: e.SHUTDOWN_TIMEOUT_MS,
     http: Object.freeze({
       trustProxyHops: e.TRUST_PROXY_HOPS,
-      corsAllowedOrigins: Object.freeze([...e.CORS_ALLOWED_ORIGINS]),
+      corsAllowedOrigins: Object.freeze([
+        ...new Set([
+          ...e.CORS_ALLOWED_ORIGINS,
+          TenantAddressing.originPattern(e.WEB_APP_URL, tenantBaseDomain),
+        ]),
+      ]),
       rateLimit: Object.freeze({ windowMs: e.RATE_LIMIT_WINDOW_MS, max: e.RATE_LIMIT_MAX }),
       authRateLimitMax: e.AUTH_RATE_LIMIT_MAX,
       telematicsRateLimitMax: e.TELEMATICS_RATE_LIMIT_MAX,
@@ -677,6 +694,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }),
     public: Object.freeze({
       webAppUrl: e.WEB_APP_URL,
+      tenantBaseDomain,
       apiUrl: (e.PUBLIC_API_URL ?? e.WEB_APP_URL).replace(/\/+$/, ""),
       smsProvider: e.SMS_PROVIDER,
       customDomainTarget: e.CUSTOM_DOMAIN_TARGET ?? null,
@@ -686,7 +704,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       paystackSecretKey: e.PAYSTACK_SECRET_KEY ?? null,
       paystackBaseUrl: e.PAYSTACK_BASE_URL,
       fakeWebhookSecret: e.BILLING_FAKE_WEBHOOK_SECRET,
-      returnUrl: e.BILLING_RETURN_URL ?? `${e.WEB_APP_URL}/billing/return`,
+      returnUrl: e.BILLING_RETURN_URL ?? null,
     }),
     operations: Object.freeze({
       onCallEmails: Object.freeze([...e.ONCALL_EMAILS]),

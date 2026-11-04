@@ -47,6 +47,7 @@ import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { FileService, FileView } from "../files/FileService.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
+import type { TenantAddressing } from "../../../domain/value-objects/TenantAddressing.js";
 import type { DocumentPdfComposer } from "./DocumentPdfComposer.js";
 import type { SignatureRequests } from "./SignatureRequests.js";
 
@@ -181,7 +182,7 @@ export class Documents {
       requestContext: IRequestContext;
       ids: IIdGenerator;
       clock: IClock;
-      settings: Readonly<{ webAppUrl: string }>;
+      settings: Readonly<{ addresses: Pick<TenantAddressing, "urlOf"> }>;
     }>,
   ) {}
 
@@ -567,7 +568,7 @@ export class Documents {
   }
 
   verifyUrl(slug: string, code: string): string {
-    return `${this.deps.settings.webAppUrl.replace(/\/$/, "")}/${slug}/verify/${groupCode(code)}`;
+    return this.deps.settings.addresses.urlOf(slug, `/verify/${groupCode(code)}`);
   }
 
   async slug(): Promise<string> {

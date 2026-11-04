@@ -21,6 +21,7 @@ import type { ITenantDataArchiver } from "../../ports/ITenantDataArchiver.js";
 import type { ITenantDirectory } from "../../ports/ITenantDirectory.js";
 import type { ITenantSeeder } from "../../ports/ITenantSeeder.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
+import type { TenantLinks } from "../../services/TenantLinks.js";
 import { recordStaffAction } from "./consoleAudit.js";
 
 export class DataExportNotFoundError extends ApplicationError {
@@ -71,7 +72,7 @@ export class TenantDataExports implements IJobHandler<"tenant.data_export"> {
       ids: IIdGenerator;
       clock: IClock;
       logger: ILogger;
-      exportsUrl: string;
+      links: Pick<TenantLinks, "urlOf">;
     }>,
   ) {}
 
@@ -179,7 +180,7 @@ export class TenantDataExports implements IJobHandler<"tenant.data_export"> {
           template: "tenant.data_export_ready",
           data: {
             name: owner.name,
-            url: deps.exportsUrl,
+            url: await deps.links.urlOf(e.tenantId, "/settings/data-export"),
             expiresOn: expiresAt.toISOString().slice(0, 10),
           },
           idempotencyKey: `data-export:${e.id}`,

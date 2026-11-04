@@ -103,7 +103,10 @@ describe("paying through the gateway", () => {
     expect(checkout.body.data).toMatchObject({
       status: "pending",
       amountMinor: PRICE,
-      checkoutUrl: expect.stringContaining("gateway=fake"),
+      // The payment page comes back to the business's own address.
+      checkoutUrl: expect.stringMatching(
+        /^http:\/\/[a-z0-9-]+\.localhost:5174\/billing\/return\?reference=.+&gateway=fake$/,
+      ),
     });
     const reference = checkout.body.data.reference as string;
     expect(

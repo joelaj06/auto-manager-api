@@ -141,9 +141,11 @@ describe("driver app access", () => {
     expect(log.body.data[0]).toMatchObject({ rule: "driver_invitation", status: "queued" });
     expect(log.body.data[0].body).toMatch(/hidden/);
 
-    const token = /#token=([A-Za-z0-9_-]+)/.exec(
-      granted.body.data.invitation.webUrl as string,
-    )![1]!;
+    const webUrl = granted.body.data.invitation.webUrl as string;
+    expect(webUrl.startsWith(`http://${t.slug}.localhost:5174/accept-invitation#token=`)).toBe(
+      true,
+    );
+    const token = /#token=([A-Za-z0-9_-]+)/.exec(webUrl)![1]!;
     const accepted = await api()
       .post("/api/v1/auth/invitations/accept")
       .set("X-Tenant", t.slug)

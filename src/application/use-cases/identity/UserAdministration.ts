@@ -53,8 +53,9 @@ export type InviteUserInput = Readonly<{
   roles: readonly RoleAssignment[];
 }>;
 
+import type { TenantAddressing } from "../../../domain/value-objects/TenantAddressing.js";
 export type UserAdministrationSettings = Readonly<{
-  webAppUrl: string;
+  addresses: Pick<TenantAddressing, "urlOf">;
   invitationTtlMs: number;
   /** A link that opens the invitation in the mobile app (signed connect link), if available. */
   appInvitationLink?: (tenantSlug: string, token: string, expiresAt: Date) => string;
@@ -390,7 +391,7 @@ export class UserAdministration {
         name: user.name,
         businessName: organisation.name,
         invitedBy: inviter?.name ?? null,
-        acceptUrl: `${deps.settings.webAppUrl.replace(/\/$/, "")}/${tenantSlug}/accept-invitation#token=${token}`,
+        acceptUrl: deps.settings.addresses.urlOf(tenantSlug, `/accept-invitation#token=${token}`),
         appUrl:
           deps.settings.appInvitationLink?.(
             tenantSlug,

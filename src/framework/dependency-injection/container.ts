@@ -656,7 +656,10 @@ import { PostgresBillingRepository } from "../../infrastructure/billing/Postgres
 import { mobileRoutes } from "../../adapters/routes/mobileRoutes.js";
 import type { IConnectLinkSigner } from "../../application/ports/IConnectLinkSigner.js";
 import { MobileConnect } from "../../application/use-cases/mobile/MobileConnect.js";
+import { TenantFromRequest } from "../../adapters/middleware/TenantFromRequest.js";
+import { TenantLinks } from "../../application/services/TenantLinks.js";
 import { HostAllowList } from "../../domain/mobile/ConnectLink.js";
+import { TenantAddressing } from "../../domain/value-objects/TenantAddressing.js";
 import {
   DEVELOPMENT_KEY_SEED,
   Ed25519ConnectLinkSigner,
@@ -1030,6 +1033,17 @@ export function createContainer(
   const container = new Container({ defaultScope: "Singleton" });
   const db = config.database;
   const auth = config.auth;
+  const tenantAddresses = new TenantAddressing({
+    webAppUrl: config.public.webAppUrl,
+    baseDomain: config.public.tenantBaseDomain,
+    ownHosts: [
+      config.public.webAppUrl,
+      config.public.apiUrl,
+      auth.platform.consoleUrl,
+      config.mobile.apiBaseUrl,
+      config.mobile.linkBaseUrl,
+    ].map((url) => new URL(url).hostname),
+  });
 
   container.bind<AppConfig>(TYPES.Config).toConstantValue(config);
   container.bind<MigrationSets>(TYPES.MigrationSets).toConstantValue(migrations);
@@ -1541,6 +1555,12 @@ export function createContainer(
     .bind<IOtpService>(TYPES.OtpService)
     .toResolvedValue(() => new HmacOtpService(auth.otpSecret));
 
+  container
+    .bind<TenantLinks>(TYPES.TenantLinks)
+    .toResolvedValue(
+      (tenants: ITenantDirectory) => new TenantLinks({ addressing: tenantAddresses, tenants }),
+      [TYPES.TenantDirectory],
+    );
   container
     .bind<ITenantDirectory>(TYPES.TenantDirectory)
     .toResolvedValue(
@@ -2324,7 +2344,7 @@ export function createContainer(
         clock,
         logger,
         settings: {
-          webAppUrl: config.public.webAppUrl,
+          addresses: tenantAddresses,
           ownerInvitationTtlMs: OWNER_INVITATION_TTL_MS,
           defaultBranch: DEFAULT_BRANCH,
         },
@@ -2727,7 +2747,7 @@ export function createContainer(
         ids,
         clock,
         settings: {
-          webAppUrl: config.public.webAppUrl,
+          addresses: tenantAddresses,
           invitationTtlMs: USER_INVITATION_TTL_MS,
           appInvitationLink: (slug, token, expiresAt) =>
             mobile.invitationLink(slug, token, expiresAt),
@@ -2973,7 +2993,6 @@ export function createContainer(
         })
       : new FakePaymentGateway({
           webhookSecret: config.billing.fakeWebhookSecret,
-          checkoutBaseUrl: config.billing.returnUrl,
         }),
   );
   platformRepository<IGatewayRepository>(
@@ -2997,6 +3016,7 @@ export function createContainer(
       logger: ILogger,
       commissions: ICommissionHooks,
       approvals: ApprovalWorkflow,
+      tenantLinks: TenantLinks,
     ) => {
       const gatewayBilling = new GatewayBilling({
         provider,
@@ -3012,7 +3032,8 @@ export function createContainer(
         ids,
         clock,
         logger,
-        returnUrl: config.billing.returnUrl,
+        returnUrl: async (tenantId) =>
+          config.billing.returnUrl ?? (await tenantLinks.urlOf(tenantId, "/billing/return")),
         commissions,
         refundApproval: {
           approvals,
@@ -3038,6 +3059,7 @@ export function createContainer(
       TYPES.Logger,
       TYPES.CommissionEngine,
       TYPES.ApprovalWorkflow,
+      TYPES.TenantLinks,
     ],
   );
   container.bind<GatewayReconciliation>(TYPES.GatewayReconciliation).toResolvedValue(
@@ -3090,6 +3112,7 @@ export function createContainer(
       settings: INotificationSettingsStore,
       seeder: ITenantSeeder,
       logger: ILogger,
+      tenantLinks: TenantLinks,
     ) =>
       new BillingNotices({
         automation,
@@ -3101,7 +3124,7 @@ export function createContainer(
         settings,
         seeder,
         logger,
-        billingUrl: `${config.public.webAppUrl}/billing`,
+        links: tenantLinks,
       }),
     [
       TYPES.BillingAutomationRepository,
@@ -3113,6 +3136,7 @@ export function createContainer(
       TYPES.NotificationSettingsStore,
       TYPES.TenantSeeder,
       TYPES.Logger,
+      TYPES.TenantLinks,
     ],
   );
   container.bind<BillingAutomation>(TYPES.BillingAutomation).toResolvedValue(
@@ -3777,7 +3801,7 @@ export function createContainer(
                 : { name: user.name, email: user.email, phone: user.phone };
             }),
           ),
-        ticketUrl: (slug, id) => `${config.public.webAppUrl}/${slug}/support/tickets/${id}`,
+        ticketUrl: (slug, id) => tenantAddresses.urlOf(slug, `/support/tickets/${id}`),
       }),
     [
       TYPES.PlatformUnitOfWork,
@@ -4090,6 +4114,7 @@ export function createContainer(
       ids: IIdGenerator,
       clock: IClock,
       logger: ILogger,
+      tenantLinks: TenantLinks,
     ) =>
       new TenantDataExports({
         exports,
@@ -4108,7 +4133,7 @@ export function createContainer(
         ids,
         clock,
         logger,
-        exportsUrl: `${config.public.webAppUrl}/settings/data-export`,
+        links: tenantLinks,
       }),
     [
       TYPES.TenantDataExportRepository,
@@ -4127,6 +4152,7 @@ export function createContainer(
       TYPES.IdGenerator,
       TYPES.Clock,
       TYPES.Logger,
+      TYPES.TenantLinks,
     ],
   );
   platformRepository<IDataProtectionRequestRepository>(
@@ -5895,6 +5921,13 @@ export function createContainer(
       (pool: pg.Pool) => new CachedTenantDomainLookup(new PostgresTenantDomains(pool)),
       [TYPES.PlatformDatabasePool],
     );
+  container
+    .bind<TenantFromRequest>(TYPES.TenantFromRequest)
+    .toResolvedValue(
+      (domains: ITenantDomainLookup) =>
+        new TenantFromRequest({ addressing: tenantAddresses, domains }),
+      [TYPES.TenantDomainLookup],
+    );
   container.bind<CustomDomains>(TYPES.CustomDomains).toResolvedValue(
     (
       unitOfWork: IPlatformUnitOfWork,
@@ -5919,7 +5952,10 @@ export function createContainer(
         clock,
         logger,
         target: config.public.customDomainTarget,
-        reserved: [config.public.webAppUrl, config.public.apiUrl].map((u) => new URL(u).hostname),
+        reserved: [
+          config.public.tenantBaseDomain,
+          ...[config.public.webAppUrl, config.public.apiUrl].map((u) => new URL(u).hostname),
+        ],
       }),
     [
       TYPES.PlatformUnitOfWork,
@@ -6396,7 +6432,7 @@ export function createContainer(
         documentSettings,
         organisation,
         clock,
-        settings: { webAppUrl: config.public.webAppUrl },
+        settings: { addresses: tenantAddresses },
       }),
     [
       TYPES.DocumentSigningLinks,
@@ -6454,7 +6490,7 @@ export function createContainer(
         requestContext,
         ids,
         clock,
-        settings: { webAppUrl: config.public.webAppUrl },
+        settings: { addresses: tenantAddresses },
       }),
     [
       TYPES.UnitOfWork,
@@ -6779,7 +6815,7 @@ export function createContainer(
         ids,
         clock,
         settings: {
-          webAppUrl: config.public.webAppUrl,
+          addresses: tenantAddresses,
           invitationTtlMs: USER_INVITATION_TTL_MS,
           appInvitationLink: (slug, token, expiresAt) =>
             mobile.invitationLink(slug, token, expiresAt),
@@ -9674,11 +9710,11 @@ export function createContainer(
       features: FeatureFlags,
       usage: UsageMeter,
       apiKeys: AuthenticateApiKey,
-      domains: ITenantDomainLookup,
+      addresses: TenantFromRequest,
     ) =>
       new AccessGuard({
         apiKeys,
-        domains,
+        addresses,
         authenticate,
         resolveTenant,
         authorization,
@@ -9704,7 +9740,7 @@ export function createContainer(
       TYPES.FeatureFlags,
       TYPES.UsageMeter,
       TYPES.AuthenticateApiKey,
-      TYPES.TenantDomainLookup,
+      TYPES.TenantFromRequest,
     ],
   );
   // --- Console MVP: dashboard, tenant 360, notes & tags, data operations, health ---
@@ -9976,7 +10012,7 @@ export function createContainer(
           branches,
           reconciliation: branchReconciliation,
           publicConfig,
-          domains: container.get<ITenantDomainLookup>(TYPES.TenantDomainLookup),
+          addresses: container.get<TenantFromRequest>(TYPES.TenantFromRequest),
           tenantContext,
           directory,
         }),

@@ -139,3 +139,4 @@ dist
 
 # Load-test sign-ins written by `yarn load:seed --tenants N`
 load/k6/data/
+autoforce-manager.postman_collection.json

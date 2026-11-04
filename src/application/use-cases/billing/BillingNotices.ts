@@ -10,6 +10,7 @@ import type { ISmsSender } from "../../ports/ISmsSender.js";
 import type { ITenantContext } from "../../ports/ITenantContext.js";
 import type { ITenantSeeder } from "../../ports/ITenantSeeder.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
+import type { TenantLinks } from "../../services/TenantLinks.js";
 import type { Notifier } from "../notifications/Notifier.js";
 
 /** What a notice is about: an unpaid invoice, without its reference (docs/25 §5.1). */
@@ -105,7 +106,7 @@ export class BillingNotices {
       notifier: Notifier;
       settings: INotificationSettingsStore;
       seeder: ITenantSeeder;
-      billingUrl: string;
+      links: Pick<TenantLinks, "urlOf">;
       logger: ILogger;
     }>,
   ) {}
@@ -134,6 +135,7 @@ export class BillingNotices {
     const { deps } = this;
     const wanted = new Set(channels);
     let sent = 0;
+    const billingUrl = await deps.links.urlOf(subject.tenantId, "/billing");
     const owner = await this.inTenant(subject.tenantId, () => deps.seeder.owner());
     const people = [
       ...(owner === null ? [] : [{ name: owner.name, email: owner.email, phone: owner.phone }]),
@@ -156,7 +158,7 @@ export class BillingNotices {
               name,
               subject: text.subject,
               paragraphs: [text.body],
-              billingUrl: deps.billingUrl,
+              billingUrl,
             },
             idempotencyKey: `billing:${subject.tenantId}:${subject.invoiceId ?? "-"}:${step}:${address}`,
             tenantId: subject.tenantId,
@@ -165,7 +167,7 @@ export class BillingNotices {
     if (wanted.has("sms"))
       for (const phone of phones)
         sent += await this.once(step, subject, "sms", phone, async () => {
-          await deps.sms.send(phone, `Autoforce: ${text.body} ${deps.billingUrl}`);
+          await deps.sms.send(phone, `Autoforce: ${text.body} ${billingUrl}`);
         });
     if (wanted.has("in_app") || wanted.has("push"))
       sent += await this.once(step, subject, "in_app", "billing.manage", async () => {

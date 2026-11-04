@@ -6,7 +6,7 @@ Decision 18: shared domain; the web portal shows a **QR code containing the back
 
 ## 1. Interpretation to confirm (open question in doc 19)
 
-"Shared domain" is read here as: **one API domain serves all tenants** (e.g. `api.<domain>`), the tenant is identified by the token / an `X-Tenant` header rather than by a per-tenant API host. The web portal may still use `<slug>.<domain>` for the browser UI. If you intended per-tenant API subdomains (`<slug>.api.<domain>`), the flows below still work — only the URL in the QR changes.
+"Shared domain" is read here as: **one API domain serves all tenants** (e.g. `api.<domain>`), the tenant is identified by the token / an `X-Tenant` header rather than by a per-tenant API host. The web portal uses `<slug>.<domain>` for the browser UI (decision 533), and connect links stay on the link domain (decision 535). If you intended per-tenant API subdomains (`<slug>.api.<domain>`), the flows below still work — only the URL in the QR changes.
 
 ## 2. Goals
 

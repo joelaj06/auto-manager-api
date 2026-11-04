@@ -91,7 +91,7 @@ Conventions for every endpoint:
 - **Security:** helmet headers, CORS allow-list (wildcard subdomains supported), JSON bodies
   limited in size, `/api` rate-limited per client, no stack traces in responses.
 - **Access control:** every route declares `access` (`adapters/routes/RouteAccess.ts`) —
-  `public`, `tenant` (anonymous, for the business named in `X-Tenant`) or `authenticated` with a
+  `public`, `tenant` (anonymous, for the business addressed) or `authenticated` with a
   permission from `application/authorization/permissionCatalog.ts`. Tenant routes run inside
   that tenant's context, so the unit of work can only reach its database. Bearer tokens are
   short-lived JWTs signed with a per-tenant key; a token for one business is rejected on
@@ -172,6 +172,23 @@ placeholders, owner), user directory, then a welcome email with a one-time link.
 it and calls `POST /api/v1/auth/invitations/accept` with `X-Tenant: <slug>` and
 `{ token, password }` to get tokens — then `GET /api/v1/me` shows their permissions. Progress and
 retry: `GET/POST /api/platform/v1/tenants/:id/provisioning[/retry]`.
+
+## A business's own address
+
+Each business lives at `<slug>.<TENANT_BASE_DOMAIN>`, with the scheme and port of `WEB_APP_URL`
+(`http://alpha.localhost:5174` locally). A request names its business in any of three ways, and
+those present must agree (`401 TENANT_MISMATCH`):
+
+- the `X-Tenant` header, for the mobile app and API clients;
+- the `Host`, when the portal is proxied on its own address (the proxy must pass it on, as
+  `X-Forwarded-Host` with `TRUST_PROXY_HOPS` set, or as `Host`);
+- the browser's `Origin`, when the portal calls the shared `api.<domain>`.
+
+So a portal on its own address sends no header. Custom domains work the same way. An access token
+must still belong to the business addressed. Links to a business go to its address, with the slug
+gone from the path: `/accept-invitation#token=…`, `/sign#token=…`, `/verify/<code>`,
+`/support/tickets/<id>`, `/billing`, `/billing/return` and `/settings/data-export`. Signup links
+stay on `WEB_APP_URL`, mobile connect links on `MOBILE_LINK_BASE_URL`.
 
 ## Tenant lifecycle and branches
 

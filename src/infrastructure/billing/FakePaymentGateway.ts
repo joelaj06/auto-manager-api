@@ -39,14 +39,12 @@ export class FakePaymentGateway implements IPaymentGateway {
   /** Provider ids stay unique across restarts (webhooks are deduplicated by them). */
   private nextId = Date.now();
 
-  constructor(
-    private readonly options: Readonly<{ webhookSecret: string; checkoutBaseUrl: string }>,
-  ) {}
+  constructor(private readonly options: Readonly<{ webhookSecret: string }>) {}
 
   initializeCheckout(r: CheckoutRequest): Promise<Readonly<{ checkoutUrl: string }>> {
     this.store(r.reference, r.amountMinor, r.currency);
     return Promise.resolve({
-      checkoutUrl: `${this.options.checkoutBaseUrl}?reference=${encodeURIComponent(r.reference)}&gateway=fake`,
+      checkoutUrl: `${r.callbackUrl}&gateway=fake`,
     });
   }
 

@@ -10,6 +10,7 @@ import type {
 import type { IDriverAppLinks } from "../../ports/IDriverAppLinks.js";
 import type { INotificationSettingsStore } from "../../ports/INotifications.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
+import type { TenantAddressing } from "../../../domain/value-objects/TenantAddressing.js";
 import type { Notifier } from "../notifications/Notifier.js";
 
 export type SigningLink = Readonly<{ url: string; expiresAt: Date }>;
@@ -36,7 +37,7 @@ export class SignatureRequests {
       documentSettings: IDocumentSettingsStore;
       organisation: IOrganisationSettings;
       clock: IClock;
-      settings: Readonly<{ webAppUrl: string }>;
+      settings: Readonly<{ addresses: Pick<TenantAddressing, "urlOf"> }>;
     }>,
   ) {}
 
@@ -130,7 +131,7 @@ export class SignatureRequests {
       expiresAt,
     });
     return {
-      url: `${deps.settings.webAppUrl.replace(/\/$/, "")}/${slug}/sign#token=${token}`,
+      url: deps.settings.addresses.urlOf(slug, `/sign#token=${token}`),
       expiresAt,
     };
   }

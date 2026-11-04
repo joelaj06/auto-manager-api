@@ -117,7 +117,8 @@ export class GatewayBilling {
       ids: IIdGenerator;
       clock: IClock;
       logger: ILogger;
-      returnUrl: string;
+      /** Where the payment page sends a business's people back. */
+      returnUrl: (tenantId: string) => Promise<string>;
       /** Refunds claw back reseller commission. */
       commissions: ICommissionHooks;
       /** Refunds above the threshold need a second staff member (four-eyes). */
@@ -144,7 +145,7 @@ export class GatewayBilling {
       amountMinor: a.amountMinor,
       currency: a.currency,
       email,
-      callbackUrl: `${deps.returnUrl}?reference=${encodeURIComponent(a.reference)}`,
+      callbackUrl: `${await deps.returnUrl(a.tenantId)}?reference=${encodeURIComponent(a.reference)}`,
       metadata: { tenantId: a.tenantId, invoiceId: a.invoiceId, attemptId: a.id },
     });
     attempt.checkoutOpened(checkoutUrl);

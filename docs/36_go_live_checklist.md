@@ -56,6 +56,7 @@ No price is in code (decision 138). Before the first invoice:
 ## 5. Hosting (P0-3, when a server exists)
 
 - [ ] Production and staging environments; secrets in the host's secret store, not `.env` files.
+- [ ] DNS and a wildcard TLS certificate for `*.<TENANT_BASE_DOMAIN>`; `TENANT_BASE_DOMAIN` set; `yarn storage:setup` rerun; a real business opened at its own address.
 - [ ] TLS on every domain; database not reachable from outside; firewall, SSH keys only.
 - [ ] **PgBouncer** in transaction pooling in front of PostgreSQL. Size it from the load figures (doc 33 §7): at 200 virtual users across 100 tenants the local server's 100 connections are the limit, not the API.
 - [ ] `max_connections` ≥ processes × (`TENANT_POOL_MAX_TOTAL_CONNECTIONS` + `PLATFORM_POOL_MAX` + `JOB_POOL_MAX`) + headroom, or PgBouncer's pool sized to it.

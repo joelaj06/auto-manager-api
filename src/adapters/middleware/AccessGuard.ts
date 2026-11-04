@@ -13,7 +13,6 @@ import {
   MaintenanceReadOnlyError,
   SupportAccessError,
   TenantBillingOnlyError,
-  TenantMismatchError,
   TenantReadOnlyError,
 } from "../../application/errors/TenantErrors.js";
 import type {
@@ -26,7 +25,6 @@ import type { ISupportAccess } from "../../application/ports/ISupportAccess.js";
 import type { IClock } from "../../application/ports/IClock.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { TenantSummary } from "../../application/ports/ITenantDirectory.js";
-import type { ITenantDomainLookup } from "../../application/ports/ITenantDomains.js";
 import type { AuthenticateTenantRequest } from "../../application/use-cases/auth/AuthenticateTenantRequest.js";
 import type { ResolveTenant } from "../../application/use-cases/auth/ResolveTenant.js";
 import type { AuthenticateApiKey } from "../../application/use-cases/integrations/ApiKeys.js";
@@ -35,8 +33,8 @@ import { isApiKey } from "../../domain/integrations/Integrations.js";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import type { RouteAccess } from "../routes/RouteAccess.js";
 import { maskSensitive, supportVerdict } from "./supportMode.js";
+import { headerSlug, type TenantFromRequest } from "./TenantFromRequest.js";
 
-export const TENANT_HEADER = "x-tenant";
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
 const MAX_TOKEN_LENGTH = 4_096;
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -51,7 +49,7 @@ type Locals = { tenant?: TenantSummary; principal?: Principal; staff?: PlatformP
 /**
  * Enforces a route's declared access before its handler runs, then runs the handler inside the
  * tenant context so the unit of work reaches that tenant's database (and no other):
- * - `tenant`: resolve the X-Tenant slug;
+ * - `tenant`: resolve the business addressed (see TenantFromRequest);
  * - `authenticated`: verify the bearer token, check it belongs to the addressed tenant, check
  *   the permission. A tenant deactivated by billing reaches only its session routes and, for
  *   users with billing access, billing and their profile.
@@ -64,8 +62,8 @@ export class AccessGuard {
     private readonly deps: Readonly<{
       /** API keys (`afk_…`), when the app takes them. */
       apiKeys?: AuthenticateApiKey;
-      /** Custom domains (decisions 528–530). */
-      domains?: ITenantDomainLookup;
+      /** Reads the business from the host and origin too; else only X-Tenant does. */
+      addresses?: TenantFromRequest;
       authenticate: AuthenticateTenantRequest;
       resolveTenant: ResolveTenant;
       authorization: AuthorizationPolicy;
@@ -200,16 +198,8 @@ export class AccessGuard {
     }
   }
 
-  /**
-   * The business a request addresses: the X-Tenant header or the custom domain it came to, which
-   * must agree when both are there.
-   */
   private async addressedSlug(req: Request): Promise<string | null> {
-    const header = tenantSlugOf(req);
-    const domain = (await this.deps.domains?.slugOf(req.hostname)) ?? null;
-    if (header !== null && domain !== null && header.toLowerCase() !== domain.toLowerCase())
-      throw new TenantMismatchError();
-    return header ?? domain;
+    return this.deps.addresses === undefined ? headerSlug(req) : this.deps.addresses.slugOf(req);
   }
 
   /** Every request of a support session goes to its trail once answered (blocked ones too). */
@@ -269,11 +259,6 @@ function assertSupportAllows(method: string, path: string, support: SupportActor
       "SUPPORT_ACTION_BLOCKED",
       "Support access cannot sign in or out, change passwords, pay, download or export",
     );
-}
-
-function tenantSlugOf(req: Request): string | null {
-  const value = req.get(TENANT_HEADER);
-  return value === undefined || value.trim() === "" ? null : value.trim();
 }
 
 function bearerTokenOf(req: Request): string | null {

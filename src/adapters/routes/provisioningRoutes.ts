@@ -43,7 +43,7 @@ export function provisioningRoutes(deps: ProvisioningRouteDependencies): ApiRout
     defineRoute({
       method: "post",
       path: "/api/v1/auth/invitations/accept",
-      summary: "Set your password from an invitation link and sign in (X-Tenant required)",
+      summary: "Set your password from an invitation link and sign in",
       tags: ["auth"],
       access: access.tenant(),
       request: {

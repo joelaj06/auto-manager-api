@@ -23,7 +23,7 @@ This document was checked against the route declarations in `src/adapters/routes
 **Connecting**
 
 - Base path is `/api/v1`. Send `Authorization: Bearer <access token>` on signed-in routes.
-- Send the business slug as `X-Tenant`. It is required on routes marked `Public (X-Tenant)`. On a custom domain the host identifies the business instead; if the two disagree the API answers `401 TENANT_MISMATCH`.
+- Send the business slug as `X-Tenant`. Some address is required on routes marked `Public (X-Tenant)`. A browser on `<slug>.<domain>` or a custom domain needs no header: the request's `Origin` or `Host` identifies the business instead; if the two disagree the API answers `401 TENANT_MISMATCH`.
 - Tokens: access 15 minutes, refresh 30 days, rotated on each use (these are defaults and can be configured).
 
 **Reading and sending data**
@@ -225,7 +225,7 @@ A business applies, proves its email and phone, and waits for review. Nothing he
 
 ## Signing in and my session
 
-Tenant routes send the business slug as `X-Tenant`, except where the host is a custom domain.
+Tenant routes send the business slug as `X-Tenant`, except from the business's own address (`<slug>.<domain>` or a custom domain).
 
 ### B-AUTH-01 · Find the businesses I belong to
 
