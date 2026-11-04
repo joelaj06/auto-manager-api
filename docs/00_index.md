@@ -44,6 +44,9 @@
 | 34 | [Beta onboarding guide](34_beta_onboarding_guide.md) | Taking a trusted business from application to its first work and pay agreement |
 | 35 | [Support process](35_support_process.md) | Channels, hours, severities and response times, triage, console tools, escalation |
 | 36 | [Go-live checklist](36_go_live_checklist.md) | The readiness gate, billing dry run and its review, pricing, legal, hosting, open security decisions, people |
+| 37 | [User stories: business side](37_user_stories_business.md) | For the web, mobile and driver app teams: every story a business and its people can act on, with endpoints, permissions and acceptance criteria |
+| 38 | [User stories: platform side](38_user_stories_platform.md) | For the console and reseller portal teams: every staff and reseller story, with endpoints, permissions, step-up and four-eyes rules |
+| 39 | [API response shapes](39_api_response_shapes.md) | Generated with `yarn docs:api`: what every route returns and every field of every shape; the full [OpenAPI file](api/openapi.json) is for generating typed clients |
 
 ## Legend used across docs
 

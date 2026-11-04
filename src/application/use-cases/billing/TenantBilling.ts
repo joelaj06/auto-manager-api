@@ -43,6 +43,10 @@ export type TenantPaymentView = Pick<
   | "receiptNumber"
 >;
 
+/** An invoice as its tenant sees it: who raised it and how payments were recorded stay ours. */
+export type TenantInvoiceView = Omit<InvoiceView, "createdBy" | "payments"> &
+  Readonly<{ payments?: readonly TenantPaymentView[] }>;
+
 /** One line of the billing history, oldest first, with the balance after it. */
 export type TransactionView = Readonly<{
   at: Date;
@@ -127,20 +131,20 @@ export class TenantBilling {
     return this.deps.billing.preview(this.tenantId());
   }
 
-  async invoices(filter: Readonly<{ limit: number; before?: string }>): Promise<InvoiceView[]> {
+  async invoices(
+    filter: Readonly<{ limit: number; before?: string }>,
+  ): Promise<TenantInvoiceView[]> {
     const invoices = await this.deps.billing.invoices({ ...filter, tenantId: this.tenantId() });
-    return invoices
-      .filter((i) => i.status !== "void")
-      .map(({ createdBy: _c, ...i }) => i as InvoiceView);
+    return invoices.filter((i) => i.status !== "void").map(({ createdBy: _c, ...i }) => i);
   }
 
-  async invoice(invoiceId: string): Promise<InvoiceView> {
+  async invoice(invoiceId: string): Promise<TenantInvoiceView> {
     const {
       createdBy: _c,
       payments,
       ...invoice
     } = await this.deps.billing.invoice(invoiceId, this.tenantId());
-    return { ...invoice, payments: (payments ?? []).map(forTenant) } as unknown as InvoiceView;
+    return { ...invoice, payments: (payments ?? []).map(forTenant) };
   }
 
   async invoicePdf(invoiceId: string): Promise<PdfFile> {
