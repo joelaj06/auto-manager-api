@@ -850,6 +850,24 @@ charges, or `…/lines/:id/ignore`. `GET /api/v1/reconciliation/summary` and the
 
 **Receipt reading** (decisions 520–522) needs `ANTHROPIC_API_KEY`, and each business then switches it on in `PUT /api/v1/settings/receipt-reading`, since receipts leave for an outside provider. Scan first with `POST /api/v1/receipt-readings`, upload, `POST …/:id/complete`, poll `GET …/:id` for the figures, enter the expense, then `POST …/:id/attach`. Receipts attached the ordinary way are read too, and `GET /api/v1/expenses/:id/receipts/:fileId/reading` shows where they disagree with the expense. A reading never changes an expense.
 
+## Enterprise extras
+
+These belong to the Enterprise licence (decision 523).
+
+**API keys** act as the user who made them, narrowed to their scopes. Create one with `POST /api/v1/integrations/api-keys` under `integrations.manage`; it is shown once. Send it as a bearer token, with no `X-Tenant`:
+
+```bash
+curl -H "Authorization: Bearer afk_…" https://api.example.com/api/v1/vehicles
+```
+
+**Webhooks** tell an https address what changed (`/api/v1/integrations/webhooks`, events at `/api/v1/integrations/webhook-events`). An event carries the entity's type and id, not its data. To check one, compute HMAC-SHA256 of `<t>.<raw body>` with the endpoint's secret and compare it with `v1` in `X-Autoforce-Signature: t=<unix>,v1=<hex>`. Delivery is at least once: drop duplicates by `X-Autoforce-Delivery`.
+
+**Custom domains** are added by staff at `/api/platform/v1/tenants/:id/domains`. The customer creates the TXT record shown, and a CNAME to `CUSTOM_DOMAIN_TARGET` if that is set; staff then call `verify`. The proxy must send the domain's traffic here with its `Host` kept, and ask `GET /api/v1/public/domains/allowed?domain=` before issuing a certificate.
+
+**Dedicated clusters**: `POST /api/platform/v1/clusters/:id/dedication` keeps an empty cluster for one tenant, which then moves there with the usual four-eyes move.
+
+**A tenant's own database login** is requested at `/api/platform/v1/tenants/:id/database-login` with two staff members, and carried out by a job. Run `yarn db:setup` once on every cluster first, because the migrator needs CREATEROLE for it; the cluster probe reports any cluster that has not had this. Behind PgBouncer, each login also needs an entry or an `auth_query`.
+
 ## Legal and operations
 
 **Terms and privacy**: staff draft and publish versions (`/api/platform/v1/legal-documents`);

@@ -65,6 +65,17 @@ const definitions = {
     fourEyes: true,
   },
   "platform.tenants.rename_slug": { description: "Change a tenant's slug", sensitive: true },
+  "platform.tenants.domains.manage": {
+    description: "Add, check and remove a tenant's custom domains",
+  },
+  "platform.tenants.integrations.manage": {
+    description: "Revoke a tenant's API keys and switch off its webhooks",
+    sensitive: true,
+  },
+  "platform.tenants.database_credentials.manage": {
+    description: "Ask to give a tenant its own database login, rotate it or take it back",
+    sensitive: true,
+  },
   "platform.tenants.demos.manage": {
     description: "Create demo and sandbox tenants with sample data, extend and end them",
   },

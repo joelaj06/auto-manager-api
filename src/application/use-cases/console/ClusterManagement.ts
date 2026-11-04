@@ -1,5 +1,6 @@
 import {
   CAPACITY_WARNING_PERCENT,
+  checkDedication,
   checkMaxTenants,
   checkMove,
   checkNewCluster,
@@ -12,6 +13,7 @@ import {
   type ClusterStatus,
 } from "../../../domain/console/Clusters.js";
 import type { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
+import type { EnterpriseGate } from "../integrations/EnterpriseGate.js";
 import type { IClock } from "../../ports/IClock.js";
 import type {
   ClusterFinding,
@@ -72,6 +74,7 @@ export class ClusterManagement {
       routing: IClusterRouting;
       approvals: ApprovalWorkflow;
       queue: IJobQueue;
+      gate: EnterpriseGate;
       alerts: IAlerts;
       audit: IPlatformAuditTrail;
       requestContext: IRequestContext;
@@ -204,6 +207,7 @@ export class ClusterManagement {
         loads.map((l) =>
           counted && l.id === tenant.clusterId ? { ...l, tenants: l.tenants - 1 } : l,
         ),
+        tenantId,
       );
       if (id === null) return null;
       await deps.registry.place(tenantId, id);
@@ -223,6 +227,40 @@ export class ClusterManagement {
     }
     await this.warnIfFull(placed);
     return placed;
+  }
+
+  /**
+   * Keeps a cluster for one Enterprise tenant, or opens it to everybody again (decision 531).
+   * Moving the tenant there is the usual four-eyes move.
+   */
+  async dedicate(
+    actor: PlatformPrincipal,
+    id: string,
+    input: Readonly<{ tenantId: string | null; reason: string }>,
+  ): Promise<ClusterView> {
+    const { deps } = this;
+    const cluster = await this.require(id);
+    if (input.tenantId !== null) {
+      if ((await deps.registry.placement(input.tenantId)) === null)
+        throw new ClusterRuleError("Unknown tenant");
+      await deps.gate.require(input.tenantId);
+      checkDedication(cluster, await deps.registry.tenantsOnClusterOtherThan(id, input.tenantId));
+    }
+    await deps.unitOfWork.run(async () => {
+      await deps.registry.dedicate(id, input.tenantId);
+      await deps.audit.record({
+        actorType: "platform_staff",
+        actorId: actor.userId,
+        action: "cluster.dedicated",
+        entityType: "cluster",
+        entityId: id,
+        targetTenantId: input.tenantId ?? cluster.dedicatedTo ?? null,
+        before: { dedicatedTo: cluster.dedicatedTo ?? null },
+        after: { dedicatedTo: input.tenantId },
+        reason: input.reason,
+      });
+    });
+    return this.cluster(id);
   }
 
   /** Asks to move a tenant to another cluster; another staff member approves it (four-eyes). */

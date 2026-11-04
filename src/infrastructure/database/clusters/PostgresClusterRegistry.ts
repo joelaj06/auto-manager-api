@@ -46,6 +46,7 @@ function toCluster(r: Row): ClusterRecord {
     status: r.status as ClusterRecord["status"],
     maxTenants: n(r.max_tenants),
     tenants: n(r.tenants),
+    dedicatedTo: text(r.dedicated_to),
     liveTenants: n(r.live_tenants),
     notes: text(r.notes),
     lastCheckedAt: date(r.last_checked_at),
@@ -138,7 +139,7 @@ export class PostgresClusterRegistry implements IClusterRegistry {
 
   async lockLoads(): Promise<ClusterLoad[]> {
     const { rows } = await this.db.query<Row>(
-      `select c.id, c.status, c.max_tenants,
+      `select c.id, c.status, c.max_tenants, c.dedicated_to,
               (select count(*) from tenants t
                 where t.cluster_id = c.id and t.status <> 'archived') as tenants
          from clusters c order by c.id for update of c`,
@@ -148,7 +149,24 @@ export class PostgresClusterRegistry implements IClusterRegistry {
       status: r.status as ClusterLoad["status"],
       maxTenants: n(r.max_tenants),
       tenants: n(r.tenants),
+      dedicatedTo: text(r.dedicated_to),
     }));
+  }
+
+  async tenantsOnClusterOtherThan(clusterId: string, tenantId: string): Promise<number> {
+    const { rows } = await this.db.query<Row>(
+      `select count(*) as tenants from tenants
+        where cluster_id = $1 and id <> $2 and status <> 'archived'`,
+      [clusterId, tenantId],
+    );
+    return n(rows[0]?.tenants);
+  }
+
+  async dedicate(clusterId: string, tenantId: string | null): Promise<void> {
+    await this.db.query("update clusters set dedicated_to = $2, updated_at = now() where id = $1", [
+      clusterId,
+      tenantId,
+    ]);
   }
 
   async checked(id: string, error: string | null, at: Date): Promise<void> {

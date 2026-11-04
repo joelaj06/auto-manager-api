@@ -1,4 +1,4 @@
-import type { SupportActor } from "../authorization/Principal.js";
+import type { ApiKeyActor, SupportActor } from "../authorization/Principal.js";
 
 /** Facts about the request (or job) being handled, available anywhere in its async call chain. */
 export type RequestContextData = Readonly<{
@@ -8,6 +8,8 @@ export type RequestContextData = Readonly<{
   ip?: string;
   /** Platform staff acting in a tenant through support access (docs/27 §3.8). */
   support?: SupportActor;
+  /** The API key the request came with (named in the tenant's audit log). */
+  apiKey?: ApiKeyActor;
 }>;
 
 export interface IRequestContext {

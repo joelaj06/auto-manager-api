@@ -8,6 +8,7 @@ import type { IPlatformAuditTrail } from "../../ports/IPlatformAuditTrail.js";
 import type { ITenantDatabaseMover } from "../../ports/ITenantDatabaseMover.js";
 import type { ITenantDirectory } from "../../ports/ITenantDirectory.js";
 import type { IAlerts } from "./PlatformAlerts.js";
+import type { TenantLoginPlacement } from "./TenantDatabaseLogins.js";
 
 const DAY_MS = 86_400_000;
 
@@ -42,6 +43,8 @@ export class MoveTenantToCluster implements IJobHandler<"tenant.cluster_move"> {
       /** How long until every process sees a change of the tenant (its caches' lifetime). */
       settleMs: number;
       wait: (ms: number) => Promise<void>;
+      /** A tenant with its own database login takes it along (decision 532). */
+      logins?: Pick<TenantLoginPlacement, "prepareOn" | "removeFrom">;
     }>,
   ) {}
 
@@ -63,6 +66,7 @@ export class MoveTenantToCluster implements IJobHandler<"tenant.cluster_move"> {
         await deps.mover.close(move.tenantId, move.from);
         await deps.registry.updateMove(moveId, { status: "copying" });
         const report = await deps.mover.copy(move.tenantId, move.from, move.to);
+        await deps.logins?.prepareOn(move.tenantId, move.to);
         await deps.mover.open(move.tenantId, move.to);
         await deps.registry.updateMove(moveId, { status: "switching", report });
         await deps.registry.switchTenant(move.tenantId, move.to);
@@ -77,6 +81,7 @@ export class MoveTenantToCluster implements IJobHandler<"tenant.cluster_move"> {
     await deps.wait(deps.settleMs);
     await deps.registry.setMoving(move.tenantId, null);
     this.forget(move.tenantId);
+    await deps.logins?.removeFrom(move.tenantId, move.from);
     const finished = deps.clock.now();
     const fresh = await deps.registry.findMove(moveId);
     await deps.registry.updateMove(moveId, {

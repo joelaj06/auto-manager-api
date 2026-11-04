@@ -353,10 +353,38 @@ describe("cluster management", () => {
       .send({ status: "retired" });
     expect(busy.status).toBe(422);
 
+    // With its own database login, which goes along.
+    await platform.query(
+      "update subscriptions set licence_type = 'enterprise' where tenant_id = $1",
+      [t.tenantId],
+    );
+    await container
+      .get<IJobHandler[]>(TYPES.EnterpriseJobHandlers)
+      .find((h) => h.job === "tenant.database_credentials")!
+      .handle({ tenantId: t.tenantId, action: "enable" }, { jobId: "test", attempt: 1 });
+    await api().get(`/api/v1/vehicles/${vehicleId}`).set(owner()).expect(200);
+
     const back = await move("main");
     expect(back).toMatchObject({ from: CLUSTER, to: "main", status: "completed" });
     const car = await api().get(`/api/v1/vehicles/${vehicleId}`).set(owner());
     expect(car.status, JSON.stringify(car.body)).toBe(200);
+
+    const role = `${database}_app`;
+    const main = await factory.connect("migrator", TEST_DATABASE.platformDatabase);
+    const left = await factory.at(second).connect("migrator", TEST_DATABASE.platformDatabase);
+    try {
+      const grants = await main.query<{ own: boolean; shared: boolean }>(
+        `select has_database_privilege($1, $2, 'connect') as own,
+                has_database_privilege('af_tenant_rw', $2, 'connect') as shared`,
+        [role, database],
+      );
+      expect(grants.rows[0]).toEqual({ own: true, shared: false });
+      const gone = await left.query("select 1 from pg_roles where rolname = $1", [role]);
+      expect(gone.rowCount).toBe(0);
+    } finally {
+      await main.end();
+      await left.end();
+    }
 
     expect(
       (await api().patch(`${BASE}/clusters/main`).set(as(admin)).send({ status: "retired" }))

@@ -5,6 +5,7 @@ import { PassThrough, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import { mapWithConcurrency } from "../concurrency/mapWithConcurrency.js";
+import { openTenantDatabase } from "../database/clusters/PostgresTenantDatabaseRoles.js";
 import { DATABASE_GROUP_ROLES } from "../database/postgres/databaseRoles.js";
 import type { PostgresConnectionFactory } from "../database/postgres/PostgresConnectionFactory.js";
 import type { TenantDatabaseNaming } from "../database/postgres/TenantDatabaseNaming.js";
@@ -569,11 +570,9 @@ export class DatabaseBackupService {
     database: string,
     connections: PostgresConnectionFactory,
   ): Promise<void> {
-    const groups =
-      kind === "tenant"
-        ? [DATABASE_GROUP_ROLES.tenantReadWrite, DATABASE_GROUP_ROLES.backupReader]
-        : [DATABASE_GROUP_ROLES.platformReadWrite, DATABASE_GROUP_ROLES.backupReader];
+    const groups = [DATABASE_GROUP_ROLES.platformReadWrite, DATABASE_GROUP_ROLES.backupReader];
     return this.withMaintenance(async (client) => {
+      if (kind === "tenant") return openTenantDatabase(client, database);
       await client.query(`revoke connect, temporary on database ${ident(database)} from public`);
       await client.query(
         `grant connect on database ${ident(database)} to ${groups.map(ident).join(", ")}`,

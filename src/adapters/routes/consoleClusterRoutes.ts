@@ -120,6 +120,22 @@ export function consoleClusterRoutes(deps: ConsoleClusterRouteDependencies): Api
     }),
     defineRoute({
       method: "post",
+      path: `${BASE}/:id/dedication`,
+      summary:
+        "Keeps a cluster for one Enterprise tenant, or opens it to all again (tenantId null)",
+      tags,
+      access: manage,
+      request: {
+        params: idParams,
+        body: z.object({ tenantId: z.uuid().nullable(), reason }),
+      },
+      responses: { 200: { description: "The cluster" } },
+      handler: async ({ params, body }, _req, res) => {
+        res.json(envelope(await clusters.dedicate(staffOf(res), params.id, body)));
+      },
+    }),
+    defineRoute({
+      method: "post",
       path: `${BASE}/:id/databases/:name/drop`,
       summary:
         "Asks to drop an orphan database once it has waited long enough (Super Admin approves)",

@@ -9,6 +9,7 @@ import type { IPlatformUnitOfWork } from "../../ports/IPlatformUnitOfWork.js";
 import type { ITenantArchives } from "../../ports/ITenantArchives.js";
 import type { ITenantDatabaseMover } from "../../ports/ITenantDatabaseMover.js";
 import type { IAlerts } from "./PlatformAlerts.js";
+import type { TenantLoginPlacement } from "./TenantDatabaseLogins.js";
 
 /** The tenant status changes of archiving (the lifecycle service). */
 export type ArchiveTransitions = Readonly<{
@@ -42,6 +43,7 @@ export class ArchiveTenant implements IJobHandler<"tenant.archive"> {
       alerts: IAlerts;
       clock: IClock;
       logger: ILogger;
+      logins?: Pick<TenantLoginPlacement, "retire">;
     }>,
   ) {}
 
@@ -130,6 +132,7 @@ export class ArchiveTenant implements IJobHandler<"tenant.archive"> {
 
   private async dropLive(tenantId: string, clusterId: string): Promise<void> {
     await this.deps.vault.dropDatabase(tenantId, clusterId);
+    await this.deps.logins?.retire(tenantId, clusterId);
     this.deps.routing.forget(tenantId);
   }
 

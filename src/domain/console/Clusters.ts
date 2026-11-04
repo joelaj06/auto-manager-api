@@ -56,6 +56,8 @@ export type ClusterLoad = Readonly<{
   status: ClusterStatus;
   maxTenants: number;
   tenants: number;
+  /** The one tenant this cluster is kept for. */
+  dedicatedTo?: string | null;
 }>;
 
 export const fillPercent = (load: ClusterLoad): number =>
@@ -68,8 +70,14 @@ export const hasRoom = (load: ClusterLoad): boolean =>
  * Where a new tenant's database goes (decision 491): the active cluster with room that is least
  * full, by id on a tie; null when none has room.
  */
-export function pickCluster(loads: readonly ClusterLoad[]): string | null {
-  const open = loads.filter(hasRoom);
+export function pickCluster(
+  loads: readonly ClusterLoad[],
+  tenantId: string | null = null,
+): string | null {
+  // A cluster kept for this tenant comes first; one kept for anybody else is never used.
+  const own = loads.find((l) => tenantId !== null && l.dedicatedTo === tenantId && hasRoom(l));
+  if (own !== undefined) return own.id;
+  const open = loads.filter((l) => hasRoom(l) && (l.dedicatedTo ?? null) === null);
   if (open.length === 0) return null;
   return [...open].sort(
     (a, b) => a.tenants / a.maxTenants - b.tenants / b.maxTenants || a.id.localeCompare(b.id),
@@ -88,7 +96,13 @@ export function checkStatusChange(load: ClusterLoad, next: ClusterStatus): void 
 
 /** A tenant's move to `to` (decision 492). */
 export function checkMove(
-  tenant: Readonly<{ clusterId: string; hasDatabase: boolean; status: string; moving: boolean }>,
+  tenant: Readonly<{
+    tenantId?: string;
+    clusterId: string;
+    hasDatabase: boolean;
+    status: string;
+    moving: boolean;
+  }>,
   to: ClusterLoad | null,
   moveOpen: boolean,
 ): void {
@@ -98,6 +112,8 @@ export function checkMove(
   if (tenant.moving || moveOpen) throw new ClusterRuleError("The tenant is already being moved");
   if (to === null) throw new ClusterRuleError("Unknown cluster");
   if (to.id === tenant.clusterId) throw new ClusterRuleError(`The tenant is already on ${to.id}`);
+  if ((to.dedicatedTo ?? null) !== null && to.dedicatedTo !== tenant.tenantId)
+    throw new ClusterRuleError(`${to.id} is kept for another tenant`);
   if (!hasRoom(to))
     throw new ClusterRuleError(
       to.status === "active"
@@ -121,4 +137,18 @@ export function droppable(
   if (finding.kind === "moved_away")
     return finding.retainedUntil !== null && now.toISOString().slice(0, 10) > finding.retainedUntil;
   return now.getTime() - finding.firstSeenAt.getTime() >= ORPHAN_GRACE_DAYS * 86_400_000;
+}
+
+/** Keeping a cluster for one tenant (decision 531): nobody else may be on it. */
+export function checkDedication(
+  cluster: Readonly<{ id: string; status: ClusterStatus }>,
+  othersOnIt: number,
+): void {
+  if (cluster.id === MAIN_CLUSTER_ID)
+    throw new ClusterRuleError("The main cluster cannot be kept for one tenant");
+  if (cluster.status === "retired") throw new ClusterRuleError(`${cluster.id} is retired`);
+  if (othersOnIt > 0)
+    throw new ClusterRuleError(
+      `${othersOnIt} other tenants are on ${cluster.id}: move them off first`,
+    );
 }

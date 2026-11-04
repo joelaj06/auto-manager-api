@@ -18,6 +18,11 @@ export type TenantConnectionPoolsOptions = Readonly<{
    * cluster than the tenant's current one is closed and opened again there. Absent: one server.
    */
   clusterFor?: (tenantId: TenantId) => Promise<ClusterEndpoint>;
+  /**
+   * The tenant's own database login, when it has one (cached by the caller). A pool opened with
+   * another version is closed and opened again. Absent or null: the shared app login.
+   */
+  loginFor?: (tenantId: TenantId) => Promise<TenantLogin | null>;
   /** Upper bound on open pools; least recently used idle pools are closed beyond it. */
   maxPools: number;
   maxConnectionsPerPool: number;
@@ -34,6 +39,8 @@ export type TenantConnectionPoolsOptions = Readonly<{
   onPoolError?: (error: Error, tenantId: string) => void;
 }>;
 
+export type TenantLogin = Readonly<{ user: string; password: string; version: number }>;
+
 export type TenantPoolStats = Readonly<{
   openPools: number;
   totalConnections: number;
@@ -41,7 +48,13 @@ export type TenantPoolStats = Readonly<{
   waitingRequests: number;
 }>;
 
-type Entry = { pool: pg.Pool; leases: number; clusterId: string | null; retired: boolean };
+type Entry = {
+  pool: pg.Pool;
+  leases: number;
+  clusterId: string | null;
+  loginVersion: number;
+  retired: boolean;
+};
 type Opening = { waiters: number; promise: Promise<Entry> };
 type VerificationRow = { tenant_id: string | null; schema_version: string | null };
 
@@ -106,10 +119,15 @@ export class TenantConnectionPools {
 
     const key = tenantId.value;
     const cluster = await this.options.clusterFor?.(tenantId);
+    const login = (await this.options.loginFor?.(tenantId)) ?? null;
     if (this.closed) throw new Error("TenantConnectionPools is closed");
     const cached = this.entries.get(key);
-    if (cached !== undefined && cluster !== undefined && cached.clusterId !== cluster.id) {
-      // The tenant moved: the old pool ends once its last lease is back.
+    if (
+      cached !== undefined &&
+      ((cluster !== undefined && cached.clusterId !== cluster.id) ||
+        cached.loginVersion !== (login?.version ?? 0))
+    ) {
+      // The tenant moved or its login changed: the old pool ends once its last lease is back.
       this.entries.delete(key);
       cached.retired = true;
       if (cached.leases === 0) this.end(cached, key);
@@ -126,7 +144,7 @@ export class TenantConnectionPools {
     let opening = this.opening.get(key);
     if (opening === undefined) {
       const counter = { waiters: 0 };
-      const promise = this.open(tenantId, cluster, () => counter.waiters).finally(() => {
+      const promise = this.open(tenantId, cluster, login, () => counter.waiters).finally(() => {
         this.opening.delete(key);
       });
       opening = Object.assign(counter, { promise });
@@ -139,11 +157,13 @@ export class TenantConnectionPools {
   private async open(
     tenantId: TenantId,
     cluster: ClusterEndpoint | undefined,
+    login: TenantLogin | null,
     waiters: () => number,
   ): Promise<Entry> {
     const databaseName = this.options.databaseNameFor(tenantId);
     const pool = new pg.Pool({
       ...this.options.clientConfigFor(databaseName, cluster),
+      ...(login === null ? {} : { user: login.user, password: login.password }),
       max: this.options.maxConnectionsPerPool,
       idleTimeoutMillis: this.options.idleTimeoutMs,
     });
@@ -165,6 +185,7 @@ export class TenantConnectionPools {
       pool,
       leases: waiters(),
       clusterId: cluster?.id ?? null,
+      loginVersion: login?.version ?? 0,
       retired: false,
     };
     this.entries.set(tenantId.value, entry);

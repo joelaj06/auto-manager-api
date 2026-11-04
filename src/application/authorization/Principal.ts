@@ -28,6 +28,9 @@ export type SupportActor = Readonly<{
   mode: "read" | "write";
 }>;
 
+/** The API key behind a request (decision 524). */
+export type ApiKeyActor = Readonly<{ id: string; name: string }>;
+
 /**
  * The authenticated tenant user behind the current request — or, with `support`, platform staff
  * acting with that user's permissions through a support session.
@@ -39,6 +42,8 @@ export class Principal {
     readonly sessionId: string,
     private readonly grants: PermissionGrants,
     readonly support: SupportActor | null = null,
+    /** Set when the request came with an API key, which acts as `userId` within its scopes. */
+    readonly apiKey: ApiKeyActor | null = null,
   ) {}
 
   get branchIds(): readonly string[] {

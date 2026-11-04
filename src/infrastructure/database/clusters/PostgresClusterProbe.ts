@@ -40,6 +40,7 @@ export class PostgresClusterProbe implements IClusterProbe {
           max_connections: string;
           tenant_bytes: string;
           createdb: boolean;
+          createrole: boolean;
           signal: boolean;
           roles: string[];
         }>(
@@ -50,6 +51,7 @@ export class PostgresClusterProbe implements IClusterProbe {
                     where starts_with(datname, $1) and not datistemplate
                       and has_database_privilege(datname, 'connect')) as tenant_bytes,
                   (select rolcreatedb from pg_roles where rolname = current_user) as createdb,
+                  (select rolcreaterole from pg_roles where rolname = current_user) as createrole,
                   pg_has_role(current_user, 'pg_signal_backend', 'member') as signal,
                   array(select rolname::text from pg_roles where rolname = any($2::text[])) as roles`,
           [deps.tenantDatabasePrefix, Object.values(DATABASE_GROUP_ROLES)],
@@ -60,6 +62,8 @@ export class PostgresClusterProbe implements IClusterProbe {
         const missing = Object.values(DATABASE_GROUP_ROLES).filter((g) => !r.roles.includes(g));
         if (missing.length > 0) problems.push(`Roles missing: ${missing.join(", ")}`);
         if (!r.createdb) problems.push("The migrator cannot create databases");
+        if (!r.createrole)
+          problems.push("The migrator cannot create tenant logins: run yarn db:setup on it");
         if (!r.signal) problems.push("The migrator cannot end sessions (pg_signal_backend)");
         const templateVersion = await this.templateVersion(connections);
         const required = deps.requiredTemplateVersion;

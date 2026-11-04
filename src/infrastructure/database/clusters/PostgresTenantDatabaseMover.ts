@@ -9,10 +9,11 @@ import { TenantId } from "../../../domain/value-objects/TenantId.js";
 import { countRows, schemaVersionOf } from "../../backup/DatabaseBackupService.js";
 import type { PgClientTools } from "../../backup/PgClientTools.js";
 import { PostgresIntegrityChecks } from "../../integrity/PostgresIntegrityChecks.js";
-import { DATABASE_GROUP_ROLES } from "../postgres/databaseRoles.js";
+import { DATABASE_GROUP_ROLES, tenantRoleOf } from "../postgres/databaseRoles.js";
 import type { PostgresConnectionFactory } from "../postgres/PostgresConnectionFactory.js";
 import type { TenantDatabaseNaming } from "../postgres/TenantDatabaseNaming.js";
 import type { ClusterConnections } from "./ClusterConnections.js";
+import { openTenantDatabase, roleExists } from "./PostgresTenantDatabaseRoles.js";
 
 const ident = (name: string) => pg.escapeIdentifier(name);
 
@@ -38,13 +39,16 @@ export class PostgresTenantDatabaseMover implements ITenantDatabaseMover {
   async close(tenantId: string, clusterId: string): Promise<void> {
     const name = this.nameOf(tenantId);
     await this.onMaintenance(clusterId, async (client) => {
+      const own = tenantRoleOf(name);
       await client.query(
         `revoke connect on database ${ident(name)} from ${ident(DATABASE_GROUP_ROLES.tenantReadWrite)}`,
       );
+      if (await roleExists(client, own))
+        await client.query(`revoke connect on database ${ident(name)} from ${ident(own)}`);
       await client.query(
         `select pg_terminate_backend(pid) from pg_stat_activity
-          where datname = $1 and usename = $2 and pid <> pg_backend_pid()`,
-        [name, this.deps.tenantUser],
+          where datname = $1 and usename = any($2) and pid <> pg_backend_pid()`,
+        [name, [this.deps.tenantUser, own]],
       );
     });
   }
@@ -52,10 +56,7 @@ export class PostgresTenantDatabaseMover implements ITenantDatabaseMover {
   async open(tenantId: string, clusterId: string): Promise<void> {
     const name = this.nameOf(tenantId);
     await this.onMaintenance(clusterId, async (client) => {
-      await client.query(`revoke connect, temporary on database ${ident(name)} from public`);
-      await client.query(
-        `grant connect on database ${ident(name)} to ${ident(DATABASE_GROUP_ROLES.tenantReadWrite)}, ${ident(DATABASE_GROUP_ROLES.backupReader)}`,
-      );
+      await openTenantDatabase(client, name);
     });
   }
 
@@ -80,6 +81,7 @@ export class PostgresTenantDatabaseMover implements ITenantDatabaseMover {
     const name = this.nameOf(tenantId);
     await this.onMaintenance(clusterId, async (client) => {
       await client.query(`drop database if exists ${ident(name)} with (force)`);
+      await client.query(`drop role if exists ${ident(tenantRoleOf(name))}`);
     });
   }
 

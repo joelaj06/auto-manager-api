@@ -13,6 +13,7 @@ import type {
 import type { TenantPublicConfig } from "../../application/use-cases/tenants/TenantPublicConfig.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { ITenantDirectory } from "../../application/ports/ITenantDirectory.js";
+import type { ITenantDomainLookup } from "../../application/ports/ITenantDomains.js";
 import { TenantNotFoundForStaffError } from "../../application/errors/TenantErrors.js";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import { principalOf, staffOf } from "../middleware/AccessGuard.js";
@@ -61,6 +62,8 @@ export type LifecycleRouteDependencies = Readonly<{
   branches: BranchLifecycle;
   reconciliation: BranchReconciliation;
   publicConfig: TenantPublicConfig;
+  /** Which business a custom domain belongs to. */
+  domains?: ITenantDomainLookup;
   tenantContext: ITenantContext;
   directory: ITenantDirectory;
 }>;
@@ -94,15 +97,17 @@ export function lifecycleRoutes(deps: LifecycleRouteDependencies): ApiRoute[] {
         "What an app needs to connect to a business (name, status, currency, sign-in methods)",
       tags: ["public"],
       access: access.public(),
-      request: { query: z.object({ slug: z.string().min(1).max(60) }) },
+      request: { query: z.object({ slug: z.string().min(1).max(60).optional() }) },
       responses: {
         200: { description: "Public tenant configuration" },
         404: { description: "Unknown business" },
       },
-      handler: async ({ query }, _req, res) => {
+      handler: async ({ query }, req, res) => {
+        // On a custom domain the host name says which business it is.
+        const slug = query.slug ?? (await deps.domains?.slugOf(req.hostname)) ?? "";
         res
           .set("Cache-Control", "public, max-age=60")
-          .json(envelope(await deps.publicConfig.get(query.slug)));
+          .json(envelope(await deps.publicConfig.get(slug)));
       },
     }),
 

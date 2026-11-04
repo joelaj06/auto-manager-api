@@ -641,6 +641,16 @@ const definitions = {
     scopes: ALL,
   },
 
+  "integrations.view": {
+    description: "See the business's API keys, webhooks and their deliveries",
+    scopes: ALL,
+  },
+  "integrations.manage": {
+    description: "Create and revoke API keys and manage webhooks",
+    scopes: ALL,
+    sensitive: true,
+  },
+
   "billing.view": { description: "View subscription and invoices", scopes: ALL },
   "billing.manage": {
     description: "Pay, change plan, request extensions",
@@ -657,6 +667,23 @@ export const PERMISSION_CATALOG: Readonly<Record<PermissionKey, PermissionDefini
 export function isPermissionKey(value: unknown): value is PermissionKey {
   return typeof value === "string" && Object.hasOwn(PERMISSION_CATALOG, value);
 }
+
+const NOT_FOR_API_KEYS = /^(users|roles|permissions|integrations|billing|settings|support)\./;
+
+/**
+ * What an API key may be given: ordinary business work, never sensitive permissions, a persona's
+ * self-service, or the keys, people, roles, settings and billing of the business itself.
+ */
+export const API_KEY_SCOPES: readonly PermissionKey[] = Object.freeze(
+  (Object.keys(PERMISSION_CATALOG) as PermissionKey[]).filter((key) => {
+    const definition: PermissionDefinition = PERMISSION_CATALOG[key];
+    return (
+      definition.sensitive !== true &&
+      definition.selfService !== true &&
+      !NOT_FOR_API_KEYS.test(key)
+    );
+  }),
+);
 
 /** Permissions of a persona's own role (the driver app), never held by staff roles or the owner. */
 export const SELF_SERVICE_PERMISSIONS: readonly PermissionKey[] = Object.freeze(

@@ -24,7 +24,8 @@ const RESTRICTED = "nosuperuser nocreaterole noreplication nobypassrls";
  * tenant template database, with CONNECT locked down.
  *
  * Role model:
- *  - migrator: owns every application database and runs DDL; may create databases.
+ *  - migrator: owns every application database and runs DDL; may create databases, and may
+ *    create a tenant's own login (decision 532) because it can hand out af_tenant_rw.
  *  - platform app user ∈ af_platform_rw: data access to the platform database only.
  *  - tenant app user ∈ af_tenant_rw: data access to tenant databases only.
  *  - backup user ∈ af_backup (pg_read_all_data): reads every application database, writes none.
@@ -43,7 +44,10 @@ export class ClusterBootstrapper {
     await this.ensureGroupRole(tenantReadWrite);
     await this.ensureGroupRole(backupReader);
     await this.admin.query(`grant pg_read_all_data to ${ident(backupReader)}`);
-    await this.ensureLoginRole(roles.migrator, `${RESTRICTED} createdb`);
+    await this.ensureLoginRole(
+      roles.migrator,
+      "nosuperuser createrole noreplication nobypassrls createdb",
+    );
     await this.ensureLoginRole(roles.platform, `${RESTRICTED} nocreatedb`);
     await this.ensureLoginRole(roles.tenant, `${RESTRICTED} nocreatedb`);
     await this.ensureLoginRole(roles.backup, `${RESTRICTED} nocreatedb`);
@@ -52,6 +56,9 @@ export class ClusterBootstrapper {
     await this.admin.query(`grant ${ident(backupReader)} to ${ident(roles.backup.user)}`);
     // Ends the app's sessions on a tenant database closed for a move to another cluster.
     await this.admin.query(`grant pg_signal_backend to ${ident(roles.migrator.user)}`);
+    await this.admin.query(
+      `grant ${ident(tenantReadWrite)} to ${ident(roles.migrator.user)} with admin option`,
+    );
     this.log("roles ready");
 
     const platform = options.platformDatabase;

@@ -56,6 +56,7 @@ export const RULE_KEYS = [
   "telematics_geofence",
   "telematics_overspeed",
   "telematics_silent",
+  "webhook_endpoint_disabled",
 ] as const;
 export type RuleKey = (typeof RULE_KEYS)[number];
 
@@ -373,6 +374,12 @@ export const RULES: Readonly<Record<RuleKey, RuleDefinition>> = Object.freeze({
       "A vehicle's tracker has sent nothing for longer than the hours set: tell the branch's staff who see telematics",
     channels: STAFF,
     defaults: { enabled: true, channels: ["in_app"] },
+  },
+  webhook_endpoint_disabled: {
+    description:
+      "A webhook address has failed for days and was switched off: tell the staff who manage integrations",
+    channels: STAFF,
+    defaults: { enabled: true, channels: ["in_app", "email"] },
   },
 });
 

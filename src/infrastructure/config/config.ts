@@ -70,6 +70,8 @@ const envSchema = z
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(30),
     /** Telematics ingestion per client IP and window (providers push for many vehicles). */
     TELEMATICS_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(6_000),
+    /** The host name custom domains point at; empty: only their TXT record is checked. */
+    CUSTOM_DOMAIN_TARGET: z.string().trim().min(4).max(253).optional(),
     // Each business's WhatsApp account is its own; this is only where Meta's API lives.
     WHATSAPP_API_URL: z.url().default("https://graph.facebook.com/v24.0"),
     // Reading receipts: without a key it is not offered at all.
@@ -460,7 +462,12 @@ export type AuthConfig = Readonly<{
 export type WhatsAppConfig = Readonly<{ apiUrl: string }>;
 export type ReceiptReadingConfig = Readonly<{ apiKey: string | null; model: string }>;
 
-export type PublicConfig = Readonly<{ webAppUrl: string; apiUrl: string; smsProvider: "log" }>;
+export type PublicConfig = Readonly<{
+  webAppUrl: string;
+  apiUrl: string;
+  smsProvider: "log";
+  customDomainTarget: string | null;
+}>;
 
 export type BackupConfig = Readonly<{
   directory: string;
@@ -672,6 +679,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       webAppUrl: e.WEB_APP_URL,
       apiUrl: (e.PUBLIC_API_URL ?? e.WEB_APP_URL).replace(/\/+$/, ""),
       smsProvider: e.SMS_PROVIDER,
+      customDomainTarget: e.CUSTOM_DOMAIN_TARGET ?? null,
     }),
     billing: Object.freeze({
       gateway: e.BILLING_GATEWAY,

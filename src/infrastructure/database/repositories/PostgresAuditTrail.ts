@@ -18,10 +18,14 @@ export class PostgresAuditTrail implements IAuditTrail {
 
   async record(original: AuditEntry): Promise<string> {
     if (!ACTION.test(original.action)) throw new Error(`Invalid audit action: ${original.action}`);
-    const support = this.requestContext?.current()?.support;
+    const context = this.requestContext?.current();
+    const support = context?.support;
+    const apiKey = context?.apiKey;
     const entry: AuditEntry =
       support === undefined
-        ? original
+        ? apiKey === undefined
+          ? original
+          : { ...original, metadata: { ...original.metadata, apiKey } }
         : {
             ...original,
             actorType: "platform_staff",

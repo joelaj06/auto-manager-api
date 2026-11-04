@@ -93,6 +93,15 @@ export type JobPayloads = {
   "demos.sweep": Readonly<Record<string, never>>;
   /** Read one queued receipt. */
   "tenant.receipt_read": Readonly<{ tenantId: string; readingId: string }>;
+  /** One try of one webhook delivery. */
+  "tenant.webhook_deliver": Readonly<{ tenantId: string; deliveryId: string }>;
+  /** Give a tenant its own database login, change its password or take it back. */
+  "tenant.database_credentials": Readonly<{
+    tenantId: string;
+    action: "enable" | "rotate" | "disable";
+  }>;
+  /** Check the DNS of every verified custom domain. */
+  "domains.sweep": Readonly<Record<string, never>>;
 };
 
 export type JobName = keyof JobPayloads;
@@ -477,6 +486,34 @@ export const JOB_CATALOG: Readonly<Record<JobName, JobDefinition>> = Object.free
     retryDelaySeconds: 120,
     retryBackoff: true,
     expireInSeconds: 1_800,
+  },
+  "tenant.webhook_deliver": {
+    description: "Post one webhook delivery to the address a business chose",
+    tenantScoped: true,
+    policy: "standard",
+    retryLimit: 3,
+    retryDelaySeconds: 30,
+    retryBackoff: true,
+    expireInSeconds: 120,
+  },
+  "tenant.database_credentials": {
+    description: "Give a tenant its own database login, change its password or take it back",
+    tenantScoped: false,
+    policy: "standard",
+    retryLimit: 3,
+    retryDelaySeconds: 60,
+    retryBackoff: true,
+    expireInSeconds: 600,
+  },
+  "domains.sweep": {
+    description: "Check the DNS of verified custom domains and suspend those whose records went",
+    tenantScoped: false,
+    policy: "stately",
+    retryLimit: 2,
+    retryDelaySeconds: 600,
+    retryBackoff: false,
+    expireInSeconds: 1_800,
+    cron: "37 4 * * *",
   },
   "demos.sweep": {
     description: "Expire demo tenants at their end and purge them a week later",

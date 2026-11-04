@@ -1508,6 +1508,38 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     find: `select 1 from receipt_readings r join files f on f.id = r.file_id
             where f.storage_key = $1`,
   },
+  api_keys: {
+    insert: (marker) => ({
+      sql: `with u as (
+              insert into users (email, name, status) values ($2, 'Key maker', 'invited') returning id
+            )
+            insert into api_keys (name, key_hash, key_hint, scopes, created_by)
+            select 'Isolation', $1, 'abcd', array['vehicles.list'], id from u`,
+      params: [marker, `${letters(marker)}@keys.example`],
+    }),
+    find: "select 1 from api_keys where key_hash = $1",
+  },
+  webhook_endpoints: {
+    insert: (marker) => ({
+      sql: `insert into webhook_endpoints (url, events, sealed_secret)
+            values ('https://hooks.example.com/in', array['vehicle.created'], $1)`,
+      params: [marker],
+    }),
+    find: "select 1 from webhook_endpoints where sealed_secret = $1",
+  },
+  webhook_deliveries: {
+    insert: (marker) => ({
+      sql: `with e as (
+              insert into webhook_endpoints (url, events, sealed_secret)
+              values ('https://hooks.example.com/in', array['vehicle.created'], $1) returning id
+            )
+            insert into webhook_deliveries
+              (endpoint_id, event_id, event_type, body, next_attempt_at)
+            select id, gen_random_uuid(), 'vehicle.created', $1, now() from e`,
+      params: [marker],
+    }),
+    find: "select 1 from webhook_deliveries where body = $1",
+  },
   telematics_settings: {
     // Singleton created by its migration: the marker's hash stands in the update time.
     insert: (marker) => ({

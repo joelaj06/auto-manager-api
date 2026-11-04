@@ -88,6 +88,9 @@ export interface IClusterRegistry {
   update(id: string, changes: ClusterChanges): Promise<void>;
   /** Every cluster's load, locked until the end of the transaction (placing a tenant). */
   lockLoads(): Promise<ClusterLoad[]>;
+  /** Tenants on a cluster, archived ones aside, besides this one. */
+  tenantsOnClusterOtherThan(clusterId: string, tenantId: string): Promise<number>;
+  dedicate(clusterId: string, tenantId: string | null): Promise<void>;
   checked(id: string, error: string | null, at: Date): Promise<void>;
 
   placement(tenantId: string): Promise<TenantPlacement | null>;

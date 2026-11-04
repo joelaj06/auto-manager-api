@@ -344,7 +344,52 @@ import {
   NoReceiptReader,
 } from "../../infrastructure/receipts/ClaudeReceiptReader.js";
 import { PostgresReceiptReadings } from "../../infrastructure/receipts/PostgresReceiptReadings.js";
+import { consoleEnterpriseRoutes } from "../../adapters/routes/consoleEnterpriseRoutes.js";
+import { integrationRoutes } from "../../adapters/routes/integrationRoutes.js";
 import { receiptReadingRoutes } from "../../adapters/routes/receiptReadingRoutes.js";
+import type { IApiKeys } from "../../application/ports/IApiKeys.js";
+import type {
+  ITenantDatabaseCredentials,
+  ITenantDatabaseRoles,
+} from "../../application/ports/ITenantDatabaseCredentials.js";
+import type {
+  IDnsResolver,
+  ITenantDomainLookup,
+  ITenantDomains,
+} from "../../application/ports/ITenantDomains.js";
+import type { ITenantLicence } from "../../application/ports/ITenantLicence.js";
+import type { IWebhooks, IWebhookTransport } from "../../application/ports/IWebhooks.js";
+import {
+  CustomDomains,
+  SweepCustomDomains,
+} from "../../application/use-cases/console/CustomDomains.js";
+import {
+  ApplyTenantDatabaseLogin,
+  TenantDatabaseLogins,
+  TenantLoginPlacement,
+} from "../../application/use-cases/console/TenantDatabaseLogins.js";
+import { TenantIntegrations } from "../../application/use-cases/console/TenantIntegrations.js";
+import { ApiKeys, AuthenticateApiKey } from "../../application/use-cases/integrations/ApiKeys.js";
+import { EnterpriseGate } from "../../application/use-cases/integrations/EnterpriseGate.js";
+import {
+  DeliverWebhook,
+  WebhookFanOut,
+  WebhookHousekeeping,
+  WebhookPublishingAuditTrail,
+  Webhooks,
+} from "../../application/use-cases/integrations/Webhooks.js";
+import { PostgresTenantDatabaseRoles } from "../../infrastructure/database/clusters/PostgresTenantDatabaseRoles.js";
+import { CachedTenantDomainLookup } from "../../infrastructure/integrations/CachedTenantDomainLookup.js";
+import { HttpsWebhookTransport } from "../../infrastructure/integrations/HttpsWebhookTransport.js";
+import { NodeDnsResolver } from "../../infrastructure/integrations/NodeDnsResolver.js";
+import { PostgresApiKeys } from "../../infrastructure/integrations/PostgresApiKeys.js";
+import {
+  PostgresTenantDatabaseCredentials,
+  TenantLogins,
+} from "../../infrastructure/integrations/PostgresTenantDatabaseCredentials.js";
+import { PostgresTenantDomains } from "../../infrastructure/integrations/PostgresTenantDomains.js";
+import { PostgresWebhooks } from "../../infrastructure/integrations/PostgresWebhooks.js";
+import { TtlCache } from "../../infrastructure/cache/TtlCache.js";
 import { SendNotifications } from "../../application/use-cases/notifications/SendNotifications.js";
 import {
   PostgresNotificationDeliveries,
@@ -1037,6 +1082,14 @@ export function createContainer(
     );
 
   container
+    .bind<TenantLogins>(TYPES.TenantLogins)
+    .toResolvedValue(
+      (pool: pg.Pool, secrets: ISecretBox) =>
+        new TenantLogins(new PostgresTenantDatabaseCredentials(pool), secrets),
+      [TYPES.PlatformDatabasePool, TYPES.CredentialsSecretBox],
+    );
+
+  container
     .bind<TenantConnectionPools>(TYPES.TenantConnectionPools)
     .toResolvedValue(
       (
@@ -1045,8 +1098,10 @@ export function createContainer(
         sets: MigrationSets,
         logger: ILogger,
         clusters: ClusterConnections,
+        logins: TenantLogins,
       ) =>
         new TenantConnectionPools({
+          loginFor: (tenantId) => logins.loginFor(tenantId),
           clientConfigFor: (databaseName, cluster) =>
             (cluster === undefined ? factory : factory.at(cluster)).clientConfig(
               "tenant",
@@ -1069,6 +1124,7 @@ export function createContainer(
         TYPES.MigrationSets,
         TYPES.Logger,
         TYPES.ClusterConnections,
+        TYPES.TenantLogins,
       ],
     )
     .onDeactivation((pools) => pools.closeAll());
@@ -1128,6 +1184,8 @@ export function createContainer(
               ? null
               : {
                   pools: new TenantConnectionPools({
+                    loginFor: (tenantId) =>
+                      container.get<TenantLogins>(TYPES.TenantLogins).loginFor(tenantId),
                     clientConfigFor: (databaseName) => ({
                       ...factory.clientConfig("tenant", databaseName),
                       host: replica.host,
@@ -1182,9 +1240,23 @@ export function createContainer(
   container
     .bind<IAuditTrail>(TYPES.AuditTrail)
     .toResolvedValue(
-      (tx: PostgresTransactionContext, requestContext: IRequestContext) =>
-        new PostgresAuditTrail(tx, requestContext),
-      [TYPES.PostgresTransactionContext, TYPES.RequestContext],
+      (
+        tx: PostgresTransactionContext,
+        requestContext: IRequestContext,
+        webhooks: IWebhooks,
+        outbox: IOutbox,
+      ) =>
+        new WebhookPublishingAuditTrail(
+          new PostgresAuditTrail(tx, requestContext),
+          webhooks,
+          outbox,
+        ),
+      [
+        TYPES.PostgresTransactionContext,
+        TYPES.RequestContext,
+        TYPES.WebhooksRepository,
+        TYPES.Outbox,
+      ],
     );
 
   container.bind<IOutbox>(TYPES.Outbox).toResolvedValue(
@@ -1252,7 +1324,24 @@ export function createContainer(
     );
 
   // Modules register their event handlers here as they are built.
-  container.bind<IEventHandler[]>(TYPES.EventHandlers).toConstantValue([]);
+  container
+    .bind<IEventHandler[]>(TYPES.EventHandlers)
+    .toResolvedValue(
+      (
+        webhooks: IWebhooks,
+        gate: EnterpriseGate,
+        queue: IJobQueue,
+        tenants: ITenantDirectory,
+        clock: IClock,
+      ) => [new WebhookFanOut({ webhooks, gate, queue, tenants, clock })],
+      [
+        TYPES.WebhooksRepository,
+        TYPES.EnterpriseGate,
+        TYPES.JobQueue,
+        TYPES.TenantDirectory,
+        TYPES.Clock,
+      ],
+    );
 
   container
     .bind<EventHandlerRegistry>(TYPES.EventHandlerRegistry)
@@ -1300,6 +1389,7 @@ export function createContainer(
       tasks: ITenantDailyTask[],
       notificationHandlers: IJobHandler[],
       receiptHandlers: IJobHandler[],
+      enterpriseHandlers: IJobHandler[],
       documentHandlers: IJobHandler[],
       reconciliation: GatewayReconciliation,
       automation: BillingAutomation,
@@ -1330,6 +1420,7 @@ export function createContainer(
       ...provisioningHandlers,
       ...notificationHandlers,
       ...receiptHandlers,
+      ...enterpriseHandlers,
       ...documentHandlers,
       reconciliation,
       automation,
@@ -1363,6 +1454,7 @@ export function createContainer(
       TYPES.TenantDailyTasks,
       TYPES.NotificationJobHandlers,
       TYPES.ReceiptJobHandlers,
+      TYPES.EnterpriseJobHandlers,
       TYPES.DocumentJobHandlers,
       TYPES.GatewayReconciliation,
       TYPES.BillingAutomation,
@@ -3423,6 +3515,7 @@ export function createContainer(
       requestContext: IRequestContext,
       clock: IClock,
       logger: ILogger,
+      gate: EnterpriseGate,
     ) => {
       const clusters = new ClusterManagement({
         unitOfWork,
@@ -3432,6 +3525,7 @@ export function createContainer(
         routing,
         approvals,
         queue,
+        gate,
         alerts: lazyAlerts,
         audit,
         requestContext,
@@ -3454,6 +3548,7 @@ export function createContainer(
       TYPES.RequestContext,
       TYPES.Clock,
       TYPES.Logger,
+      TYPES.EnterpriseGate,
     ],
   );
   container.bind<MoveTenantToCluster>(TYPES.MoveTenantToCluster).toResolvedValue(
@@ -3465,6 +3560,7 @@ export function createContainer(
       audit: IPlatformAuditTrail,
       clock: IClock,
       logger: ILogger,
+      logins: TenantLoginPlacement,
     ) =>
       new MoveTenantToCluster({
         registry,
@@ -3475,6 +3571,7 @@ export function createContainer(
         alerts: lazyAlerts,
         clock,
         logger,
+        logins,
         settleMs: operations.clusterMoveSettleMs,
         wait: async (ms) => {
           await sleep(ms);
@@ -3488,6 +3585,7 @@ export function createContainer(
       TYPES.PlatformAuditTrail,
       TYPES.Clock,
       TYPES.Logger,
+      TYPES.TenantLoginPlacement,
     ],
   );
   // --- Cold archive and erasure (P9-2) ---
@@ -3617,6 +3715,7 @@ export function createContainer(
       audit: IPlatformAuditTrail,
       clock: IClock,
       logger: ILogger,
+      logins: TenantLoginPlacement,
     ) =>
       new ArchiveTenant({
         unitOfWork,
@@ -3629,6 +3728,7 @@ export function createContainer(
         alerts: lazyAlerts,
         clock,
         logger,
+        logins,
       }),
     [
       TYPES.PlatformUnitOfWork,
@@ -3640,6 +3740,7 @@ export function createContainer(
       TYPES.PlatformAuditTrail,
       TYPES.Clock,
       TYPES.Logger,
+      TYPES.TenantLoginPlacement,
     ],
   );
   platformRepository<ISupportDesk>(TYPES.SupportDeskRepository, (p) => new PostgresSupportDesk(p));
@@ -5617,6 +5718,7 @@ export function createContainer(
       logger: ILogger,
       telematicsDaily: TelematicsDaily,
       receiptScans: PurgeUnattachedScans,
+      webhookHousekeeping: WebhookHousekeeping,
     ) =>
       // Stats and the ledger roll-up after the money tasks: they read what those posted.
       [
@@ -5638,6 +5740,7 @@ export function createContainer(
         new SigningMaintenance(signing),
         new ReportRetention(reports),
         receiptScans,
+        webhookHousekeeping,
       ],
     [
       TYPES.RecurringExpenses,
@@ -5659,6 +5762,318 @@ export function createContainer(
       TYPES.Logger,
       TYPES.TelematicsDaily,
       TYPES.PurgeUnattachedScans,
+      TYPES.WebhookHousekeeping,
+    ],
+  );
+  // --- Enterprise extras (P9-7, decisions 523–532) ---
+  const licenceCache = new TtlCache<string | null>({ ttlMs: 30_000, maxEntries: 20_000 });
+  container.bind<ITenantLicence>(TYPES.TenantLicence).toResolvedValue(
+    (flags: IFeatureFlagRepository) => ({
+      licenceType: (tenantId: string) =>
+        licenceCache.getOrLoad(tenantId, () => flags.licenceType(tenantId)),
+    }),
+    [TYPES.FeatureFlagRepository],
+  );
+  container
+    .bind<EnterpriseGate>(TYPES.EnterpriseGate)
+    .toResolvedValue(
+      (licence: ITenantLicence) => new EnterpriseGate(licence),
+      [TYPES.TenantLicence],
+    );
+  tenantRepository<IApiKeys>(TYPES.ApiKeysRepository, (tx) => new PostgresApiKeys(tx));
+  tenantRepository<IWebhooks>(TYPES.WebhooksRepository, (tx) => new PostgresWebhooks(tx));
+  container
+    .bind<IWebhookTransport>(TYPES.WebhookTransport)
+    .toConstantValue(new HttpsWebhookTransport());
+  container.bind<IDnsResolver>(TYPES.DnsResolver).toConstantValue(new NodeDnsResolver());
+  container
+    .bind<ApiKeys>(TYPES.ApiKeys)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        keys: IApiKeys,
+        gate: EnterpriseGate,
+        auditTrail: IAuditTrail,
+        requestContext: IRequestContext,
+        clock: IClock,
+      ) => new ApiKeys({ unitOfWork, keys, gate, auditTrail, requestContext, clock }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.ApiKeysRepository,
+        TYPES.EnterpriseGate,
+        TYPES.AuditTrail,
+        TYPES.RequestContext,
+        TYPES.Clock,
+      ],
+    );
+  container.bind<AuthenticateApiKey>(TYPES.AuthenticateApiKey).toResolvedValue(
+    (
+      tenants: ITenantDirectory,
+      tenantContext: ITenantContext,
+      unitOfWork: IUnitOfWork,
+      keys: IApiKeys,
+      gate: EnterpriseGate,
+      permissions: IPermissionResolver,
+      clock: IClock,
+    ) =>
+      new AuthenticateApiKey({
+        tenants,
+        tenantContext,
+        unitOfWork,
+        keys,
+        gate,
+        permissions,
+        clock,
+      }),
+    [
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.ApiKeysRepository,
+      TYPES.EnterpriseGate,
+      TYPES.PermissionResolver,
+      TYPES.Clock,
+    ],
+  );
+  container.bind<Webhooks>(TYPES.Webhooks).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      webhooks: IWebhooks,
+      gate: EnterpriseGate,
+      secrets: ISecretBox,
+      queue: IJobQueue,
+      tenants: ITenantDirectory,
+      auditTrail: IAuditTrail,
+      requestContext: IRequestContext,
+      clock: IClock,
+    ) =>
+      new Webhooks({
+        unitOfWork,
+        webhooks,
+        gate,
+        secrets,
+        queue,
+        tenants,
+        auditTrail,
+        requestContext,
+        clock,
+      }),
+    [
+      TYPES.UnitOfWork,
+      TYPES.WebhooksRepository,
+      TYPES.EnterpriseGate,
+      TYPES.CredentialsSecretBox,
+      TYPES.JobQueue,
+      TYPES.TenantDirectory,
+      TYPES.AuditTrail,
+      TYPES.RequestContext,
+      TYPES.Clock,
+    ],
+  );
+  container
+    .bind<WebhookHousekeeping>(TYPES.WebhookHousekeeping)
+    .toResolvedValue(
+      (
+        unitOfWork: IUnitOfWork,
+        webhooks: IWebhooks,
+        queue: IJobQueue,
+        tenantContext: ITenantContext,
+        clock: IClock,
+      ) => new WebhookHousekeeping({ unitOfWork, webhooks, queue, tenantContext, clock }),
+      [
+        TYPES.UnitOfWork,
+        TYPES.WebhooksRepository,
+        TYPES.JobQueue,
+        TYPES.TenantContext,
+        TYPES.Clock,
+      ],
+    );
+  platformRepository<ITenantDomains>(TYPES.TenantDomains, (p) => new PostgresTenantDomains(p));
+  container
+    .bind<ITenantDomainLookup>(TYPES.TenantDomainLookup)
+    .toResolvedValue(
+      (pool: pg.Pool) => new CachedTenantDomainLookup(new PostgresTenantDomains(pool)),
+      [TYPES.PlatformDatabasePool],
+    );
+  container.bind<CustomDomains>(TYPES.CustomDomains).toResolvedValue(
+    (
+      unitOfWork: IPlatformUnitOfWork,
+      domains: ITenantDomains,
+      lookup: ITenantDomainLookup,
+      dns: IDnsResolver,
+      gate: EnterpriseGate,
+      tenants: ITenantDirectory,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+      logger: ILogger,
+    ) =>
+      new CustomDomains({
+        unitOfWork,
+        domains,
+        lookup,
+        dns,
+        gate,
+        tenants,
+        audit,
+        alerts: lazyAlerts,
+        clock,
+        logger,
+        target: config.public.customDomainTarget,
+        reserved: [config.public.webAppUrl, config.public.apiUrl].map((u) => new URL(u).hostname),
+      }),
+    [
+      TYPES.PlatformUnitOfWork,
+      TYPES.TenantDomains,
+      TYPES.TenantDomainLookup,
+      TYPES.DnsResolver,
+      TYPES.EnterpriseGate,
+      TYPES.TenantDirectory,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+      TYPES.Logger,
+    ],
+  );
+  container.bind<TenantIntegrations>(TYPES.TenantIntegrations).toResolvedValue(
+    (
+      tenants: ITenantDirectory,
+      tenantContext: ITenantContext,
+      unitOfWork: IUnitOfWork,
+      keys: IApiKeys,
+      webhooks: IWebhooks,
+      audit: IPlatformAuditTrail,
+      clock: IClock,
+    ) =>
+      new TenantIntegrations({
+        tenants,
+        tenantContext,
+        unitOfWork,
+        keys,
+        webhooks,
+        audit,
+        clock,
+      }),
+    [
+      TYPES.TenantDirectory,
+      TYPES.TenantContext,
+      TYPES.UnitOfWork,
+      TYPES.ApiKeysRepository,
+      TYPES.WebhooksRepository,
+      TYPES.PlatformAuditTrail,
+      TYPES.Clock,
+    ],
+  );
+  platformRepository<ITenantDatabaseCredentials>(
+    TYPES.TenantDatabaseCredentials,
+    (p) => new PostgresTenantDatabaseCredentials(p),
+  );
+  container.bind<ITenantDatabaseRoles>(TYPES.TenantDatabaseRoles).toResolvedValue(
+    (clusters: ClusterConnections, naming: TenantDatabaseNaming) =>
+      new PostgresTenantDatabaseRoles({
+        clusters,
+        naming,
+        maintenanceDatabase: db.platformDatabase,
+        tenantUser: db.roles.tenant.user,
+      }),
+    [TYPES.ClusterConnections, TYPES.TenantDatabaseNaming],
+  );
+  container.bind<TenantDatabaseLogins>(TYPES.TenantDatabaseLogins).toResolvedValue(
+    (
+      credentials: ITenantDatabaseCredentials,
+      registry: IClusterRegistry,
+      gate: EnterpriseGate,
+      approvals: ApprovalWorkflow,
+      queue: IJobQueue,
+    ) => {
+      const logins = new TenantDatabaseLogins({ credentials, registry, gate, approvals, queue });
+      approvals.register(logins.executor());
+      return logins;
+    },
+    [
+      TYPES.TenantDatabaseCredentials,
+      TYPES.ClusterRegistry,
+      TYPES.EnterpriseGate,
+      TYPES.ApprovalWorkflow,
+      TYPES.JobQueue,
+    ],
+  );
+  container
+    .bind<TenantLoginPlacement>(TYPES.TenantLoginPlacement)
+    .toResolvedValue(
+      (
+        credentials: ITenantDatabaseCredentials,
+        roles: ITenantDatabaseRoles,
+        secrets: ISecretBox,
+        logins: TenantLogins,
+      ) => new TenantLoginPlacement({ credentials, roles, secrets, logins }),
+      [
+        TYPES.TenantDatabaseCredentials,
+        TYPES.TenantDatabaseRoles,
+        TYPES.CredentialsSecretBox,
+        TYPES.TenantLogins,
+      ],
+    );
+  container.bind<IJobHandler[]>(TYPES.EnterpriseJobHandlers).toResolvedValue(
+    (
+      unitOfWork: IUnitOfWork,
+      webhooks: IWebhooks,
+      transport: IWebhookTransport,
+      secrets: ISecretBox,
+      queue: IJobQueue,
+      notifier: Notifier,
+      notificationSettings: INotificationSettingsStore,
+      clock: IClock,
+      logger: ILogger,
+      domains: CustomDomains,
+      credentials: ITenantDatabaseCredentials,
+      roles: ITenantDatabaseRoles,
+      registry: IClusterRegistry,
+      logins: TenantLogins,
+      audit: IPlatformAuditTrail,
+    ): IJobHandler[] => [
+      new DeliverWebhook({
+        unitOfWork,
+        webhooks,
+        transport,
+        secrets,
+        queue,
+        notifier,
+        notificationSettings,
+        clock,
+        logger,
+      }),
+      new SweepCustomDomains(domains),
+      new ApplyTenantDatabaseLogin({
+        credentials,
+        roles,
+        registry,
+        secrets,
+        logins,
+        audit,
+        alerts: lazyAlerts,
+        clock,
+        logger,
+        settleMs: operations.clusterMoveSettleMs,
+        wait: async (ms) => {
+          await sleep(ms);
+        },
+      }),
+    ],
+    [
+      TYPES.UnitOfWork,
+      TYPES.WebhooksRepository,
+      TYPES.WebhookTransport,
+      TYPES.CredentialsSecretBox,
+      TYPES.JobQueue,
+      TYPES.Notifier,
+      TYPES.NotificationSettingsStore,
+      TYPES.Clock,
+      TYPES.Logger,
+      TYPES.CustomDomains,
+      TYPES.TenantDatabaseCredentials,
+      TYPES.TenantDatabaseRoles,
+      TYPES.ClusterRegistry,
+      TYPES.TenantLogins,
+      TYPES.PlatformAuditTrail,
     ],
   );
   // --- Reading receipts (decisions 520–522) ---
@@ -9258,8 +9673,12 @@ export function createContainer(
       maintenance: MaintenanceState,
       features: FeatureFlags,
       usage: UsageMeter,
+      apiKeys: AuthenticateApiKey,
+      domains: ITenantDomainLookup,
     ) =>
       new AccessGuard({
+        apiKeys,
+        domains,
         authenticate,
         resolveTenant,
         authorization,
@@ -9284,6 +9703,8 @@ export function createContainer(
       TYPES.MaintenanceState,
       TYPES.FeatureFlags,
       TYPES.UsageMeter,
+      TYPES.AuthenticateApiKey,
+      TYPES.TenantDomainLookup,
     ],
   );
   // --- Console MVP: dashboard, tenant 360, notes & tags, data operations, health ---
@@ -9555,8 +9976,14 @@ export function createContainer(
           branches,
           reconciliation: branchReconciliation,
           publicConfig,
+          domains: container.get<ITenantDomainLookup>(TYPES.TenantDomainLookup),
           tenantContext,
           directory,
+        }),
+        ...consoleEnterpriseRoutes({
+          domains: container.get<CustomDomains>(TYPES.CustomDomains),
+          integrations: container.get<TenantIntegrations>(TYPES.TenantIntegrations),
+          logins: container.get<TenantDatabaseLogins>(TYPES.TenantDatabaseLogins),
         }),
         ...consoleRoutes({
           dashboard,
@@ -9681,6 +10108,10 @@ export function createContainer(
           whatsapp: whatsappWebhook,
         }),
         ...receiptReadingRoutes(receiptReadings),
+        ...integrationRoutes({
+          keys: container.get<ApiKeys>(TYPES.ApiKeys),
+          webhooks: container.get<Webhooks>(TYPES.Webhooks),
+        }),
         ...driverAppRoutes({
           app: driverApp,
           access: driverAppAccess,

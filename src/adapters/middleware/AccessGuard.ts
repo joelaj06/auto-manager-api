@@ -13,6 +13,7 @@ import {
   MaintenanceReadOnlyError,
   SupportAccessError,
   TenantBillingOnlyError,
+  TenantMismatchError,
   TenantReadOnlyError,
 } from "../../application/errors/TenantErrors.js";
 import type {
@@ -25,9 +26,12 @@ import type { ISupportAccess } from "../../application/ports/ISupportAccess.js";
 import type { IClock } from "../../application/ports/IClock.js";
 import type { ITenantContext } from "../../application/ports/ITenantContext.js";
 import type { TenantSummary } from "../../application/ports/ITenantDirectory.js";
+import type { ITenantDomainLookup } from "../../application/ports/ITenantDomains.js";
 import type { AuthenticateTenantRequest } from "../../application/use-cases/auth/AuthenticateTenantRequest.js";
 import type { ResolveTenant } from "../../application/use-cases/auth/ResolveTenant.js";
+import type { AuthenticateApiKey } from "../../application/use-cases/integrations/ApiKeys.js";
 import type { StaffSessions } from "../../application/use-cases/platform/StaffSessions.js";
+import { isApiKey } from "../../domain/integrations/Integrations.js";
 import { TenantId } from "../../domain/value-objects/TenantId.js";
 import type { RouteAccess } from "../routes/RouteAccess.js";
 import { maskSensitive, supportVerdict } from "./supportMode.js";
@@ -58,6 +62,10 @@ type Locals = { tenant?: TenantSummary; principal?: Principal; staff?: PlatformP
 export class AccessGuard {
   constructor(
     private readonly deps: Readonly<{
+      /** API keys (`afk_…`), when the app takes them. */
+      apiKeys?: AuthenticateApiKey;
+      /** Custom domains (decisions 528–530). */
+      domains?: ITenantDomainLookup;
       authenticate: AuthenticateTenantRequest;
       resolveTenant: ResolveTenant;
       authorization: AuthorizationPolicy;
@@ -89,7 +97,7 @@ export class AccessGuard {
       }
 
       case "tenant": {
-        const tenant = await this.deps.resolveTenant.execute(tenantSlugOf(req));
+        const tenant = await this.deps.resolveTenant.execute(await this.addressedSlug(req));
         const flag = await this.deps.features?.disabledBy(tenant.id, pathOf(req));
         if (flag !== undefined && flag !== null) throw new FeatureDisabledError(flag);
         locals.tenant = tenant;
@@ -99,10 +107,14 @@ export class AccessGuard {
       case "authenticated": {
         const accessToken = bearerTokenOf(req);
         if (accessToken === null) throw new AuthenticationRequiredError();
-        const { tenant, principal } = await this.deps.authenticate.execute({
-          accessToken,
-          tenantSlug: tenantSlugOf(req),
-        });
+        const tenantSlug = await this.addressedSlug(req);
+        const { tenant, principal } =
+          isApiKey(accessToken) && this.deps.apiKeys !== undefined
+            ? await this.deps.apiKeys.execute({ key: accessToken, tenantSlug })
+            : await this.deps.authenticate.execute({ accessToken, tenantSlug });
+        // A key works on business data only: never a person's own profile and sessions.
+        if (principal.apiKey !== null && access.permission === null)
+          throw new PermissionDeniedError("api_key");
         const path = pathOf(req);
         if (principal.support !== null) this.trail(req, res, principal.support);
         if (tenant.billingOnly === true) this.assertBillingOnly(req, principal);
@@ -137,6 +149,13 @@ export class AccessGuard {
         locals.tenant = tenant;
         locals.principal = principal;
         const run = () => this.deps.tenantContext.runAs(TenantId.from(tenant.id), handler);
+        if (principal.apiKey !== null) {
+          const apiKey = principal.apiKey;
+          const context = this.deps.requestContext?.current();
+          return context === undefined
+            ? run()
+            : this.deps.requestContext!.run({ ...context, apiKey }, run);
+        }
         if (principal.support === null) return run();
         // Support access: staff named in the tenant's audit log, sensitive values masked.
         const support = principal.support;
@@ -179,6 +198,18 @@ export class AccessGuard {
         return handler();
       }
     }
+  }
+
+  /**
+   * The business a request addresses: the X-Tenant header or the custom domain it came to, which
+   * must agree when both are there.
+   */
+  private async addressedSlug(req: Request): Promise<string | null> {
+    const header = tenantSlugOf(req);
+    const domain = (await this.deps.domains?.slugOf(req.hostname)) ?? null;
+    if (header !== null && domain !== null && header.toLowerCase() !== domain.toLowerCase())
+      throw new TenantMismatchError();
+    return header ?? domain;
   }
 
   /** Every request of a support session goes to its trail once answered (blocked ones too). */

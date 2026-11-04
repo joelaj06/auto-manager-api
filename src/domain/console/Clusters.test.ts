@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkDedication,
   checkMove,
   checkNewCluster,
   checkStatusChange,
@@ -24,6 +25,29 @@ describe("clusters", () => {
     expect(pickCluster([load("main", 50), load("c2", 50)])).toBe("c2");
     expect(pickCluster([load("main", 100), load("c2", 0, 100, "draining")])).toBeNull();
     expect(fillPercent(load("c2", 1, 3))).toBe(33.3);
+  });
+
+  it("keeps a dedicated cluster for its tenant", () => {
+    const kept = { id: "acme", status: "active" as const, maxTenants: 10, tenants: 0 };
+    const open = { id: "main", status: "active" as const, maxTenants: 10, tenants: 9 };
+    const loads = [{ ...kept, dedicatedTo: "tenant-a" }, open];
+    expect(pickCluster(loads)).toBe("main");
+    expect(pickCluster(loads, "tenant-b")).toBe("main");
+    expect(pickCluster(loads, "tenant-a")).toBe("acme");
+    expect(pickCluster([{ ...kept, dedicatedTo: "tenant-a" }])).toBeNull();
+    const tenant = { clusterId: "main", hasDatabase: true, status: "active", moving: false };
+    expect(() => checkMove({ ...tenant, tenantId: "tenant-b" }, loads[0]!, false)).toThrow(
+      ClusterRuleError,
+    );
+    expect(() => checkMove({ ...tenant, tenantId: "tenant-a" }, loads[0]!, false)).not.toThrow();
+  });
+
+  it("dedicates only a cluster nobody else is on", () => {
+    const c2 = { id: "c2", status: "active" as const };
+    expect(() => checkDedication(c2, 0)).not.toThrow();
+    expect(() => checkDedication(c2, 1)).toThrow(ClusterRuleError);
+    expect(() => checkDedication({ ...c2, id: "main" }, 0)).toThrow(ClusterRuleError);
+    expect(() => checkDedication({ ...c2, status: "retired" }, 0)).toThrow(ClusterRuleError);
   });
 
   it("checks a new cluster", () => {
