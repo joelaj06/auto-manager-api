@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { PlannedTask, TaskTemplate } from "../../domain/console/OnboardingConcierge.js";
 import type { OnboardingFacts, OnboardingStep } from "../../domain/console/TenantAnalytics.js";
 import type {
@@ -154,7 +156,7 @@ export class PostgresOnboardingTasks implements IOnboardingTasks {
     return rows[0] === undefined ? null : toTask(rows[0]);
   }
 
-  async list(filter: TaskFilter): Promise<OnboardingTask[]> {
+  async list(filter: TaskFilter): Promise<Paged<OnboardingTask>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (column: string, value: unknown, op = "=") => {
@@ -168,14 +170,16 @@ export class PostgresOnboardingTasks implements IOnboardingTasks {
       where.push("k.status = 'open'");
       add("k.due_at", filter.overdueAt, "<");
     }
-    params.push(filter.limit);
-    const { rows } = await this.db.query<Row>(
-      `${TASKS} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-        order by (k.status = 'open') desc, k.due_at, k.created_at
-        limit $${params.length}`,
-      params,
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `${TASKS} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: "(k.status = 'open') desc, k.due_at, k.created_at, k.id",
+        params,
+      },
+      filter,
     );
-    return rows.map(toTask);
+    return { rows: rows.map(toTask), total };
   }
 
   async openWithMilestones(

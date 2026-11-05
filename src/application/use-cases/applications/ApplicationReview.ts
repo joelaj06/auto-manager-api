@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import type {
   ApplicationStatus,
   ApprovalOptions,
@@ -81,11 +82,11 @@ export class ApplicationReview {
     status?: ApplicationStatus;
     search?: string;
     assignedTo?: string;
-    limit: number;
-    before?: string;
-  }): Promise<ApplicationSummary[]> {
-    const applications = await this.deps.applications.list(query);
-    return applications.map((application) => {
+    page: number;
+    pageSize: number;
+  }): Promise<Page<ApplicationSummary>> {
+    const applications = await this.deps.applications.list({ ...query, ...pageWindow(query) });
+    return pageOf(query, applications, (application) => {
       const s = application.snapshot();
       return {
         id: s.id,

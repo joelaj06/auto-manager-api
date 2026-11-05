@@ -9,7 +9,7 @@ import { maskGhanaCard } from "../../../domain/parties/PartyDetails.js";
 import type { ICustomerRepository } from "../../../domain/repositories/IPartyRepositories.js";
 import type { AuthorizationPolicy } from "../../authorization/AuthorizationPolicy.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { CustomerNotFoundError, PartyExistsError } from "../../errors/PartyErrors.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -23,7 +23,6 @@ import type {
 } from "../../ports/IPartyRecords.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
 
@@ -35,7 +34,7 @@ export type CustomerInput = Partial<Omit<CustomerDetails, "creditLimitMinor">> &
   Readonly<{ creditLimit?: string | null }>;
 
 export type CustomerQuery = Omit<CustomerListFilter, "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 const EMPTY: CustomerDetails = Object.freeze({
   type: "individual",
@@ -87,17 +86,13 @@ export class CustomerAdministration {
 
   async list(actor: Principal, query: CustomerQuery): Promise<Page<CustomerView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.queries.list({
+      const found = await deps.queries.list({
         ...query,
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { createdAt: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
       const currency = await this.currency();
-      const page = PageCursor.paginate(rows, query.limit, (c) => [c.createdAt.toISOString(), c.id]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map((c) => this.view(actor, c, currency)) };
     });
   }

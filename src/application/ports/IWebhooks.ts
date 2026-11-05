@@ -1,3 +1,4 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
 export type WebhookEndpointRecord = Readonly<{
   id: string;
   url: string;
@@ -78,7 +79,7 @@ export interface IWebhooks {
     }>,
   ): Promise<string | null>;
   delivery(id: string): Promise<DeliveryToSend | null>;
-  deliveries(endpointId: string, limit: number): Promise<WebhookDeliveryRecord[]>;
+  deliveries(endpointId: string, window: PageWindow): Promise<Paged<WebhookDeliveryRecord>>;
   /** Records one try and returns the endpoint's failures in a row after it. */
   recordAttempt(outcome: AttemptOutcome): Promise<WebhookEndpointRecord | null>;
   replay(id: string, at: Date): Promise<boolean>;

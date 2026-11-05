@@ -30,7 +30,7 @@ function setup(
   }> = {},
 ) {
   const queries: IDataOperationsQueries = {
-    backups: () => Promise.resolve([]),
+    backups: () => Promise.resolve({ rows: [], total: 0 }),
     backupOverview: () => Promise.resolve(overrides.backups ?? healthyBackups),
     schemaVersions: () =>
       Promise.resolve(overrides.versions ?? [{ version: "0006", status: "ok", tenants: 3 }]),

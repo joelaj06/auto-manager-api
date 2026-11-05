@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { PaymentMethod } from "../../domain/finance/Payment.js";
 import type { RemittanceProps, RemittanceStatus } from "../../domain/remittances/Remittance.js";
 
@@ -39,7 +40,7 @@ export type RemittanceListFilter = Readonly<{
   from?: string;
   to?: string;
   limit: number;
-  after?: Readonly<{ periodStart: string; id: string }>;
+  offset?: number;
 }>;
 
 /** A fixed-target assignment the expected-row job works through. */
@@ -58,7 +59,7 @@ export type TargetAssignment = Readonly<{
 }>;
 
 export interface IRemittanceRecords {
-  list(filter: RemittanceListFilter): Promise<RemittanceProps[]>;
+  list(filter: RemittanceListFilter): Promise<Paged<RemittanceProps>>;
   submissions(remittanceId: string): Promise<RemittanceSubmission[]>;
   lockOpenSubmission(remittanceId: string): Promise<RemittanceSubmission | null>;
   saveSubmission(submission: RemittanceSubmission): Promise<void>;

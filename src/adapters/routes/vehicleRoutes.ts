@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import type { Response } from "express";
 import { z } from "zod";
 import type { OdometerLog } from "../../application/use-cases/vehicles/OdometerLog.js";
@@ -327,18 +329,17 @@ export function vehicleRoutes(deps: VehicleRouteDependencies): ApiRoute[] {
       access: access.permission("vehicles.list"),
       request: {
         query: listQuery.extend({
-          cursor: z.string().max(200).optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
-      responses: { 200: { description: "Vehicles; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Vehicles" } },
       handler: async ({ query }, _req, res) => {
         const { status: statuses, ...rest } = query;
         const page = await registry.list(principalOf(res), {
           ...rest,
           ...(statuses === undefined ? {} : { statuses }),
         });
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -514,17 +515,13 @@ export function vehicleRoutes(deps: VehicleRouteDependencies): ApiRoute[] {
       request: {
         params: idParams,
         query: z.object({
-          before: z.iso.datetime().optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
-      responses: { 200: { description: "Entries; `meta.nextBefore` for the next page" } },
+      responses: { 200: { description: "Entries" } },
       handler: async ({ params, query }, _req, res) => {
-        const page = await overview.timeline(principalOf(res), params.id, {
-          limit: query.limit,
-          ...(query.before === undefined ? {} : { before: new Date(query.before) }),
-        });
-        res.json(envelope(page.items, { nextBefore: page.nextBefore }));
+        const page = await overview.timeline(principalOf(res), params.id, query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
 
@@ -561,11 +558,12 @@ export function vehicleRoutes(deps: VehicleRouteDependencies): ApiRoute[] {
       access: access.permission("vehicles.view"),
       request: {
         params: idParams,
-        query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(100) }),
+        query: z.object(pageParams(200, 100)),
       },
       responses: { 200: { description: "History, newest first" } },
       handler: async ({ params, query }, _req, res) => {
-        res.json(envelope(await registry.statusHistory(principalOf(res), params.id, query.limit)));
+        const page = await registry.statusHistory(principalOf(res), params.id, query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
 
@@ -578,11 +576,12 @@ export function vehicleRoutes(deps: VehicleRouteDependencies): ApiRoute[] {
       access: access.permission("vehicles.view"),
       request: {
         params: idParams,
-        query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
+        query: z.object(pageParams(200, 50)),
       },
       responses: { 200: { description: "Readings" } },
       handler: async ({ params, query }, _req, res) => {
-        res.json(envelope(await odometer.list(principalOf(res), params.id, query.limit)));
+        const page = await odometer.list(principalOf(res), params.id, query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

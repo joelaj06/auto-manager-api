@@ -147,7 +147,8 @@ export class RoleDashboards {
         key: "alerts",
         title: "Unread notifications",
         permission: null,
-        load: (actor) => deps.notifications.list(actor, { unreadOnly: true, limit: WIDGET_ROWS }),
+        load: (actor) =>
+          deps.notifications.list(actor, { unreadOnly: true, page: 1, pageSize: WIDGET_ROWS }),
       },
       {
         key: "operations_board",
@@ -176,12 +177,15 @@ export class RoleDashboards {
         key: "my_leads",
         title: "My open leads",
         permission: "dealer.leads.view",
-        load: (actor) =>
-          deps.leads.list(actor, {
-            assignedTo: actor.userId,
-            stages: ["new", "contacted", "appointment", "test_drive", "negotiation"],
-            limit: WIDGET_ROWS,
-          }),
+        load: async (actor) =>
+          (
+            await deps.leads.list(actor, {
+              assignedTo: actor.userId,
+              stages: ["new", "contacted", "appointment", "test_drive", "negotiation"],
+              page: 1,
+              pageSize: WIDGET_ROWS,
+            })
+          ).items,
       },
       this.report("lead_funnel", "Lead funnel this month", "dealer_lead_funnel", (today) => ({
         from: monthStart(today),

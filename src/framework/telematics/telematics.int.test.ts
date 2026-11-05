@@ -186,7 +186,7 @@ describe("telematics", () => {
     expect(overspeed.endedAt).not.toBeNull();
     expect((events as Body[]).find((e) => e.kind === "geofence_exit").geofenceName).toBe("Depot");
 
-    const inbox = await api().get("/api/v1/notifications?limit=50").set(owner());
+    const inbox = await api().get("/api/v1/notifications?pageSize=50").set(owner());
     const titles = (inbox.body.data as { title: string }[]).map((n) => n.title).join(" | ");
     expect(titles).toContain("is over the speed limit");
     expect(titles).toContain("left Depot");
@@ -310,7 +310,7 @@ describe("telematics", () => {
     );
     expect(readings[0]!.source).toBe("telematics");
 
-    const inbox = await api().get("/api/v1/notifications?limit=50").set(owner());
+    const inbox = await api().get("/api/v1/notifications?pageSize=50").set(owner());
     expect(JSON.stringify(inbox.body.data)).toContain("No position from");
     const left = await t.tenant.query<{ n: number }>(
       "select count(*)::int as n from telematics_positions where vehicle_id = $1",

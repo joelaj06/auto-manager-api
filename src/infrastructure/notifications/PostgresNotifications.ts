@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   Delivery,
   DeliveryChannel,
@@ -141,16 +143,18 @@ export class PostgresNotificationInbox implements INotificationInbox {
   async list(
     userId: string,
     filter: Parameters<INotificationInbox["list"]>[1],
-  ): Promise<InboxItem[]> {
-    const { rows } = await this.tx.query<InboxRow>(
-      `select * from notifications
-        where user_id = $1 and (not $2 or read_at is null)
-          and ($3::uuid is null or id < $3)
-        order by id desc
-        limit $4`,
-      [userId, filter.unreadOnly, filter.afterId ?? null, filter.limit],
+  ): Promise<Paged<InboxItem>> {
+    const { rows, total } = await pagedQuery<InboxRow>(
+      this.tx,
+      {
+        sql: `select * from notifications
+        where user_id = $1 and (not $2 or read_at is null)`,
+        orderBy: "id desc",
+        params: [userId, filter.unreadOnly],
+      },
+      filter,
     );
-    return rows.map(toInboxItem);
+    return { rows: rows.map(toInboxItem), total };
   }
 
   async unreadCount(userId: string): Promise<number> {
@@ -343,25 +347,21 @@ export class PostgresNotificationDeliveries implements INotificationDeliveries {
     );
   }
 
-  async list(filter: Parameters<INotificationDeliveries["list"]>[0]): Promise<Delivery[]> {
-    const { rows } = await this.tx.query<DeliveryRow>(
-      `select *, case when sensitive and status <> 'sent'
+  async list(filter: Parameters<INotificationDeliveries["list"]>[0]): Promise<Paged<Delivery>> {
+    const { rows, total } = await pagedQuery<DeliveryRow>(
+      this.tx,
+      {
+        sql: `select *, case when sensitive and status <> 'sent'
                       then '(hidden: it contains a one-time link)' else body end as body
          from notification_deliveries
         where ($1::text is null or channel = $1) and ($2::text is null or status = $2)
-          and ($3::uuid is null or recipient_id = $3)
-          and ($4::uuid is null or id < $4)
-        order by id desc
-        limit $5`,
-      [
-        filter.channel ?? null,
-        filter.status ?? null,
-        filter.recipientId ?? null,
-        filter.afterId ?? null,
-        filter.limit,
-      ],
+          and ($3::uuid is null or recipient_id = $3)`,
+        orderBy: "id desc",
+        params: [filter.channel ?? null, filter.status ?? null, filter.recipientId ?? null],
+      },
+      filter,
     );
-    return rows.map(toDelivery);
+    return { rows: rows.map(toDelivery), total };
   }
 }
 

@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 export type PlatformAuditEntry = Readonly<{
   actorType: "platform_staff" | "partner" | "system";
   actorId?: string | null;
@@ -26,12 +27,19 @@ export type PlatformAuditQuery = Readonly<{
   from?: Date;
   to?: Date;
   limit: number;
-  /** Keyset cursor: entries strictly older than this id. */
-  before?: string;
+  offset?: number;
 }>;
+
+/** A walk over the whole log: stays right while new entries arrive. */
+export type PlatformAuditScan = PlatformAuditQuery &
+  Readonly<{
+    /** Entries strictly older than this id. */
+    before?: string;
+  }>;
 
 /** The immutable platform audit log (docs/27 §2). */
 export interface IPlatformAuditTrail {
   record(entry: PlatformAuditEntry): Promise<string>;
-  search(query: PlatformAuditQuery): Promise<PlatformAuditRecord[]>;
+  page(query: PlatformAuditQuery): Promise<Paged<PlatformAuditRecord>>;
+  search(query: PlatformAuditScan): Promise<PlatformAuditRecord[]>;
 }

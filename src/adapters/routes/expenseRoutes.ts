@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { ExpenseAdministration } from "../../application/use-cases/expenses/ExpenseAdministration.js";
 import type { Expenses } from "../../application/use-cases/expenses/Expenses.js";
@@ -382,18 +384,17 @@ export function expenseRoutes(deps: ExpenseRouteDependencies): ApiRoute[] {
           driverId: uuid.optional(),
           from: date.optional(),
           to: date.optional(),
-          cursor: z.string().max(300).optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
-      responses: { 200: { description: "Expenses; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Expenses" } },
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await expenses.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

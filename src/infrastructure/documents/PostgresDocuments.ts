@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   DocumentEvent,
   DocumentListFilter,
@@ -267,29 +269,29 @@ export class PostgresIssuedDocuments implements IDocumentRepository {
     );
   }
 
-  async list(filter: DocumentListFilter): Promise<IssuedDocument[]> {
-    const { rows } = await this.tx.query<DocumentRow>(
-      `select * from documents
+  async list(filter: DocumentListFilter): Promise<Paged<IssuedDocument>> {
+    const { rows, total } = await pagedQuery<DocumentRow>(
+      this.tx,
+      {
+        sql: `select * from documents
         where ($1::uuid[] is null or branch_id = any($1::uuid[]) or branch_id is null)
           and ($2::uuid is null or branch_id = $2)
           and ($3::text is null or type = $3)
           and ($4::text is null or (subject_type = $4 and subject_id = $5::uuid))
-          and ($6::text is null or status = $6)
-          and ($7::uuid is null or id < $7)
-        order by id desc
-        limit $8`,
-      [
-        filter.branchIds === "all" ? null : filter.branchIds,
-        filter.branchId ?? null,
-        filter.type ?? null,
-        filter.subject?.type ?? null,
-        filter.subject?.id ?? null,
-        filter.status ?? null,
-        filter.afterId ?? null,
-        filter.limit,
-      ],
+          and ($6::text is null or status = $6)`,
+        orderBy: "id desc",
+        params: [
+          filter.branchIds === "all" ? null : filter.branchIds,
+          filter.branchId ?? null,
+          filter.type ?? null,
+          filter.subject?.type ?? null,
+          filter.subject?.id ?? null,
+          filter.status ?? null,
+        ],
+      },
+      filter,
     );
-    return rows.map(toDocument);
+    return { rows: rows.map(toDocument), total };
   }
 
   async unsealed(limit: number): Promise<string[]> {

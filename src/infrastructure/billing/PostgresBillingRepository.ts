@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { BillingSettings } from "../../domain/billing/BillingSettings.js";
 import {
   Invoice,
@@ -415,17 +417,20 @@ export class PostgresBillingRepository implements IBillingRepository {
     );
   }
 
-  async invoices(filter: InvoiceFilter): Promise<Invoice[]> {
-    const { rows } = await this.db.query<InvoiceRow>(
-      `select ${INVOICE_COLUMNS} from billing_invoices
+  async invoices(filter: InvoiceFilter): Promise<Paged<Invoice>> {
+    const { rows, total } = await pagedQuery<InvoiceRow>(
+      this.db,
+      {
+        sql: `select ${INVOICE_COLUMNS} from billing_invoices
         where ($1::uuid is null or tenant_id = $1)
           and ($2::text is null or status = $2)
-          and ($3::uuid is null or id < $3)
-        order by id desc
-        limit $4`,
-      [filter.tenantId ?? null, filter.status ?? null, filter.before ?? null, filter.limit],
+          and (not $3 or status <> 'void')`,
+        orderBy: "id desc",
+        params: [filter.tenantId ?? null, filter.status ?? null, filter.excludeVoid === true],
+      },
+      filter,
     );
-    return rows.map(toInvoice);
+    return { rows: rows.map(toInvoice), total };
   }
 
   async insertPayment(payment: Omit<PaymentRecord, "createdAt">): Promise<void> {

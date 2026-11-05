@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 import type { IssueStatus, VehicleIssue } from "../vehicles/VehicleIssue.js";
 
 export type VehicleIssueFilter = Readonly<{
@@ -7,8 +8,7 @@ export type VehicleIssueFilter = Readonly<{
   driverId?: string;
   statuses?: readonly IssueStatus[];
   limit: number;
-  /** Keyset: the last id of the previous page (ids are time-ordered). */
-  afterId?: string;
+  offset?: number;
 }>;
 
 export interface IVehicleIssueRepository {
@@ -16,5 +16,5 @@ export interface IVehicleIssueRepository {
   lockById(id: string): Promise<VehicleIssue | null>;
   save(issue: VehicleIssue): Promise<void>;
   /** Newest first. */
-  list(filter: VehicleIssueFilter): Promise<VehicleIssue[]>;
+  list(filter: VehicleIssueFilter): Promise<Paged<VehicleIssue>>;
 }

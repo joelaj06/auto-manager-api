@@ -1185,10 +1185,10 @@
 | `submittedAt` | date-time / null | Yes |
 | `decisionReason` | string / null | Yes |
 | `partnerId` | string / null | Yes |
-| `riskLevel` | "high" / "low" / "medium" | Yes |
 | `createdByStaffId` | string / null | Yes |
 | `emailVerifiedAt` | date-time / null | Yes |
 | `phoneVerifiedAt` | date-time / null | Yes |
+| `riskLevel` | "high" / "low" / "medium" | Yes |
 | `riskSignals` | object[] | Yes |
 | `riskSignals[].code` | string | Yes |
 | `riskSignals[].detail` | string | Yes |
@@ -1283,7 +1283,6 @@
 | `notes` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `type` | "chauffeur" / "remittance" / "salary" / "workpay" | Yes |
 | `startedBy` | string / null | Yes |
 | `endedBy` | string / null | Yes |
 | `driver` | object | Yes |
@@ -1297,6 +1296,7 @@
 | `vehicle.plateNumber` | string / null | Yes |
 | `vehicle.make` | string | Yes |
 | `vehicle.model` | string | Yes |
+| `type` | "chauffeur" / "remittance" / "salary" / "workpay" | Yes |
 | `startedAt` | date-time | Yes |
 | `endedAt` | date-time / null | Yes |
 | `startOdometer` | number | Yes |
@@ -1686,11 +1686,11 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `tags` | string[] | Yes |
-| `type` | "corporate" / "individual" | Yes |
 | `code` | string | Yes |
 | `name` | string | Yes |
+| `type` | "corporate" / "individual" | Yes |
 | `paymentTermsDays` | number / null | Yes |
+| `tags` | string[] | Yes |
 | `source` | "corporate" / "other" / "phone" / "referral" / "social" / "walk_in" / "website" / null | Yes |
 | `phone` | string / null | Yes |
 | `email` | string / null | Yes |
@@ -2005,9 +2005,9 @@
 | `id` | string | Yes |
 | `branchId` | string / null | Yes |
 | `status` | "declined" / "expired" / "fully_signed" / "issued" / "partially_signed" / "pending_signatures" / "void" | Yes |
-| `type` | "dealer_delivery_note" / "dealer_quote" / "dealer_sales_agreement" / "rental_agreement" / "rental_return" / "test_drive_waiver" / "transfer_letter" / "vehicle_handover" / "workpay_agreement" | Yes |
 | `issuedBy` | string / null | Yes |
 | `issuedAt` | date-time | Yes |
+| `type` | "dealer_delivery_note" / "dealer_quote" / "dealer_sales_agreement" / "rental_agreement" / "rental_return" / "test_drive_waiver" / "transfer_letter" / "vehicle_handover" / "workpay_agreement" | Yes |
 | `fullySignedAt` | date-time / null | Yes |
 | `replacesId` | string / null | Yes |
 | `subjectType` | string | Yes |
@@ -2068,8 +2068,8 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `tags` | string[] | Yes |
 | `code` | string | Yes |
+| `tags` | string[] | Yes |
 | `phone` | string | Yes |
 | `email` | string / null | Yes |
 | `licenceNumber` | string / null | Yes |
@@ -2137,8 +2137,8 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `tags` | string[] | Yes |
 | `code` | string | Yes |
+| `tags` | string[] | Yes |
 | `phone` | string | Yes |
 | `email` | string / null | Yes |
 | `licenceNumber` | string / null | Yes |
@@ -2198,8 +2198,8 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `description` | string | Yes |
 | `paymentId` | string / null | Yes |
+| `description` | string | Yes |
 | `currency` | string | Yes |
 | `taxCode` | string / null | Yes |
 | `reference` | string / null | Yes |
@@ -2572,8 +2572,8 @@
 | `budget.createdBy` | string / null | Yes |
 | `budget.createdAt` | date-time | Yes |
 | `budget.updatedAt` | date-time | Yes |
-| `budget.active` | boolean | Yes |
 | `budget.name` | string | Yes |
+| `budget.active` | boolean | Yes |
 | `budget.categoryId` | string / null | Yes |
 | `budget.monthlyAmount` | object | Yes |
 | `budget.monthlyAmount.amountMinor` | number | Yes |
@@ -2607,8 +2607,8 @@
 |---|---|---|
 | `customer` | object | Yes |
 | `customer.id` | string | Yes |
-| `customer.type` | "corporate" / "individual" | Yes |
 | `customer.name` | string | Yes |
+| `customer.type` | "corporate" / "individual" | Yes |
 | `customer.riskStatus` | "blacklisted" / "ok" / "watch" | Yes |
 | `customer.riskReason` | string / null | Yes |
 | `customer.hasIdDocument` | boolean | Yes |
@@ -2909,8 +2909,8 @@
 | `budgets.budget.createdBy` | string / null | Yes |
 | `budgets.budget.createdAt` | date-time | Yes |
 | `budgets.budget.updatedAt` | date-time | Yes |
-| `budgets.budget.active` | boolean | Yes |
 | `budgets.budget.name` | string | Yes |
+| `budgets.budget.active` | boolean | Yes |
 | `budgets.budget.categoryId` | string / null | Yes |
 | `budgets.budget.monthlyAmount` | object | Yes |
 | `budgets.budget.monthlyAmount.amountMinor` | number | Yes |
@@ -3072,14 +3072,6 @@
 | `revenue.total.currency` | string | Yes |
 | `revenue.total.formatted` | string | Yes |
 | `revenue.bySource` | object | Yes |
-| `revenue.bySource.workpay` | object | Yes |
-| `revenue.bySource.workpay.amountMinor` | number | Yes |
-| `revenue.bySource.workpay.currency` | string | Yes |
-| `revenue.bySource.workpay.formatted` | string | Yes |
-| `revenue.bySource.rentals` | object | Yes |
-| `revenue.bySource.rentals.amountMinor` | number | Yes |
-| `revenue.bySource.rentals.currency` | string | Yes |
-| `revenue.bySource.rentals.formatted` | string | Yes |
 | `revenue.bySource.other` | object | Yes |
 | `revenue.bySource.other.amountMinor` | number | Yes |
 | `revenue.bySource.other.currency` | string | Yes |
@@ -3092,6 +3084,14 @@
 | `revenue.bySource.remittances.amountMinor` | number | Yes |
 | `revenue.bySource.remittances.currency` | string | Yes |
 | `revenue.bySource.remittances.formatted` | string | Yes |
+| `revenue.bySource.workpay` | object | Yes |
+| `revenue.bySource.workpay.amountMinor` | number | Yes |
+| `revenue.bySource.workpay.currency` | string | Yes |
+| `revenue.bySource.workpay.formatted` | string | Yes |
+| `revenue.bySource.rentals` | object | Yes |
+| `revenue.bySource.rentals.amountMinor` | number | Yes |
+| `revenue.bySource.rentals.currency` | string | Yes |
+| `revenue.bySource.rentals.formatted` | string | Yes |
 | `costs` | object | Yes |
 | `costs.total` | object | Yes |
 | `costs.total.amountMinor` | number | Yes |
@@ -3174,14 +3174,14 @@
 | `series[].key` | string | Yes |
 | `series[].from` | string | Yes |
 | `series[].to` | string | Yes |
-| `series[].expected` | object | Yes |
-| `series[].expected.amountMinor` | number | Yes |
-| `series[].expected.currency` | string | Yes |
-| `series[].expected.formatted` | string | Yes |
 | `series[].outstanding` | object | Yes |
 | `series[].outstanding.amountMinor` | number | Yes |
 | `series[].outstanding.currency` | string | Yes |
 | `series[].outstanding.formatted` | string | Yes |
+| `series[].expected` | object | Yes |
+| `series[].expected.amountMinor` | number | Yes |
+| `series[].expected.currency` | string | Yes |
+| `series[].expected.formatted` | string | Yes |
 | `series[].received` | object | Yes |
 | `series[].received.amountMinor` | number | Yes |
 | `series[].received.currency` | string | Yes |
@@ -4044,8 +4044,8 @@
 | `vehicle` | object | Yes |
 | `vehicle.branchId` | string | Yes |
 | `vehicle.status` | "accident" / "assigned" / "available" / "for_sale" / "impounded" / "in_maintenance" / "incoming" / "on_rent" / "on_workpay" / "reconditioning" / "repossessed" / "reserved" / "reserved_rental" / "retired" / "scrapped" / "sold" / "stolen" / "transferred" / "written_off" | Yes |
-| `vehicle.code` | string | Yes |
 | `vehicle.odometer` | number / null | Yes |
+| `vehicle.code` | string | Yes |
 | `vehicle.make` | string | Yes |
 | `vehicle.model` | string | Yes |
 | `vehicle.vin` | string / null | Yes |
@@ -7530,8 +7530,8 @@
 | Field | Type | Required |
 |---|---|---|
 | `record` | object | Yes |
-| `record.completed` | number | Yes |
 | `record.open` | number | Yes |
+| `record.completed` | number | Yes |
 | `record.workOrders` | number | Yes |
 | `record.ratings` | number | Yes |
 | `record.averageTurnaroundDays` | number / null | Yes |
@@ -7952,7 +7952,9 @@
 | `timeline.items[].kind` | "document" / "odometer" / "status" | Yes |
 | `timeline.items[].actorId` | string / null | Yes |
 | `timeline.items[].data` | map | Yes |
-| `timeline.nextBefore` | date-time / null | Yes |
+| `timeline.total` | number | Yes |
+| `timeline.page` | number | Yes |
+| `timeline.pageSize` | number | Yes |
 
 ### GetVehiclesIdProfit
 
@@ -8903,8 +8905,8 @@
 | `branchId` | string | Yes |
 | `status` | "recorded" / "reversed" | Yes |
 | `notes` | string / null | Yes |
-| `method` | "bank_transfer" / "card" / "cash" / "cheque" / "momo" / "trade_in" | Yes |
 | `currency` | string | Yes |
+| `method` | "bank_transfer" / "card" / "cash" / "cheque" / "momo" / "trade_in" | Yes |
 | `momoNetwork` | "at" / "mtn" / "telecel" / null | Yes |
 | `reference` | string / null | Yes |
 | `paidOn` | string | Yes |
@@ -9033,8 +9035,8 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `active` | boolean | Yes |
 | `name` | string | Yes |
+| `active` | boolean | Yes |
 | `userId` | string / null | Yes |
 | `basis` | "flat" / "gross_profit_percent" / "price_percent" | Yes |
 | `tiers` | object[] | Yes |
@@ -9671,9 +9673,9 @@
 | `import.importedBy` | string / null | Yes |
 | `import.importedAt` | date-time | Yes |
 | `columns` | object | Yes |
+| `columns.balance` | string |  |
 | `columns.description` | string |  |
 | `columns.date` | string |  |
-| `columns.balance` | string |  |
 | `columns.credit` | string |  |
 | `columns.amount` | string |  |
 | `columns.reference` | string |  |
@@ -10233,8 +10235,8 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `type` | "auction" / "import" / "local" | Yes |
 | `currency` | string | Yes |
+| `type` | "auction" / "import" / "local" | Yes |
 | `reference` | string / null | Yes |
 | `cancelledBy` | string / null | Yes |
 | `supplierId` | string | Yes |
@@ -10271,8 +10273,8 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `type` | "auction" / "import" / "local" | Yes |
 | `currency` | string | Yes |
+| `type` | "auction" / "import" / "local" | Yes |
 | `reference` | string / null | Yes |
 | `cancelledBy` | string / null | Yes |
 | `supplierId` | string | Yes |
@@ -10730,12 +10732,12 @@
 | `id` | string | Yes |
 | `status` | "done" / "failed" / "queued" / "skipped" / "uploading" | Yes |
 | `createdAt` | date-time | Yes |
+| `total` | string / null | Yes |
+| `currency` | string / null | Yes |
 | `date` | string / null | Yes |
 | `error` | string / null | Yes |
-| `currency` | string / null | Yes |
 | `fileId` | string | Yes |
 | `expenseId` | string / null | Yes |
-| `total` | string / null | Yes |
 | `merchant` | string / null | Yes |
 | `tax` | string / null | Yes |
 | `isReceipt` | boolean / null | Yes |
@@ -10754,8 +10756,8 @@
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
 | `description` | string | Yes |
-| `active` | boolean | Yes |
 | `name` | string | Yes |
+| `active` | boolean | Yes |
 | `taxCode` | string / null | Yes |
 | `categoryId` | string | Yes |
 | `payee` | object / null | Yes |
@@ -10808,8 +10810,8 @@
 | `submissions[].id` | string | Yes |
 | `submissions[].status` | "approved" / "rejected" / "submitted" | Yes |
 | `submissions[].notes` | string / null | Yes |
-| `submissions[].method` | "bank_transfer" / "card" / "cash" / "cheque" / "momo" / "trade_in" | Yes |
 | `submissions[].paymentId` | string / null | Yes |
+| `submissions[].method` | "bank_transfer" / "card" / "cash" / "cheque" / "momo" / "trade_in" | Yes |
 | `submissions[].momoNetwork` | "at" / "mtn" / "telecel" / null | Yes |
 | `submissions[].reference` | string / null | Yes |
 | `submissions[].decidedAt` | date-time / null | Yes |
@@ -10845,10 +10847,10 @@
 | `id` | string | Yes |
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
-| `params` | map | Yes |
 | `agreementId` | string | Yes |
 | `kind` | "holiday" / "restructure" | Yes |
 | `reason` | string | Yes |
+| `params` | map | Yes |
 | `movedNumbers` | number[] | Yes |
 | `createdNumbers` | number[] | Yes |
 | `moved` | object | Yes |
@@ -10919,8 +10921,8 @@
 |---|---|---|
 | `id` | string | Yes |
 | `status` | "declined" / "pending" / "signed" | Yes |
-| `method` | "drawn" / "paper" / "typed" / null | Yes |
 | `name` | string | Yes |
+| `method` | "drawn" / "paper" / "typed" / null | Yes |
 | `label` | string | Yes |
 | `position` | number | Yes |
 | `role` | string | Yes |
@@ -10996,12 +10998,12 @@
 | `createdBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
-| `tags` | string[] | Yes |
-| `active` | boolean | Yes |
-| `type` | "auction" / "clearing_agent" / "dealer" / "fuel" / "importer" / "individual" / "insurer" / "other" / "parts" / "workshop" | Yes |
 | `code` | string | Yes |
 | `name` | string | Yes |
+| `active` | boolean | Yes |
+| `type` | "auction" / "clearing_agent" / "dealer" / "fuel" / "importer" / "individual" / "insurer" / "other" / "parts" / "workshop" | Yes |
 | `paymentTermsDays` | number / null | Yes |
+| `tags` | string[] | Yes |
 | `phone` | string / null | Yes |
 | `email` | string / null | Yes |
 | `address` | string / null | Yes |
@@ -11077,8 +11079,8 @@
 |---|---|---|
 | `id` | string | Yes |
 | `status` | "open" / "paid" / "void" | Yes |
-| `code` | string | Yes |
 | `issuedAt` | date-time | Yes |
+| `code` | string | Yes |
 | `currency` | string | Yes |
 | `lines` | object[] | Yes |
 | `lines[].kind` | "branch_rate" / "discount" / "other" / "proration" / "setup" / "size_adjustment" | Yes |
@@ -11126,8 +11128,8 @@
 | Field | Type | Required |
 |---|---|---|
 | `id` | string | Yes |
-| `method` | "bank_transfer" / "card" / "cash" / "cheque" / "momo" / "other" | Yes |
 | `currency` | string | Yes |
+| `method` | "bank_transfer" / "card" / "cash" / "cheque" / "momo" / "other" | Yes |
 | `reference` | string | Yes |
 | `receivedAt` | date-time | Yes |
 | `invoiceId` | string | Yes |
@@ -11441,10 +11443,10 @@
 | `createdAt` | date-time | Yes |
 | `updatedAt` | date-time | Yes |
 | `description` | string / null | Yes |
-| `type` | "accident" / "corrective" / "inspection" / "preventive" / "reconditioning" | Yes |
-| `title` | string | Yes |
 | `currency` | string | Yes |
 | `blockId` | string / null | Yes |
+| `type` | "accident" / "corrective" / "inspection" / "preventive" / "reconditioning" | Yes |
+| `title` | string | Yes |
 | `priority` | "high" / "low" / "normal" / "urgent" | Yes |
 | `issueId` | string / null | Yes |
 | `damageId` | string / null | Yes |
@@ -11469,8 +11471,8 @@
 | `cancelledBy` | string / null | Yes |
 | `lines` | object[] | Yes |
 | `lines[].id` | string | Yes |
-| `lines[].description` | string | Yes |
 | `lines[].kind` | "labour" / "other" / "part" / "sublet" | Yes |
+| `lines[].description` | string | Yes |
 | `lines[].partId` | string / null | Yes |
 | `lines[].quantity` | number | Yes |
 | `lines[].position` | number | Yes |

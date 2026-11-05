@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { ApiKeys } from "../../application/use-cases/integrations/ApiKeys.js";
 import type { Webhooks } from "../../application/use-cases/integrations/Webhooks.js";
@@ -180,11 +182,12 @@ export function integrationRoutes(deps: IntegrationRouteDependencies): ApiRoute[
       access: view,
       request: {
         params: idParams,
-        query: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+        query: z.object(pageParams(200, 50)),
       },
       responses: { 200: { description: "Deliveries" } },
       handler: async ({ params, query }, _req, res) => {
-        res.json(envelope(await webhooks.deliveries(params.id, query.limit ?? 50)));
+        const page = await webhooks.deliveries(params.id, query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

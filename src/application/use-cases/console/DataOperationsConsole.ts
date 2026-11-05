@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import type { IClock } from "../../ports/IClock.js";
 import type {
   BackupListFilter,
@@ -39,8 +40,8 @@ export class DataOperationsConsole {
     }>,
   ) {}
 
-  backups(filter: BackupListFilter): Promise<BackupView[]> {
-    return this.deps.queries.backups(filter);
+  async backups(filter: Paging<BackupListFilter>): Promise<Page<BackupView>> {
+    return pageOf(filter, await this.deps.queries.backups({ ...filter, ...pageWindow(filter) }));
   }
 
   backupOverview(): Promise<BackupOverview> {

@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   Announcement,
   AnnouncementAudience,
@@ -119,14 +121,18 @@ export class PostgresCommunicationsRepository implements ICommunicationsReposito
   }
 
   async announcements(
-    f: Readonly<{ status?: AnnouncementStatus; limit: number }>,
-  ): Promise<Announcement[]> {
-    const { rows } = await this.db.query<AnnouncementRow>(
-      `select * from announcements where ($1::text is null or status = $1)
-        order by created_at desc limit $2`,
-      [f.status ?? null, f.limit],
+    f: Readonly<{ status?: AnnouncementStatus; limit: number; offset?: number }>,
+  ): Promise<Paged<Announcement>> {
+    const { rows, total } = await pagedQuery<AnnouncementRow>(
+      this.db,
+      {
+        sql: `select * from announcements where ($1::text is null or status = $1)`,
+        orderBy: "created_at desc, id desc",
+        params: [f.status ?? null],
+      },
+      f,
     );
-    return rows.map(toAnnouncement);
+    return { rows: rows.map(toAnnouncement), total };
   }
 
   async liveFor(tenantId: string, userId: string, now: Date) {
@@ -211,13 +217,19 @@ export class PostgresCommunicationsRepository implements ICommunicationsReposito
     return rows[0] === undefined ? null : toWindow(rows[0]);
   }
 
-  async windows(f: Readonly<{ from?: Date; limit: number }>): Promise<MaintenanceWindow[]> {
-    const { rows } = await this.db.query<WindowRow>(
-      `select * from maintenance_windows where ($1::timestamptz is null or ends_at >= $1)
-        order by starts_at desc limit $2`,
-      [f.from ?? null, f.limit],
+  async windows(
+    f: Readonly<{ from?: Date; limit: number; offset?: number }>,
+  ): Promise<Paged<MaintenanceWindow>> {
+    const { rows, total } = await pagedQuery<WindowRow>(
+      this.db,
+      {
+        sql: `select * from maintenance_windows where ($1::timestamptz is null or ends_at >= $1)`,
+        orderBy: "starts_at desc, id desc",
+        params: [f.from ?? null],
+      },
+      f,
     );
-    return rows.map(toWindow);
+    return { rows: rows.map(toWindow), total };
   }
 
   async upcoming(now: Date, until: Date): Promise<MaintenanceWindow[]> {

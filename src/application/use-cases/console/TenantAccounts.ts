@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest, type Paging } from "../../dto/Page.js";
 import { TenantNotFoundForStaffError } from "../../errors/TenantErrors.js";
 import type { IClock } from "../../ports/IClock.js";
 import type {
@@ -33,8 +34,8 @@ export class TenantAccounts {
     }>,
   ) {}
 
-  list(filter: TenantListFilter): Promise<TenantListItem[]> {
-    return this.deps.queries.list(filter);
+  async list(filter: Paging<TenantListFilter>): Promise<Page<TenantListItem>> {
+    return pageOf(filter, await this.deps.queries.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async profile(tenantId: string): Promise<TenantProfile> {
@@ -54,12 +55,9 @@ export class TenantAccounts {
     }
   }
 
-  async timeline(
-    tenantId: string,
-    options: Readonly<{ limit: number; before?: Date }>,
-  ): Promise<TimelineEntry[]> {
+  async timeline(tenantId: string, request: PageRequest): Promise<Page<TimelineEntry>> {
     if ((await this.deps.directory.findById(tenantId)) === null)
       throw new TenantNotFoundForStaffError();
-    return this.deps.queries.timeline(tenantId, options);
+    return pageOf(request, await this.deps.queries.timeline(tenantId, pageWindow(request)));
   }
 }

@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { AlertStatus, DueStatus } from "../../domain/maintenance/ServiceDue.js";
 import type {
   ServicePlanProps,
@@ -66,6 +67,7 @@ export type DueFilter = Readonly<{
   vehicleId?: string;
   statuses?: readonly DueStatus[];
   limit: number;
+  offset?: number;
 }>;
 
 /** Who drives a vehicle now (its open assignment), to tell them a service is due. */
@@ -90,7 +92,7 @@ export interface IServicePlans {
   saveDue(row: ServiceDueRow): Promise<void>;
   removeDue(ids: readonly string[]): Promise<void>;
 
-  due(filter: DueFilter): Promise<ServiceDueView[]>;
+  due(filter: DueFilter): Promise<Paged<ServiceDueView>>;
   dueView(ids: readonly string[]): Promise<ServiceDueView[]>;
   addRecord(record: ServiceRecordProps): Promise<void>;
   records(vehicleId: string, limit: number): Promise<(ServiceRecordProps & { taskName: string })[]>;

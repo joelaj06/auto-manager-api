@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import { checkExtension, deactivationDate } from "../../../domain/billing/Dunning.js";
 import type { IBillingRepository } from "../../../domain/repositories/IBillingRepository.js";
 import type {
@@ -76,7 +77,7 @@ export class BillingExtensions {
       const i = invoice?.snapshot();
       if (i === undefined || i.tenantId !== tenantId || i.status !== "open")
         throw new InvoiceNotFoundError();
-      const open = await deps.automation.extensions({ tenantId, limit: 50 });
+      const { rows: open } = await deps.automation.extensions({ tenantId, limit: 50 });
       if (
         open.some(
           (e) => e.invoiceId === i.id && (e.status === "requested" || e.status === "approved"),
@@ -118,10 +119,13 @@ export class BillingExtensions {
     });
   }
 
-  list(
-    filter: Readonly<{ tenantId?: string; status?: ExtensionStatus; limit: number }>,
-  ): Promise<ExtensionRecord[]> {
-    return this.deps.automation.extensions(filter);
+  async list(
+    filter: Readonly<{ tenantId?: string; status?: ExtensionStatus }> & PageRequest,
+  ): Promise<Page<ExtensionRecord>> {
+    return pageOf(
+      filter,
+      await this.deps.automation.extensions({ ...filter, ...pageWindow(filter) }),
+    );
   }
 
   async approve(

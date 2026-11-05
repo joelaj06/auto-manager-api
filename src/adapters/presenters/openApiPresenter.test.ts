@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { defineRoute } from "../routes/ApiRoute.js";
 import { idParams, paginationQuery } from "../validators/commonRequests.js";
+import { PAGE_HEADERS } from "./pageHeaders.js";
 import { buildOpenApiDocument } from "./openApiPresenter.js";
 import { dataEnvelope } from "./responseEnvelope.js";
 import { access } from "../routes/RouteAccess.js";
@@ -42,13 +43,24 @@ describe("buildOpenApiDocument", () => {
     expect(Object.keys(doc.paths)).toEqual(["/api/v1/vehicles", "/api/v1/vehicles/{id}"]);
   });
 
+  it("documents the page headers on lists that take a page", () => {
+    const list = doc.paths["/api/v1/vehicles"]?.get as {
+      responses: Record<string, { headers?: Record<string, unknown> }>;
+    };
+    expect(Object.keys(list.responses["200"]?.headers ?? {})).toEqual([...PAGE_HEADERS]);
+    const update = doc.paths["/api/v1/vehicles/{id}"]?.patch as {
+      responses: Record<string, { headers?: unknown }>;
+    };
+    expect(update.responses["200"]?.headers).toBeUndefined();
+  });
+
   it("documents query and path parameters", () => {
     const list = doc.paths["/api/v1/vehicles"]?.get as {
       parameters: { name: string; in: string; required: boolean }[];
     };
     expect(list.parameters).toEqual([
-      expect.objectContaining({ name: "limit", in: "query", required: false }),
-      expect.objectContaining({ name: "cursor", in: "query", required: false }),
+      expect.objectContaining({ name: "page", in: "query", required: false }),
+      expect.objectContaining({ name: "pageSize", in: "query", required: false }),
     ]);
 
     const update = doc.paths["/api/v1/vehicles/{id}"]?.patch as {

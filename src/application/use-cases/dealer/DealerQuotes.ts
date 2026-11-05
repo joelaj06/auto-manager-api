@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   Quote,
   QuoteRuleError,
@@ -67,8 +68,8 @@ export type QuoteQuery = Readonly<{
   vehicleId?: string;
   customerId?: string;
   statuses?: readonly QuoteStatus[];
-  limit: number;
-  beforeId?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 export type QuoteView = Omit<
@@ -125,16 +126,16 @@ export class DealerQuotes {
     }>,
   ) {}
 
-  list(actor: Principal, query: QuoteQuery): Promise<QuoteView[]> {
+  list(actor: Principal, query: QuoteQuery): Promise<Page<QuoteView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const base = await this.base();
-      return (
-        await deps.quotes.list({
-          ...query,
-          branchIds: deps.scope.branchesFor(actor, "dealer.quotes.manage"),
-        })
-      ).map((q) => view(q, base));
+      const found = await deps.quotes.list({
+        ...query,
+        ...pageWindow(query),
+        branchIds: deps.scope.branchesFor(actor, "dealer.quotes.manage"),
+      });
+      return pageOf(query, found, (q) => view(q, base));
     });
   }
 

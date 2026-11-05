@@ -86,7 +86,7 @@ async function queue(to: string, key: string, sensitive = false): Promise<boolea
 
 const log = async (address: string) =>
   (
-    (await api().get("/api/v1/notification-deliveries?limit=100").set(owner())).body.data as {
+    (await api().get("/api/v1/notification-deliveries?pageSize=100").set(owner())).body.data as {
       address: string;
       channel: string;
       status: string;
@@ -243,7 +243,7 @@ describe("what Meta tells us", () => {
     await queue(to, `d:${to}`);
     await sendDue();
     const [delivery] = await log(to);
-    const full = (await api().get("/api/v1/notification-deliveries?limit=100").set(owner())).body
+    const full = (await api().get("/api/v1/notification-deliveries?pageSize=100").set(owner())).body
       .data as { id: string; providerMessageId: string; providerStatus: string | null }[];
     return full.find((d) => d.id === delivery!.id)!.providerMessageId;
   };

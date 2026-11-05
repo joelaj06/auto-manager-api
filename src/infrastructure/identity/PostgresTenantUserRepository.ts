@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import { TenantUser, type TenantUserStatus } from "../../domain/entities/TenantUser.js";
 import type {
   ITenantUserRepository,
@@ -84,30 +86,30 @@ export class PostgresTenantUserRepository implements ITenantUserRepository {
     );
   }
 
-  async list(query: UserListQuery): Promise<TenantUser[]> {
+  async list(query: UserListQuery): Promise<Paged<TenantUser>> {
     const search = query.search?.trim();
-    const { rows } = await this.transactions.current().query<Row>(
-      `select ${COLUMNS} from users u
+    const { rows, total } = await pagedQuery<Row>(
+      this.transactions.current(),
+      {
+        sql: `select ${COLUMNS} from users u
         where ($1::boolean
                or exists (select 1 from user_branches ub where ub.user_id = u.id and ub.branch_id = any($2::uuid[]))
                or u.id = $3)
           and ($4::text is null or u.status = $4)
           and ($5::text is null or u.name ilike '%' || $5 || '%' or u.email ilike '%' || $5 || '%'
-               or u.phone like '%' || $5 || '%')
-          and ($6::uuid is null or u.id < $6)
-        order by u.id desc
-        limit $7`,
-      [
-        query.branchIds === "all",
-        query.branchIds === "all" ? [] : query.branchIds,
-        query.includeUserId ?? null,
-        query.status ?? null,
-        search === undefined || search === "" ? null : search.replace(/[\\%_]/g, (c) => `\\${c}`),
-        query.before ?? null,
-        query.limit,
-      ],
+               or u.phone like '%' || $5 || '%')`,
+        orderBy: "u.id desc",
+        params: [
+          query.branchIds === "all",
+          query.branchIds === "all" ? [] : query.branchIds,
+          query.includeUserId ?? null,
+          query.status ?? null,
+          search === undefined || search === "" ? null : search.replace(/[\\%_]/g, (c) => `\\${c}`),
+        ],
+      },
+      query,
     );
-    return rows.map(toEntity);
+    return { rows: rows.map(toEntity), total };
   }
 
   private async one(

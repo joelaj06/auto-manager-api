@@ -84,7 +84,7 @@ export class RentalAgreements {
   /** The booking's documents, newest first (voided ones too). */
   async of(bookingId: string): Promise<RentalDocument[]> {
     const { deps } = this;
-    const rows = await deps.issued.list({
+    const { rows } = await deps.issued.list({
       branchIds: "all",
       subject: { type: RENTAL_DOCUMENT_SUBJECT, id: bookingId },
       limit: 50,
@@ -233,7 +233,7 @@ export class RentalAgreements {
       const plan = b.terms.plan;
       const deposit = await deps.bookings.deposit(b.id);
       // The damage map the renter accepts: what is on the vehicle and not yet repaired.
-      const open = await deps.damages.list({
+      const { rows: open } = await deps.damages.list({
         branchIds: "all",
         vehicleId: b.vehicleId,
         statuses: ["open"],
@@ -278,7 +278,9 @@ export class RentalAgreements {
       const agreement = (await this.of(b.id)).find(
         (d) => d.type === "rental_agreement" && d.status !== "void",
       );
-      const found = (await deps.damages.list({ branchIds: "all", bookingId: b.id, limit: 100 }))
+      const found = (
+        await deps.damages.list({ branchIds: "all", bookingId: b.id, limit: 100 })
+      ).rows
         .map((d) => d.snapshot())
         .filter((d) => d.foundAt === "check_in");
       data = {

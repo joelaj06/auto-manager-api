@@ -368,7 +368,7 @@ describe("staff administration, step-up and four-eyes", () => {
   it("records every action in the audit log", async () => {
     const res = await api()
       .get(`${BASE}/audit-logs`)
-      .query({ actorId: admin.id, limit: 100 })
+      .query({ actorId: admin.id, pageSize: 100 })
       .set(bearer(admin.accessToken));
     expect(res.status).toBe(200);
     const actions = (res.body.data as { action: string }[]).map((e) => e.action);

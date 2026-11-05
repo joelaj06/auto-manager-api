@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { Money } from "../../../domain/money/Money.js";
 import {
   VehicleDamage,
@@ -56,7 +57,8 @@ export type DamageQuery = Readonly<{
   vehicleId?: string;
   bookingId?: string;
   status?: DamageStatus;
-  limit: number;
+  page: number;
+  pageSize: number;
 }>;
 
 type Deps = Readonly<{
@@ -82,7 +84,7 @@ type Deps = Readonly<{
 export class VehicleDamages {
   constructor(private readonly deps: Deps) {}
 
-  list(actor: Principal, query: DamageQuery): Promise<DamageView[]> {
+  list(actor: Principal, query: DamageQuery): Promise<Page<DamageView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       if (query.vehicleId !== undefined)
@@ -92,9 +94,9 @@ export class VehicleDamages {
         ...(query.vehicleId === undefined ? {} : { vehicleId: query.vehicleId }),
         ...(query.bookingId === undefined ? {} : { bookingId: query.bookingId }),
         ...(query.status === undefined ? {} : { statuses: [query.status] }),
-        limit: query.limit,
+        ...pageWindow(query),
       });
-      return damages.map(damageView);
+      return pageOf(query, damages, damageView);
     });
   }
 

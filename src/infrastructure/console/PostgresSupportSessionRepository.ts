@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   SupportSession,
   type SupportSessionProps,
@@ -136,20 +138,32 @@ export class PostgresSupportSessionRepository implements ISupportSessionReposito
       status?: SupportStatus;
       from?: Date;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<SupportSessionRow[]> {
-    const { rows } = await this.db.query<Row & { staff_name: string; tenant_name: string }>(
-      `select s.*, u.name as staff_name, t.name as tenant_name
+  ): Promise<Paged<SupportSessionRow>> {
+    const { rows, total } = await pagedQuery<Row & { staff_name: string; tenant_name: string }>(
+      this.db,
+      {
+        sql: `select s.*, u.name as staff_name, t.name as tenant_name
          from support_sessions s
          join platform_users u on u.id = s.staff_id
          join tenants t on t.id = s.tenant_id
         where ($1::uuid is null or s.staff_id = $1) and ($2::uuid is null or s.tenant_id = $2)
           and ($3::text is null or s.status = $3)
-          and ($4::timestamptz is null or s.requested_at >= $4)
-        order by s.requested_at desc limit $5`,
-      [f.staffId ?? null, f.tenantId ?? null, f.status ?? null, f.from ?? null, f.limit],
+          and ($4::timestamptz is null or s.requested_at >= $4)`,
+        orderBy: "s.requested_at desc, s.id desc",
+        params: [f.staffId ?? null, f.tenantId ?? null, f.status ?? null, f.from ?? null],
+      },
+      f,
     );
-    return rows.map((r) => ({ ...toProps(r), staffName: r.staff_name, tenantName: r.tenant_name }));
+    return {
+      rows: rows.map((r) => ({
+        ...toProps(r),
+        staffName: r.staff_name,
+        tenantName: r.tenant_name,
+      })),
+      total,
+    };
   }
 
   async recordRequest(sessionId: string, r: SupportRequestRecord): Promise<void> {

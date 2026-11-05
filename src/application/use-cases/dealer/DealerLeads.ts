@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   LEAD_STAGES,
   Lead,
@@ -78,8 +79,8 @@ export type LeadQuery = Readonly<{
   stages?: readonly LeadStage[];
   sources?: readonly LeadSource[];
   search?: string;
-  limit: number;
-  beforeId?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 export type LeadView = Omit<LeadProps, "budgetMaxMinor"> &
@@ -191,7 +192,7 @@ export async function noteOnLead(
 export class DealerLeads {
   constructor(private readonly deps: Deps) {}
 
-  list(actor: Principal, query: LeadQuery): Promise<LeadView[]> {
+  list(actor: Principal, query: LeadQuery): Promise<Page<LeadView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const own = actor.grantFor("dealer.leads.view")?.scope === "own";
@@ -200,10 +201,11 @@ export class DealerLeads {
       const base = await this.base();
       const leads = await deps.leads.list({
         ...query,
+        ...pageWindow(query),
         branchIds: own ? "all" : deps.scope.branchesFor(actor, "dealer.leads.view"),
         ...(own ? { assignedTo: actor.userId } : {}),
       });
-      return leads.map((l) => view(l, base));
+      return pageOf(query, leads, (l) => view(l, base));
     });
   }
 

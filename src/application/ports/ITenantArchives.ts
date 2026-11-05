@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { ArchiveStatus } from "../../domain/console/ColdArchive.js";
 
 /** Files the tenant's records point at when it was archived (decision 495). */
@@ -93,8 +94,8 @@ export interface ITenantArchives {
   /** The archive in progress or in force for a tenant. */
   current(tenantId: string): Promise<TenantArchive | null>;
   list(
-    filter: Readonly<{ status?: ArchiveStatus; tenantId?: string; limit: number }>,
-  ): Promise<TenantArchive[]>;
+    filter: Readonly<{ status?: ArchiveStatus; tenantId?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<TenantArchive>>;
   update(id: string, changes: ArchiveChanges): Promise<void>;
   /** Archives whose last restore test (or archiving) is older than `before`. */
   verifiedBefore(before: Date, limit: number): Promise<TenantArchive[]>;

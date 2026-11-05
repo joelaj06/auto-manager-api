@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { Appraisal, AppraisalStatus } from "../../domain/dealer/Appraisal.js";
 import type { Deal, DealStatus, ScheduledInstalment } from "../../domain/dealer/Deal.js";
 import type { PaymentMethod } from "../../domain/finance/Payment.js";
@@ -16,7 +17,7 @@ export type DealFilter = Readonly<{
   soldFrom?: string;
   soldTo?: string;
   limit: number;
-  beforeId?: string;
+  offset?: number;
 }>;
 
 /** A payment recorded for the deal (deposits, instalments, the bank's disbursement …). */
@@ -45,7 +46,7 @@ export interface IDeals {
   update(deal: Deal): Promise<void>;
   get(id: string): Promise<Deal | null>;
   lock(id: string): Promise<Deal | null>;
-  list(filter: DealFilter): Promise<Deal[]>;
+  list(filter: DealFilter): Promise<Paged<Deal>>;
   /** The open deal (draft, reserved or sold) on the vehicle, if any. */
   liveForVehicle(vehicleId: string): Promise<string | null>;
   /** Payments for the deal not yet used on its invoices, oldest first. */
@@ -68,7 +69,7 @@ export type AppraisalFilter = Readonly<{
   leadId?: string;
   customerId?: string;
   limit: number;
-  beforeId?: string;
+  offset?: number;
 }>;
 
 export interface IAppraisals {
@@ -76,5 +77,5 @@ export interface IAppraisals {
   update(appraisal: Appraisal): Promise<void>;
   get(id: string): Promise<Appraisal | null>;
   lock(id: string): Promise<Appraisal | null>;
-  list(filter: AppraisalFilter): Promise<Appraisal[]>;
+  list(filter: AppraisalFilter): Promise<Paged<Appraisal>>;
 }

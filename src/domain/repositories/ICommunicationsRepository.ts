@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 export type AnnouncementAudience = Readonly<{
   statuses?: readonly string[];
   licenceTypes?: readonly string[];
@@ -41,8 +42,8 @@ export interface ICommunicationsRepository {
   saveAnnouncement(announcement: Announcement): Promise<void>;
   announcement(id: string, lock?: boolean): Promise<Announcement | null>;
   announcements(
-    filter: Readonly<{ status?: AnnouncementStatus; limit: number }>,
-  ): Promise<Announcement[]>;
+    filter: Readonly<{ status?: AnnouncementStatus; limit: number; offset?: number }>,
+  ): Promise<Paged<Announcement>>;
   /** Published, live now, and addressed to this tenant (with whether this user read each). */
   liveFor(
     tenantId: string,
@@ -57,7 +58,9 @@ export interface ICommunicationsRepository {
 
   saveWindow(window: MaintenanceWindow): Promise<void>;
   window(id: string, lock?: boolean): Promise<MaintenanceWindow | null>;
-  windows(filter: Readonly<{ from?: Date; limit: number }>): Promise<MaintenanceWindow[]>;
+  windows(
+    filter: Readonly<{ from?: Date; limit: number; offset?: number }>,
+  ): Promise<Paged<MaintenanceWindow>>;
   /** Scheduled windows that are on now or start before `until`. */
   upcoming(now: Date, until: Date): Promise<MaintenanceWindow[]>;
 }

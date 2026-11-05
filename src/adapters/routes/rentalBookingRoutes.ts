@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { RentalBookings } from "../../application/use-cases/rentals/RentalBookings.js";
 import type { RentalAgreements } from "../../application/use-cases/rentals/RentalAgreements.js";
@@ -71,8 +73,7 @@ const listQuery = z.object({
   vehicleId: uuid.optional(),
   from: instant.optional(),
   to: instant.optional(),
-  cursor: z.string().max(200).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  ...pageParams(100, 50),
 });
 
 const callOffBody = z.object({
@@ -120,7 +121,7 @@ export function rentalBookingRoutes(deps: RentalBookingRouteDependencies): ApiRo
       responses: { 200: { description: "Bookings" } },
       handler: async ({ query }, _req, res) => {
         const page = await bookings.list(principalOf(res), query);
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

@@ -280,7 +280,7 @@ describe("branches of a paying tenant", () => {
     ]);
     await container.get<BranchReconciliation>(TYPES.BranchReconciliation).handle();
     const logged = await api()
-      .get(`${CONSOLE}/billing/branch-reconciliations?tenantId=${t.tenantId}&limit=1`)
+      .get(`${CONSOLE}/billing/branch-reconciliations?tenantId=${t.tenantId}&pageSize=1`)
       .set(staff());
     expect(logged.body.data[0]).toMatchObject({
       outcome: "over_limit",

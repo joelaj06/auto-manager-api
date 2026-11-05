@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { StockUnit } from "../../../domain/dealer/StockUnit.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import {
@@ -112,8 +113,8 @@ export type PurchaseQuery = Readonly<{
   supplierId?: string;
   statuses?: readonly PurchaseStatus[];
   types?: readonly PurchaseType[];
-  limit: number;
-  beforeId?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 type Landed = Readonly<{
@@ -185,7 +186,7 @@ export class Purchases {
     }>,
   ) {}
 
-  list(actor: Principal, query: PurchaseQuery): Promise<PurchaseSummary[]> {
+  list(actor: Principal, query: PurchaseQuery): Promise<Page<PurchaseSummary>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       if (query.branchId !== undefined)
@@ -193,8 +194,9 @@ export class Purchases {
       const purchases = await deps.purchases.list({
         branchIds: deps.scope.branchesFor(actor, "purchases.view"),
         ...query,
+        ...pageWindow(query),
       });
-      return purchases.map((purchase) => {
+      return pageOf(query, purchases, (purchase) => {
         const { lines, ...p } = purchase.snapshot();
         return {
           ...p,

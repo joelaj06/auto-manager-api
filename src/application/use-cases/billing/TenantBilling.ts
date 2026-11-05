@@ -1,3 +1,4 @@
+import type { Page, PageRequest } from "../../dto/Page.js";
 import { InvoiceRuleError } from "../../../domain/billing/Invoice.js";
 import type {
   BillingContact,
@@ -131,11 +132,13 @@ export class TenantBilling {
     return this.deps.billing.preview(this.tenantId());
   }
 
-  async invoices(
-    filter: Readonly<{ limit: number; before?: string }>,
-  ): Promise<TenantInvoiceView[]> {
-    const invoices = await this.deps.billing.invoices({ ...filter, tenantId: this.tenantId() });
-    return invoices.filter((i) => i.status !== "void").map(({ createdBy: _c, ...i }) => i);
+  async invoices(request: PageRequest): Promise<Page<TenantInvoiceView>> {
+    const items = await this.deps.billing.invoices({
+      ...request,
+      tenantId: this.tenantId(),
+      excludeVoid: true,
+    });
+    return { ...items, items: items.items.map(({ createdBy: _c, ...i }) => i) };
   }
 
   async invoice(invoiceId: string): Promise<TenantInvoiceView> {
@@ -156,7 +159,7 @@ export class TenantBilling {
   async transactions(): Promise<TransactionHistory> {
     const tenantId = this.tenantId();
     const { records } = this.deps;
-    const invoices = await records.invoices({ tenantId, limit: 500 });
+    const { rows: invoices } = await records.invoices({ tenantId, limit: 500 });
     const payments = await records.payments({ tenantId });
     const entries: Omit<TransactionView, "balanceMinor">[] = [];
     for (const invoice of invoices) {

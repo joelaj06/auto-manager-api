@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { GeofenceAlert, GeofenceArea, GeofenceShape } from "../../domain/telematics/Geo.js";
 import type { Fix, TrackerState } from "../../domain/telematics/Tracker.js";
 
@@ -80,6 +81,7 @@ export type DeviceFilter = Readonly<{
   unlinked?: boolean;
   status?: "active" | "retired";
   limit: number;
+  offset?: number;
 }>;
 
 export type DeviceChanges = Readonly<{
@@ -146,6 +148,7 @@ export type TripFilter = Readonly<{
   from: Date;
   to: Date;
   limit: number;
+  offset?: number;
 }>;
 
 export const TELEMATICS_EVENT_KINDS = ["geofence_enter", "geofence_exit", "overspeed"] as const;
@@ -183,6 +186,7 @@ export type EventFilter = Readonly<{
   from?: Date;
   to?: Date;
   limit: number;
+  offset?: number;
 }>;
 
 export type NewEvent = Readonly<{
@@ -265,7 +269,7 @@ export interface ITelematics {
     at: Date,
   ): Promise<void>;
 
-  devices(filter: DeviceFilter): Promise<TelematicsDevice[]>;
+  devices(filter: DeviceFilter): Promise<Paged<TelematicsDevice>>;
   device(id: string): Promise<TelematicsDevice | null>;
   deviceCount(connectionId: string): Promise<number>;
   createDevice(
@@ -338,8 +342,8 @@ export interface ITelematics {
 
   live(branchIds: "all" | readonly string[]): Promise<TelematicsDevice[]>;
   positions(vehicleId: string, from: Date, to: Date, limit: number): Promise<PositionView[]>;
-  trips(filter: TripFilter): Promise<TripView[]>;
-  events(filter: EventFilter): Promise<TelematicsEvent[]>;
+  trips(filter: TripFilter): Promise<Paged<TripView>>;
+  events(filter: EventFilter): Promise<Paged<TelematicsEvent>>;
   event(id: string): Promise<TelematicsEvent | null>;
   acknowledge(id: string, userId: string, note: string | null, at: Date): Promise<void>;
   usage(

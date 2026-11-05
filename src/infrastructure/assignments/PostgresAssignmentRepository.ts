@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import { AssignmentConflictError } from "../../application/errors/AssignmentErrors.js";
 import {
   DEFAULT_ASSIGNMENT_SETTINGS,
@@ -216,7 +218,7 @@ export class PostgresAssignmentRepository implements IAssignmentRepository, IAss
     return rows[0] === undefined ? null : toRecord(rows[0]);
   }
 
-  async list(filter: AssignmentListFilter): Promise<AssignmentRecord[]> {
+  async list(filter: AssignmentListFilter): Promise<Paged<AssignmentRecord>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -230,16 +232,16 @@ export class PostgresAssignmentRepository implements IAssignmentRepository, IAss
     if (filter.driverId !== undefined) where.push(`a.driver_id = ${param(filter.driverId)}`);
     if (filter.open === true) where.push("a.ended_at is null");
     if (filter.open === false) where.push("a.ended_at is not null");
-    if (filter.after !== undefined)
-      where.push(
-        `(a.started_at, a.id) < (${param(filter.after.startedAt)}::timestamptz, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<RecordRow>(
-      `${RECORD_SELECT} where ${where.join(" and ")}
-        order by a.started_at desc, a.id desc limit ${param(filter.limit)}`,
-      params,
+    const { rows, total } = await pagedQuery<RecordRow>(
+      this.tx,
+      {
+        sql: `${RECORD_SELECT} where ${where.join(" and ")}`,
+        orderBy: "a.started_at desc, a.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toRecord);
+    return { rows: rows.map(toRecord), total };
   }
 }
 

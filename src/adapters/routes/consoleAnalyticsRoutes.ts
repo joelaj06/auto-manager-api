@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { PlatformAnalytics } from "../../application/use-cases/console/PlatformAnalytics.js";
 import { staffOf } from "../middleware/AccessGuard.js";
@@ -54,12 +56,13 @@ export function consoleAnalyticsRoutes(deps: ConsoleAnalyticsRouteDependencies):
       request: {
         query: z.object({
           flag: z.enum(["at_risk", "expansion_ready", "new"]).optional(),
-          limit: z.coerce.number().int().min(1).max(1_000).default(200),
+          ...pageParams(1_000, 200),
         }),
       },
       responses: { 200: { description: "Tenant health" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await analytics.health(query)));
+        const page = await analytics.health(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

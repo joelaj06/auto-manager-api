@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   BranchReconciliation,
   IBranchReconciliationRepository,
@@ -59,15 +61,24 @@ export class PostgresBranchReconciliationRepository implements IBranchReconcilia
   }
 
   async list(
-    filter: Readonly<{ tenantId?: string; outcome?: ReconciliationOutcome; limit: number }>,
-  ): Promise<BranchReconciliation[]> {
-    const { rows } = await this.db.query<Row>(
-      `select * from branch_reconciliations
-        where ($1::uuid is null or tenant_id = $1) and ($2::text is null or outcome = $2)
-        order by created_at desc, id desc limit $3`,
-      [filter.tenantId ?? null, filter.outcome ?? null, filter.limit],
+    filter: Readonly<{
+      tenantId?: string;
+      outcome?: ReconciliationOutcome;
+      limit: number;
+      offset?: number;
+    }>,
+  ): Promise<Paged<BranchReconciliation>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `select * from branch_reconciliations
+        where ($1::uuid is null or tenant_id = $1) and ($2::text is null or outcome = $2)`,
+        orderBy: "created_at desc, id desc",
+        params: [filter.tenantId ?? null, filter.outcome ?? null],
+      },
+      filter,
     );
-    return rows.map(toEntry);
+    return { rows: rows.map(toEntry), total };
   }
 
   async setOverLimit(tenantId: string, overLimit: boolean, now: Date): Promise<void> {

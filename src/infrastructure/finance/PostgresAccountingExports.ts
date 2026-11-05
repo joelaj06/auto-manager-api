@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AccountingExportRecord,
   AccountMapping,
@@ -160,29 +162,36 @@ export class PostgresAccountingExports implements IAccountingExports {
     );
   }
 
-  async history(limit: number): Promise<AccountingExportRecord[]> {
-    const { rows } = await this.tx.current().query<HistoryRow>(
-      `select x.id, x.format, x.detail, x.from_date::text as from_date, x.to_date::text as to_date,
+  async history(window: PageWindow): Promise<Paged<AccountingExportRecord>> {
+    const { rows, total } = await pagedQuery<HistoryRow>(
+      this.tx.current(),
+      {
+        sql: `select x.id, x.format, x.detail, x.from_date::text as from_date, x.to_date::text as to_date,
               x.entries, x.lines, x.total_debit_minor, x.exported_by, x.exported_at,
               (select count(*)::int from journal_entries e
                 where e.entry_date between x.from_date and x.to_date
                   and e.created_at > x.exported_at) as posted_since
-         from accounting_exports x
-        order by x.exported_at desc limit $1`,
-      [limit],
+         from accounting_exports x`,
+        orderBy: "x.exported_at desc, x.id desc",
+        params: [],
+      },
+      window,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      format: r.format,
-      detail: r.detail,
-      from: r.from_date,
-      to: r.to_date,
-      entries: r.entries,
-      lines: r.lines,
-      totalDebitMinor: Number(r.total_debit_minor),
-      exportedBy: r.exported_by,
-      exportedAt: r.exported_at,
-      postedSince: r.posted_since,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        format: r.format,
+        detail: r.detail,
+        from: r.from_date,
+        to: r.to_date,
+        entries: r.entries,
+        lines: r.lines,
+        totalDebitMinor: Number(r.total_debit_minor),
+        exportedBy: r.exported_by,
+        exportedAt: r.exported_at,
+        postedSince: r.posted_since,
+      })),
+      total,
+    };
   }
 }

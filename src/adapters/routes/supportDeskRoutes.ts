@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { DemoTenants } from "../../application/use-cases/console/DemoTenants.js";
 import type { OnboardingConcierge } from "../../application/use-cases/console/OnboardingConcierge.js";
@@ -17,7 +19,6 @@ import { access } from "./RouteAccess.js";
 
 const BASE = "/api/platform/v1";
 const idParams = z.object({ id: z.uuid() });
-const limit = z.coerce.number().int().min(1).max(500).default(100);
 const priority = z.enum(TICKET_PRIORITIES);
 const category = z.enum(TICKET_CATEGORIES);
 const body = z.string().trim().min(1).max(10_000);
@@ -64,10 +65,11 @@ export function supportDeskRoutes(deps: SupportDeskRouteDependencies): ApiRoute[
       summary: "Your support tickets (every ticket of the business with support.tickets.view_all)",
       tags: ["support"],
       access: access.signedIn(),
-      request: { query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }) },
+      request: { query: z.object(pageParams(200, 50)) },
       responses: { 200: { description: "Tickets" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await desk.myTickets(requesterOf(res), query.limit)));
+        const page = await desk.myTickets(requesterOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -162,19 +164,16 @@ export function supportDeskRoutes(deps: SupportDeskRouteDependencies): ApiRoute[
             .transform((v) => v === "true")
             .optional(),
           q: z.string().trim().max(120).optional(),
-          limit,
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Tickets" } },
       handler: async ({ query }, _req, res) => {
-        res.json(
-          envelope(
-            await desk.list({
-              ...query,
-              ...(query.assigneeId === "me" ? { assigneeId: staffOf(res).userId } : {}),
-            }),
-          ),
-        );
+        const page = await desk.list({
+          ...query,
+          ...(query.assigneeId === "me" ? { assigneeId: staffOf(res).userId } : {}),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -402,12 +401,13 @@ export function supportDeskRoutes(deps: SupportDeskRouteDependencies): ApiRoute[
             .enum(["true", "false"])
             .transform((v) => v === "true")
             .optional(),
-          limit,
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Demos" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await demos.list(query)));
+        const page = await demos.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -535,26 +535,24 @@ export function supportDeskRoutes(deps: SupportDeskRouteDependencies): ApiRoute[
             .enum(["true", "false"])
             .transform((v) => v === "true")
             .optional(),
-          limit,
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Tasks" } },
       handler: async ({ query }, _req, res) => {
-        res.json(
-          envelope(
-            await concierge.list({
-              ...(query.status === undefined ? {} : { status: query.status }),
-              ...(query.tenantId === undefined ? {} : { tenantId: query.tenantId }),
-              ...(query.assigneeId === undefined
-                ? {}
-                : {
-                    assigneeId: query.assigneeId === "me" ? staffOf(res).userId : query.assigneeId,
-                  }),
-              ...(query.overdue === true ? { overdueAt: new Date() } : {}),
-              limit: query.limit,
-            }),
-          ),
-        );
+        const page = await concierge.list({
+          ...(query.status === undefined ? {} : { status: query.status }),
+          ...(query.tenantId === undefined ? {} : { tenantId: query.tenantId }),
+          ...(query.assigneeId === undefined
+            ? {}
+            : {
+                assigneeId: query.assigneeId === "me" ? staffOf(res).userId : query.assigneeId,
+              }),
+          ...(query.overdue === true ? { overdueAt: new Date() } : {}),
+          page: query.page,
+          pageSize: query.pageSize,
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

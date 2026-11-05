@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type {
   ClusterLoad,
   ClusterStatus,
@@ -114,8 +115,8 @@ export interface IClusterRegistry {
   findMove(id: string): Promise<ClusterMove | null>;
   openMove(tenantId: string): Promise<ClusterMove | null>;
   moves(
-    filter: Readonly<{ tenantId?: string; clusterId?: string; limit: number }>,
-  ): Promise<ClusterMove[]>;
+    filter: Readonly<{ tenantId?: string; clusterId?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<ClusterMove>>;
   updateMove(id: string, changes: MoveChanges): Promise<void>;
 
   /**

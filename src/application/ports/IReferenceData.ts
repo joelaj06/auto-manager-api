@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { TaxCodeProps } from "../../domain/tax/TaxCode.js";
 
 export type VehicleMake = Readonly<{ id: string; name: string; active: boolean }>;
@@ -48,7 +49,9 @@ export interface ITenantReferenceData {
   /** Inserts or updates the code with its components. */
   saveTaxCode(props: TaxCodeProps): Promise<void>;
 
-  fxRates(filter: Readonly<{ quote?: string; limit: number }>): Promise<FxRate[]>;
+  fxRates(
+    filter: Readonly<{ quote?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<FxRate>>;
   /** The latest rate for `quote` on or before `date`. */
   latestFxRate(base: string, quote: string, date: string): Promise<FxRate | null>;
   addFxRate(rate: Omit<FxRate, "createdAt">): Promise<void>;

@@ -99,9 +99,10 @@ export class WorkPayArrearsReport implements ReportDefinition {
   ) {}
 
   async run(actor: Principal, params: ParamValues): Promise<ReportTable> {
-    const rows = await this.workpay.arrears(actor, {
+    const { items: rows } = await this.workpay.arrears(actor, {
       ...(params.branchId === undefined ? {} : { branchId: params.branchId }),
-      limit: 10_000,
+      page: 1,
+      pageSize: 10_000,
     });
     const sum = (pick: (r: (typeof rows)[number]) => number) => total(rows, pick);
     return {

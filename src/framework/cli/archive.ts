@@ -54,7 +54,7 @@ runCommand("archive", async () => {
   );
   try {
     if (command === "list") {
-      const archives = await container.get<ITenantArchives>(TYPES.TenantArchives).list({
+      const { rows: archives } = await container.get<ITenantArchives>(TYPES.TenantArchives).list({
         ...(values.status === undefined ? {} : { status: values.status as "archived" }),
         limit: Number(values.limit ?? 50),
       });

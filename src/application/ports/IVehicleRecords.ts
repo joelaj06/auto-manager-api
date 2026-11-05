@@ -1,3 +1,4 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
 import type { CustomFieldDefinition } from "../../domain/vehicles/CustomFields.js";
 import type { OdometerReadingProps } from "../../domain/vehicles/OdometerReading.js";
 import type { VehicleProps, VehicleUsage } from "../../domain/vehicles/Vehicle.js";
@@ -18,8 +19,7 @@ export type VehicleListFilter = Readonly<{
   /** Include sold, transferred, scrapped and written-off vehicles. */
   includeOffFleet?: boolean;
   limit: number;
-  /** Keyset cursor: created-at and id of the last vehicle of the previous page. */
-  after?: Readonly<{ createdAt: string; id: string }>;
+  offset?: number;
 }>;
 
 export type StatusHistoryEntry = Readonly<{
@@ -42,10 +42,10 @@ export type TimelineEntry = Readonly<{
 
 /** Reads over the vehicle register (tenant unit of work). */
 export interface IVehicleQueries {
-  list(filter: VehicleListFilter): Promise<VehicleProps[]>;
-  statusHistory(vehicleId: string, limit: number): Promise<StatusHistoryEntry[]>;
+  list(filter: VehicleListFilter): Promise<Paged<VehicleProps>>;
+  statusHistory(vehicleId: string, window: PageWindow): Promise<Paged<StatusHistoryEntry>>;
   /** Status changes, documents and odometer readings, newest first. */
-  timeline(vehicleId: string, before: Date | null, limit: number): Promise<TimelineEntry[]>;
+  timeline(vehicleId: string, window: PageWindow): Promise<Paged<TimelineEntry>>;
   /** Vehicles still in the fleet (not off-fleet, not removed) in a branch. */
   countInBranch(branchId: string): Promise<number>;
   /** Distance driven between two instants from the readings (null without two readings). */
@@ -90,7 +90,7 @@ export interface IOdometerReadings {
     }>
   >;
   add(reading: OdometerReadingProps): Promise<void>;
-  list(vehicleId: string, limit: number): Promise<OdometerReadingProps[]>;
+  list(vehicleId: string, window: PageWindow): Promise<Paged<OdometerReadingProps>>;
 }
 
 export type VehicleGroup = Readonly<{

@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { CommissionTerms, CommissionTermsInput } from "../../domain/partners/Commissions.js";
 import type {
   CommissionAttribution,
@@ -306,25 +308,28 @@ export class PostgresPartnerCommissionRepository implements IPartnerCommissionRe
     return Number(rows[0]!.total);
   }
 
-  async entries(f: EntryFilter): Promise<CommissionEntry[]> {
-    const { rows } = await this.db.query<EntryRow>(
-      `select ${ENTRY_COLUMNS} from partner_commission_entries
+  async entries(f: EntryFilter): Promise<Paged<CommissionEntry>> {
+    const { rows, total } = await pagedQuery<EntryRow>(
+      this.db,
+      {
+        sql: `select ${ENTRY_COLUMNS} from partner_commission_entries
         where ($1::uuid is null or partner_id = $1) and ($2::uuid is null or tenant_id = $2)
           and ($3::text is null or status = $3) and ($4::text is null or commission_type = $4)
           and ($5::timestamptz is null or created_at >= $5)
-          and ($6::timestamptz is null or created_at < $6)
-        order by created_at desc, id desc limit $7`,
-      [
-        f.partnerId ?? null,
-        f.tenantId ?? null,
-        f.status ?? null,
-        f.type ?? null,
-        f.from ?? null,
-        f.to ?? null,
-        f.limit,
-      ],
+          and ($6::timestamptz is null or created_at < $6)`,
+        orderBy: "created_at desc, id desc",
+        params: [
+          f.partnerId ?? null,
+          f.tenantId ?? null,
+          f.status ?? null,
+          f.type ?? null,
+          f.from ?? null,
+          f.to ?? null,
+        ],
+      },
+      f,
     );
-    return rows.map(toEntry);
+    return { rows: rows.map(toEntry), total };
   }
 
   async releaseDue(now: Date): Promise<number> {
@@ -472,16 +477,21 @@ export class PostgresPartnerCommissionRepository implements IPartnerCommissionRe
       status?: PayoutStatus;
       unacknowledged?: boolean;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<PayoutRecord[]> {
-    const { rows } = await this.db.query<PayoutRow>(
-      `select * from partner_payouts
+  ): Promise<Paged<PayoutRecord>> {
+    const { rows, total } = await pagedQuery<PayoutRow>(
+      this.db,
+      {
+        sql: `select * from partner_payouts
         where ($1::uuid is null or partner_id = $1) and ($2::text is null or status = $2)
-          and (not $3 or (acknowledged_at is null and status = 'paid'))
-        order by recorded_at desc, id desc limit $4`,
-      [f.partnerId ?? null, f.status ?? null, f.unacknowledged === true, f.limit],
+          and (not $3 or (acknowledged_at is null and status = 'paid'))`,
+        orderBy: "recorded_at desc, id desc",
+        params: [f.partnerId ?? null, f.status ?? null, f.unacknowledged === true],
+      },
+      f,
     );
-    return rows.map(toPayout);
+    return { rows: rows.map(toPayout), total };
   }
 
   async payoutEntries(payoutId: string): Promise<CommissionEntry[]> {

@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import { CashSession, type CashSessionProps } from "../../../domain/finance/CashSession.js";
 import { FinanceRuleError } from "../../../domain/finance/Journal.js";
 import { Postings } from "../../../domain/finance/Postings.js";
@@ -88,20 +89,21 @@ export class CashSessions {
 
   async list(
     actor: Principal,
-    filter: Omit<CashSessionListFilter, "branchIds">,
-  ): Promise<CashSessionView[]> {
+    filter: Paging<Omit<CashSessionListFilter, "branchIds">>,
+  ): Promise<Page<CashSessionView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const all = deps.scope.branchesFor(actor, "finance.cash_sessions.view");
       const own = all !== "all" && all.length === 0;
-      const rows = await deps.queries.cashSessions({
+      const found = await deps.queries.cashSessions({
         ...filter,
+        ...pageWindow(filter),
         branchIds: own ? "all" : all,
         // Without supervision rights: your own sessions only.
         ...(own ? { cashierId: actor.userId } : {}),
       });
       const base = await deps.posting.baseCurrency();
-      return rows.map((s) => view(s, base));
+      return pageOf(filter, found, (s) => view(s, base));
     });
   }
 

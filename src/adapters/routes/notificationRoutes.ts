@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { NotificationCenter } from "../../application/use-cases/notifications/NotificationCenter.js";
 import type { NotificationSettingsService } from "../../application/use-cases/notifications/NotificationSettingsService.js";
@@ -42,7 +44,7 @@ export function notificationRoutes(deps: NotificationRouteDependencies): ApiRout
     defineRoute({
       method: "get",
       path: "/api/v1/notifications",
-      summary: "My notifications, newest first (`meta.unread`, `meta.nextCursor`)",
+      summary: "My notifications, newest first (`meta.unread`)",
       tags: ["notifications"],
       access: access.signedIn(),
       request: {
@@ -51,14 +53,13 @@ export function notificationRoutes(deps: NotificationRouteDependencies): ApiRout
             .enum(["true", "false"])
             .optional()
             .transform((v) => v === "true"),
-          cursor: z.string().max(300).optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(30),
+          ...pageParams(100, 30),
         }),
       },
       responses: { 200: { description: "Notifications" } },
       handler: async ({ query }, _req, res) => {
         const page = await center.list(principalOf(res), query);
-        res.json(envelope(page.items, { unread: page.unread, nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items, { unread: page.unread }));
       },
     }),
     defineRoute({
@@ -287,14 +288,13 @@ export function notificationRoutes(deps: NotificationRouteDependencies): ApiRout
           channel: z.enum(["sms", "push", "email", "whatsapp"]).optional(),
           status: z.enum(["queued", "sent", "failed", "skipped"]).optional(),
           recipientId: uuid.optional(),
-          cursor: z.string().max(300).optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
-      responses: { 200: { description: "Deliveries; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Deliveries" } },
       handler: async ({ query }, _req, res) => {
         const page = await settings.deliveries(query);
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
   ];

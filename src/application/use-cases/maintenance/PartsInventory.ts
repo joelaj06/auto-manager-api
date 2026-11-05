@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, slicePage, type Page } from "../../dto/Page.js";
 import { credit, debit, journal, type JournalLine } from "../../../domain/finance/Journal.js";
 import {
   Part,
@@ -58,7 +59,8 @@ export type PartQuery = Readonly<{
   /** Only parts that fit this vehicle. */
   vehicleId?: string;
   includeInactive?: boolean;
-  limit: number;
+  page: number;
+  pageSize: number;
 }>;
 
 export type StockView = Omit<StockProps, "avgCostMinor"> &
@@ -107,7 +109,7 @@ export class PartsInventory {
 
   // --- the catalogue ---
 
-  list(actor: Principal, query: PartQuery): Promise<PartProps[]> {
+  list(actor: Principal, query: PartQuery): Promise<Page<PartProps>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       let fits: ((p: Part) => boolean) | null = null;
@@ -121,12 +123,13 @@ export class PartsInventory {
         ...(query.search === undefined ? {} : { search: query.search }),
         ...(query.category === undefined ? {} : { category: query.category }),
         includeInactive: query.includeInactive ?? false,
-        limit: fits === null ? query.limit : 1_000,
+        ...(fits === null ? pageWindow(query) : { limit: 1_000 }),
       });
-      return parts
-        .filter((p) => fits === null || fits(p))
-        .slice(0, query.limit)
-        .map((p) => p.snapshot());
+      if (fits === null) return pageOf(query, parts, (p) => p.snapshot());
+      return slicePage(
+        query,
+        parts.rows.filter(fits).map((p) => p.snapshot()),
+      );
     });
   }
 
@@ -419,10 +422,10 @@ export class PartsInventory {
       partId?: string;
       branchId?: string;
       workOrderId?: string;
-      before?: string;
-      limit: number;
+      page: number;
+      pageSize: number;
     }>,
-  ): Promise<MoveView[]> {
+  ): Promise<Page<MoveView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       if (query.branchId !== undefined)
@@ -432,12 +435,11 @@ export class PartsInventory {
         ...(query.partId === undefined ? {} : { partId: query.partId }),
         ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
         ...(query.workOrderId === undefined ? {} : { workOrderId: query.workOrderId }),
-        ...(query.before === undefined ? {} : { beforeId: query.before }),
-        limit: query.limit,
+        ...pageWindow(query),
       });
       const currency = await this.currency();
       const m = (minor: number) => Money.ofMinor(minor, currency).toJSON();
-      return moves.map(({ unitCostMinor, valueMinor, avgCostAfter, ...rest }) => ({
+      return pageOf(query, moves, ({ unitCostMinor, valueMinor, avgCostAfter, ...rest }) => ({
         ...rest,
         unitCost: m(unitCostMinor),
         value: m(valueMinor),

@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   DueTask,
   FunnelRow,
@@ -161,7 +163,7 @@ export class PostgresLeads implements ILeads {
     return this.one(id, "for update");
   }
 
-  async list(filter: LeadFilter): Promise<Lead[]> {
+  async list(filter: LeadFilter): Promise<Paged<Lead>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -179,16 +181,17 @@ export class PostgresLeads implements ILeads {
         `(l.name ilike ? or l.phone ilike ? or l.email::text ilike ? or l.number ilike ?)`,
         `%${filter.search.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`,
       );
-    if (filter.beforeId !== undefined && UUID.test(filter.beforeId))
-      add("l.id < ?", filter.beforeId);
-    params.push(filter.limit);
-    const { rows } = await this.tx.query<Row>(
-      `select ${SELECT} from dealer_leads l
-        ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-        order by l.id desc limit $${params.length}`,
-      params,
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx,
+      {
+        sql: `select ${SELECT} from dealer_leads l
+        ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: "l.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toLead);
+    return { rows: rows.map(toLead), total };
   }
 
   async addActivity(a: LeadActivity): Promise<void> {

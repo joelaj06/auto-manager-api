@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import { randomBytes } from "node:crypto";
 import {
   Partner,
@@ -96,8 +97,10 @@ export class PartnerAdministration {
     }>,
   ) {}
 
-  list(filter: Parameters<IPartnerQueries["list"]>[0]): Promise<PartnerListItem[]> {
-    return this.deps.queries.list(filter);
+  async list(
+    filter: Paging<Parameters<IPartnerQueries["list"]>[0]>,
+  ): Promise<Page<PartnerListItem>> {
+    return pageOf(filter, await this.deps.queries.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async get(partnerId: string): Promise<PartnerDetail> {
@@ -244,9 +247,15 @@ export class PartnerAdministration {
     return this.deps.staff.invite({ ...params, roleIds: [], actor, partnerId });
   }
 
-  async tenants(partnerId: string, filter: PartnerTenantFilter): Promise<PartnerTenantRow[]> {
+  async tenants(
+    partnerId: string,
+    filter: Paging<PartnerTenantFilter>,
+  ): Promise<Page<PartnerTenantRow>> {
     await this.partner(partnerId);
-    return this.deps.queries.tenants(partnerId, filter);
+    return pageOf(
+      filter,
+      await this.deps.queries.tenants(partnerId, { ...filter, ...pageWindow(filter) }),
+    );
   }
 
   /**

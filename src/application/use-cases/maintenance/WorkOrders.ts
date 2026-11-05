@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import {
   WorkOrder,
@@ -125,8 +126,8 @@ export type WorkOrderQuery = Readonly<{
   vendorId?: string;
   branchId?: string;
   open?: boolean;
-  limit: number;
-  before?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 export type WorkOrderView = Omit<WorkOrderProps, "lines" | "allocations"> &
@@ -177,7 +178,7 @@ export class WorkOrders {
     }>,
   ) {}
 
-  list(actor: Principal, query: WorkOrderQuery): Promise<WorkOrderView[]> {
+  list(actor: Principal, query: WorkOrderQuery): Promise<Page<WorkOrderView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       if (query.branchId !== undefined)
@@ -193,10 +194,9 @@ export class WorkOrders {
           : query.open === true
             ? { statuses: ["open", "in_progress", "awaiting_parts"] as const }
             : {}),
-        ...(query.before === undefined ? {} : { beforeId: query.before }),
-        limit: query.limit,
+        ...pageWindow(query),
       });
-      return orders.map((o) => this.view(o));
+      return pageOf(query, orders, (o) => this.view(o));
     });
   }
 
@@ -392,7 +392,7 @@ export class WorkOrders {
     return deps.unitOfWork.run(async () => {
       const { spentMinor, ...record } = await deps.orders.vendorRecord(vendorId);
       const currency = (await deps.organisation.get()).baseCurrency;
-      const recent = await deps.orders.list({
+      const { rows: recent } = await deps.orders.list({
         branchIds: deps.vehicleAccess.branchesFor(actor, "maintenance.view"),
         vendorId,
         limit: 20,

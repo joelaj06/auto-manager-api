@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { Appraisals } from "../../application/use-cases/dealer/Appraisals.js";
 import type { DealerDeals } from "../../application/use-cases/dealer/DealerDeals.js";
@@ -24,10 +26,7 @@ const list = <T extends readonly [string, ...string[]]>(values: T) =>
     .optional()
     .transform((v) => (v === undefined || v === "" ? undefined : v.split(",")))
     .pipe(z.array(z.enum(values)).optional());
-const page = {
-  beforeId: uuid.optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-};
+const paging = pageParams(100, 50);
 const photo = z.object({
   filename: z.string().trim().min(1).max(200),
   contentType: z.string().trim().min(3).max(100),
@@ -113,20 +112,17 @@ export function dealerDealRoutes(deps: DealerDealRouteDependencies): ApiRoute[] 
           leadId: uuid.optional(),
           customerId: uuid.optional(),
           status: list(APPRAISAL_STATUSES),
-          ...page,
+          ...paging,
         }),
       },
       responses: { 200: { description: "Appraisals" } },
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
-        res.json(
-          envelope(
-            await appraisals.list(principalOf(res), {
-              ...rest,
-              ...(status === undefined ? {} : { statuses: status }),
-            }),
-          ),
-        );
+        const page = await appraisals.list(principalOf(res), {
+          ...rest,
+          ...(status === undefined ? {} : { statuses: status }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -226,20 +222,17 @@ export function dealerDealRoutes(deps: DealerDealRouteDependencies): ApiRoute[] 
           vehicleId: uuid.optional(),
           leadId: uuid.optional(),
           salesExecutiveId: uuid.optional(),
-          ...page,
+          ...paging,
         }),
       },
       responses: { 200: { description: "Deals" } },
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
-        res.json(
-          envelope(
-            await deals.list(principalOf(res), {
-              ...rest,
-              ...(status === undefined ? {} : { statuses: status }),
-            }),
-          ),
-        );
+        const page = await deals.list(principalOf(res), {
+          ...rest,
+          ...(status === undefined ? {} : { statuses: status }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { TenantStatus } from "../../application/ports/ITenantDirectory.js";
 import type { AuditLogExport } from "../../application/use-cases/console/AuditLogExport.js";
@@ -34,8 +36,6 @@ const TENANT_STATUSES: readonly TenantStatus[] = [
 ];
 
 const uuid = z.uuid();
-const limit = (max: number, fallback: number) =>
-  z.coerce.number().int().min(1).max(max).default(fallback);
 const tenantParams = z.object({ id: uuid });
 const noteParams = z.object({ id: uuid, noteId: uuid });
 const statusList = z
@@ -65,10 +65,6 @@ const auditFilter = {
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 };
-
-/** The `before` cursor for keyset pages: the last id when the page is full. */
-const nextBefore = (items: readonly { id: string }[], pageSize: number) =>
-  items.length === pageSize ? (items.at(-1)?.id ?? null) : null;
 
 export type ConsoleRouteDependencies = Readonly<{
   dashboard: ConsoleDashboard;
@@ -123,14 +119,13 @@ export function consoleRoutes(deps: ConsoleRouteDependencies): ApiRoute[] {
           tag: z.string().trim().toLowerCase().max(30).optional(),
           createdFrom: z.coerce.date().optional(),
           createdTo: z.coerce.date().optional(),
-          before: uuid.optional(),
-          limit: limit(100, 25),
+          ...pageParams(100, 25),
         }),
       },
-      responses: { 200: { description: "Tenants; `meta.nextBefore` pages further" } },
+      responses: { 200: { description: "Tenants" } },
       handler: async ({ query }, _req, res) => {
         const tenants = await deps.tenants.list(query);
-        res.json(envelope(tenants, { nextBefore: nextBefore(tenants, query.limit) }));
+        res.set(pageHeaders(tenants)).json(envelope(tenants.items));
       },
     }),
     defineRoute({
@@ -153,17 +148,12 @@ export function consoleRoutes(deps: ConsoleRouteDependencies): ApiRoute[] {
       access: access.platform("platform.tenants.view"),
       request: {
         params: tenantParams,
-        query: z.object({ before: z.coerce.date().optional(), limit: limit(200, 50) }),
+        query: z.object(pageParams(200, 50)),
       },
-      responses: { 200: { description: "Entries, newest first; `meta.nextBefore` is a time" } },
+      responses: { 200: { description: "Entries, newest first" } },
       handler: async ({ params, query }, _req, res) => {
         const entries = await deps.tenants.timeline(params.id, query);
-        res.json(
-          envelope(entries, {
-            nextBefore:
-              entries.length === query.limit ? (entries.at(-1)?.at.toISOString() ?? null) : null,
-          }),
-        );
+        res.set(pageHeaders(entries)).json(envelope(entries.items));
       },
     }),
     defineRoute({
@@ -174,12 +164,12 @@ export function consoleRoutes(deps: ConsoleRouteDependencies): ApiRoute[] {
       access: access.platform("platform.data.backups.view"),
       request: {
         params: tenantParams,
-        query: z.object({ before: uuid.optional(), limit: limit(100, 25) }),
+        query: z.object(pageParams(100, 25)),
       },
       responses: { 200: { description: "Backups" } },
       handler: async ({ params, query }, _req, res) => {
         const backups = await deps.dataOperations.backups({ ...query, tenantId: params.id });
-        res.json(envelope(backups, { nextBefore: nextBefore(backups, query.limit) }));
+        res.set(pageHeaders(backups)).json(envelope(backups.items));
       },
     }),
 
@@ -197,14 +187,13 @@ export function consoleRoutes(deps: ConsoleRouteDependencies): ApiRoute[] {
             .enum(["true", "false"])
             .transform((v) => v === "true")
             .optional(),
-          before: uuid.optional(),
-          limit: limit(100, 25),
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Notes" } },
       handler: async ({ params, query }, _req, res) => {
         const notes = await deps.notes.notes(params.id, query);
-        res.json(envelope(notes, { nextBefore: nextBefore(notes, query.limit) }));
+        res.set(pageHeaders(notes)).json(envelope(notes.items));
       },
     }),
     defineRoute({
@@ -297,14 +286,13 @@ export function consoleRoutes(deps: ConsoleRouteDependencies): ApiRoute[] {
           kind: z.enum(["tenant", "platform"]).optional(),
           tenantId: uuid.optional(),
           status: z.enum(["running", "succeeded", "failed"]).optional(),
-          before: uuid.optional(),
-          limit: limit(100, 25),
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Backups" } },
       handler: async ({ query }, _req, res) => {
         const backups = await deps.dataOperations.backups(query);
-        res.json(envelope(backups, { nextBefore: nextBefore(backups, query.limit) }));
+        res.set(pageHeaders(backups)).json(envelope(backups.items));
       },
     }),
     defineRoute({

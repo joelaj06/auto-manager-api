@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   CashSessionListFilter,
   FinanceSettings,
@@ -557,7 +559,7 @@ export class PostgresFinanceQueries implements IFinanceQueries {
     return this.transactions.current();
   }
 
-  async invoices(filter: InvoiceListFilter): Promise<InvoiceProps[]> {
+  async invoices(filter: InvoiceListFilter): Promise<Paged<InvoiceProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -579,19 +581,19 @@ export class PostgresFinanceQueries implements IFinanceQueries {
       where.push(
         `status in ('issued', 'partially_paid') and due_date < ${param(filter.overdueOn)}`,
       );
-    if (filter.after !== undefined)
-      where.push(
-        `(created_at, id) < (${param(filter.after.createdAt)}::timestamptz, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<InvoiceRow>(
-      `select ${INVOICE_COLUMNS} from invoices where ${where.join(" and ")}
-        order by created_at desc, id desc limit ${param(filter.limit)}`,
-      params,
+    const { rows, total } = await pagedQuery<InvoiceRow>(
+      this.tx,
+      {
+        sql: `select ${INVOICE_COLUMNS} from invoices where ${where.join(" and ")}`,
+        orderBy: "created_at desc, id desc",
+        params,
+      },
+      filter,
     );
-    return withLines(this.tx, rows);
+    return { rows: await withLines(this.tx, rows), total };
   }
 
-  async payments(filter: PaymentListFilter): Promise<PaymentProps[]> {
+  async payments(filter: PaymentListFilter): Promise<Paged<PaymentProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -612,35 +614,38 @@ export class PostgresFinanceQueries implements IFinanceQueries {
     if (filter.to !== undefined) where.push(`paid_on <= ${param(filter.to)}`);
     if (filter.withCredit === true)
       where.push("direction = 'in' and status = 'recorded' and allocated_minor < amount_minor");
-    if (filter.after !== undefined)
-      where.push(
-        `(recorded_at, id) < (${param(filter.after.recordedAt)}::timestamptz, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<PaymentRow>(
-      `select ${PAYMENT_COLUMNS} from payments where ${where.join(" and ")}
-        order by recorded_at desc, id desc limit ${param(filter.limit)}`,
-      params,
+    const { rows, total } = await pagedQuery<PaymentRow>(
+      this.tx,
+      {
+        sql: `select ${PAYMENT_COLUMNS} from payments where ${where.join(" and ")}`,
+        orderBy: "recorded_at desc, id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toPayment);
+    return { rows: rows.map(toPayment), total };
   }
 
-  async cashSessions(filter: CashSessionListFilter): Promise<CashSessionProps[]> {
-    const { rows } = await this.tx.query<SessionRow>(
-      `select * from cash_sessions
+  async cashSessions(filter: CashSessionListFilter): Promise<Paged<CashSessionProps>> {
+    const { rows, total } = await pagedQuery<SessionRow>(
+      this.tx,
+      {
+        sql: `select * from cash_sessions
         where ($1::uuid[] is null or branch_id = any($1::uuid[]))
           and ($2::uuid is null or branch_id = $2)
           and ($3::uuid is null or cashier_id = $3)
-          and ($4::text is null or status = $4)
-        order by opened_at desc limit $5`,
-      [
-        filter.branchIds === "all" ? null : filter.branchIds,
-        filter.branchId ?? null,
-        filter.cashierId ?? null,
-        filter.status ?? null,
-        filter.limit,
-      ],
+          and ($4::text is null or status = $4)`,
+        orderBy: "opened_at desc, id desc",
+        params: [
+          filter.branchIds === "all" ? null : filter.branchIds,
+          filter.branchId ?? null,
+          filter.cashierId ?? null,
+          filter.status ?? null,
+        ],
+      },
+      filter,
     );
-    return rows.map(toSession);
+    return { rows: rows.map(toSession), total };
   }
 }
 

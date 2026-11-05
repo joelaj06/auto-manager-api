@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import { billingTax, sellerParty } from "../../../domain/billing/BillingSettings.js";
 import {
   Invoice,
@@ -140,7 +141,11 @@ export class ManualBilling {
       const now = deps.clock.now();
       const draft = await this.compose(subscription, input.lines, now, true);
       // Before taking an invoice number: numbers must have no gaps.
-      const open = await deps.billing.invoices({ tenantId, status: "open", limit: 50 });
+      const { rows: open } = await deps.billing.invoices({
+        tenantId,
+        status: "open",
+        limit: 50,
+      });
       if (open.some((i) => i.snapshot().periodStart === draft.period.start))
         throw new BillingSetupError("PERIOD_INVOICED", "This period already has an open invoice");
       const issued = Invoice.issue({
@@ -328,9 +333,10 @@ export class ManualBilling {
     return this.view(invoice);
   }
 
-  async invoices(filter: InvoiceFilter): Promise<InvoiceView[]> {
-    const invoices = await this.deps.billing.invoices(filter);
-    return Promise.all(invoices.map((i) => this.view(i)));
+  async invoices(filter: Paging<InvoiceFilter>): Promise<Page<InvoiceView>> {
+    const invoices = await this.deps.billing.invoices({ ...filter, ...pageWindow(filter) });
+    const items = await Promise.all(invoices.rows.map((i) => this.view(i)));
+    return pageOf(filter, { rows: items, total: invoices.total });
   }
 
   async invoice(invoiceId: string, tenantId?: string): Promise<InvoiceView> {

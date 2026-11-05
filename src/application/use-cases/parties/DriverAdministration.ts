@@ -11,7 +11,7 @@ import { maskGhanaCard } from "../../../domain/parties/PartyDetails.js";
 import type { IDriverRepository } from "../../../domain/repositories/IPartyRepositories.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { DriverNotFoundError, PartyExistsError } from "../../errors/PartyErrors.js";
 import type { AssignmentRecord, IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
@@ -31,7 +31,6 @@ import type {
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import { localDateTime } from "../../services/TenantLocalTime.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
@@ -58,7 +57,7 @@ export type DriverDetailView = DriverView &
 export type DriverInput = Partial<DriverDetails> & Readonly<{ branchId?: string }>;
 
 export type DriverQuery = Omit<DriverListFilter, "branchIds" | "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 /** A status change and the permission it needs (docs/28: suspend and terminate are separate). */
 export const DRIVER_ACTIONS = {
@@ -132,17 +131,13 @@ export class DriverAdministration {
 
   async list(actor: Principal, query: DriverQuery): Promise<Page<DriverView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.queries.list({
+      const found = await deps.queries.list({
         ...query,
         branchIds: deps.scope.branchesFor(actor, "drivers.list"),
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { createdAt: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
-      const page = PageCursor.paginate(rows, query.limit, (d) => [d.createdAt.toISOString(), d.id]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map((d) => this.view(actor, d)) };
     });
   }

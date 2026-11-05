@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   DEMO_MAX_LIVE,
@@ -68,8 +69,8 @@ export class DemoTenants {
     }>,
   ) {}
 
-  list(filter: Readonly<{ live?: boolean; limit: number }>): Promise<DemoTenant[]> {
-    return this.deps.demos.list(filter);
+  async list(filter: Readonly<{ live?: boolean }> & PageRequest): Promise<Page<DemoTenant>> {
+    return pageOf(filter, await this.deps.demos.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async demo(tenantId: string): Promise<DemoTenant> {

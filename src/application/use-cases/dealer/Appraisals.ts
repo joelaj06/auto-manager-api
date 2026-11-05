@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   Appraisal,
   AppraisalRuleError,
@@ -55,8 +56,8 @@ export type AppraisalQuery = Readonly<{
   statuses?: readonly AppraisalStatus[];
   leadId?: string;
   customerId?: string;
-  limit: number;
-  beforeId?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 export type AppraisalView = Omit<AppraisalProps, "valueMinor"> &
@@ -86,16 +87,16 @@ export class Appraisals {
     }>,
   ) {}
 
-  list(actor: Principal, query: AppraisalQuery): Promise<AppraisalView[]> {
+  list(actor: Principal, query: AppraisalQuery): Promise<Page<AppraisalView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const base = await this.base();
-      return (
-        await deps.appraisals.list({
-          ...query,
-          branchIds: deps.scope.branchesFor(actor, PERMISSION),
-        })
-      ).map((a) => view(a, base));
+      const found = await deps.appraisals.list({
+        ...query,
+        ...pageWindow(query),
+        branchIds: deps.scope.branchesFor(actor, PERMISSION),
+      });
+      return pageOf(query, found, (a) => view(a, base));
     });
   }
 

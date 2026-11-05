@@ -21,7 +21,6 @@ import type {
   ILedger,
   IPartyDirectory,
   IPaymentReversalListener,
-  LedgerLineView,
 } from "../../ports/IFinanceRecords.js";
 import type { IPayables, OpenBill } from "../../ports/IPayables.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
@@ -236,7 +235,7 @@ export class SupplierPayables {
       const party = { type: "supplier" as const, id: supplierId };
       // The payables account is a liability: what is owed is credit less debit.
       const opening = -(await deps.ledger.partyNet(accountIds, party, from));
-      const rows: LedgerLineView[] = await deps.ledger.lines({
+      const { rows } = await deps.ledger.lines({
         accountIds,
         party,
         from,

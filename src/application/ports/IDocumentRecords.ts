@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { DocumentSigner } from "../../domain/documents/DocumentSigner.js";
 import type { DocumentTemplate } from "../../domain/documents/DocumentTemplate.js";
 import type { DocumentType, Language } from "../../domain/documents/DocumentTypes.js";
@@ -24,7 +25,7 @@ export type DocumentListFilter = Readonly<{
   subject?: Readonly<{ type: string; id: string }>;
   status?: DocumentStatus;
   limit: number;
-  afterId?: string;
+  offset?: number;
 }>;
 
 /** Issued documents (tenant unit of work). */
@@ -34,7 +35,7 @@ export interface IDocumentRepository {
   findByCode(code: string): Promise<IssuedDocument | null>;
   save(document: IssuedDocument): Promise<void>;
   /** Newest first. */
-  list(filter: DocumentListFilter): Promise<IssuedDocument[]>;
+  list(filter: DocumentListFilter): Promise<Paged<IssuedDocument>>;
   /** Documents still waiting for their PDF (oldest first). */
   unrendered(limit: number): Promise<string[]>;
   /** Fully signed documents still waiting for their signed PDF. */

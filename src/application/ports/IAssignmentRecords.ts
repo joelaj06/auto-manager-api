@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import {
   DEFAULT_HANDOVER_ITEMS,
   type ChecklistItemDefinition,
@@ -27,8 +28,7 @@ export type AssignmentListFilter = Readonly<{
   /** Only open (true) or only ended (false) assignments. */
   open?: boolean;
   limit: number;
-  /** Keyset cursor: start time and id of the last assignment of the previous page. */
-  after?: Readonly<{ startedAt: string; id: string }>;
+  offset?: number;
 }>;
 
 /** Reads over assignments (tenant unit of work). */
@@ -39,7 +39,7 @@ export interface IAssignmentQueries {
   /** The assignment of a vehicle covering an instant ("who was driving on date X"). */
   at(vehicleId: string, instant: Date): Promise<AssignmentRecord | null>;
   /** Newest start first. */
-  list(filter: AssignmentListFilter): Promise<AssignmentRecord[]>;
+  list(filter: AssignmentListFilter): Promise<Paged<AssignmentRecord>>;
 }
 
 export type AssignmentSettings = Readonly<{

@@ -86,7 +86,7 @@ async function smsTo(phone: string): Promise<string[]> {
 }
 
 async function inbox(): Promise<string[]> {
-  const res = await api().get("/api/v1/notifications?limit=100").set(owner());
+  const res = await api().get("/api/v1/notifications?pageSize=100").set(owner());
   return (res.body.data as { title: string }[]).map((n) => n.title);
 }
 

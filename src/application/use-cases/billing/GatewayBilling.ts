@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import type { Invoice } from "../../../domain/billing/Invoice.js";
 import {
   PaymentAttempt,
@@ -174,7 +175,11 @@ export class GatewayBilling {
    */
   async reverify(invoiceId: string): Promise<boolean> {
     const { deps } = this;
-    const pending = await deps.gateway.attempts({ invoiceId, status: "pending", limit: 20 });
+    const { rows: pending } = await deps.gateway.attempts({
+      invoiceId,
+      status: "pending",
+      limit: 20,
+    });
     for (const attempt of pending) {
       const reference = attempt.snapshot().reference;
       try {
@@ -268,10 +273,8 @@ export class GatewayBilling {
     return (await deps.gateway.webhook(id))!;
   }
 
-  webhooks(
-    filter: Readonly<{ outcome?: WebhookRecord["outcome"]; before?: string; limit: number }>,
-  ) {
-    return this.deps.gateway.webhooks(filter);
+  async webhooks(filter: Readonly<{ outcome?: WebhookRecord["outcome"] }> & PageRequest) {
+    return pageOf(filter, await this.deps.gateway.webhooks({ ...filter, ...pageWindow(filter) }));
   }
 
   async webhook(id: string): Promise<WebhookRecord> {
@@ -282,15 +285,17 @@ export class GatewayBilling {
 
   /** Attempts for the console (the failed-payments queue: `status=failed`). */
   async attempts(
-    filter: Readonly<{ status?: PaymentAttempt["status"]; tenantId?: string; limit: number }>,
-  ): Promise<AttemptView[]> {
-    return (await this.deps.gateway.attempts(filter)).map((a) => this.view(a));
+    filter: Readonly<{ status?: PaymentAttempt["status"]; tenantId?: string }> & PageRequest,
+  ): Promise<Page<AttemptView>> {
+    const found = await this.deps.gateway.attempts({ ...filter, ...pageWindow(filter) });
+    return pageOf(filter, found, (a) => this.view(a));
   }
 
   /** The attempts of one of the tenant's invoices (Billing tab). */
   async invoiceAttempts(invoiceId: string): Promise<AttemptView[]> {
     await this.tenantInvoice(invoiceId);
-    return (await this.deps.gateway.attempts({ invoiceId, limit: 50 })).map((a) => this.view(a));
+    const { rows } = await this.deps.gateway.attempts({ invoiceId, limit: 50 });
+    return rows.map((a) => this.view(a));
   }
 
   // --- refunds (console) ---

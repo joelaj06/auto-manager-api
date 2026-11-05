@@ -286,8 +286,8 @@ describe("reminders", () => {
   });
 
   it("marks notifications read", async () => {
-    const page = await api().get("/api/v1/notifications?limit=1").set(owner());
-    expect(page.body.meta.nextCursor).not.toBeNull();
+    const page = await api().get("/api/v1/notifications?pageSize=1").set(owner());
+    expect(Number(page.headers["x-total-count"])).toBeGreaterThan(1);
     const one = await api()
       .post("/api/v1/notifications/read")
       .set(owner())

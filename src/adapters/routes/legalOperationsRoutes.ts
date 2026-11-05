@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type {
   DataProtectionRequests,
@@ -15,7 +17,6 @@ const BASE = "/api/platform/v1";
 const uuid = z.uuid();
 const idParams = z.object({ id: uuid });
 const reason = z.string().trim().min(5).max(1_000);
-const limit = z.coerce.number().int().min(1).max(200).default(50);
 const legalKind = z.enum(["terms", "privacy", "dpa"]);
 const incidentStatus = z.enum(["investigating", "identified", "monitoring", "resolved"]);
 const impact = z.enum(["minor", "major", "critical"]);
@@ -263,20 +264,18 @@ export function legalOperationsRoutes(deps: LegalOperationsRouteDependencies): A
         query: z.object({
           status: z.enum(["open", "in_progress", "completed", "rejected"]).optional(),
           open: z.stringbool().optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Requests" } },
       handler: async ({ query }, _req, res) => {
-        res.json(
-          envelope(
-            await requests.list({
-              limit: query.limit,
-              ...(query.status === undefined ? {} : { status: query.status }),
-              ...(query.open === undefined ? {} : { openOnly: query.open }),
-            }),
-          ),
-        );
+        const page = await requests.list({
+          page: query.page,
+          pageSize: query.pageSize,
+          ...(query.status === undefined ? {} : { status: query.status }),
+          ...(query.open === undefined ? {} : { openOnly: query.open }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -416,10 +415,11 @@ export function legalOperationsRoutes(deps: LegalOperationsRouteDependencies): A
       summary: "Restore drills: the next one scheduled and past results",
       tags: ["console: data"],
       access: access.platform("platform.data.backups.view"),
-      request: { query: z.object({ limit }) },
+      request: { query: z.object(pageParams(200, 50)) },
       responses: { 200: { description: "Drills" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await drills.list(query.limit)));
+        const page = await drills.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

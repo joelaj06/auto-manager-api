@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   BookingCharge,
   BookingEvent,
@@ -205,7 +207,7 @@ export class PostgresRentalBookings implements IRentalBookings {
     );
   }
 
-  async list(filter: BookingFilter): Promise<RentalBooking[]> {
+  async list(filter: BookingFilter): Promise<Paged<RentalBooking>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (clause: string, ...values: unknown[]) => {
@@ -229,15 +231,16 @@ export class PostgresRentalBookings implements IRentalBookings {
           : "not (r.status = 'reserved' and r.expires_at <= ?)",
         filter.lapsedAt.now,
       );
-    if (filter.after !== undefined)
-      add("(r.pickup_at, r.id) < (?, ?)", filter.after.pickupAt, filter.after.id);
-    params.push(filter.limit);
-    const { rows } = await this.tx.query<BookingRow>(
-      `${SELECT} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-        order by r.pickup_at desc, r.id desc limit $${params.length}`,
-      params,
+    const { rows, total } = await pagedQuery<BookingRow>(
+      this.tx,
+      {
+        sql: `${SELECT} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: "r.pickup_at desc, r.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toBooking);
+    return { rows: rows.map(toBooking), total };
   }
 
   async addEvent(e: BookingEvent): Promise<void> {

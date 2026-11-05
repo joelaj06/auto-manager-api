@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 import type {
   CommissionTerms,
   CommissionTermsInput,
@@ -89,6 +90,7 @@ export type EntryFilter = Readonly<{
   from?: Date;
   to?: Date;
   limit: number;
+  offset?: number;
 }>;
 
 /** Reseller commission terms, ledger and payouts (platform database, platform unit of work). */
@@ -115,7 +117,7 @@ export interface IPartnerCommissionRepository {
   forPayment(paymentId: string): Promise<CommissionEntry[]>;
   /** Net commission already earned from a tenant (for the cap). */
   tenantTotal(tenantId: string): Promise<number>;
-  entries(filter: EntryFilter): Promise<CommissionEntry[]>;
+  entries(filter: EntryFilter): Promise<Paged<CommissionEntry>>;
   /** Accrued entries whose hold ended become payable; returns how many. */
   releaseDue(now: Date): Promise<number>;
   /** Payable entries of a partner not in a payout (locked). */
@@ -134,8 +136,9 @@ export interface IPartnerCommissionRepository {
       status?: PayoutStatus;
       unacknowledged?: boolean;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<PayoutRecord[]>;
+  ): Promise<Paged<PayoutRecord>>;
   payoutEntries(payoutId: string): Promise<CommissionEntry[]>;
   /** Paid out: the payout's entries are paid. */
   markEntriesPaid(payoutId: string): Promise<void>;

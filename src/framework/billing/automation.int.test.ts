@@ -94,7 +94,7 @@ const tenantStatus = async () =>
   ).rows[0]!;
 
 const notices = async (token: string) =>
-  (await api().get("/api/v1/billing/notices?limit=100").set(as(token))).body.data as {
+  (await api().get("/api/v1/billing/notices?pageSize=100").set(as(token))).body.data as {
     step: string;
     channel: string;
   }[];
@@ -352,7 +352,7 @@ describe("billing automation", () => {
     expect((await api().get("/api/v1/vehicles").set(owner)).status).toBe(200);
     expect((await api().get("/api/v1/billing/banner").set(owner)).body.data).toBeNull();
 
-    const runs = await api().get(`${CONSOLE}/billing/automation/runs?limit=3`).set(staff());
+    const runs = await api().get(`${CONSOLE}/billing/automation/runs?pageSize=3`).set(staff());
     expect(runs.body.data[0]).toMatchObject({ status: "completed" });
   });
 

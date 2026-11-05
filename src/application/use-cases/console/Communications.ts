@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import type {
   Announcement,
   AnnouncementAudience,
@@ -183,8 +184,13 @@ export class Communications {
     });
   }
 
-  list(filter: Readonly<{ status?: AnnouncementStatus; limit: number }>): Promise<Announcement[]> {
-    return this.deps.store.announcements(filter);
+  async list(
+    filter: Readonly<{ status?: AnnouncementStatus }> & PageRequest,
+  ): Promise<Page<Announcement>> {
+    return pageOf(
+      filter,
+      await this.deps.store.announcements({ ...filter, ...pageWindow(filter) }),
+    );
   }
 
   async get(id: string) {
@@ -257,8 +263,8 @@ export class Communications {
       .finally(() => deps.maintenance?.forget());
   }
 
-  windows(limit: number): Promise<MaintenanceWindow[]> {
-    return this.deps.store.windows({ limit });
+  async windows(request: PageRequest): Promise<Page<MaintenanceWindow>> {
+    return pageOf(request, await this.deps.store.windows(pageWindow(request)));
   }
 
   // --- the tenant's apps ---

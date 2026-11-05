@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import type {
   BranchReconciliation as Reconciliation,
   IBranchReconciliationRepository,
@@ -91,10 +92,13 @@ export class BranchReconciliation implements IJobHandler<"billing.branch_reconci
     return result;
   }
 
-  list(
-    filter: Readonly<{ tenantId?: string; outcome?: ReconciliationOutcome; limit: number }>,
-  ): Promise<Reconciliation[]> {
-    return this.deps.reconciliations.list(filter);
+  async list(
+    filter: Readonly<{ tenantId?: string; outcome?: ReconciliationOutcome }> & PageRequest,
+  ): Promise<Page<Reconciliation>> {
+    return pageOf(
+      filter,
+      await this.deps.reconciliations.list({ ...filter, ...pageWindow(filter) }),
+    );
   }
 
   overLimit(): Promise<OverLimitTenant[]> {

@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import {
   LOGGED_ACTIVITIES,
@@ -105,23 +107,19 @@ export function dealerSalesRoutes(deps: DealerSalesRouteDependencies): ApiRoute[
           stage: list(LEAD_STAGES),
           source: list(LEAD_SOURCES),
           search: z.string().trim().min(1).max(100).optional(),
-          beforeId: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
       responses: { 200: { description: "Leads" } },
       handler: async ({ query }, _req, res) => {
         const { stage, source, unassigned, ...rest } = query;
-        res.json(
-          envelope(
-            await leads.list(principalOf(res), {
-              ...rest,
-              ...(unassigned === undefined ? {} : { unassigned }),
-              ...(stage === undefined ? {} : { stages: stage }),
-              ...(source === undefined ? {} : { sources: source }),
-            }),
-          ),
-        );
+        const page = await leads.list(principalOf(res), {
+          ...rest,
+          ...(unassigned === undefined ? {} : { unassigned }),
+          ...(stage === undefined ? {} : { stages: stage }),
+          ...(source === undefined ? {} : { sources: source }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -305,21 +303,17 @@ export function dealerSalesRoutes(deps: DealerSalesRouteDependencies): ApiRoute[
           status: list(TEST_DRIVE_STATUSES),
           from: instant.optional(),
           until: instant.optional(),
-          beforeId: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
       responses: { 200: { description: "Test drives" } },
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
-        res.json(
-          envelope(
-            await drives.list(principalOf(res), {
-              ...rest,
-              ...(status === undefined ? {} : { statuses: status }),
-            }),
-          ),
-        );
+        const page = await drives.list(principalOf(res), {
+          ...rest,
+          ...(status === undefined ? {} : { statuses: status }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -415,21 +409,17 @@ export function dealerSalesRoutes(deps: DealerSalesRouteDependencies): ApiRoute[
           vehicleId: uuid.optional(),
           customerId: uuid.optional(),
           status: list(QUOTE_STATUSES),
-          beforeId: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
       responses: { 200: { description: "Quotes" } },
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
-        res.json(
-          envelope(
-            await quotes.list(principalOf(res), {
-              ...rest,
-              ...(status === undefined ? {} : { statuses: status }),
-            }),
-          ),
-        );
+        const page = await quotes.list(principalOf(res), {
+          ...rest,
+          ...(status === undefined ? {} : { statuses: status }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

@@ -151,11 +151,9 @@ describe("register", () => {
     const target = await register({ plateNumber: "AS 777-26" });
     const found = await api().get("/api/v1/vehicles?search=as777").set(owner());
     expect((found.body.data as { id: string }[]).map((v) => v.id)).toEqual([target.body.data.id]);
-    const first = await api().get("/api/v1/vehicles?limit=2").set(owner());
+    const first = await api().get("/api/v1/vehicles?pageSize=2").set(owner());
     expect(first.body.data).toHaveLength(2);
-    const second = await api()
-      .get(`/api/v1/vehicles?limit=2&cursor=${first.body.meta.nextCursor}`)
-      .set(owner());
+    const second = await api().get("/api/v1/vehicles?page=2&pageSize=2").set(owner());
     expect(second.body.data[0].id).not.toBe(first.body.data[1].id);
     expect((await api().get("/api/v1/vehicles?status=on_rent").set(owner())).body.data).toEqual([]);
   });

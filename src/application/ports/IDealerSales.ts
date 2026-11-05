@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { Lead, LeadSource, LeadStage } from "../../domain/dealer/Lead.js";
 import type { Quote, QuoteStatus } from "../../domain/dealer/Quote.js";
 import type { TestDrive, TestDriveStatus } from "../../domain/dealer/TestDrive.js";
@@ -14,7 +15,7 @@ export type LeadFilter = Readonly<{
   search?: string;
   limit: number;
   /** Newest first: rows created before this one. */
-  beforeId?: string;
+  offset?: number;
 }>;
 
 export const ACTIVITY_KINDS = [
@@ -85,7 +86,7 @@ export interface ILeads {
   update(lead: Lead): Promise<void>;
   get(id: string): Promise<Lead | null>;
   lock(id: string): Promise<Lead | null>;
-  list(filter: LeadFilter): Promise<Lead[]>;
+  list(filter: LeadFilter): Promise<Paged<Lead>>;
   addActivity(activity: LeadActivity): Promise<void>;
   activities(leadId: string): Promise<LeadActivity[]>;
   saveTask(task: LeadTask): Promise<void>;
@@ -123,7 +124,7 @@ export type TestDriveFilter = Readonly<{
   from?: Date;
   until?: Date;
   limit: number;
-  beforeId?: string;
+  offset?: number;
 }>;
 
 export interface ITestDrives {
@@ -131,7 +132,7 @@ export interface ITestDrives {
   update(drive: TestDrive): Promise<void>;
   get(id: string): Promise<TestDrive | null>;
   lock(id: string): Promise<TestDrive | null>;
-  list(filter: TestDriveFilter): Promise<TestDrive[]>;
+  list(filter: TestDriveFilter): Promise<Paged<TestDrive>>;
 }
 
 export type QuoteFilter = Readonly<{
@@ -141,7 +142,7 @@ export type QuoteFilter = Readonly<{
   customerId?: string;
   statuses?: readonly QuoteStatus[];
   limit: number;
-  beforeId?: string;
+  offset?: number;
 }>;
 
 export interface IQuotes {
@@ -150,7 +151,7 @@ export interface IQuotes {
   update(quote: Quote): Promise<void>;
   get(id: string): Promise<Quote | null>;
   lock(id: string): Promise<Quote | null>;
-  list(filter: QuoteFilter): Promise<Quote[]>;
+  list(filter: QuoteFilter): Promise<Paged<Quote>>;
   /** Sent quotes valid until before the day. */
   lapsed(today: string): Promise<string[]>;
 }

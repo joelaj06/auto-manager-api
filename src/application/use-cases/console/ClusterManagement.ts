@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type PageRequest } from "../../dto/Page.js";
 import {
   CAPACITY_WARNING_PERCENT,
   checkDedication,
@@ -306,8 +307,8 @@ export class ClusterManagement {
     };
   }
 
-  moves(filter: Readonly<{ tenantId?: string; clusterId?: string; limit: number }>) {
-    return this.deps.registry.moves(filter);
+  async moves(filter: Readonly<{ tenantId?: string; clusterId?: string }> & PageRequest) {
+    return pageOf(filter, await this.deps.registry.moves({ ...filter, ...pageWindow(filter) }));
   }
 
   async move(id: string): Promise<ClusterMove> {

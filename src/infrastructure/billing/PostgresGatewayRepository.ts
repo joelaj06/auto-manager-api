@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   PaymentAttempt,
   type AttemptStatus,
@@ -219,16 +221,21 @@ export class PostgresGatewayRepository implements IGatewayRepository {
       tenantId?: string;
       invoiceId?: string;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<PaymentAttempt[]> {
-    const { rows } = await this.db.query<AttemptRow>(
-      `select * from gateway_transactions
+  ): Promise<Paged<PaymentAttempt>> {
+    const { rows, total } = await pagedQuery<AttemptRow>(
+      this.db,
+      {
+        sql: `select * from gateway_transactions
         where ($1::text is null or status = $1) and ($2::uuid is null or tenant_id = $2)
-          and ($3::uuid is null or invoice_id = $3)
-        order by created_at desc, id desc limit $4`,
-      [filter.status ?? null, filter.tenantId ?? null, filter.invoiceId ?? null, filter.limit],
+          and ($3::uuid is null or invoice_id = $3)`,
+        orderBy: "created_at desc, id desc",
+        params: [filter.status ?? null, filter.tenantId ?? null, filter.invoiceId ?? null],
+      },
+      filter,
     );
-    return rows.map(toAttempt);
+    return { rows: rows.map(toAttempt), total };
   }
 
   async succeededBetween(provider: string, from: Date, to: Date): Promise<PaymentAttempt[]> {
@@ -285,13 +292,17 @@ export class PostgresGatewayRepository implements IGatewayRepository {
 
   async webhooks(
     filter: Readonly<{ outcome?: WebhookRecord["outcome"]; before?: string; limit: number }>,
-  ): Promise<WebhookRecord[]> {
-    const { rows } = await this.db.query<WebhookRow>(
-      `${WEBHOOK} where ($1::text is null or outcome = $1) and ($2::uuid is null or id < $2)
-        order by id desc limit $3`,
-      [filter.outcome ?? null, filter.before ?? null, filter.limit],
+  ): Promise<Paged<WebhookRecord>> {
+    const { rows, total } = await pagedQuery<WebhookRow>(
+      this.db,
+      {
+        sql: `${WEBHOOK} where ($1::text is null or outcome = $1)`,
+        orderBy: "id desc",
+        params: [filter.outcome ?? null],
+      },
+      filter,
     );
-    return rows.map(toWebhook);
+    return { rows: rows.map(toWebhook), total };
   }
 
   async addRefund(r: Omit<RefundRecord, "createdAt" | "processedAt">): Promise<void> {
@@ -391,11 +402,16 @@ export class PostgresGatewayRepository implements IGatewayRepository {
     return toReconciliation(rows[0]!);
   }
 
-  async reconciliations(limit: number): Promise<ReconciliationRecord[]> {
-    const { rows } = await this.db.query<ReconciliationRow>(
-      `select *, day::text as day from gateway_reconciliations order by day desc limit $1`,
-      [limit],
+  async reconciliations(window: PageWindow): Promise<Paged<ReconciliationRecord>> {
+    const { rows, total } = await pagedQuery<ReconciliationRow>(
+      this.db,
+      {
+        sql: `select *, day::text as day from gateway_reconciliations`,
+        orderBy: "gateway_reconciliations.day desc, gateway_reconciliations.id desc",
+        params: [],
+      },
+      window,
     );
-    return rows.map(toReconciliation);
+    return { rows: rows.map(toReconciliation), total };
   }
 }

@@ -31,7 +31,7 @@ This document was checked against the route declarations in `src/adapters/routes
 - Success is `{ "data": ... }`, sometimes with `meta`. Errors are `{ "error": { "code", "message", "details"?, "remainingAttempts"?, "requestId"? } }`.
 - Branch on `error.code`, not on the message. Show `requestId` on failure screens so support can trace it.
 - Send money as text, for example `"250.00"`, never as a number. Responses return money as `{ amountMinor, currency, formatted }`, or as fields ending in `Minor`: see [39_api_response_shapes.md](39_api_response_shapes.md).
-- Lists page in one of four ways depending on the route: `cursor`, `before`, `beforeId` or `after`. Check each route's query parameters. Notifications, for example, return `meta.nextCursor`.
+- Lists take `page` (from 1) and `pageSize`, and answer with the headers `X-Total-Count`, `X-Page` and `X-Page-Size`, so you can show page numbers and jump to any page. The largest and default page size differ by route: see each route's query parameters. A page past the end is an empty list with the true total. The fuel report takes `limit`: it is a report over the latest logs rather than a list of pages. Notifications still give `meta.unread`.
 - Long jobs answer `202` and are followed by polling, for example report files.
 
 **Status codes to design for**
@@ -611,12 +611,12 @@ Every photo, scan and receipt in the product uses this pattern, whichever route 
 
 **Acceptance criteria**
 
-- The bell badge uses the unread count. The list pages with `meta.nextCursor`.
+- The bell badge uses the unread count. The list pages with `page` and `pageSize`.
 - Marking read with no `ids` marks everything read.
 
 | Method | Path | Access | Does | Returns |
 |---|---|---|---|---|
-| GET | `/api/v1/notifications` | Signed-in | My notifications, newest first (`meta.unread`, `meta.nextCursor`) | [GetNotificationsItem](39_api_response_shapes.md#getnotificationsitem)[] |
+| GET | `/api/v1/notifications` | Signed-in | My notifications, newest first (`meta.unread`) | [GetNotificationsItem](39_api_response_shapes.md#getnotificationsitem)[] |
 | GET | `/api/v1/notifications/unread-count` | Signed-in | How many of my notifications are unread (the bell badge) | [GetNotificationsUnreadCount](39_api_response_shapes.md#getnotificationsunreadcount) |
 | POST | `/api/v1/notifications/read` | Signed-in | Mark notifications read (all of them without `ids`) | [GetNotificationsUnreadCount](39_api_response_shapes.md#getnotificationsunreadcount) |
 

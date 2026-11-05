@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import {
   TELEMATICS_EVENT_KINDS,
@@ -18,7 +20,6 @@ const uuid = z.uuid();
 const idParams = z.object({ id: uuid });
 const instant = z.iso.datetime({ offset: true }).transform((v) => new Date(v));
 const day = z.iso.date();
-const limit = z.coerce.number().int().min(1).max(500).default(100);
 const flag = z
   .enum(["true", "false"])
   .transform((v) => v === "true")
@@ -125,12 +126,13 @@ export function telematicsRoutes(deps: TelematicsRouteDependencies): ApiRoute[] 
           driverId: uuid.optional(),
           from: instant,
           to: instant,
-          limit,
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Trips" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await views.trips(principalOf(res), query)));
+        const page = await views.trips(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -147,12 +149,13 @@ export function telematicsRoutes(deps: TelematicsRouteDependencies): ApiRoute[] 
           open: flag,
           from: instant.optional(),
           to: instant.optional(),
-          limit,
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Events" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await views.events(principalOf(res), query)));
+        const page = await views.events(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -204,12 +207,13 @@ export function telematicsRoutes(deps: TelematicsRouteDependencies): ApiRoute[] 
           vehicleId: uuid.optional(),
           unlinked: flag,
           status: z.enum(["active", "retired"]).optional(),
-          limit,
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Trackers" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await setup.devices(principalOf(res), query)));
+        const page = await setup.devices(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

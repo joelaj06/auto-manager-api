@@ -265,12 +265,13 @@ export class ServiceDueReport implements ReportDefinition {
   ) {}
 
   async run(actor: Principal, params: ParamValues): Promise<ReportTable> {
-    const items = await this.schedule.due(actor, {
+    const { items } = await this.schedule.due(actor, {
       ...(params.status === undefined
         ? {}
         : { status: params.status as "upcoming" | "due" | "overdue" }),
       ...(params.branchId === undefined ? {} : { branchId: params.branchId }),
-      limit: 2_000,
+      page: 1,
+      pageSize: 2_000,
     });
     const shown =
       params.status === undefined ? items.filter((i) => i.status !== "scheduled") : items;

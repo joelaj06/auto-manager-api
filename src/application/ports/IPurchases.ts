@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { Allocation, CostKind } from "../../domain/purchases/LandedCost.js";
 import type {
   ImportStage,
@@ -14,7 +15,7 @@ export type PurchaseFilter = Readonly<{
   types?: readonly PurchaseType[];
   limit: number;
   /** Newest first: rows created before this one. */
-  beforeId?: string;
+  offset?: number;
 }>;
 
 export type NewPurchaseCost = Readonly<{
@@ -74,7 +75,7 @@ export interface IPurchases {
   update(purchase: Purchase): Promise<void>;
   get(id: string): Promise<Purchase | null>;
   lock(id: string): Promise<Purchase | null>;
-  list(filter: PurchaseFilter): Promise<Purchase[]>;
+  list(filter: PurchaseFilter): Promise<Paged<Purchase>>;
   addCost(cost: NewPurchaseCost): Promise<void>;
   costs(purchaseId: string): Promise<PurchaseCostRecord[]>;
   /** The purchase a cost (by its id, the expense's source) belongs to. */

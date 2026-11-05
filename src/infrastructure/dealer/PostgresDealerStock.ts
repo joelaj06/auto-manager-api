@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AgedStock,
   IDealerStock,
@@ -155,6 +157,8 @@ const toRecord = (r: Row & VehicleRow): StockRecord => ({
   consignorName: r.consignor_name,
 });
 
+const STOCK_ORDER = "s.stocked_on, s.vehicle_id";
+
 export class PostgresDealerStock implements IDealerStock {
   constructor(private readonly transactions: PostgresTransactionContext) {}
 
@@ -199,6 +203,34 @@ export class PostgresDealerStock implements IDealerStock {
   }
 
   async list(filter: StockFilter): Promise<StockRecord[]> {
+    const { sql, params } = this.filtered(filter);
+    const after = filter.afterVehicleId;
+    const keyset = after !== undefined && UUID.test(after);
+    if (keyset) params.push(after);
+    params.push(filter.limit);
+    const { rows } = await this.tx.query<Row & VehicleRow>(
+      `${sql} ${
+        keyset
+          ? `and (s.stocked_on, s.vehicle_id) >
+               (select a.stocked_on, a.vehicle_id from dealer_stock a
+                 where a.vehicle_id = $${params.length - 1})`
+          : ""
+      } order by ${STOCK_ORDER} limit $${params.length}`,
+      params,
+    );
+    return rows.map(toRecord);
+  }
+
+  async page(filter: StockFilter): Promise<Paged<StockRecord>> {
+    const { rows, total } = await pagedQuery<Row & VehicleRow>(
+      this.tx,
+      { ...this.filtered(filter), orderBy: STOCK_ORDER },
+      filter,
+    );
+    return { rows: rows.map(toRecord), total };
+  }
+
+  private filtered(filter: StockFilter) {
     const where: string[] = ["v.deleted_at is null"];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -219,21 +251,7 @@ export class PostgresDealerStock implements IDealerStock {
     if (filter.stockedOnOrBefore !== undefined)
       add("s.stocked_on <= ?::date", filter.stockedOnOrBefore);
     if (filter.consignorId !== undefined) add("s.consignor_id = ?", filter.consignorId);
-    if (filter.afterVehicleId !== undefined && UUID.test(filter.afterVehicleId))
-      add(
-        `(s.stocked_on, s.vehicle_id) >
-           (select a.stocked_on, a.vehicle_id from dealer_stock a where a.vehicle_id = ?)`,
-        filter.afterVehicleId,
-      );
-    params.push(filter.limit);
-    const { rows } = await this.tx.query<Row & VehicleRow>(
-      `select ${RECORD_SELECT}
-        where ${where.join(" and ")}
-        order by s.stocked_on, s.vehicle_id
-        limit $${params.length}`,
-      params,
-    );
-    return rows.map(toRecord);
+    return { sql: `select ${RECORD_SELECT} where ${where.join(" and ")}`, params };
   }
 
   async spend(vehicleIds: readonly string[]): Promise<Map<string, StockSpend>> {

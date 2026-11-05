@@ -114,7 +114,7 @@ export class DriverApp {
       const assignment = await deps.assignments.openForDriver(driver.id);
       const today = await deps.calendar.today();
       const statement = await deps.ledger.statementOf(driver, { from: today, to: today });
-      const recent = await deps.remittances.listOwn(driver.id, { limit: 20 });
+      const recent = await deps.remittances.listOwn(driver.id, { page: 1, pageSize: 20 });
       const base = await deps.posting.baseCurrency();
       return {
         driver: {
@@ -196,7 +196,7 @@ export class DriverApp {
 
   async remittances(
     actor: Principal,
-    query: Readonly<{ limit: number; cursor?: string }>,
+    query: Readonly<{ page: number; pageSize: number }>,
   ): Promise<Page<RemittanceView>> {
     const driver = await this.deps.unitOfWork.run(() => this.me(actor));
     return this.deps.remittances.listOwn(driver.id, query);

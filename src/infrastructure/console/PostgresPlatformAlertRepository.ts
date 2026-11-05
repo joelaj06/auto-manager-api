@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AlertInput,
   AlertSeverity,
@@ -105,18 +107,27 @@ export class PostgresPlatformAlertRepository implements IPlatformAlertRepository
   }
 
   async list(
-    f: Readonly<{ status?: AlertStatus; severity?: AlertSeverity; source?: string; limit: number }>,
-  ): Promise<PlatformAlert[]> {
-    const { rows } = await this.db.query<Row>(
-      `select * from platform_alerts
+    f: Readonly<{
+      status?: AlertStatus;
+      severity?: AlertSeverity;
+      source?: string;
+      limit: number;
+      offset?: number;
+    }>,
+  ): Promise<Paged<PlatformAlert>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `select * from platform_alerts
         where ($1::text is null or status = $1) and ($2::text is null or severity = $2)
-          and ($3::text is null or source = $3)
-        order by case severity when 'critical' then 0 when 'warning' then 1 else 2 end,
-                 last_seen_at desc
-        limit $4`,
-      [f.status ?? null, f.severity ?? null, f.source ?? null, f.limit],
+          and ($3::text is null or source = $3)`,
+        orderBy:
+          "case severity when 'critical' then 0 when 'warning' then 1 else 2 end, last_seen_at desc, id desc",
+        params: [f.status ?? null, f.severity ?? null, f.source ?? null],
+      },
+      f,
     );
-    return rows.map(toAlert);
+    return { rows: rows.map(toAlert), total };
   }
 
   async acknowledge(id: string, staffId: string, now: Date): Promise<void> {

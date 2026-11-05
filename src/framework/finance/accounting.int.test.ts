@@ -340,7 +340,7 @@ describe("reconciliation", () => {
 
     const matched = ok(
       await api()
-        .get(`/api/v1/reconciliation/lines?accountId=${bank()}&status=matched&limit=100`)
+        .get(`/api/v1/reconciliation/lines?accountId=${bank()}&status=matched&pageSize=100`)
         .set(owner()),
     ) as Body[];
     const transfer = matched.find((l) => l.description === "Transfer from Ama");
@@ -371,7 +371,7 @@ describe("reconciliation", () => {
 
     const matched = ok(
       await api()
-        .get(`/api/v1/reconciliation/lines?accountId=${bank()}&status=matched&limit=100`)
+        .get(`/api/v1/reconciliation/lines?accountId=${bank()}&status=matched&pageSize=100`)
         .set(owner()),
     ) as Body[];
     const charges = matched.find((l) => l.description === "Monthly charges");

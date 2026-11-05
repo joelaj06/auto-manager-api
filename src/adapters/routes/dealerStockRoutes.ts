@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type {
   ConsignmentInput,
@@ -101,22 +103,18 @@ export function dealerStockRoutes(deps: DealerStockRouteDependencies): ApiRoute[
           priceTo: amount.optional(),
           minDays: z.coerce.number().int().min(0).max(3650).optional(),
           consignorId: uuid.optional(),
-          after: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
       responses: { 200: { description: "Stock" } },
       handler: async ({ query }, _req, res) => {
         const { status, source, ...rest } = query;
-        res.json(
-          envelope(
-            await stock.list(principalOf(res), {
-              ...rest,
-              ...(status === undefined ? {} : { statuses: status }),
-              ...(source === undefined ? {} : { sources: source }),
-            }),
-          ),
-        );
+        const page = await stock.list(principalOf(res), {
+          ...rest,
+          ...(status === undefined ? {} : { statuses: status }),
+          ...(source === undefined ? {} : { sources: source }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

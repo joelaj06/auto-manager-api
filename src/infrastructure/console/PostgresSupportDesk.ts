@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   SupportTicket,
   TICKET_PRIORITIES,
@@ -195,7 +197,7 @@ export class PostgresSupportDesk implements ISupportDesk {
     return rows[0] === undefined ? null : toView(rows[0]);
   }
 
-  async list(filter: TicketFilter): Promise<TicketView[]> {
+  async list(filter: TicketFilter): Promise<Paged<TicketView>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -221,16 +223,18 @@ export class PostgresSupportDesk implements ISupportDesk {
           or k.requester_email::text ilike ${q})`,
       );
     }
-    params.push(filter.limit);
-    const { rows } = await this.db.query<Row>(
-      `${VIEW} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-       order by (k.status in ${ACTIVE}) desc,
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `${VIEW} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: `(k.status in ${ACTIVE}) desc,
                 case k.priority when 'urgent' then 0 when 'high' then 1 when 'normal' then 2 else 3 end,
-                k.resolution_due_at, k.created_at desc
-       limit $${params.length}`,
-      params,
+                k.resolution_due_at, k.created_at desc, k.id desc`,
+        params,
+      },
+      filter,
     );
-    return rows.map(toView);
+    return { rows: rows.map(toView), total };
   }
 
   async addMessage(message: NewTicketMessage): Promise<TicketMessage> {

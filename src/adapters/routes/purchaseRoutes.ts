@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { Purchases } from "../../application/use-cases/purchases/Purchases.js";
 import { FILE_KINDS } from "../../domain/files/FileKinds.js";
@@ -82,22 +84,18 @@ export function purchaseRoutes(deps: PurchaseRouteDependencies): ApiRoute[] {
           supplierId: uuid.optional(),
           status: list(PURCHASE_STATUSES),
           type: list(PURCHASE_TYPES),
-          beforeId: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
       responses: { 200: { description: "Purchases" } },
       handler: async ({ query }, _req, res) => {
         const { status, type, ...rest } = query;
-        res.json(
-          envelope(
-            await purchases.list(principalOf(res), {
-              ...rest,
-              ...(status === undefined ? {} : { statuses: status }),
-              ...(type === undefined ? {} : { types: type }),
-            }),
-          ),
-        );
+        const page = await purchases.list(principalOf(res), {
+          ...rest,
+          ...(status === undefined ? {} : { statuses: status }),
+          ...(type === undefined ? {} : { types: type }),
+        });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

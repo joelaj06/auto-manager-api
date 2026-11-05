@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IClock } from "../../ports/IClock.js";
 import type {
@@ -7,13 +8,8 @@ import type {
   PushPlatform,
 } from "../../ports/INotifications.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
-import { PageCursor } from "../../services/PageCursor.js";
 
-export type InboxPage = Readonly<{
-  items: readonly InboxItem[];
-  unread: number;
-  nextCursor: string | null;
-}>;
+export type InboxPage = Page<InboxItem> & Readonly<{ unread: number }>;
 
 /** A staff member's own notifications (the bell) and the app installations that get push. */
 export class NotificationCenter {
@@ -28,17 +24,15 @@ export class NotificationCenter {
 
   async list(
     actor: Principal,
-    query: Readonly<{ unreadOnly?: boolean; cursor?: string; limit: number }>,
+    query: Readonly<{ unreadOnly?: boolean; page: number; pageSize: number }>,
   ): Promise<InboxPage> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 1).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.inbox.list(actor.userId, {
+      const found = await deps.inbox.list(actor.userId, {
         unreadOnly: query.unreadOnly ?? false,
-        limit: query.limit + 1,
-        ...(after === undefined ? {} : { afterId: String(after[0]) }),
+        ...pageWindow(query),
       });
-      const page = PageCursor.paginate(rows, query.limit, (r) => [r.id]);
+      const page = pageOf(query, found);
       return { ...page, unread: await deps.inbox.unreadCount(actor.userId) };
     });
   }

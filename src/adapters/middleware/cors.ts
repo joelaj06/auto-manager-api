@@ -1,5 +1,6 @@
 import cors from "cors";
 import type { RequestHandler } from "express";
+import { PAGE_HEADERS } from "../presenters/pageHeaders.js";
 
 /**
  * True when `origin` is allowed. Entries are exact origins ("https://admin.example.com") or
@@ -44,6 +45,7 @@ export function corsPolicy(allowList: readonly string[]): RequestHandler {
       "RateLimit-Policy",
       "Retry-After",
       "WWW-Authenticate",
+      ...PAGE_HEADERS,
     ],
     maxAge: 600,
   });

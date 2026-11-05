@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { ServicePlans } from "../../application/use-cases/maintenance/ServicePlans.js";
 import type { ServiceSchedule } from "../../application/use-cases/maintenance/ServiceSchedule.js";
@@ -172,12 +174,13 @@ export function maintenanceRoutes(deps: MaintenanceRouteDependencies): ApiRoute[
           status: z.enum(DUE_STATUSES).optional(),
           branchId: uuid.optional(),
           vehicleId: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(500).default(100),
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Due services" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await schedule.due(principalOf(res), query)));
+        const page = await schedule.due(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

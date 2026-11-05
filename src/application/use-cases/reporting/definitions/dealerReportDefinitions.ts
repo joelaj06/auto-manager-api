@@ -543,17 +543,18 @@ export class PurchasesReport implements ReportDefinition {
   ) {}
 
   async run(actor: Principal, params: ParamValues): Promise<ReportTable> {
-    const list = await this.purchases.list(actor, {
+    const { items } = await this.purchases.list(actor, {
       ...(params.branchId === undefined ? {} : { branchId: params.branchId }),
       statuses:
         params.status === undefined
           ? ["draft", "ordered", "received"]
           : [params.status as "draft" | "ordered" | "received"],
-      limit: MAX_PURCHASES,
+      page: 1,
+      pageSize: MAX_PURCHASES,
     });
     const base = await this.context.baseCurrency();
     const views = [];
-    for (const p of list) views.push(await this.purchases.get(actor, p.id));
+    for (const p of items) views.push(await this.purchases.get(actor, p.id));
     const rows = views.flatMap((p) =>
       p.lines.map((l) => ({
         number: p.number,

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { InvalidCursorError } from "../../application/errors/PaginationErrors.js";
 import {
   MissingTenantContextError,
   TenantDatabaseMismatchError,
@@ -47,7 +46,6 @@ describe("presentError", () => {
 
   it.each([
     [new InvalidTenantIdError(), 400, "INVALID_TENANT_ID"],
-    [new InvalidCursorError(), 400, "INVALID_CURSOR"],
     [new RouteNotFoundError("GET", "/x"), 404, "ROUTE_NOT_FOUND"],
     [new RateLimitedError(), 429, "RATE_LIMITED"],
     [new TenantSchemaOutdatedError("t", "0001", "0002"), 503, "TENANT_SCHEMA_OUTDATED"],

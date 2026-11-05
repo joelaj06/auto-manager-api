@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest, type Paging } from "../../dto/Page.js";
 import { Money } from "../../../domain/money/Money.js";
 import {
   commissionTerms,
@@ -209,9 +210,12 @@ export class PartnerCommissions {
     return this.deps.commissions.balances();
   }
 
-  async entries(filter: EntryFilter): Promise<CommissionEntry[]> {
+  async entries(filter: Paging<EntryFilter>): Promise<Page<CommissionEntry>> {
     await this.deps.commissions.releaseDue(this.deps.clock.now());
-    return this.deps.commissions.entries(filter);
+    return pageOf(
+      filter,
+      await this.deps.commissions.entries({ ...filter, ...pageWindow(filter) }),
+    );
   }
 
   async adjust(
@@ -400,15 +404,18 @@ export class PartnerCommissions {
     return this.payoutView(id);
   }
 
-  payouts(
+  async payouts(
     filter: Readonly<{
       partnerId?: string;
       status?: PayoutStatus;
       unacknowledged?: boolean;
-      limit: number;
-    }>,
-  ): Promise<PayoutRecord[]> {
-    return this.deps.commissions.payouts(filter);
+    }> &
+      PageRequest,
+  ): Promise<Page<PayoutRecord>> {
+    return pageOf(
+      filter,
+      await this.deps.commissions.payouts({ ...filter, ...pageWindow(filter) }),
+    );
   }
 
   async payout(id: string, partnerId?: string): Promise<PayoutView> {
@@ -427,10 +434,15 @@ export class PartnerCommissions {
     const to = new Date(Date.UTC(Number(match[1]), Number(match[2]), 1));
     const partner = await this.partner(partnerId);
     await deps.commissions.releaseDue(deps.clock.now());
-    const entries = await deps.commissions.entries({ partnerId, from, to, limit: STATEMENT_LIMIT });
+    const { rows: entries } = await deps.commissions.entries({
+      partnerId,
+      from,
+      to,
+      limit: STATEMENT_LIMIT,
+    });
     const payouts = (
       await deps.commissions.payouts({ partnerId, status: "paid", limit: STATEMENT_LIMIT })
-    ).filter((p) => p.paidAt >= from && p.paidAt < to);
+    ).rows.filter((p) => p.paidAt >= from && p.paidAt < to);
     const sum = (kind: CommissionEntry["kind"]) =>
       entries.filter((e) => e.kind === kind).reduce((s, e) => s + e.amountMinor, 0);
     const opening = await deps.commissions.balanceAt(partnerId, from);
@@ -559,7 +571,7 @@ export class PartnerCommissions {
 
   // --- the reseller's own console ---
 
-  myEntries(user: PlatformPrincipal, filter: Omit<EntryFilter, "partnerId" | "tenantId">) {
+  myEntries(user: PlatformPrincipal, filter: Paging<Omit<EntryFilter, "partnerId" | "tenantId">>) {
     return this.entries({ ...filter, partnerId: partnerOf(user) });
   }
 
@@ -568,8 +580,8 @@ export class PartnerCommissions {
     return (await this.deps.commissions.balances(partnerOf(user)))[0] ?? null;
   }
 
-  myPayouts(user: PlatformPrincipal, limit: number): Promise<PayoutRecord[]> {
-    return this.payouts({ partnerId: partnerOf(user), limit });
+  myPayouts(user: PlatformPrincipal, request: PageRequest): Promise<Page<PayoutRecord>> {
+    return this.payouts({ ...request, partnerId: partnerOf(user) });
   }
 
   async myTerms(partnerId: string): Promise<CommissionTerms | null> {

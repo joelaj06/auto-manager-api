@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { ArchiveStatus } from "../../domain/console/ColdArchive.js";
 import type {
   ArchivableTenant,
@@ -128,16 +130,19 @@ export class PostgresTenantArchives implements ITenantArchives {
   }
 
   async list(
-    filter: Readonly<{ status?: ArchiveStatus; tenantId?: string; limit: number }>,
-  ): Promise<TenantArchive[]> {
-    const { rows } = await this.db.query<Row>(
-      `${ARCHIVES}
-        where ($1::text is null or a.status = $1) and ($2::uuid is null or a.tenant_id = $2)
-        order by a.requested_at desc, a.id desc
-        limit $3`,
-      [filter.status ?? null, filter.tenantId ?? null, filter.limit],
+    filter: Readonly<{ status?: ArchiveStatus; tenantId?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<TenantArchive>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `${ARCHIVES}
+        where ($1::text is null or a.status = $1) and ($2::uuid is null or a.tenant_id = $2)`,
+        orderBy: "a.requested_at desc, a.id desc",
+        params: [filter.status ?? null, filter.tenantId ?? null],
+      },
+      filter,
     );
-    return rows.map(toArchive);
+    return { rows: rows.map(toArchive), total };
   }
 
   async update(id: string, changes: ArchiveChanges): Promise<void> {

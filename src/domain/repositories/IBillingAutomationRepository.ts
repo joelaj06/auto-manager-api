@@ -1,3 +1,4 @@
+import type { Paged, PageWindow } from "../value-objects/Paged.js";
 import type { DunningPolicy, NoticeChannel } from "../billing/Dunning.js";
 import type { BillingDate } from "../billing/Subscription.js";
 
@@ -107,7 +108,7 @@ export interface IBillingAutomationRepository {
     notice: Omit<NoticeRecord, "id" | "status" | "error" | "sentAt">,
   ): Promise<string | null>;
   noticeFailed(id: string, error: string): Promise<void>;
-  notices(tenantId: string, limit: number): Promise<NoticeRecord[]>;
+  notices(tenantId: string, window: PageWindow): Promise<Paged<NoticeRecord>>;
 
   setDisputeHold(tenantId: string, reason: string | null): Promise<boolean>;
 
@@ -115,8 +116,13 @@ export interface IBillingAutomationRepository {
   extension(id: string, lock?: boolean): Promise<ExtensionRecord | null>;
   saveExtension(extension: ExtensionRecord): Promise<void>;
   extensions(
-    filter: Readonly<{ tenantId?: string; status?: ExtensionStatus; limit: number }>,
-  ): Promise<ExtensionRecord[]>;
+    filter: Readonly<{
+      tenantId?: string;
+      status?: ExtensionStatus;
+      limit: number;
+      offset?: number;
+    }>,
+  ): Promise<Paged<ExtensionRecord>>;
   /** Extensions approved for the tenant since `since` (the rolling 90-day limit). */
   approvedSince(tenantId: string, since: Date): Promise<number>;
   /** A paid invoice closes its open extension. */
@@ -126,5 +132,5 @@ export interface IBillingAutomationRepository {
 
   startRun(run: Pick<AutomationRun, "id" | "runOn" | "dryRun">): Promise<void>;
   finishRun(run: AutomationRun): Promise<void>;
-  runs(limit: number): Promise<AutomationRun[]>;
+  runs(window: PageWindow): Promise<Paged<AutomationRun>>;
 }

@@ -117,7 +117,7 @@ const deal = async (id: string) => {
   return res.body.data as { status: string; holdUntil: string | null; number: string };
 };
 async function inbox(token: string): Promise<{ title: string }[]> {
-  const res = await api().get("/api/v1/notifications?limit=100").set(as(token));
+  const res = await api().get("/api/v1/notifications?pageSize=100").set(as(token));
   expect(res.status, JSON.stringify(res.body)).toBe(200);
   return res.body.data as { title: string }[];
 }

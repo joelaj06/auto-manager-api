@@ -11,7 +11,7 @@ import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRe
 import { TaxCode } from "../../../domain/tax/TaxCode.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { InvoiceNotFoundError } from "../../errors/FinanceErrors.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -27,7 +27,6 @@ import type { ITenantReferenceData } from "../../ports/IReferenceData.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
@@ -102,7 +101,7 @@ export type InvoiceView = Omit<
   }>;
 
 export type InvoiceQuery = Omit<InvoiceListFilter, "branchIds" | "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 /**
  * Invoices (docs/13 §2.1, §6): drafts edited freely; issuing numbers the invoice (INV-…),
@@ -135,17 +134,13 @@ export class Invoicing {
 
   async list(actor: Principal, query: InvoiceQuery): Promise<Page<InvoiceView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.queries.invoices({
+      const found = await deps.queries.invoices({
         ...query,
         branchIds: deps.scope.branchesFor(actor, "finance.invoices.view"),
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { createdAt: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
-      const page = PageCursor.paginate(rows, query.limit, (i) => [i.createdAt.toISOString(), i.id]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map(invoiceView) };
     });
   }

@@ -88,7 +88,7 @@ async function refund(paymentId: string, amountMinor: number) {
 
 const ledger = async (tenantId?: string) =>
   (
-    (await api().get(`${BASE}/partners/${partnerId}/commissions?limit=100`).set(as(admin))).body
+    (await api().get(`${BASE}/partners/${partnerId}/commissions?pageSize=100`).set(as(admin))).body
       .data as { kind: string; amountMinor: number; status: string; tenantId: string | null }[]
   ).filter((e) => tenantId === undefined || e.tenantId === tenantId);
 

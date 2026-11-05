@@ -144,7 +144,7 @@ export class LaunchReadiness {
     const now = deps.clock.now();
     const backups = await deps.dataOperations.backupOverview();
     const migrations = await deps.dataOperations.migrations();
-    const drills = await deps.drills.list(20);
+    const { items: drills } = await deps.drills.list({ page: 1, pageSize: 20 });
     const scheduled = drills.find(
       (d) => d.kind === "quarterly_game_day" && d.status === "scheduled",
     );

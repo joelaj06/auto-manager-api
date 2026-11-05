@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import { randomBytes } from "node:crypto";
 import {
   TelematicsRuleError,
@@ -193,13 +194,20 @@ export class TelematicsSetup {
 
   // --- trackers ---
 
-  devices(actor: Principal, filter: Omit<DeviceFilter, "branchIds">): Promise<TelematicsDevice[]> {
+  devices(
+    actor: Principal,
+    filter: Paging<Omit<DeviceFilter, "branchIds">>,
+  ): Promise<Page<TelematicsDevice>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const branchIds = deps.vehicleAccess.branchesFor(actor, "telematics.view");
       // Trackers not on a vehicle belong to no branch: business-wide access sees them.
-      if (filter.unlinked === true && branchIds !== "all") return [];
-      return deps.telematics.devices({ ...filter, branchIds });
+      if (filter.unlinked === true && branchIds !== "all")
+        return pageOf(filter, { rows: [], total: 0 });
+      return pageOf(
+        filter,
+        await deps.telematics.devices({ ...filter, ...pageWindow(filter), branchIds }),
+      );
     });
   }
 
@@ -232,7 +240,7 @@ export class TelematicsSetup {
       if ((await deps.telematics.connection(input.connectionId)) === null)
         throw new TelematicsNotFoundError("connection");
       const identifier = input.identifier.trim();
-      const existing = await deps.telematics.devices({
+      const { rows: existing } = await deps.telematics.devices({
         branchIds: "all",
         connectionId: input.connectionId,
         limit: 5_000,

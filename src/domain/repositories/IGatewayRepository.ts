@@ -1,3 +1,4 @@
+import type { Paged, PageWindow } from "../value-objects/Paged.js";
 import type { AttemptStatus, PaymentAttempt } from "../billing/PaymentAttempt.js";
 
 export type WebhookRecord = Readonly<{
@@ -57,8 +58,9 @@ export interface IGatewayRepository {
       tenantId?: string;
       invoiceId?: string;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<PaymentAttempt[]>;
+  ): Promise<Paged<PaymentAttempt>>;
   /** Succeeded attempts completed in [from, to) (reconciliation). */
   succeededBetween(provider: string, from: Date, to: Date): Promise<PaymentAttempt[]>;
 
@@ -80,8 +82,8 @@ export interface IGatewayRepository {
     now: Date,
   ): Promise<void>;
   webhooks(
-    filter: Readonly<{ outcome?: WebhookRecord["outcome"]; before?: string; limit: number }>,
-  ): Promise<WebhookRecord[]>;
+    filter: Readonly<{ outcome?: WebhookRecord["outcome"]; offset?: number; limit: number }>,
+  ): Promise<Paged<WebhookRecord>>;
 
   addRefund(refund: Omit<RefundRecord, "createdAt" | "processedAt">): Promise<void>;
   refund(id: string, lock?: boolean): Promise<RefundRecord | null>;
@@ -93,5 +95,5 @@ export interface IGatewayRepository {
   saveReconciliation(
     record: Omit<ReconciliationRecord, "id" | "ranAt">,
   ): Promise<ReconciliationRecord>;
-  reconciliations(limit: number): Promise<ReconciliationRecord[]>;
+  reconciliations(window: PageWindow): Promise<Paged<ReconciliationRecord>>;
 }

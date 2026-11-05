@@ -1,3 +1,5 @@
+import type { Paged } from "../../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../postgres/PagedQuery.js";
 import type {
   ClusterChanges,
   ClusterFinding,
@@ -241,17 +243,20 @@ export class PostgresClusterRegistry implements IClusterRegistry {
   }
 
   async moves(
-    filter: Readonly<{ tenantId?: string; clusterId?: string; limit: number }>,
-  ): Promise<ClusterMove[]> {
-    const { rows } = await this.db.query<Row>(
-      `${MOVES}
+    filter: Readonly<{ tenantId?: string; clusterId?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<ClusterMove>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `${MOVES}
         where ($1::uuid is null or m.tenant_id = $1)
-          and ($2::text is null or m.from_cluster = $2 or m.to_cluster = $2)
-        order by m.requested_at desc, m.id desc
-        limit $3`,
-      [filter.tenantId ?? null, filter.clusterId ?? null, filter.limit],
+          and ($2::text is null or m.from_cluster = $2 or m.to_cluster = $2)`,
+        orderBy: "m.requested_at desc, m.id desc",
+        params: [filter.tenantId ?? null, filter.clusterId ?? null],
+      },
+      filter,
     );
-    return rows.map(toMove);
+    return { rows: rows.map(toMove), total };
   }
 
   async updateMove(id: string, changes: MoveChanges): Promise<void> {

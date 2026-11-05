@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   ConnectionSecret,
   DeviceChanges,
@@ -328,18 +330,22 @@ export class PostgresTelematics implements ITelematics {
 
   // --- trackers ---
 
-  async devices(filter: DeviceFilter): Promise<TelematicsDevice[]> {
+  async devices(filter: DeviceFilter): Promise<Paged<TelematicsDevice>> {
     const w = new Where().branches("v.branch_id", filter.branchIds);
     if (filter.connectionId !== undefined) w.add("d.connection_id = ?", filter.connectionId);
     if (filter.vehicleId !== undefined) w.add("d.vehicle_id = ?", filter.vehicleId);
     if (filter.unlinked === true) w.raw("d.vehicle_id is null");
     if (filter.status !== undefined) w.add("d.status = ?", filter.status);
-    const { rows } = await this.tx.query<Row>(
-      `${DEVICE} ${w.sql()} order by d.vehicle_id is null desc, vehicle_name, d.identifier
-        limit ${w.next(filter.limit)}`,
-      w.params,
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx,
+      {
+        sql: `${DEVICE} ${w.sql()}`,
+        orderBy: "d.vehicle_id is null desc, vehicle_name, d.identifier, d.id",
+        params: w.params,
+      },
+      filter,
     );
-    return rows.map(toDevice);
+    return { rows: rows.map(toDevice), total };
   }
 
   async device(id: string): Promise<TelematicsDevice | null> {
@@ -771,7 +777,7 @@ export class PostgresTelematics implements ITelematics {
     }));
   }
 
-  async trips(filter: TripFilter): Promise<TripView[]> {
+  async trips(filter: TripFilter): Promise<Paged<TripView>> {
     const w = new Where()
       .branches("v.branch_id", filter.branchIds)
       .add("t.started_at >= ?", filter.from)
@@ -779,14 +785,15 @@ export class PostgresTelematics implements ITelematics {
     if (filter.branchIds !== "all") w.raw("t.vehicle_id is not null");
     if (filter.vehicleId !== undefined) w.add("t.vehicle_id = ?", filter.vehicleId);
     if (filter.driverId !== undefined) w.add("t.driver_id = ?", filter.driverId);
-    const { rows } = await this.tx.query<Row>(
-      `${TRIP} ${w.sql()} order by t.started_at desc limit ${w.next(filter.limit)}`,
-      w.params,
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx,
+      { sql: `${TRIP} ${w.sql()}`, orderBy: "t.started_at desc, t.id desc", params: w.params },
+      filter,
     );
-    return rows.map(toTrip);
+    return { rows: rows.map(toTrip), total };
   }
 
-  async events(filter: EventFilter): Promise<TelematicsEvent[]> {
+  async events(filter: EventFilter): Promise<Paged<TelematicsEvent>> {
     const w = new Where().branches("e.branch_id", filter.branchIds);
     if (filter.kind !== undefined) w.add("e.kind = ?", filter.kind);
     if (filter.vehicleId !== undefined) w.add("e.vehicle_id = ?", filter.vehicleId);
@@ -795,11 +802,12 @@ export class PostgresTelematics implements ITelematics {
     if (filter.open === false) w.raw("e.acknowledged_at is not null");
     if (filter.from !== undefined) w.add("e.started_at >= ?", filter.from);
     if (filter.to !== undefined) w.add("e.started_at < ?", filter.to);
-    const { rows } = await this.tx.query<Row>(
-      `${EVENT} ${w.sql()} order by e.started_at desc limit ${w.next(filter.limit)}`,
-      w.params,
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx,
+      { sql: `${EVENT} ${w.sql()}`, orderBy: "e.started_at desc, e.id desc", params: w.params },
+      filter,
     );
-    return rows.map(toEvent);
+    return { rows: rows.map(toEvent), total };
   }
 
   async event(id: string): Promise<TelematicsEvent | null> {

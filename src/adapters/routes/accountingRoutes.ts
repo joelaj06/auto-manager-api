@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { AccountingExports } from "../../application/use-cases/finance/AccountingExports.js";
 import type { BankReconciliation } from "../../application/use-cases/finance/BankReconciliation.js";
@@ -18,7 +20,7 @@ const uuid = z.uuid();
 const date = z.iso.date();
 const idParams = z.object({ id: uuid });
 const flag = z.enum(["true", "false"]).transform((v) => v === "true");
-const history = { limit: z.coerce.number().int().min(1).max(100).default(50) };
+const history = pageParams(100, 50);
 const columnName = z.string().trim().min(1).max(80);
 
 function statementRows(csv: string): string[][] {
@@ -89,7 +91,8 @@ export function accountingRoutes(deps: AccountingRouteDependencies): ApiRoute[] 
       request: { query: z.object(history) },
       responses: { 200: { description: "Exports, newest first" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await exports.history(query.limit)));
+        const page = await exports.history(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -183,7 +186,8 @@ export function accountingRoutes(deps: AccountingRouteDependencies): ApiRoute[] 
       request: { query: z.object({ accountId: uuid.optional(), ...history }) },
       responses: { 200: { description: "Statements" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await reconciliation.imports(query.accountId ?? null, query.limit)));
+        const page = await reconciliation.imports(query.accountId ?? null, query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -212,14 +216,13 @@ export function accountingRoutes(deps: AccountingRouteDependencies): ApiRoute[] 
           status: z.enum(STATEMENT_LINE_STATUSES).default("unmatched"),
           from: date.optional(),
           to: date.optional(),
-          cursor: z.string().max(300).optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
       responses: { 200: { description: "Page of statement lines" } },
       handler: async ({ query }, _req, res) => {
         const page = await reconciliation.lines(query);
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

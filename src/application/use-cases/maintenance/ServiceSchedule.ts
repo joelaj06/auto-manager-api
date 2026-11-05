@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   alertFor,
   duePoint,
@@ -55,7 +56,8 @@ export type DueQuery = Readonly<{
   status?: DueStatus;
   branchId?: string;
   vehicleId?: string;
-  limit: number;
+  page: number;
+  pageSize: number;
 }>;
 
 export type ServiceDoneInput = Readonly<{
@@ -179,7 +181,7 @@ export class ServiceSchedule implements ITenantDailyTask {
 
   // --- reading ---
 
-  due(actor: Principal, query: DueQuery): Promise<DueItem[]> {
+  due(actor: Principal, query: DueQuery): Promise<Page<DueItem>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       if (query.branchId !== undefined)
@@ -194,9 +196,9 @@ export class ServiceSchedule implements ITenantDailyTask {
         ...(query.status === undefined
           ? { statuses: ["upcoming", "due", "overdue"] as const }
           : { statuses: [query.status] }),
-        limit: query.limit,
+        ...pageWindow(query),
       });
-      return rows.map((r) => item(r, today));
+      return pageOf(query, rows, (r) => item(r, today));
     });
   }
 
@@ -205,7 +207,7 @@ export class ServiceSchedule implements ITenantDailyTask {
     return deps.unitOfWork.run(async () => {
       await deps.vehicleAccess.reach(actor, vehicleId, "maintenance.view");
       const today = await deps.calendar.today();
-      const rows = await deps.plans.due({ branchIds: "all", vehicleId, limit: 200 });
+      const { rows } = await deps.plans.due({ branchIds: "all", vehicleId, limit: 200 });
       const [vehicle] = await deps.plans.vehicles([vehicleId]);
       const plan =
         vehicle === undefined || !vehicle.inService
@@ -226,7 +228,7 @@ export class ServiceSchedule implements ITenantDailyTask {
   async warnings(vehicleId: string, returnAt: Date): Promise<string[]> {
     const { deps } = this;
     const returnOn = await deps.calendar.dateOf(returnAt);
-    const rows = await deps.plans.due({ branchIds: "all", vehicleId, limit: 50 });
+    const { rows } = await deps.plans.due({ branchIds: "all", vehicleId, limit: 50 });
     return rows
       .filter(
         (r) =>
@@ -247,7 +249,7 @@ export class ServiceSchedule implements ITenantDailyTask {
     if (vehicle === undefined || !vehicle.inService) return [];
     const plan = planFor(await deps.plans.plans(false), vehicle);
     if (plan === null) return [];
-    const due = await deps.plans.due({ branchIds: "all", vehicleId, limit: 200 });
+    const { rows: due } = await deps.plans.due({ branchIds: "all", vehicleId, limit: 200 });
     return plan.tasks.map((t) => ({
       id: t.id,
       name: t.name,

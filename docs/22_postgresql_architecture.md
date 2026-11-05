@@ -217,7 +217,7 @@ create index vehicles_search_ix on vehicles using gin ((coalesce(plate_number,''
 | Embedded arrays | Child tables or `jsonb` |
 | `counters`, `outbox`, `audit_logs` collections | Tables in each tenant DB (`audit_logs` partitioned by month) |
 | `daily_vehicle_stats` | Summary table/materialized view per tenant |
-| Doc 17 §3 `$facet` pagination | Keyset pagination or `COUNT(*) OVER()` |
+| Doc 17 §3 `$facet` pagination | `limit`/`offset` with a separate count (decision 537) |
 | Doc 17 §14 strangler | Replaced by §9 rewrite |
 
 ## 8. Findings from doc 01
@@ -261,7 +261,7 @@ Internet ─▶ Caddy/Traefik (TLS; wildcard cert via DNS-01 for portal subdomai
 - Indexes are simple (no tenant prefix), so planner behaviour is the same as a single-tenant app.
 - Cold tenant = first request pays pool creation + connect (tens of ms); keep hot-tenant pools warm; cache tenant lookup in Redis.
 - Partition large append-only tables per tenant DB (`audit_logs`, `journal_lines`, `notifications`, telematics) by month.
-- Keyset pagination for long lists; heavy reports via jobs with cursor streaming; optional read replica for reports.
+- Numbered pages with a total for lists (decisions 537 and 538), keyset for walks over a whole list (539); heavy reports via jobs with cursor streaming; optional read replica for reports.
 - Autovacuum tuning for many DBs (`autovacuum_naptime`, worker count); monitor bloat per DB.
 
 ## 12. Risks & mitigations

@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { PlannedTask, TaskTemplate } from "../../domain/console/OnboardingConcierge.js";
 import type { OnboardingFacts } from "../../domain/console/TenantAnalytics.js";
 
@@ -30,6 +31,7 @@ export type TaskFilter = Readonly<{
   /** Open and past due. */
   overdueAt?: Date;
   limit: number;
+  offset?: number;
 }>;
 
 /** The onboarding concierge's templates and tasks (platform database, docs/27 §5.12). */
@@ -59,7 +61,7 @@ export interface IOnboardingTasks {
     createdBy: string,
   ): Promise<string>;
   find(id: string): Promise<OnboardingTask | null>;
-  list(filter: TaskFilter): Promise<OnboardingTask[]>;
+  list(filter: TaskFilter): Promise<Paged<OnboardingTask>>;
   /** Open tasks completed by a milestone, with the tenant's milestones. */
   openWithMilestones(
     limit: number,

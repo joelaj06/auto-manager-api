@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { ClusterManagement } from "../../application/use-cases/console/ClusterManagement.js";
 import { CLUSTER_STATUSES } from "../../domain/console/Clusters.js";
@@ -67,12 +69,13 @@ export function consoleClusterRoutes(deps: ConsoleClusterRouteDependencies): Api
         query: z.object({
           tenantId: z.uuid().optional(),
           clusterId: clusterId.optional(),
-          limit: z.coerce.number().int().min(1).max(500).default(100),
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Moves" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await clusters.moves(query)));
+        const page = await clusters.moves(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

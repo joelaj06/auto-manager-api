@@ -75,7 +75,7 @@ export class DealerGrossProfit {
       const reach = deps.scope.branchesFor(actor, PERMISSION);
       if (query.branchId !== undefined && !deps.scope.can(actor, PERMISSION, query.branchId))
         throw new DealRuleError("You do not see that branch's cost");
-      const deals = await deps.deals.list({
+      const { rows: deals } = await deps.deals.list({
         branchIds: query.branchId === undefined ? reach : [query.branchId],
         statuses: ["sold", "delivered"],
         soldFrom: query.from,

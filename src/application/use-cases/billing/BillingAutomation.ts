@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import {
   addDays,
   circuitBreakerTrips,
@@ -338,7 +339,9 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
   async dryRunReview(days = DRY_RUN_REVIEW_DAYS * 2): Promise<DryRunReview> {
     const { deps } = this;
     const since = new Date(deps.clock.now().getTime() - days * DAY_MS).toISOString().slice(0, 10);
-    const runs = (await deps.automation.runs(500)).filter((r) => r.dryRun && r.runOn >= since);
+    const runs = (await deps.automation.runs({ limit: 500 })).rows.filter(
+      (r) => r.dryRun && r.runOn >= since,
+    );
     const flagged = new Map<
       string,
       { tenantId: string; tenantName: string; firstOn: string; times: number }
@@ -379,8 +382,8 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
     };
   }
 
-  runs(limit: number): Promise<AutomationRun[]> {
-    return this.deps.automation.runs(limit);
+  async runs(request: PageRequest): Promise<Page<AutomationRun>> {
+    return pageOf(request, await this.deps.automation.runs(pageWindow(request)));
   }
 
   /** Who the automation would deactivate in the next 48 hours, large tenants flagged. */
@@ -431,8 +434,8 @@ export class BillingAutomation implements IJobHandler<"billing.automation"> {
     });
   }
 
-  notices(tenantId: string, limit = 100): Promise<NoticeRecord[]> {
-    return this.deps.automation.notices(tenantId, limit);
+  async notices(tenantId: string, request: PageRequest): Promise<Page<NoticeRecord>> {
+    return pageOf(request, await this.deps.automation.notices(tenantId, pageWindow(request)));
   }
 
   /** The banner for the tenant's apps: the oldest unpaid invoice from its first reminder. */

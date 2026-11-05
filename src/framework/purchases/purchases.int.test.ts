@@ -49,7 +49,7 @@ const balanceOf = async (code: string) => {
 };
 
 async function titles(): Promise<string[]> {
-  const inbox = await api().get("/api/v1/notifications?limit=100").set(owner());
+  const inbox = await api().get("/api/v1/notifications?pageSize=100").set(owner());
   return (inbox.body.data as { title: string }[]).map((n) => n.title);
 }
 

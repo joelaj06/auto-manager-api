@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   IncidentRuleError,
   TrafficOffence,
@@ -86,10 +87,10 @@ export class TrafficOffences {
       status?: OffenceStatus;
       /** Not paid or waived yet. */
       outstanding?: boolean;
-      before?: string;
-      limit: number;
+      page: number;
+      pageSize: number;
     }>,
-  ): Promise<OffenceView[]> {
+  ): Promise<Page<OffenceView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const found = await deps.incidents.offences({
@@ -101,10 +102,9 @@ export class TrafficOffences {
           : query.outstanding === true
             ? { statuses: ["unpaid", "contested"] as const }
             : {}),
-        ...(query.before === undefined ? {} : { beforeId: query.before }),
-        limit: query.limit,
+        ...pageWindow(query),
       });
-      return this.views(found);
+      return pageOf(query, { rows: await this.views(found.rows), total: found.total });
     });
   }
 

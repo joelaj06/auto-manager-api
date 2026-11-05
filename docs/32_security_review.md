@@ -30,7 +30,7 @@ Internal penetration test of the API against the **OWASP Top 10 (2021)**, done f
 | | | Passwords: Argon2id hashes, never logged (C6); provider secrets sealed with AES-GCM (`AesGcmSecretBox`); backups encrypted with RSA-4096 + AES-256-GCM | R, T | Pass |
 | | | Ghana Card and licence numbers are stored in clear (doc 16 §4 asks for field-level encryption of IDs) | R | **Finding F1** |
 | | | TLS everywhere, HSTS honoured behind the proxy | H | Open |
-| A03 | Injection | SQL in search, filters and cursors is text or a 400, never SQL (all queries are parameterised; no string-built SQL from input) | T, R | Pass |
+| A03 | Injection | SQL in search, filters and page numbers is text or a 400, never SQL (all queries are parameterised; no string-built SQL from input) | T, R | Pass |
 | | | Ids that are not UUIDs → 400 `VALIDATION_FAILED` | T | Pass |
 | | | Document templates: a safe Mustache dialect and an HTML subset, no code; SMS placeholders checked against a list | R, T (template suites) | Pass |
 | A04 | Insecure design | Money rules in the domain (allocation, waivers, settlement, reversal) with integrity checks after every step of the e2e flow | T | Pass |

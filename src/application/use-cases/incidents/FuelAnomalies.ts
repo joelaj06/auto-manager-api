@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import { fuelAnomaly } from "../../../domain/expenses/ExpenseRules.js";
 import { IncidentRuleError } from "../../../domain/incidents/Incident.js";
 import type { Vehicle } from "../../../domain/vehicles/Vehicle.js";
@@ -92,17 +93,18 @@ export class FuelAnomalies {
 
   list(
     actor: Principal,
-    query: Readonly<{ vehicleId?: string; status?: FuelAnomalyRow["status"]; limit: number }>,
-  ): Promise<FuelAnomalyRow[]> {
+    query: Readonly<{ vehicleId?: string; status?: FuelAnomalyRow["status"] }> & PageRequest,
+  ): Promise<Page<FuelAnomalyRow>> {
     const { deps } = this;
-    return deps.unitOfWork.run(() =>
-      deps.incidents.anomalies({
+    return deps.unitOfWork.run(async () => {
+      const found = await deps.incidents.anomalies({
         branchIds: deps.vehicleAccess.branchesFor(actor, "incidents.view"),
         ...(query.vehicleId === undefined ? {} : { vehicleId: query.vehicleId }),
         ...(query.status === undefined ? {} : { status: query.status }),
-        limit: query.limit,
-      }),
-    );
+        ...pageWindow(query),
+      });
+      return pageOf(query, found);
+    });
   }
 
   /** Confirmed (something was wrong) or dismissed (explained), with a note. */

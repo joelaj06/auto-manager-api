@@ -87,9 +87,8 @@ export class TenantUserSupport {
         const tenantId = String(payload.tenantId);
         const email = String(payload.newEmail);
         await this.inTenant(tenantId, async () => {
-          const owner = (await this.deps.users.list({ branchIds: "all", limit: 500 })).find(
-            (u) => u.isOwner,
-          );
+          const { rows } = await this.deps.users.list({ branchIds: "all", limit: 500 });
+          const owner = rows.find((u) => u.isOwner);
           if (owner === undefined)
             throw new UserSupportError("NOT_OWNER", "The tenant has no owner");
           const taken = await this.deps.users.findByEmail(email.trim().toLowerCase());
@@ -150,10 +149,10 @@ export class TenantUserSupport {
 
   async users(tenantId: string): Promise<SupportUserView[]> {
     await this.assertTenant(tenantId);
-    const users = await this.inTenant(tenantId, () =>
+    const { rows } = await this.inTenant(tenantId, () =>
       this.deps.users.list({ branchIds: "all", limit: 500 }),
     );
-    return users.map((u) => this.view(u));
+    return rows.map((u) => this.view(u));
   }
 
   async act(

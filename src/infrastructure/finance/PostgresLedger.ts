@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AccountBalance,
   ILedger,
@@ -226,7 +228,7 @@ export class PostgresLedger implements ILedger {
     return Number(rolled.rows[0]?.lines ?? 0);
   }
 
-  async lines(filter: LedgerLineFilter): Promise<LedgerLineView[]> {
+  async lines(filter: LedgerLineFilter): Promise<Paged<LedgerLineView>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -244,38 +246,40 @@ export class PostgresLedger implements ILedger {
     if (filter.branchId !== undefined) where.push(`l.branch_id = ${param(filter.branchId)}`);
     if (filter.from !== undefined) where.push(`e.entry_date >= ${param(filter.from)}`);
     if (filter.to !== undefined) where.push(`e.entry_date <= ${param(filter.to)}`);
-    if (filter.after !== undefined)
-      where.push(
-        `(e.entry_date, e.created_at, l.id) < (${param(filter.after.date)}::date, ${param(filter.after.createdAt)}::timestamptz, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<LineRow>(
-      `select l.id, l.entry_id, e.number, e.entry_date::text as entry_date, e.description,
+    const { rows, total } = await pagedQuery<LineRow>(
+      this.tx,
+      {
+        sql: `select l.id, l.entry_id, e.number, e.entry_date::text as entry_date, e.description,
               e.source_type, e.source_id, l.account_id, l.debit_minor, l.credit_minor, l.branch_id,
               l.vehicle_id, l.party_type, l.party_id, l.memo, e.created_at
          from ledger_lines l join journal_entries e on e.id = l.entry_id
-        where ${where.join(" and ")}
-        order by e.entry_date desc, e.created_at desc, l.id desc
-        limit ${param(filter.limit)}`,
-      params,
+        where ${where.join(" and ")}`,
+        orderBy: "e.entry_date desc, e.created_at desc, l.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      entryId: r.entry_id,
-      number: r.number,
-      date: r.entry_date,
-      description: r.description,
-      sourceType: r.source_type,
-      sourceId: r.source_id,
-      accountId: r.account_id,
-      debitMinor: Number(r.debit_minor),
-      creditMinor: Number(r.credit_minor),
-      branchId: r.branch_id,
-      vehicleId: r.vehicle_id,
-      partyType: r.party_type,
-      partyId: r.party_id,
-      memo: r.memo,
-      createdAt: r.created_at,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        entryId: r.entry_id,
+        number: r.number,
+        date: r.entry_date,
+        description: r.description,
+        sourceType: r.source_type,
+        sourceId: r.source_id,
+        accountId: r.account_id,
+        debitMinor: Number(r.debit_minor),
+        creditMinor: Number(r.credit_minor),
+        branchId: r.branch_id,
+        vehicleId: r.vehicle_id,
+        partyType: r.party_type,
+        partyId: r.party_id,
+        memo: r.memo,
+        createdAt: r.created_at,
+      })),
+      total,
+    };
   }
 
   async partyBalance(

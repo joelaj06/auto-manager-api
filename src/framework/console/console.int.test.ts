@@ -61,7 +61,7 @@ describe("dashboard", () => {
 
 describe("tenant list and 360° profile", () => {
   it("lists, searches and filters tenants", async () => {
-    const all = await get("/tenants?limit=100");
+    const all = await get("/tenants?pageSize=100");
     expect(all.status).toBe(200);
     expect(all.body.data.map((x: { id: string }) => x.id)).toContain(t.tenantId);
 
@@ -78,12 +78,12 @@ describe("tenant list and 360° profile", () => {
     expect((await get("/tenants?status=bogus")).status).toBe(400);
   });
 
-  it("pages with a keyset cursor", async () => {
+  it("pages by number with the total in the headers", async () => {
     await new ProvisionedTenants(container, app, admin).create();
-    const first = await get("/tenants?limit=1");
+    const first = await get("/tenants?pageSize=1");
     expect(first.body.data).toHaveLength(1);
-    const next = first.body.meta.nextBefore as string;
-    const second = await get(`/tenants?limit=1&before=${next}`);
+    expect(Number(first.headers["x-total-count"])).toBeGreaterThanOrEqual(2);
+    const second = await get("/tenants?page=2&pageSize=1");
     expect(second.body.data).toHaveLength(1);
     expect(second.body.data[0].id).not.toBe(first.body.data[0].id);
   });

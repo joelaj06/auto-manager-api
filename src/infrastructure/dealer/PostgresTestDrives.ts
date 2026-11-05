@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { ITestDrives, TestDriveFilter } from "../../application/ports/IDealerSales.js";
 import { TestDrive, type TestDriveProps } from "../../domain/dealer/TestDrive.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
@@ -127,7 +129,7 @@ export class PostgresTestDrives implements ITestDrives {
     return this.one(id, "for update");
   }
 
-  async list(filter: TestDriveFilter): Promise<TestDrive[]> {
+  async list(filter: TestDriveFilter): Promise<Paged<TestDrive>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -140,15 +142,17 @@ export class PostgresTestDrives implements ITestDrives {
     if (filter.statuses !== undefined) add("status = any(?::text[])", filter.statuses);
     if (filter.from !== undefined) add("ends_at > ?", filter.from);
     if (filter.until !== undefined) add("starts_at < ?", filter.until);
-    if (filter.beforeId !== undefined && UUID.test(filter.beforeId)) add("id < ?", filter.beforeId);
-    params.push(filter.limit);
-    const { rows } = await this.tx.query<Row>(
-      `select ${SELECT} from dealer_test_drives
-        ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-        order by id desc limit $${params.length}`,
-      params,
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx,
+      {
+        sql: `select ${SELECT} from dealer_test_drives
+        ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: "id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toDrive);
+    return { rows: rows.map(toDrive), total };
   }
 
   private async one(id: string, lock: string): Promise<TestDrive | null> {

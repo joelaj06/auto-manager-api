@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest, type Paging } from "../../dto/Page.js";
 import { DomainError } from "../../../domain/errors/DomainError.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -108,8 +109,8 @@ export class SupportDesk {
 
   // --- staff ---
 
-  list(filter: TicketFilter): Promise<TicketView[]> {
-    return this.deps.desk.list(filter);
+  async list(filter: Paging<TicketFilter>): Promise<Page<TicketView>> {
+    return pageOf(filter, await this.deps.desk.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async ticket(id: string): Promise<TicketWithMessages> {
@@ -413,12 +414,13 @@ export class SupportDesk {
     return this.mine(requester, ticket.id);
   }
 
-  myTickets(requester: Requester, limit: number): Promise<TicketView[]> {
-    return this.deps.desk.list({
+  async myTickets(requester: Requester, request: PageRequest): Promise<Page<TicketView>> {
+    const found = await this.deps.desk.list({
       tenantId: requester.tenantId,
       ...(requester.seesAll ? {} : { tenantUserId: requester.userId }),
-      limit,
+      ...pageWindow(request),
     });
+    return pageOf(request, found);
   }
 
   /** A ticket of the user (or of the business), without staff's internal notes. */

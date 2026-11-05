@@ -161,7 +161,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -190,6 +201,26 @@
         "responses": {
           "200": {
             "description": "Exports, newest first",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -756,7 +787,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -785,6 +827,26 @@
         "responses": {
           "200": {
             "description": "Statements",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1017,16 +1079,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -1055,6 +1119,26 @@
         "responses": {
           "200": {
             "description": "Page of statement lines",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1065,24 +1149,6 @@
                       "items": {
                         "$ref": "#/components/schemas/StatementLineView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -3417,17 +3483,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -3448,6 +3515,26 @@
         "responses": {
           "200": {
             "description": "Application summaries",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -3458,24 +3545,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformApplicationsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -4635,16 +4704,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 200
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -4672,7 +4743,27 @@
         "x-permission": "vehicles.view",
         "responses": {
           "200": {
-            "description": "Assignments; `meta.nextCursor` for the next page",
+            "description": "Assignments",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4683,24 +4774,6 @@
                       "items": {
                         "$ref": "#/components/schemas/AssignmentView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -6158,7 +6231,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -6187,6 +6271,26 @@
         "responses": {
           "200": {
             "description": "Notices",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -6276,6 +6380,28 @@
         ],
         "parameters": [
           {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
             "name": "X-Tenant",
             "in": "header",
             "required": false,
@@ -6294,6 +6420,26 @@
         "responses": {
           "200": {
             "description": "Extensions",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -7067,7 +7213,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -7088,6 +7245,26 @@
         "responses": {
           "200": {
             "description": "Runs",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -7295,7 +7472,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -7316,6 +7504,26 @@
         "responses": {
           "200": {
             "description": "Extensions",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -7793,7 +8001,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -7814,6 +8033,26 @@
         "responses": {
           "200": {
             "description": "Notices",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -8007,17 +8246,18 @@
         ],
         "parameters": [
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -8046,6 +8286,26 @@
         "responses": {
           "200": {
             "description": "Invoices",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -8056,24 +8316,6 @@
                       "items": {
                         "$ref": "#/components/schemas/TenantInvoiceView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -10630,7 +10872,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -10651,6 +10904,26 @@
         "responses": {
           "200": {
             "description": "Attempts",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -10754,17 +11027,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -10785,6 +11059,26 @@
         "responses": {
           "200": {
             "description": "Webhook events",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -10795,24 +11089,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformBillingWebhooksItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -11582,7 +11858,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -11603,6 +11890,26 @@
         "responses": {
           "200": {
             "description": "Reconciliations",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -13190,17 +13497,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -13221,6 +13529,26 @@
         "responses": {
           "200": {
             "description": "Invoices",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -13231,24 +13559,6 @@
                       "items": {
                         "$ref": "#/components/schemas/InvoiceView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -14126,7 +14436,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -14147,6 +14468,26 @@
         "responses": {
           "200": {
             "description": "Tenant health",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -15043,7 +15384,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -15064,6 +15416,26 @@
         "responses": {
           "200": {
             "description": "Archives",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -15851,7 +16223,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -15872,6 +16255,26 @@
         "responses": {
           "200": {
             "description": "Erasures",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -16224,7 +16627,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -16245,6 +16659,26 @@
         "responses": {
           "200": {
             "description": "Moves",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -18675,7 +19109,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -18696,6 +19141,26 @@
         "responses": {
           "200": {
             "description": "Alerts",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -19792,7 +20257,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -19813,6 +20289,26 @@
         "responses": {
           "200": {
             "description": "Sessions",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -20711,7 +21207,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -20732,6 +21239,26 @@
         "responses": {
           "200": {
             "description": "Announcements",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -21283,7 +21810,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -21304,6 +21842,26 @@
         "responses": {
           "200": {
             "description": "Windows",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -23391,17 +23949,18 @@
             "schema": {}
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -23421,7 +23980,27 @@
         "x-permission": "platform.tenants.view",
         "responses": {
           "200": {
-            "description": "Tenants; `meta.nextBefore` pages further",
+            "description": "Tenants",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -23432,24 +24011,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformTenantsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -23648,13 +24209,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
-            "schema": {}
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -23674,7 +24240,27 @@
         "x-permission": "platform.tenants.view",
         "responses": {
           "200": {
-            "description": "Entries, newest first; `meta.nextBefore` is a time",
+            "description": "Entries, newest first",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -23685,24 +24271,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformTenantsIdTimelineItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -23792,17 +24360,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -23823,6 +24392,26 @@
         "responses": {
           "200": {
             "description": "Backups",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -23833,24 +24422,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformTenantsIdBackupsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -23952,17 +24523,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -23983,6 +24555,26 @@
         "responses": {
           "200": {
             "description": "Notes",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -23993,24 +24585,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformTenantsIdNotesItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -24724,17 +25298,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -24755,6 +25330,26 @@
         "responses": {
           "200": {
             "description": "Backups",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -24765,24 +25360,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformTenantsIdBackupsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -27831,17 +28408,18 @@
             }
           },
           {
-            "name": "beforeId",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -27870,6 +28448,26 @@
         "responses": {
           "200": {
             "description": "Appraisals",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -29000,17 +29598,18 @@
             }
           },
           {
-            "name": "beforeId",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -29039,6 +29638,26 @@
         "responses": {
           "200": {
             "description": "Deals",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -31655,17 +32274,18 @@
             }
           },
           {
-            "name": "beforeId",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -31694,6 +32314,26 @@
         "responses": {
           "200": {
             "description": "Leads",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -33725,17 +34365,18 @@
             }
           },
           {
-            "name": "beforeId",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -33764,6 +34405,26 @@
         "responses": {
           "200": {
             "description": "Test drives",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -34619,17 +35280,18 @@
             }
           },
           {
-            "name": "beforeId",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -34658,6 +35320,26 @@
         "responses": {
           "200": {
             "description": "Quotes",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -35930,17 +36612,18 @@
             }
           },
           {
-            "name": "after",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -35969,6 +36652,26 @@
         "responses": {
           "200": {
             "description": "Stock",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -39179,16 +39882,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -39216,7 +39921,27 @@
         "x-permission": "documents.list",
         "responses": {
           "200": {
-            "description": "Documents; `meta.nextCursor` for the next page",
+            "description": "Documents",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -39227,24 +39952,6 @@
                       "items": {
                         "$ref": "#/components/schemas/DocumentView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -40535,16 +41242,18 @@
         ],
         "parameters": [
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -40610,7 +41319,27 @@
         "x-permission": "vehicles.issues.view",
         "responses": {
           "200": {
-            "description": "Issues; `meta.nextCursor` for the next page",
+            "description": "Issues",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -40621,24 +41350,6 @@
                       "items": {
                         "$ref": "#/components/schemas/VehicleIssueView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -42646,16 +43357,18 @@
         ],
         "parameters": [
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -42683,7 +43396,27 @@
         "x-permission": "driver_app.use",
         "responses": {
           "200": {
-            "description": "Remittances; `meta.nextCursor` for the next page",
+            "description": "Remittances",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -42694,24 +43427,6 @@
                       "items": {
                         "$ref": "#/components/schemas/RemittanceView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -43654,16 +44369,18 @@
         ],
         "parameters": [
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -43700,6 +44417,26 @@
         "responses": {
           "200": {
             "description": "Issues",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -43710,24 +44447,6 @@
                       "items": {
                         "$ref": "#/components/schemas/VehicleIssueView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -48400,16 +49119,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -48437,7 +49158,27 @@
         "x-permission": "expenses.list",
         "responses": {
           "200": {
-            "description": "Expenses; `meta.nextCursor` for the next page",
+            "description": "Expenses",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -48448,24 +49189,6 @@
                       "items": {
                         "$ref": "#/components/schemas/ExpenseView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -53827,16 +54550,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -53864,7 +54589,27 @@
         "x-permission": "finance.invoices.view",
         "responses": {
           "200": {
-            "description": "Invoices; `meta.nextCursor` for the next page",
+            "description": "Invoices",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -53875,24 +54620,6 @@
                       "items": {
                         "$ref": "#/components/schemas/InvoiceView2"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -55045,16 +55772,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -55082,7 +55811,27 @@
         "x-permission": "finance.payments.view",
         "responses": {
           "200": {
-            "description": "Payments; `meta.nextCursor` for the next page",
+            "description": "Payments",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -55093,24 +55842,6 @@
                       "items": {
                         "$ref": "#/components/schemas/PaymentView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -56297,7 +57028,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -56326,6 +57068,26 @@
         "responses": {
           "200": {
             "description": "Cash sessions",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -57322,16 +58084,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -57359,7 +58123,27 @@
         "x-permission": "finance.ledger.view",
         "responses": {
           "200": {
-            "description": "Lines; `meta.nextCursor` for the next page",
+            "description": "Lines",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -57370,24 +58154,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetLedgerLinesItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -59363,17 +60129,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -59402,6 +60169,26 @@
         "responses": {
           "200": {
             "description": "Users",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -59412,24 +60199,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetUsersItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -62128,17 +62897,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -62167,6 +62937,26 @@
         "responses": {
           "200": {
             "description": "Incidents",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -63371,7 +64161,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -63400,6 +64201,26 @@
         "responses": {
           "200": {
             "description": "Claims",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -64291,17 +65112,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -64330,6 +65152,26 @@
         "responses": {
           "200": {
             "description": "Offences",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -65394,7 +66236,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -65423,6 +66276,26 @@
         "responses": {
           "200": {
             "description": "Anomalies",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -66971,10 +67844,22 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
               "type": "integer",
               "minimum": 1,
               "maximum": 200
@@ -66999,6 +67884,26 @@
         "responses": {
           "200": {
             "description": "Deliveries",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -68827,7 +69732,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -68848,6 +69764,26 @@
         "responses": {
           "200": {
             "description": "Requests",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -69848,7 +70784,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -69869,6 +70816,26 @@
         "responses": {
           "200": {
             "description": "Drills",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -72365,7 +73332,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -72386,6 +73364,26 @@
         "responses": {
           "200": {
             "description": "Reconciliations",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -75060,7 +76058,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -75089,6 +76098,26 @@
         "responses": {
           "200": {
             "description": "Due services",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -76319,7 +77348,7 @@
     "/api/v1/notifications": {
       "get": {
         "operationId": "getApiV1Notifications",
-        "summary": "My notifications, newest first (`meta.unread`, `meta.nextCursor`)",
+        "summary": "My notifications, newest first (`meta.unread`)",
         "tags": [
           "notifications"
         ],
@@ -76337,16 +77366,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -76374,6 +77405,26 @@
         "responses": {
           "200": {
             "description": "Notifications",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -76390,21 +77441,10 @@
                       "properties": {
                         "unread": {
                           "type": "number"
-                        },
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
                         }
                       },
                       "required": [
-                        "unread",
-                        "nextCursor"
+                        "unread"
                       ]
                     }
                   },
@@ -78305,16 +79345,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -78342,7 +79384,27 @@
         "x-permission": "notifications.deliveries.view",
         "responses": {
           "200": {
-            "description": "Deliveries; `meta.nextCursor` for the next page",
+            "description": "Deliveries",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -78353,24 +79415,6 @@
                       "items": {
                         "$ref": "#/components/schemas/PostSettingsNotificationsSmsTest"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -78577,7 +79621,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -78606,6 +79661,26 @@
         "responses": {
           "200": {
             "description": "Parts",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -80186,17 +81261,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -80225,6 +81301,26 @@
         "responses": {
           "200": {
             "description": "Moves",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -80965,7 +82061,18 @@
             "schema": {}
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -80986,6 +82093,26 @@
         "responses": {
           "200": {
             "description": "Entries",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -81218,7 +82345,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -81239,6 +82377,26 @@
         "responses": {
           "200": {
             "description": "Payouts",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -81525,7 +82683,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -81546,6 +82715,26 @@
         "responses": {
           "200": {
             "description": "Payouts",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -82328,7 +83517,18 @@
             "schema": {}
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -82357,6 +83557,26 @@
         "responses": {
           "200": {
             "description": "Entries",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -82589,7 +83809,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -82618,6 +83849,26 @@
         "responses": {
           "200": {
             "description": "Payouts",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -83155,17 +84406,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -83186,6 +84438,26 @@
         "responses": {
           "200": {
             "description": "Partners with user, tenant and application counts",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -83196,24 +84468,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformPartnersItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -84406,17 +85660,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -84437,6 +85692,26 @@
         "responses": {
           "200": {
             "description": "Tenants",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -84447,24 +85722,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformPartnersIdTenantsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -84895,17 +86152,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -84934,6 +86192,26 @@
         "responses": {
           "200": {
             "description": "Tenants; owner contact and billing state if granted",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -84944,24 +86222,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformPartnerTenantsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -85173,17 +86433,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -85212,6 +86473,26 @@
         "responses": {
           "200": {
             "description": "Applications",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -85222,24 +86503,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetPlatformPartnerApplicationsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -86583,16 +87846,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 200
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -86620,7 +87885,27 @@
         "x-permission": "drivers.list",
         "responses": {
           "200": {
-            "description": "Drivers; `meta.nextCursor` for the next page",
+            "description": "Drivers",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -86631,24 +87916,6 @@
                       "items": {
                         "$ref": "#/components/schemas/DriverView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -91538,16 +92805,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 200
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -91575,7 +92844,27 @@
         "x-permission": "customers.list",
         "responses": {
           "200": {
-            "description": "Customers; `meta.nextCursor` for the next page",
+            "description": "Customers",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -91586,24 +92875,6 @@
                       "items": {
                         "$ref": "#/components/schemas/CustomerView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -98426,17 +99697,18 @@
             "schema": {}
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -98457,6 +99729,26 @@
         "responses": {
           "200": {
             "description": "Audit entries",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -98467,24 +99759,6 @@
                       "items": {
                         "$ref": "#/components/schemas/PlatformAuditRecord"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -98920,17 +100194,18 @@
             }
           },
           {
-            "name": "beforeId",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -98959,6 +100234,26 @@
         "responses": {
           "200": {
             "description": "Purchases",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -104676,7 +105971,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -104705,6 +106011,26 @@
         "responses": {
           "200": {
             "description": "Rates",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -106536,16 +107862,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -106573,7 +107901,27 @@
         "x-permission": "remittances.list",
         "responses": {
           "200": {
-            "description": "Remittances; `meta.nextCursor` for the next page",
+            "description": "Remittances",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -106584,24 +107932,6 @@
                       "items": {
                         "$ref": "#/components/schemas/RemittanceView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -109447,16 +110777,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 200
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -109485,6 +110817,26 @@
         "responses": {
           "200": {
             "description": "Bookings",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -109495,24 +110847,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetRentalsItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -122159,7 +123493,18 @@
         ],
         "parameters": [
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -122187,6 +123532,26 @@
         "responses": {
           "200": {
             "description": "Tickets",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -122917,7 +124282,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -122938,6 +124314,26 @@
         "responses": {
           "200": {
             "description": "Tickets",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -124742,7 +126138,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -124763,6 +126170,26 @@
         "responses": {
           "200": {
             "description": "Demos",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -125700,7 +127127,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -125721,6 +127159,26 @@
         "responses": {
           "200": {
             "description": "Tasks",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -126903,7 +128361,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -126932,6 +128401,26 @@
         "responses": {
           "200": {
             "description": "Trips",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -127086,7 +128575,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -127115,6 +128615,26 @@
         "responses": {
           "200": {
             "description": "Events",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -127530,7 +129050,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -127559,6 +129090,26 @@
         "responses": {
           "200": {
             "description": "Trackers",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -129654,7 +131205,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -129683,6 +131245,26 @@
         "responses": {
           "200": {
             "description": "Damages",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -131825,16 +133407,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 200
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -131862,7 +133446,27 @@
         "x-permission": "vehicles.list",
         "responses": {
           "200": {
-            "description": "Vehicles; `meta.nextCursor` for the next page",
+            "description": "Vehicles",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -131873,24 +133477,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetVehiclesItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -134036,17 +135622,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "date-time",
-              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -134074,7 +135661,27 @@
         "x-permission": "vehicles.view",
         "responses": {
           "200": {
-            "description": "Entries; `meta.nextBefore` for the next page",
+            "description": "Entries",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -134085,25 +135692,6 @@
                       "items": {
                         "$ref": "#/components/schemas/GetVehiclesIdTimelineItem"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextBefore": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextBefore"
-                      ]
                     }
                   },
                   "required": [
@@ -134494,7 +136082,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -134523,6 +136122,26 @@
         "responses": {
           "200": {
             "description": "History, newest first",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -134622,7 +136241,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -134651,6 +136281,26 @@
         "responses": {
           "200": {
             "description": "Readings",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -136666,17 +138316,18 @@
             }
           },
           {
-            "name": "before",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -136705,6 +138356,26 @@
         "responses": {
           "200": {
             "description": "Work orders",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -139164,16 +140835,18 @@
             }
           },
           {
-            "name": "cursor",
+            "name": "page",
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "maxLength": 300
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
             }
           },
           {
-            "name": "limit",
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -139201,7 +140874,27 @@
         "x-permission": "workpay.view",
         "responses": {
           "200": {
-            "description": "Agreements; `meta.nextCursor` for the next page",
+            "description": "Agreements",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -139212,24 +140905,6 @@
                       "items": {
                         "$ref": "#/components/schemas/AgreementView"
                       }
-                    },
-                    "meta": {
-                      "type": "object",
-                      "properties": {
-                        "nextCursor": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "nextCursor"
-                      ]
                     }
                   },
                   "required": [
@@ -144431,7 +146106,18 @@
             }
           },
           {
-            "name": "limit",
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
             "in": "query",
             "required": false,
             "schema": {
@@ -144460,6 +146146,26 @@
         "responses": {
           "200": {
             "description": "Arrears",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Rows in the whole list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page": {
+                "description": "This page's number, from 1",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Page-Size": {
+                "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -144728,13 +146434,13 @@
           "columns": {
             "type": "object",
             "properties": {
+              "balance": {
+                "type": "string"
+              },
               "description": {
                 "type": "string"
               },
               "date": {
-                "type": "string"
-              },
-              "balance": {
                 "type": "string"
               },
               "credit": {
@@ -145818,14 +147524,6 @@
               }
             ]
           },
-          "riskLevel": {
-            "type": "string",
-            "enum": [
-              "high",
-              "low",
-              "medium"
-            ]
-          },
           "createdByStaffId": {
             "anyOf": [
               {
@@ -145856,6 +147554,14 @@
               {
                 "type": "null"
               }
+            ]
+          },
+          "riskLevel": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low",
+              "medium"
             ]
           },
           "riskSignals": {
@@ -146142,10 +147848,10 @@
           "submittedAt",
           "decisionReason",
           "partnerId",
-          "riskLevel",
           "createdByStaffId",
           "emailVerifiedAt",
           "phoneVerifiedAt",
+          "riskLevel",
           "riskSignals",
           "reapplyAfter",
           "approvalOptions",
@@ -146241,15 +147947,6 @@
             "type": "string",
             "format": "date-time"
           },
-          "type": {
-            "type": "string",
-            "enum": [
-              "chauffeur",
-              "remittance",
-              "salary",
-              "workpay"
-            ]
-          },
           "startedBy": {
             "anyOf": [
               {
@@ -146325,6 +148022,15 @@
               "plateNumber",
               "make",
               "model"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "chauffeur",
+              "remittance",
+              "salary",
+              "workpay"
             ]
           },
           "startedAt": {
@@ -146605,11 +148311,11 @@
           "notes",
           "createdAt",
           "updatedAt",
-          "type",
           "startedBy",
           "endedBy",
           "driver",
           "vehicle",
+          "type",
           "startedAt",
           "endedAt",
           "startOdometer",
@@ -147711,12 +149417,12 @@
               "void"
             ]
           },
-          "code": {
-            "type": "string"
-          },
           "issuedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "code": {
+            "type": "string"
           },
           "currency": {
             "type": "string"
@@ -148002,8 +149708,8 @@
         "required": [
           "id",
           "status",
-          "code",
           "issuedAt",
+          "code",
           "currency",
           "lines",
           "tenantId",
@@ -148030,6 +149736,9 @@
           "id": {
             "type": "string"
           },
+          "currency": {
+            "type": "string"
+          },
           "method": {
             "type": "string",
             "enum": [
@@ -148040,9 +149749,6 @@
               "momo",
               "other"
             ]
-          },
-          "currency": {
-            "type": "string"
           },
           "reference": {
             "type": "string"
@@ -148070,8 +149776,8 @@
         },
         "required": [
           "id",
-          "method",
           "currency",
+          "method",
           "reference",
           "receivedAt",
           "invoiceId",
@@ -155756,44 +157462,6 @@
               "bySource": {
                 "type": "object",
                 "properties": {
-                  "workpay": {
-                    "type": "object",
-                    "properties": {
-                      "amountMinor": {
-                        "type": "number"
-                      },
-                      "currency": {
-                        "type": "string"
-                      },
-                      "formatted": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "amountMinor",
-                      "currency",
-                      "formatted"
-                    ]
-                  },
-                  "rentals": {
-                    "type": "object",
-                    "properties": {
-                      "amountMinor": {
-                        "type": "number"
-                      },
-                      "currency": {
-                        "type": "string"
-                      },
-                      "formatted": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "amountMinor",
-                      "currency",
-                      "formatted"
-                    ]
-                  },
                   "other": {
                     "type": "object",
                     "properties": {
@@ -155850,14 +157518,52 @@
                       "currency",
                       "formatted"
                     ]
+                  },
+                  "workpay": {
+                    "type": "object",
+                    "properties": {
+                      "amountMinor": {
+                        "type": "number"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "formatted": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "amountMinor",
+                      "currency",
+                      "formatted"
+                    ]
+                  },
+                  "rentals": {
+                    "type": "object",
+                    "properties": {
+                      "amountMinor": {
+                        "type": "number"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "formatted": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "amountMinor",
+                      "currency",
+                      "formatted"
+                    ]
                   }
                 },
                 "required": [
-                  "workpay",
-                  "rentals",
                   "other",
                   "sales",
-                  "remittances"
+                  "remittances",
+                  "workpay",
+                  "rentals"
                 ]
               }
             },
@@ -157386,7 +159092,7 @@
                 "to": {
                   "type": "string"
                 },
-                "expected": {
+                "outstanding": {
                   "type": "object",
                   "properties": {
                     "amountMinor": {
@@ -157405,7 +159111,7 @@
                     "formatted"
                   ]
                 },
-                "outstanding": {
+                "expected": {
                   "type": "object",
                   "properties": {
                     "amountMinor": {
@@ -157458,8 +159164,8 @@
                 "key",
                 "from",
                 "to",
-                "expected",
                 "outstanding",
+                "expected",
                 "received",
                 "collectionRatePercent"
               ]
@@ -157865,11 +159571,11 @@
                           "type": "string",
                           "format": "date-time"
                         },
-                        "active": {
-                          "type": "boolean"
-                        },
                         "name": {
                           "type": "string"
+                        },
+                        "active": {
+                          "type": "boolean"
                         },
                         "categoryId": {
                           "anyOf": [
@@ -157908,8 +159614,8 @@
                         "createdBy",
                         "createdAt",
                         "updatedAt",
-                        "active",
                         "name",
+                        "active",
                         "categoryId",
                         "monthlyAmount"
                       ]
@@ -158842,11 +160548,11 @@
             "type": "string",
             "format": "date-time"
           },
-          "active": {
-            "type": "boolean"
-          },
           "name": {
             "type": "string"
+          },
+          "active": {
+            "type": "boolean"
           },
           "userId": {
             "anyOf": [
@@ -158924,8 +160630,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "active",
           "name",
+          "active",
           "userId",
           "basis",
           "tiers"
@@ -165054,9 +166760,6 @@
                   "written_off"
                 ]
               },
-              "code": {
-                "type": "string"
-              },
               "odometer": {
                 "anyOf": [
                   {
@@ -165066,6 +166769,9 @@
                     "type": "null"
                   }
                 ]
+              },
+              "code": {
+                "type": "string"
               },
               "make": {
                 "type": "string"
@@ -165127,8 +166833,8 @@
             "required": [
               "branchId",
               "status",
-              "code",
               "odometer",
+              "code",
               "make",
               "model",
               "vin",
@@ -166561,20 +168267,6 @@
               "void"
             ]
           },
-          "type": {
-            "type": "string",
-            "enum": [
-              "dealer_delivery_note",
-              "dealer_quote",
-              "dealer_sales_agreement",
-              "rental_agreement",
-              "rental_return",
-              "test_drive_waiver",
-              "transfer_letter",
-              "vehicle_handover",
-              "workpay_agreement"
-            ]
-          },
           "issuedBy": {
             "anyOf": [
               {
@@ -166588,6 +168280,20 @@
           "issuedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "dealer_delivery_note",
+              "dealer_quote",
+              "dealer_sales_agreement",
+              "rental_agreement",
+              "rental_return",
+              "test_drive_waiver",
+              "transfer_letter",
+              "vehicle_handover",
+              "workpay_agreement"
+            ]
           },
           "fullySignedAt": {
             "anyOf": [
@@ -166847,9 +168553,9 @@
           "id",
           "branchId",
           "status",
-          "type",
           "issuedBy",
           "issuedAt",
+          "type",
           "fullySignedAt",
           "replacesId",
           "subjectType",
@@ -166886,6 +168592,9 @@
               "signed"
             ]
           },
+          "name": {
+            "type": "string"
+          },
           "method": {
             "anyOf": [
               {
@@ -166900,9 +168609,6 @@
                 "type": "null"
               }
             ]
-          },
-          "name": {
-            "type": "string"
           },
           "label": {
             "type": "string"
@@ -166976,8 +168682,8 @@
         "required": [
           "id",
           "status",
-          "method",
           "name",
+          "method",
           "label",
           "position",
           "role",
@@ -167669,6 +169375,16 @@
                     }
                   ]
                 },
+                "paymentId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "method": {
                   "type": "string",
                   "enum": [
@@ -167678,16 +169394,6 @@
                     "cheque",
                     "momo",
                     "trade_in"
-                  ]
-                },
-                "paymentId": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
-                    }
                   ]
                 },
                 "momoNetwork": {
@@ -167800,8 +169506,8 @@
                 "id",
                 "status",
                 "notes",
-                "method",
                 "paymentId",
+                "method",
                 "momoNetwork",
                 "reference",
                 "decidedAt",
@@ -170405,9 +172111,6 @@
             "type": "string",
             "format": "date-time"
           },
-          "description": {
-            "type": "string"
-          },
           "paymentId": {
             "anyOf": [
               {
@@ -170417,6 +172120,9 @@
                 "type": "null"
               }
             ]
+          },
+          "description": {
+            "type": "string"
           },
           "currency": {
             "type": "string"
@@ -171013,8 +172719,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "description",
           "paymentId",
+          "description",
           "currency",
           "taxCode",
           "reference",
@@ -171513,11 +173219,11 @@
                 "type": "string",
                 "format": "date-time"
               },
-              "active": {
-                "type": "boolean"
-              },
               "name": {
                 "type": "string"
+              },
+              "active": {
+                "type": "boolean"
               },
               "categoryId": {
                 "anyOf": [
@@ -171556,8 +173262,8 @@
               "createdBy",
               "createdAt",
               "updatedAt",
-              "active",
               "name",
+              "active",
               "categoryId",
               "monthlyAmount"
             ]
@@ -171740,11 +173446,11 @@
           "description": {
             "type": "string"
           },
-          "active": {
-            "type": "boolean"
-          },
           "name": {
             "type": "string"
+          },
+          "active": {
+            "type": "boolean"
           },
           "taxCode": {
             "anyOf": [
@@ -171855,8 +173561,8 @@
           "createdAt",
           "updatedAt",
           "description",
-          "active",
           "name",
+          "active",
           "taxCode",
           "categoryId",
           "payee",
@@ -172651,6 +174357,9 @@
               }
             ]
           },
+          "currency": {
+            "type": "string"
+          },
           "method": {
             "type": "string",
             "enum": [
@@ -172661,9 +174370,6 @@
               "momo",
               "trade_in"
             ]
-          },
-          "currency": {
-            "type": "string"
           },
           "momoNetwork": {
             "anyOf": [
@@ -172910,8 +174616,8 @@
           "branchId",
           "status",
           "notes",
-          "method",
           "currency",
+          "method",
           "momoNetwork",
           "reference",
           "paidOn",
@@ -184321,14 +186027,14 @@
             "type": "string",
             "format": "date-time"
           },
+          "code": {
+            "type": "string"
+          },
           "tags": {
             "type": "array",
             "items": {
               "type": "string"
             }
-          },
-          "code": {
-            "type": "string"
           },
           "phone": {
             "type": "string"
@@ -184642,8 +186348,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "tags",
           "code",
+          "tags",
           "phone",
           "email",
           "licenceNumber",
@@ -184713,14 +186419,14 @@
             "type": "string",
             "format": "date-time"
           },
+          "code": {
+            "type": "string"
+          },
           "tags": {
             "type": "array",
             "items": {
               "type": "string"
             }
-          },
-          "code": {
-            "type": "string"
           },
           "phone": {
             "type": "string"
@@ -185194,8 +186900,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "tags",
           "code",
+          "tags",
           "phone",
           "email",
           "licenceNumber",
@@ -185708,11 +187414,11 @@
             "type": "string",
             "format": "date-time"
           },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
           },
           "type": {
             "type": "string",
@@ -185720,12 +187426,6 @@
               "corporate",
               "individual"
             ]
-          },
-          "code": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
           },
           "paymentTermsDays": {
             "anyOf": [
@@ -185736,6 +187436,12 @@
                 "type": "null"
               }
             ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "source": {
             "anyOf": [
@@ -185996,11 +187702,11 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "tags",
-          "type",
           "code",
           "name",
+          "type",
           "paymentTermsDays",
+          "tags",
           "source",
           "phone",
           "email",
@@ -186059,11 +187765,11 @@
             "type": "string",
             "format": "date-time"
           },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
           },
           "active": {
             "type": "boolean"
@@ -186083,12 +187789,6 @@
               "workshop"
             ]
           },
-          "code": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
           "paymentTermsDays": {
             "anyOf": [
               {
@@ -186098,6 +187798,12 @@
                 "type": "null"
               }
             ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "phone": {
             "anyOf": [
@@ -186252,12 +187958,12 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "tags",
-          "active",
-          "type",
           "code",
           "name",
+          "active",
+          "type",
           "paymentTermsDays",
+          "tags",
           "phone",
           "email",
           "address",
@@ -188381,6 +190087,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "currency": {
+            "type": "string"
+          },
           "type": {
             "type": "string",
             "enum": [
@@ -188388,9 +190097,6 @@
               "import",
               "local"
             ]
-          },
-          "currency": {
-            "type": "string"
           },
           "reference": {
             "anyOf": [
@@ -188584,8 +190290,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "type",
           "currency",
+          "type",
           "reference",
           "cancelledBy",
           "supplierId",
@@ -188676,6 +190382,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "currency": {
+            "type": "string"
+          },
           "type": {
             "type": "string",
             "enum": [
@@ -188683,9 +190392,6 @@
               "import",
               "local"
             ]
-          },
-          "currency": {
-            "type": "string"
           },
           "reference": {
             "anyOf": [
@@ -189442,8 +191148,8 @@
           "createdBy",
           "createdAt",
           "updatedAt",
-          "type",
           "currency",
+          "type",
           "reference",
           "cancelledBy",
           "supplierId",
@@ -189864,6 +191570,26 @@
             "type": "string",
             "format": "date-time"
           },
+          "total": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "date": {
             "anyOf": [
               {
@@ -189884,30 +191610,10 @@
               }
             ]
           },
-          "currency": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "fileId": {
             "type": "string"
           },
           "expenseId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "total": {
             "anyOf": [
               {
                 "type": "string"
@@ -189984,12 +191690,12 @@
           "id",
           "status",
           "createdAt",
+          "total",
+          "currency",
           "date",
           "error",
-          "currency",
           "fileId",
           "expenseId",
-          "total",
           "merchant",
           "tax",
           "isReceipt",
@@ -191063,15 +192769,15 @@
               "id": {
                 "type": "string"
               },
+              "name": {
+                "type": "string"
+              },
               "type": {
                 "type": "string",
                 "enum": [
                   "corporate",
                   "individual"
                 ]
-              },
-              "name": {
-                "type": "string"
               },
               "riskStatus": {
                 "type": "string",
@@ -191097,8 +192803,8 @@
             },
             "required": [
               "id",
-              "type",
               "name",
+              "type",
               "riskStatus",
               "riskReason",
               "hasIdDocument"
@@ -202265,21 +203971,21 @@
                   ]
                 }
               },
-              "nextBefore": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "format": "date-time"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+              "total": {
+                "type": "number"
+              },
+              "page": {
+                "type": "number"
+              },
+              "pageSize": {
+                "type": "number"
               }
             },
             "required": [
               "items",
-              "nextBefore"
+              "total",
+              "page",
+              "pageSize"
             ]
           }
         },
@@ -203070,19 +204776,6 @@
               }
             ]
           },
-          "type": {
-            "type": "string",
-            "enum": [
-              "accident",
-              "corrective",
-              "inspection",
-              "preventive",
-              "reconditioning"
-            ]
-          },
-          "title": {
-            "type": "string"
-          },
           "currency": {
             "type": "string"
           },
@@ -203095,6 +204788,19 @@
                 "type": "null"
               }
             ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "accident",
+              "corrective",
+              "inspection",
+              "preventive",
+              "reconditioning"
+            ]
+          },
+          "title": {
+            "type": "string"
           },
           "priority": {
             "type": "string",
@@ -203309,9 +205015,6 @@
                 "id": {
                   "type": "string"
                 },
-                "description": {
-                  "type": "string"
-                },
                 "kind": {
                   "type": "string",
                   "enum": [
@@ -203320,6 +205023,9 @@
                     "part",
                     "sublet"
                   ]
+                },
+                "description": {
+                  "type": "string"
                 },
                 "partId": {
                   "anyOf": [
@@ -203388,8 +205094,8 @@
               },
               "required": [
                 "id",
-                "description",
                 "kind",
+                "description",
                 "partId",
                 "quantity",
                 "position",
@@ -203614,10 +205320,10 @@
           "createdAt",
           "updatedAt",
           "description",
-          "type",
-          "title",
           "currency",
           "blockId",
+          "type",
+          "title",
           "priority",
           "issueId",
           "damageId",
@@ -203653,10 +205359,10 @@
           "record": {
             "type": "object",
             "properties": {
-              "completed": {
+              "open": {
                 "type": "number"
               },
-              "open": {
+              "completed": {
                 "type": "number"
               },
               "workOrders": {
@@ -203706,8 +205412,8 @@
               }
             },
             "required": [
-              "completed",
               "open",
+              "completed",
               "workOrders",
               "ratings",
               "averageTurnaroundDays",
@@ -205064,10 +206770,6 @@
             "type": "string",
             "format": "date-time"
           },
-          "params": {
-            "type": "object",
-            "additionalProperties": {}
-          },
           "agreementId": {
             "type": "string"
           },
@@ -205080,6 +206782,10 @@
           },
           "reason": {
             "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {}
           },
           "movedNumbers": {
             "type": "array",
@@ -205117,10 +206823,10 @@
           "id",
           "createdBy",
           "createdAt",
-          "params",
           "agreementId",
           "kind",
           "reason",
+          "params",
           "movedNumbers",
           "createdNumbers",
           "moved"

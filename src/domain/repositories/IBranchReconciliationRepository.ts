@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 export type ReconciliationOutcome = "matched" | "fixed" | "over_limit" | "failed";
 
 export type BranchReconciliation = Readonly<{
@@ -27,8 +28,13 @@ export type OverLimitTenant = Readonly<{
 export interface IBranchReconciliationRepository {
   record(entry: Omit<BranchReconciliation, "id" | "createdAt">): Promise<BranchReconciliation>;
   list(
-    filter: Readonly<{ tenantId?: string; outcome?: ReconciliationOutcome; limit: number }>,
-  ): Promise<BranchReconciliation[]>;
+    filter: Readonly<{
+      tenantId?: string;
+      outcome?: ReconciliationOutcome;
+      limit: number;
+      offset?: number;
+    }>,
+  ): Promise<Paged<BranchReconciliation>>;
   /** Marks the subscription over its limit (keeps the first date) or within it (null). */
   setOverLimit(tenantId: string, overLimit: boolean, now: Date): Promise<void>;
   overLimit(): Promise<OverLimitTenant[]>;

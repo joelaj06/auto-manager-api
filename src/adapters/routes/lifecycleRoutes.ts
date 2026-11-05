@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import type { Response } from "express";
 import { z } from "zod";
 import { MANUAL_DEACTIVATION_REASONS } from "../../domain/entities/TenantLifecycle.js";
@@ -344,12 +346,13 @@ export function lifecycleRoutes(deps: LifecycleRouteDependencies): ApiRoute[] {
         query: z.object({
           tenantId: z.uuid().optional(),
           outcome: z.enum(["matched", "fixed", "over_limit", "failed"]).optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(25),
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Reconciliations" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await deps.reconciliation.list(query)));
+        const page = await deps.reconciliation.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

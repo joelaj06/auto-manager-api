@@ -15,7 +15,7 @@ import type {
 } from "../../../domain/repositories/IFinanceRepositories.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   CashSessionRequiredError,
   InvoiceNotFoundError,
@@ -37,7 +37,6 @@ import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRepository.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
@@ -108,7 +107,7 @@ export type ReceiptView = Readonly<{
 }>;
 
 export type PaymentQuery = Omit<PaymentListFilter, "branchIds" | "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 /**
  * Recorded payments (docs/13 §2.2–2.3, decision 16: the money moved outside the system). Money in
@@ -146,21 +145,14 @@ export class PaymentRecording {
 
   async list(actor: Principal, query: PaymentQuery): Promise<Page<PaymentView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.queries.payments({
+      const found = await deps.queries.payments({
         ...query,
         branchIds: deps.scope.branchesFor(actor, "finance.payments.view"),
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { recordedAt: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = PageCursor.paginate(rows, query.limit, (p) => [
-        p.recordedAt.toISOString(),
-        p.id,
-      ]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map((p) => paymentView(p, base)) };
     });
   }

@@ -293,11 +293,11 @@ describe("A03 injection", () => {
       .query({ status: "draft'); drop table workpay_agreements; --" })
       .set(owner());
     expect(status.status).toBe(400);
-    const cursor = await api()
+    const page = await api()
       .get("/api/v1/workpay/agreements")
-      .query({ cursor: "1' union select * from users --" })
+      .query({ page: "1 union select * from users --" })
       .set(owner());
-    expect(cursor.status).toBe(400);
+    expect(page.status).toBe(400);
     expect((await api().get(`/api/v1/workpay/agreements/${agreement}`).set(owner())).status).toBe(
       200,
     );

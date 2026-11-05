@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { AssignmentSettingsService } from "../../application/use-cases/assignments/AssignmentSettingsService.js";
 import type { VehicleAssignments } from "../../application/use-cases/assignments/VehicleAssignments.js";
@@ -101,18 +103,17 @@ export function assignmentRoutes(deps: AssignmentRouteDependencies): ApiRoute[] 
           branchId: uuid.optional(),
           vehicleId: uuid.optional(),
           driverId: uuid.optional(),
-          cursor: z.string().max(200).optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
-      responses: { 200: { description: "Assignments; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Assignments" } },
       handler: async ({ query }, _req, res) => {
         const { open, ...rest } = query;
         const page = await assignments.list(principalOf(res), {
           ...rest,
           ...(open === undefined ? {} : { open }),
         });
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

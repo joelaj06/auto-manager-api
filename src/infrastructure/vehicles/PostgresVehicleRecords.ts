@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   DEFAULT_VEHICLE_SETTINGS,
   type IOdometerReadings,
@@ -188,13 +190,17 @@ export class PostgresOdometerReadings implements IOdometerReadings {
     );
   }
 
-  async list(vehicleId: string, limit: number): Promise<OdometerReadingProps[]> {
-    const { rows } = await this.tx.query<ReadingRow>(
-      `select ${READING_COLUMNS} from odometer_readings where vehicle_id = $1
-        order by read_at desc, created_at desc limit $2`,
-      [vehicleId, limit],
+  async list(vehicleId: string, window: PageWindow): Promise<Paged<OdometerReadingProps>> {
+    const { rows, total } = await pagedQuery<ReadingRow>(
+      this.tx,
+      {
+        sql: `select ${READING_COLUMNS} from odometer_readings where vehicle_id = $1`,
+        orderBy: "read_at desc, created_at desc, id desc",
+        params: [vehicleId],
+      },
+      window,
     );
-    return rows.map(toReading);
+    return { rows: rows.map(toReading), total };
   }
 }
 

@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { HandoverDocuments } from "../../application/use-cases/assignments/HandoverDocuments.js";
 import type { DocumentTemplates } from "../../application/use-cases/documents/DocumentTemplates.js";
@@ -183,11 +185,10 @@ export function documentRoutes(deps: DocumentRouteDependencies): ApiRoute[] {
           subjectId: uuid.optional(),
           status: z.enum(["issued", "void"]).optional(),
           branchId: uuid.optional(),
-          cursor: z.string().max(300).optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(30),
+          ...pageParams(100, 30),
         }),
       },
-      responses: { 200: { description: "Documents; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Documents" } },
       handler: async ({ query }, _req, res) => {
         const { subjectType, subjectId, ...rest } = query;
         const page = await documents.list(principalOf(res), {
@@ -196,7 +197,7 @@ export function documentRoutes(deps: DocumentRouteDependencies): ApiRoute[] {
             ? { subject: { type: subjectType, id: subjectId } }
             : {}),
         });
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

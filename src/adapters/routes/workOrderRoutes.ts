@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { WorkOrders } from "../../application/use-cases/maintenance/WorkOrders.js";
 import {
@@ -125,13 +127,13 @@ export function workOrderRoutes(deps: WorkOrderRouteDependencies): ApiRoute[] {
             .enum(["true", "false"])
             .transform((v) => v === "true")
             .optional(),
-          before: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Work orders" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await orders.list(principalOf(res), query)));
+        const page = await orders.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

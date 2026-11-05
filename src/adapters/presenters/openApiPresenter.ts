@@ -23,6 +23,21 @@ const operationId = (route: ApiRoute) =>
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join("")}`;
 
+const PAGE_RESPONSE_HEADERS = Object.fromEntries(
+  (
+    [
+      ["X-Total-Count", "Rows in the whole list"],
+      ["X-Page", "This page's number, from 1"],
+      ["X-Page-Size", "Rows asked for on a page"],
+    ] as const
+  ).map(([name, description]) => [name, { description, schema: { type: "integer" } }]),
+);
+
+const takesPage = (route: ApiRoute) => {
+  const query = route.request?.query?.shape;
+  return query !== undefined && "page" in query && "pageSize" in query;
+};
+
 function parameters(schema: z.ZodObject | undefined, location: "path" | "query") {
   if (schema === undefined) return [];
   const json = toSchema(schema);
@@ -84,6 +99,7 @@ export function buildOpenApiDocument(routes: readonly ApiRoute[], info: OpenApiI
     for (const [status, response] of Object.entries(route.responses)) {
       responses[status] = {
         description: response.description,
+        ...(status === "200" && takesPage(route) ? { headers: PAGE_RESPONSE_HEADERS } : {}),
         ...(response.schema === undefined ? {} : { content: jsonContent(response.schema) }),
       };
     }

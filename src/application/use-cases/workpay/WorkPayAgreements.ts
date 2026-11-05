@@ -19,7 +19,7 @@ import {
 } from "../../../domain/workpay/WorkPayTerms.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -35,7 +35,6 @@ import type {
   IWorkPayTransfers,
 } from "../../ports/IWorkPayRecords.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { ChecklistAnswers } from "../../../domain/assignments/VehicleAssignment.js";
 import type { VehicleAssignments } from "../assignments/VehicleAssignments.js";
@@ -507,25 +506,23 @@ export class WorkPayAgreements {
       driverId?: string;
       vehicleId?: string;
       branchId?: string;
-      cursor?: string;
-      limit: number;
+      page: number;
+      pageSize: number;
     }>,
   ): Promise<Page<AgreementView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 1).values;
     return deps.unitOfWork.run(async () => {
       if (query.branchId !== undefined)
         await deps.scope.branch(actor, "workpay.view", query.branchId);
-      const rows = await deps.agreements.list({
+      const found = await deps.agreements.list({
         branchIds: deps.scope.branchesFor(actor, "workpay.view"),
         ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
         ...(query.statuses === undefined ? {} : { statuses: query.statuses }),
         ...(query.driverId === undefined ? {} : { driverId: query.driverId }),
         ...(query.vehicleId === undefined ? {} : { vehicleId: query.vehicleId }),
-        limit: query.limit + 1,
-        ...(after === undefined ? {} : { afterId: String(after[0]) }),
+        ...pageWindow(query),
       });
-      const page = PageCursor.paginate(rows, query.limit, (r) => [r.id]);
+      const page = pageOf(query, found);
       return { ...page, items: await Promise.all(page.items.map((a) => this.view(a, false))) };
     });
   }
@@ -540,7 +537,7 @@ export class WorkPayAgreements {
   async ofDriver(driverId: string): Promise<AgreementView[]> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.agreements.list({
+      const found = await deps.agreements.list({
         branchIds: "all",
         driverId,
         statuses: [
@@ -553,7 +550,7 @@ export class WorkPayAgreements {
         ],
         limit: 20,
       });
-      return Promise.all(rows.map((a) => this.view(a, true)));
+      return Promise.all(found.rows.map((a) => this.view(a, true)));
     });
   }
 

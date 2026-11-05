@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type PageRequest } from "../../dto/Page.js";
 import { ErasureRuleError, type ErasureSubject } from "../../../domain/console/ColdArchive.js";
 import type { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
 import type { IJobHandler } from "../../jobs/IJobHandler.js";
@@ -109,8 +110,8 @@ export class PersonalDataErasure {
     };
   }
 
-  list(filter: Readonly<{ tenantId?: string; requestId?: string; limit: number }>) {
-    return this.deps.ledger.list(filter);
+  async list(filter: Readonly<{ tenantId?: string; requestId?: string }> & PageRequest) {
+    return pageOf(filter, await this.deps.ledger.list({ ...filter, ...pageWindow(filter) }));
   }
 
   /**

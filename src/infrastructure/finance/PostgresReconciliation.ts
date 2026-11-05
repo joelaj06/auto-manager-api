@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   IReconciliation,
   LedgerCandidate,
@@ -194,14 +196,18 @@ export class PostgresReconciliation implements IReconciliation {
       .query("update statement_imports set auto_matched = $2 where id = $1", [importId, count]);
   }
 
-  async imports(accountId: string | null, limit: number): Promise<StatementImport[]> {
-    const { rows } = await this.tx.current().query<ImportRow>(
-      `select ${IMPORT_COLUMNS} from statement_imports
-        where ($1::uuid is null or account_id = $1)
-        order by imported_at desc limit $2`,
-      [accountId, limit],
+  async imports(accountId: string | null, window: PageWindow): Promise<Paged<StatementImport>> {
+    const { rows, total } = await pagedQuery<ImportRow>(
+      this.tx.current(),
+      {
+        sql: `select ${IMPORT_COLUMNS} from statement_imports
+        where ($1::uuid is null or account_id = $1)`,
+        orderBy: "imported_at desc, id desc",
+        params: [accountId],
+      },
+      window,
     );
-    return rows.map(toImport);
+    return { rows: rows.map(toImport), total };
   }
 
   async importById(id: string): Promise<StatementImport | null> {
@@ -245,7 +251,7 @@ export class PostgresReconciliation implements IReconciliation {
     return rows[0] === undefined ? null : toLine(rows[0]);
   }
 
-  async lines(filter: StatementLineFilter): Promise<StatementLineRecord[]> {
+  async lines(filter: StatementLineFilter): Promise<Paged<StatementLineRecord>> {
     const params: unknown[] = [filter.accountId, filter.status];
     const where = ["account_id = $1", "status = $2"];
     const add = (sql: (n: number) => string, value: unknown) => {
@@ -254,17 +260,16 @@ export class PostgresReconciliation implements IReconciliation {
     };
     if (filter.from !== undefined) add((n) => `value_date >= $${n}`, filter.from);
     if (filter.to !== undefined) add((n) => `value_date <= $${n}`, filter.to);
-    if (filter.after !== undefined) {
-      params.push(filter.after.date, filter.after.id);
-      where.push(`(value_date, id) > ($${params.length - 1}, $${params.length})`);
-    }
-    params.push(filter.limit);
-    const { rows } = await this.tx.current().query<LineRow>(
-      `select ${LINE_COLUMNS} from statement_lines where ${where.join(" and ")}
-        order by value_date, id limit $${params.length}`,
-      params,
+    const { rows, total } = await pagedQuery<LineRow>(
+      this.tx.current(),
+      {
+        sql: `select ${LINE_COLUMNS} from statement_lines where ${where.join(" and ")}`,
+        orderBy: "value_date, id",
+        params,
+      },
+      filter,
     );
-    return rows.map(toLine);
+    return { rows: rows.map(toLine), total };
   }
 
   async unmatched(accountId: string): Promise<StatementLineRecord[]> {

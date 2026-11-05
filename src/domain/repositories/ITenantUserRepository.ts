@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 import type { TenantUser, TenantUserStatus } from "../entities/TenantUser.js";
 
 export type UserListQuery = Readonly<{
@@ -8,7 +9,7 @@ export type UserListQuery = Readonly<{
   status?: TenantUserStatus;
   search?: string;
   limit: number;
-  before?: string;
+  offset?: number;
 }>;
 
 /** Users of the current tenant (tenant unit of work). */
@@ -19,5 +20,5 @@ export interface ITenantUserRepository {
   findByPhone(phone: string): Promise<TenantUser | null>;
   /** Inserts or updates. */
   save(user: TenantUser, invitedBy?: string | null): Promise<void>;
-  list(query: UserListQuery): Promise<TenantUser[]>;
+  list(query: UserListQuery): Promise<Paged<TenantUser>>;
 }

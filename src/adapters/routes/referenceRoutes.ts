@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { CurrencySettingsService } from "../../application/use-cases/reference/CurrencySettingsService.js";
 import type { ExpenseCategoryAdministration } from "../../application/use-cases/reference/ExpenseCategoryAdministration.js";
@@ -263,12 +265,13 @@ export function referenceRoutes(deps: ReferenceRouteDependencies): ApiRoute[] {
       request: {
         query: z.object({
           quote: currency.optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Rates" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await fxRates.list(query)));
+        const page = await fxRates.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

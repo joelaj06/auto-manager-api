@@ -11,13 +11,12 @@ import type { ISequenceGenerator } from "../../../application/ports/ISequenceGen
 import type { ITenantContext } from "../../../application/ports/ITenantContext.js";
 import type { ITenantDatabaseProvisioner } from "../../../application/ports/ITenantDatabaseProvisioner.js";
 import type { IUnitOfWork } from "../../../application/ports/IUnitOfWork.js";
-import { PageCursor, type CursorValue } from "../../../application/services/PageCursor.js";
 import { TenantId } from "../../../domain/value-objects/TenantId.js";
 import { disposeContainer } from "../../../framework/dependency-injection/container.js";
 import { TYPES } from "../../../framework/dependency-injection/types.js";
 import { createTestContainer } from "../../../testing/testContainer.js";
 import { connectAdmin } from "../../../testing/testDatabase.js";
-import { KeysetQuery } from "../postgres/KeysetQuery.js";
+import { pagedQuery } from "../postgres/PagedQuery.js";
 import type { PostgresTransactionContext } from "../postgres/PostgresTransactionContext.js";
 import type { TenantDatabaseNaming } from "../postgres/TenantDatabaseNaming.js";
 
@@ -183,7 +182,7 @@ describe("PostgresOutbox", () => {
   });
 });
 
-describe("keyset pagination on real rows", () => {
+describe("numbered pages on real rows", () => {
   it("pages through every row exactly once, newest first", async () => {
     const naming = container.get<TenantDatabaseNaming>(TYPES.TenantDatabaseNaming);
     const admin = await connectAdmin(naming.databaseNameFor(tenantId));
@@ -194,34 +193,38 @@ describe("keyset pagination on real rows", () => {
     );
     await admin.end();
 
-    const query = new KeysetQuery([
-      { column: "available_at", direction: "desc" },
-      { column: "id", direction: "desc" },
-    ]);
-    type Row = { id: string; available_at: Date };
-    const seen: string[] = [];
-    let cursor: readonly CursorValue[] | null = null;
-
-    for (let page = 0; page < 10; page += 1) {
-      const parts = query.build(cursor, 2);
-      const { rows } = await inTenant(() =>
-        transactions.current().query<Row>(
-          `select id, available_at from outbox
-           where event_type = $1 and ${parts.where}
-           order by ${parts.orderBy} limit 6`,
-          ["paging.test", ...parts.params],
+    type Row = { id: string };
+    const page = (limit: number, offset: number) =>
+      inTenant(() =>
+        pagedQuery<Row>(
+          transactions.current(),
+          {
+            sql: "select id, available_at from outbox where event_type = $1",
+            orderBy: "available_at desc, id desc",
+            params: ["paging.test"],
+          },
+          { limit, offset },
         ),
       );
-      const result = PageCursor.paginate(rows, 5, (row) => [
-        row.available_at.toISOString(),
-        row.id,
-      ]);
-      seen.push(...result.items.map((row) => row.id));
-      if (result.nextCursor === null) break;
-      cursor = PageCursor.parse(result.nextCursor, query.size).values;
+
+    const seen: string[] = [];
+    for (let number = 1; number <= 5; number += 1) {
+      const { rows, total } = await page(5, (number - 1) * 5);
+      expect(total).toBe(23);
+      seen.push(...rows.map((row) => row.id));
     }
 
     expect(seen).toHaveLength(23);
     expect(new Set(seen).size).toBe(23);
+
+    const jumped = await page(5, 15);
+    expect(jumped.rows.map((row) => row.id)).toEqual(seen.slice(15, 20));
+
+    const everything = await page(23, 0);
+    expect(everything).toMatchObject({ total: 23 });
+    expect(everything.rows).toHaveLength(23);
+
+    const pastTheEnd = await page(5, 100);
+    expect(pastTheEnd).toEqual({ rows: [], total: 23 });
   });
 });

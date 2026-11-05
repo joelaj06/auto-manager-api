@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 export type AlertSeverity = "info" | "warning" | "critical";
 export type AlertStatus = "open" | "acknowledged" | "resolved";
 
@@ -49,8 +50,9 @@ export interface IPlatformAlertRepository {
       severity?: AlertSeverity;
       source?: string;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<PlatformAlert[]>;
+  ): Promise<Paged<PlatformAlert>>;
   acknowledge(id: string, staffId: string, now: Date): Promise<void>;
   resolve(id: string, staffId: string | null, now: Date): Promise<void>;
   markNotified(id: string, now: Date): Promise<void>;

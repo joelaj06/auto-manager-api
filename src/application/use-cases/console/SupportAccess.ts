@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import {
   SupportSession,
   type SupportMode,
@@ -232,15 +233,15 @@ export class SupportAccess implements ISupportAccess {
     return this.change(id, actor, "support.session_ended", (s, now) => s.end("ended", now));
   }
 
-  list(
+  async list(
     filter: Readonly<{
       staffId?: string;
       tenantId?: string;
       status?: SupportStatus;
-      limit: number;
-    }>,
-  ): Promise<SupportSessionRow[]> {
-    return this.deps.sessions.list(filter);
+    }> &
+      PageRequest,
+  ): Promise<Page<SupportSessionRow>> {
+    return pageOf(filter, await this.deps.sessions.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async get(
@@ -258,7 +259,7 @@ export class SupportAccess implements ISupportAccess {
   ): Promise<Readonly<{ visible: boolean; sessions: TenantSupportLogEntry[] }>> {
     const visible = await this.deps.sessions.logVisible(tenantId);
     if (!visible) return { visible, sessions: [] };
-    const rows = await this.deps.sessions.list({ tenantId, limit: 100 });
+    const { rows } = await this.deps.sessions.list({ tenantId, limit: 100 });
     return {
       visible,
       sessions: rows

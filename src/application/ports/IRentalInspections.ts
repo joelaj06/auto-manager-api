@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { ChargeAmount } from "../../domain/rentals/RentalBooking.js";
 import type { RentalInspection } from "../../domain/rentals/RentalInspection.js";
 import type { DamageStatus, VehicleDamage } from "../../domain/rentals/VehicleDamage.js";
@@ -17,6 +18,7 @@ export type DamageFilter = Readonly<{
   bookingId?: string;
   statuses?: readonly DamageStatus[];
   limit: number;
+  offset?: number;
 }>;
 
 /** The damage register (the damage map) of the fleet, docs/07 §6. */
@@ -25,7 +27,7 @@ export interface IVehicleDamages {
   /** Locks the damage row until the unit of work ends. */
   lock(id: string): Promise<VehicleDamage | null>;
   /** Newest first. */
-  list(filter: DamageFilter): Promise<VehicleDamage[]>;
+  list(filter: DamageFilter): Promise<Paged<VehicleDamage>>;
   insert(damage: VehicleDamage): Promise<void>;
   /** Saves the damage and its photos. */
   update(damage: VehicleDamage): Promise<void>;

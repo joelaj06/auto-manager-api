@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pageTotal } from "../database/postgres/PagedQuery.js";
 import type {
   ImportWatch,
   IPurchases,
@@ -190,7 +192,7 @@ export class PostgresPurchases implements IPurchases {
     return this.one(id, "for update");
   }
 
-  async list(filter: PurchaseFilter): Promise<Purchase[]> {
+  async list(filter: PurchaseFilter): Promise<Paged<Purchase>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -202,13 +204,16 @@ export class PostgresPurchases implements IPurchases {
     if (filter.supplierId !== undefined) add("supplier_id = ?", filter.supplierId);
     if (filter.statuses !== undefined) add("status = any(?::text[])", filter.statuses);
     if (filter.types !== undefined) add("type = any(?::text[])", filter.types);
-    if (filter.beforeId !== undefined && UUID.test(filter.beforeId)) add("id < ?", filter.beforeId);
-    params.push(filter.limit);
-    return this.load(
-      `${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-       order by id desc limit $${params.length}`,
-      params,
+    const tail = where.length === 0 ? "" : `where ${where.join(" and ")}`;
+    const rows = await this.load(
+      `${tail} order by id desc limit $${params.length + 1} offset $${params.length + 2}`,
+      [...params, filter.limit, filter.offset ?? 0],
     );
+    const total = await pageTotal(this.tx, rows.length, filter, {
+      sql: `select count(*) as total from purchases ${tail}`,
+      params,
+    });
+    return { rows, total };
   }
 
   async addCost(c: NewPurchaseCost): Promise<void> {

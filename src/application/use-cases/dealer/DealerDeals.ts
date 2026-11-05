@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import type { Appraisal } from "../../../domain/dealer/Appraisal.js";
 import {
   addMonths,
@@ -119,8 +120,8 @@ export type DealQuery = Readonly<{
   vehicleId?: string;
   leadId?: string;
   salesExecutiveId?: string;
-  limit: number;
-  beforeId?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 export type DealAccount = Readonly<{
@@ -241,19 +242,20 @@ type Deps = Readonly<{
 export class DealerDeals {
   constructor(private readonly deps: Deps) {}
 
-  list(actor: Principal, query: DealQuery): Promise<DealView[]> {
+  list(actor: Principal, query: DealQuery): Promise<Page<DealView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const own = actor.grantFor("dealer.deals.view")?.scope === "own";
-      const deals = await deps.deals.list({
+      const { rows: deals, total } = await deps.deals.list({
         ...query,
+        ...pageWindow(query),
         branchIds: own ? "all" : deps.scope.branchesFor(actor, "dealer.deals.view"),
         ...(own ? { salesExecutiveId: actor.userId } : {}),
       });
       const base = await this.base();
       const views: DealView[] = [];
       for (const deal of deals) views.push(await this.summary(deal, base));
-      return views;
+      return pageOf(query, { rows: views, total });
     });
   }
 

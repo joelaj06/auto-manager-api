@@ -262,7 +262,7 @@ export class VehicleDocuments {
   ): Promise<ComplianceBoard> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
-      const vehicles = await deps.queries.list({
+      const { rows: vehicles } = await deps.queries.list({
         branchIds: deps.access.branchesFor(actor, "vehicles.documents.view"),
         ...(filter.branchId === undefined ? {} : { branchId: filter.branchId }),
         statuses: VEHICLE_STATUSES.filter((s) => !OFF_FLEET_STATUSES.has(s)),

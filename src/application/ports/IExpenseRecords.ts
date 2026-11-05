@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { ExpenseProps, ExpenseStatus, PayeeType } from "../../domain/expenses/Expense.js";
 import type { ApprovalRule, RecurringFrequency } from "../../domain/expenses/ExpenseRules.js";
 
@@ -15,12 +16,12 @@ export type ExpenseListFilter = Readonly<{
   from?: string;
   to?: string;
   limit: number;
-  after?: Readonly<{ createdAt: string; id: string }>;
+  offset?: number;
 }>;
 
 /** Reads over expenses (tenant unit of work). */
 export interface IExpenseQueries {
-  list(filter: ExpenseListFilter): Promise<ExpenseProps[]>;
+  list(filter: ExpenseListFilter): Promise<Paged<ExpenseProps>>;
   /** Expenses (not void) that look like a duplicate: same category, date, currency and amount. */
   similar(
     expense: Readonly<{

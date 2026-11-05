@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import type { ComplianceStatus } from "../../../domain/vehicles/VehicleCompliance.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
@@ -12,7 +13,7 @@ import type { VehiclePhotos } from "./VehiclePhotos.js";
 import type { VehicleRegistry } from "./VehicleRegistry.js";
 import type { VehicleView } from "./VehicleView.js";
 
-export type TimelinePage = Readonly<{ items: TimelineEntry[]; nextBefore: Date | null }>;
+export type TimelinePage = Page<TimelineEntry>;
 
 export type VehicleOverviewView = Readonly<{
   vehicle: VehicleView;
@@ -39,7 +40,7 @@ export type VehicleOverviewView = Readonly<{
 }>;
 
 const DAY_MS = 86_400_000;
-const FIRST_PAGE = 20;
+const FIRST_PAGE: PageRequest = { page: 1, pageSize: 20 };
 
 /**
  * The vehicle 360° page (docs/06 §10), skeleton: header, compliance badges, recent distance and
@@ -91,7 +92,7 @@ export class VehicleOverview {
           new Date(now.getTime() - 30 * DAY_MS),
           now,
         ),
-        timeline: await this.page(id, null, FIRST_PAGE),
+        timeline: await this.page(id, FIRST_PAGE),
       };
     });
     return {
@@ -102,20 +103,14 @@ export class VehicleOverview {
     };
   }
 
-  async timeline(
-    actor: Principal,
-    id: string,
-    query: Readonly<{ before?: Date; limit: number }>,
-  ): Promise<TimelinePage> {
+  async timeline(actor: Principal, id: string, query: PageRequest): Promise<TimelinePage> {
     return this.deps.unitOfWork.run(async () => {
       await this.deps.access.reach(actor, id, "vehicles.view");
-      return this.page(id, query.before ?? null, query.limit);
+      return this.page(id, query);
     });
   }
 
-  private async page(id: string, before: Date | null, limit: number): Promise<TimelinePage> {
-    const rows = await this.deps.queries.timeline(id, before, limit + 1);
-    const items = rows.slice(0, limit);
-    return { items, nextBefore: rows.length > limit ? (items.at(-1)?.at ?? null) : null };
+  private async page(id: string, request: PageRequest): Promise<TimelinePage> {
+    return pageOf(request, await this.deps.queries.timeline(id, pageWindow(request)));
   }
 }

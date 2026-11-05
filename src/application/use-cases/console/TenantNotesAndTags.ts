@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import { TenantNote } from "../../../domain/entities/TenantNote.js";
 import { TenantTag } from "../../../domain/value-objects/TenantTag.js";
 import type { PlatformPrincipal } from "../../authorization/PlatformPrincipal.js";
@@ -40,9 +41,12 @@ export class TenantNotesAndTags {
     }>,
   ) {}
 
-  async notes(tenantId: string, options: NoteListOptions): Promise<TenantNoteView[]> {
+  async notes(tenantId: string, options: Paging<NoteListOptions>): Promise<Page<TenantNoteView>> {
     await this.assertTenant(tenantId);
-    return this.deps.notes.list(tenantId, options);
+    return pageOf(
+      options,
+      await this.deps.notes.list(tenantId, { ...options, ...pageWindow(options) }),
+    );
   }
 
   async addNote(

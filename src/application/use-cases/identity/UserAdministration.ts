@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { createHash, randomBytes } from "node:crypto";
 import { TenantUser } from "../../../domain/entities/TenantUser.js";
 import type { ITenantUserRepository } from "../../../domain/repositories/ITenantUserRepository.js";
@@ -98,15 +99,21 @@ export class UserAdministration {
     query: Readonly<{
       status?: TenantUser["status"];
       search?: string;
-      limit: number;
-      before?: string;
+      page: number;
+      pageSize: number;
     }>,
-  ): Promise<UserView[]> {
+  ): Promise<Page<UserView>> {
     const { deps } = this;
     const branchIds = deps.policy.branchesFor(actor, "users.list");
     return deps.unitOfWork.run(async () => {
-      const users = await deps.users.list({ ...query, branchIds, includeUserId: actor.userId });
-      return Promise.all(users.map(async (u) => this.view(u, false)));
+      const { rows, total } = await deps.users.list({
+        ...query,
+        ...pageWindow(query),
+        branchIds,
+        includeUserId: actor.userId,
+      });
+      const views = await Promise.all(rows.map(async (u) => this.view(u, false)));
+      return pageOf(query, { rows: views, total });
     });
   }
 

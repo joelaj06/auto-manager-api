@@ -99,7 +99,7 @@ async function listed(body: Record<string, unknown>, price = "60000.00", minimum
 }
 
 async function inbox(token: string): Promise<{ title: string }[]> {
-  const res = await api().get("/api/v1/notifications?limit=100").set(as(token));
+  const res = await api().get("/api/v1/notifications?pageSize=100").set(as(token));
   expect(res.status, JSON.stringify(res.body)).toBe(200);
   return res.body.data as { title: string }[];
 }

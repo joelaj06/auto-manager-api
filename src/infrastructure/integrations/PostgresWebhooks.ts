@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AttemptOutcome,
   DeliveryToSend,
@@ -170,13 +172,17 @@ export class PostgresWebhooks implements IWebhooks {
     };
   }
 
-  async deliveries(endpointId: string, limit: number): Promise<WebhookDeliveryRecord[]> {
-    const { rows } = await this.tx().query<Row>(
-      `select * from webhook_deliveries where endpoint_id = $1
-        order by created_at desc limit $2`,
-      [endpointId, limit],
+  async deliveries(endpointId: string, window: PageWindow): Promise<Paged<WebhookDeliveryRecord>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx(),
+      {
+        sql: `select * from webhook_deliveries where endpoint_id = $1`,
+        orderBy: "created_at desc, id desc",
+        params: [endpointId],
+      },
+      window,
     );
-    return rows.map(toDelivery);
+    return { rows: rows.map(toDelivery), total };
   }
 
   async recordAttempt(outcome: AttemptOutcome): Promise<WebhookEndpointRecord | null> {

@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import {
   DPR_RESPONSE_DAYS,
   nextQuarterEnd,
@@ -147,8 +148,8 @@ export class DataProtectionRequests {
     });
   }
 
-  list(filter: Readonly<{ status?: DprStatus; openOnly?: boolean; limit: number }>) {
-    return this.deps.requests.list(filter);
+  async list(filter: Readonly<{ status?: DprStatus; openOnly?: boolean }> & PageRequest) {
+    return pageOf(filter, await this.deps.requests.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async get(id: string): Promise<DataProtectionRequest> {
@@ -343,8 +344,8 @@ export class StatusPage {
 export class RestoreDrills {
   constructor(private readonly deps: Deps & Readonly<{ drills: IRestoreDrillRepository }>) {}
 
-  list(limit: number): Promise<RestoreDrill[]> {
-    return this.deps.drills.list(limit);
+  async list(request: PageRequest): Promise<Page<RestoreDrill>> {
+    return pageOf(request, await this.deps.drills.list(pageWindow(request)));
   }
 
   /** The daily check: one scheduled game day; a passed due date is a missed drill. */

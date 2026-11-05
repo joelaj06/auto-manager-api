@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import { TelematicsRuleError } from "../../../domain/telematics/Geo.js";
 import { utilisationPercent } from "../../../domain/telematics/Tracker.js";
 import type { Principal } from "../../authorization/Principal.js";
@@ -120,26 +121,33 @@ export class TelematicsViews {
     });
   }
 
-  trips(actor: Principal, filter: Omit<TripFilter, "branchIds">): Promise<TripView[]> {
+  trips(actor: Principal, filter: Paging<Omit<TripFilter, "branchIds">>): Promise<Page<TripView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       if (filter.vehicleId !== undefined)
         await deps.vehicleAccess.reach(actor, filter.vehicleId, "telematics.view");
-      return deps.telematics.trips({
+      const found = await deps.telematics.trips({
         ...filter,
+        ...pageWindow(filter),
         branchIds: deps.vehicleAccess.branchesFor(actor, "telematics.view"),
       });
+      return pageOf(filter, found);
     });
   }
 
-  events(actor: Principal, filter: Omit<EventFilter, "branchIds">): Promise<TelematicsEvent[]> {
+  events(
+    actor: Principal,
+    filter: Paging<Omit<EventFilter, "branchIds">>,
+  ): Promise<Page<TelematicsEvent>> {
     const { deps } = this;
-    return deps.unitOfWork.run(() =>
-      deps.telematics.events({
+    return deps.unitOfWork.run(async () => {
+      const found = await deps.telematics.events({
         ...filter,
+        ...pageWindow(filter),
         branchIds: deps.vehicleAccess.branchesFor(actor, "telematics.view"),
-      }),
-    );
+      });
+      return pageOf(filter, found);
+    });
   }
 
   acknowledge(actor: Principal, id: string, note: string | null): Promise<TelematicsEvent> {

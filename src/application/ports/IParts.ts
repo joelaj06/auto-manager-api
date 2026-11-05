@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { MoveKind, Part, Stock } from "../../domain/maintenance/Part.js";
 
 export type PartFilter = Readonly<{
@@ -5,6 +6,7 @@ export type PartFilter = Readonly<{
   category?: string;
   includeInactive: boolean;
   limit: number;
+  offset?: number;
 }>;
 
 export type PartMove = Readonly<{
@@ -34,7 +36,7 @@ export type MoveFilter = Readonly<{
   workOrderId?: string;
   limit: number;
   /** Newest first: rows with a smaller id. */
-  beforeId?: string;
+  offset?: number;
 }>;
 
 /** A stock row with its part, for stock lists and reorder alerts. */
@@ -52,7 +54,7 @@ export interface IParts {
   update(part: Part): Promise<void>;
   get(id: string): Promise<Part | null>;
   skuTaken(sku: string, exceptId: string | null): Promise<boolean>;
-  list(filter: PartFilter): Promise<Part[]>;
+  list(filter: PartFilter): Promise<Paged<Part>>;
   /** The part's stock at the branch, locked (an empty row the first time). */
   lockStock(partId: string, branchId: string): Promise<Stock>;
   saveStock(stock: Stock): Promise<void>;
@@ -65,5 +67,5 @@ export interface IParts {
   addMove(move: PartMove): Promise<void>;
   /** An active supplier of the business. */
   supplierExists(id: string): Promise<boolean>;
-  moves(filter: MoveFilter): Promise<PartMove[]>;
+  moves(filter: MoveFilter): Promise<Paged<PartMove>>;
 }

@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import { credit, debit, journal } from "../../../domain/finance/Journal.js";
 import { METHOD_ACCOUNT } from "../../../domain/finance/Payment.js";
 import {
@@ -163,10 +164,10 @@ export class Incidents {
       driverId?: string;
       type?: IncidentType;
       status?: "open" | "closed";
-      before?: string;
-      limit: number;
+      page: number;
+      pageSize: number;
     }>,
-  ): Promise<IncidentProps[]> {
+  ): Promise<Page<IncidentProps>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const found = await deps.incidents.list({
@@ -175,10 +176,9 @@ export class Incidents {
         ...(query.driverId === undefined ? {} : { driverId: query.driverId }),
         ...(query.type === undefined ? {} : { type: query.type }),
         ...(query.status === undefined ? {} : { status: query.status }),
-        ...(query.before === undefined ? {} : { beforeId: query.before }),
-        limit: query.limit,
+        ...pageWindow(query),
       });
-      return found.map((i) => i.snapshot());
+      return pageOf(query, found, (i) => i.snapshot());
     });
   }
 
@@ -298,18 +298,18 @@ export class Incidents {
 
   claims(
     actor: Principal,
-    query: Readonly<{ status?: ClaimStatus; insurerId?: string; limit: number }>,
-  ): Promise<ClaimView[]> {
+    query: Readonly<{ status?: ClaimStatus; insurerId?: string }> & PageRequest,
+  ): Promise<Page<ClaimView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const claims = await deps.incidents.claims({
         branchIds: deps.vehicleAccess.branchesFor(actor, "incidents.view"),
         ...(query.status === undefined ? {} : { statuses: [query.status] }),
         ...(query.insurerId === undefined ? {} : { insurerId: query.insurerId }),
-        limit: query.limit,
+        ...pageWindow(query),
       });
       const currency = await this.currency();
-      return claims.map((c) => claimView(c, currency));
+      return pageOf(query, claims, (c) => claimView(c, currency));
     });
   }
 

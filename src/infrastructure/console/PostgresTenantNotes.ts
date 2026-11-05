@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   ITenantNotes,
   ITenantTags,
@@ -35,17 +37,19 @@ export class PostgresTenantNotes implements ITenantNotes {
   async list(
     tenantId: string,
     options: Readonly<{ limit: number; before?: string; pinned?: boolean }>,
-  ): Promise<TenantNoteView[]> {
-    const { rows } = await this.db.query<ViewRow>(
-      `${VIEW}
+  ): Promise<Paged<TenantNoteView>> {
+    const { rows, total } = await pagedQuery<ViewRow>(
+      this.db,
+      {
+        sql: `${VIEW}
         where n.tenant_id = $1 and n.deleted_at is null
-          and ($2::uuid is null or n.id < $2)
-          and ($4::boolean is null or n.pinned = $4)
-        order by n.id desc
-        limit $3`,
-      [tenantId, options.before ?? null, options.limit, options.pinned ?? null],
+          and ($2::boolean is null or n.pinned = $2)`,
+        orderBy: "n.id desc",
+        params: [tenantId, options.pinned ?? null],
+      },
+      options,
     );
-    return rows.map(toView);
+    return { rows: rows.map(toView), total };
   }
 
   async view(noteId: string): Promise<TenantNoteView | null> {

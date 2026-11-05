@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   BackupListFilter,
   BackupOverview,
@@ -15,8 +17,8 @@ const SAMPLE = 20;
 export class PostgresDataOperationsQueries implements IDataOperationsQueries {
   constructor(private readonly db: PlatformDb) {}
 
-  async backups(filter: BackupListFilter): Promise<BackupView[]> {
-    const { rows } = await this.db.query<{
+  async backups(filter: BackupListFilter): Promise<Paged<BackupView>> {
+    const { rows, total } = await pagedQuery<{
       id: string;
       kind: "tenant" | "platform";
       tenant_id: string | null;
@@ -30,37 +32,36 @@ export class PostgresDataOperationsQueries implements IDataOperationsQueries {
       verified_at: Date | null;
       verification: Record<string, unknown> | null;
     }>(
-      `select b.id, b.kind, b.tenant_id, t.slug::text as slug, b.status, b.started_at,
+      this.db,
+      {
+        sql: `select b.id, b.kind, b.tenant_id, t.slug::text as slug, b.status, b.started_at,
               b.finished_at, b.size_bytes, b.schema_version, b.error, b.verified_at, b.verification
          from backups b left join tenants t on t.id = b.tenant_id
         where ($1::text is null or b.kind = $1)
           and ($2::uuid is null or b.tenant_id = $2)
-          and ($3::text is null or b.status = $3)
-          and ($4::uuid is null or b.id < $4)
-        order by b.id desc
-        limit $5`,
-      [
-        filter.kind ?? null,
-        filter.tenantId ?? null,
-        filter.status ?? null,
-        filter.before ?? null,
-        filter.limit,
-      ],
+          and ($3::text is null or b.status = $3)`,
+        orderBy: "b.id desc",
+        params: [filter.kind ?? null, filter.tenantId ?? null, filter.status ?? null],
+      },
+      filter,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      kind: r.kind,
-      tenantId: r.tenant_id,
-      tenantSlug: r.slug,
-      status: r.status,
-      startedAt: r.started_at,
-      finishedAt: r.finished_at,
-      sizeBytes: r.size_bytes === null ? null : Number(r.size_bytes),
-      schemaVersion: r.schema_version,
-      error: r.error,
-      verifiedAt: r.verified_at,
-      verification: r.verification,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        tenantId: r.tenant_id,
+        tenantSlug: r.slug,
+        status: r.status,
+        startedAt: r.started_at,
+        finishedAt: r.finished_at,
+        sizeBytes: r.size_bytes === null ? null : Number(r.size_bytes),
+        schemaVersion: r.schema_version,
+        error: r.error,
+        verifiedAt: r.verified_at,
+        verification: r.verification,
+      })),
+      total,
+    };
   }
 
   async backupOverview(now: Date, since: Date): Promise<BackupOverview> {

@@ -1,3 +1,4 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
 import type { TenantStatus } from "./ITenantDirectory.js";
 
 export type TenantListFilter = Readonly<{
@@ -8,8 +9,7 @@ export type TenantListFilter = Readonly<{
   createdFrom?: Date;
   createdTo?: Date;
   limit: number;
-  /** Keyset cursor: tenants created before this tenant id (ids are time-ordered). */
-  before?: string;
+  offset?: number;
 }>;
 
 export type TenantListItem = Readonly<{
@@ -105,11 +105,8 @@ export type DashboardCounts = Readonly<{
 
 /** Console read models over the platform registry (docs/27 §3.1, §3.4). */
 export interface IConsoleTenantQueries {
-  list(filter: TenantListFilter): Promise<TenantListItem[]>;
+  list(filter: TenantListFilter): Promise<Paged<TenantListItem>>;
   overview(tenantId: string): Promise<TenantOverview | null>;
-  timeline(
-    tenantId: string,
-    options: Readonly<{ limit: number; before?: Date }>,
-  ): Promise<TimelineEntry[]>;
+  timeline(tenantId: string, window: PageWindow): Promise<Paged<TimelineEntry>>;
   dashboard(now: Date): Promise<DashboardCounts>;
 }

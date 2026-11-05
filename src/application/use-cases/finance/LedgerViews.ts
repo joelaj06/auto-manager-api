@@ -6,7 +6,7 @@ import {
 } from "../../../domain/finance/Journal.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type {
   ILedger,
@@ -17,7 +17,6 @@ import type {
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import type { FinanceContext } from "./FinanceContext.js";
@@ -45,7 +44,7 @@ export type PartyAccount = Readonly<{
 }>;
 
 export type LedgerLineQuery = Omit<LedgerLineFilter, "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 /**
  * The accounting view (docs/13 §2.4, §7): chart of accounts with balances, trial balance,
@@ -133,22 +132,12 @@ export class LedgerViews {
 
   async lines(query: LedgerLineQuery): Promise<Page<LedgerLineView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 3).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.ledger.lines({
+      const found = await deps.ledger.lines({
         ...query,
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : {
-              after: { date: String(after[0]), createdAt: String(after[1]), id: String(after[2]) },
-            }),
+        ...pageWindow(query),
       });
-      return PageCursor.paginate(rows, query.limit, (l) => [
-        l.date,
-        l.createdAt.toISOString(),
-        l.id,
-      ]);
+      return pageOf(query, found);
     });
   }
 

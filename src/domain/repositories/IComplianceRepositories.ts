@@ -1,3 +1,4 @@
+import type { Paged, PageWindow } from "../value-objects/Paged.js";
 // --- data-protection requests (docs/27 §3.15) ---
 
 export type DprKind = "access" | "correction" | "erasure" | "objection";
@@ -29,8 +30,8 @@ export interface IDataProtectionRequestRepository {
   save(request: DataProtectionRequest): Promise<void>;
   find(id: string, lock?: boolean): Promise<DataProtectionRequest | null>;
   list(
-    filter: Readonly<{ status?: DprStatus; openOnly?: boolean; limit: number }>,
-  ): Promise<DataProtectionRequest[]>;
+    filter: Readonly<{ status?: DprStatus; openOnly?: boolean; limit: number; offset?: number }>,
+  ): Promise<Paged<DataProtectionRequest>>;
   /** Open requests due before `before`. */
   dueBefore(before: Date): Promise<DataProtectionRequest[]>;
 }
@@ -85,5 +86,5 @@ export interface IRestoreDrillRepository {
   save(drill: RestoreDrill): Promise<void>;
   find(id: string, lock?: boolean): Promise<RestoreDrill | null>;
   scheduled(kind: DrillKind): Promise<RestoreDrill | null>;
-  list(limit: number): Promise<RestoreDrill[]>;
+  list(window: PageWindow): Promise<Paged<RestoreDrill>>;
 }

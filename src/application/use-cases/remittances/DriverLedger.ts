@@ -9,7 +9,7 @@ import {
 import type { Principal } from "../../authorization/Principal.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
-import type { ILedger, LedgerLineView } from "../../ports/IFinanceRecords.js";
+import type { ILedger } from "../../ports/IFinanceRecords.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IRemittanceRecords } from "../../ports/IRemittanceRecords.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
@@ -101,7 +101,7 @@ export class DriverLedger {
       const accountIds = await this.accountIds();
       const party = { type: "driver" as const, id: driverId };
       const opening = await deps.ledger.partyNet(accountIds, party, from);
-      const rows: LedgerLineView[] = await deps.ledger.lines({
+      const { rows } = await deps.ledger.lines({
         accountIds,
         party,
         from,

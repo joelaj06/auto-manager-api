@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   AGEING_BUCKETS,
   StockRuleError,
@@ -100,8 +101,8 @@ export type StockQuery = Readonly<{
   priceTo?: string;
   minDays?: number;
   consignorId?: string;
-  limit: number;
-  after?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 /** What the vehicle has cost the business so far (with `dealer.stock.cost.view`). */
@@ -199,13 +200,13 @@ export class DealerStock {
     }>,
   ) {}
 
-  list(actor: Principal, query: StockQuery): Promise<StockView[]> {
+  list(actor: Principal, query: StockQuery): Promise<Page<StockView>> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       if (query.branchId !== undefined)
         await deps.scope.branch(actor, "dealer.stock.list", query.branchId);
       const context = await this.context(actor);
-      const records = await deps.stock.list({
+      const records = await deps.stock.page({
         branchIds: deps.scope.branchesFor(actor, "dealer.stock.list"),
         ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
         ...(query.statuses === undefined ? {} : { statuses: query.statuses }),
@@ -224,11 +225,10 @@ export class DealerStock {
           ? {}
           : { stockedOnOrBefore: shift(context.today, -query.minDays) }),
         ...(query.consignorId === undefined ? {} : { consignorId: query.consignorId }),
-        limit: query.limit,
-        ...(query.after === undefined ? {} : { afterVehicleId: query.after }),
+        ...pageWindow(query),
       });
-      const spend = await this.spend(records, context);
-      return records.map((r) => this.view(r, context, spend.get(r.unit.vehicleId)));
+      const spend = await this.spend(records.rows, context);
+      return pageOf(query, records, (r) => this.view(r, context, spend.get(r.unit.vehicleId)));
     });
   }
 

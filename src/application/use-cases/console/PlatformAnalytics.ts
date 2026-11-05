@@ -1,3 +1,4 @@
+import { slicePage, type Page, type PageRequest } from "../../dto/Page.js";
 import {
   AnalyticsRuleError,
   checkRates,
@@ -164,13 +165,20 @@ export class PlatformAnalytics {
 
   /** Every live tenant's health, the weakest first; optionally only those with a flag. */
   async health(
-    query: Readonly<{ flag?: HealthFlag; limit?: number }>,
-  ): Promise<TenantHealthView[]> {
+    query: Readonly<{ flag?: HealthFlag }> & PageRequest,
+  ): Promise<Page<TenantHealthView>> {
     const rows = (await this.activity()).map((a) => this.healthOf(a, null));
-    return rows
-      .filter((r) => query.flag === undefined || r.flags.includes(query.flag))
-      .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name))
-      .slice(0, query.limit ?? 200);
+    return slicePage(
+      query,
+      rows
+        .filter((r) => query.flag === undefined || r.flags.includes(query.flag))
+        .sort(
+          (a, b) =>
+            a.score - b.score ||
+            a.name.localeCompare(b.name) ||
+            a.tenantId.localeCompare(b.tenantId),
+        ),
+    );
   }
 
   /** One tenant's health with its onboarding checklist. */

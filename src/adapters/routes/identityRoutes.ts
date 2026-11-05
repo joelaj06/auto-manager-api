@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import type { Request } from "express";
 import { z } from "zod";
 import type { RefreshAuthSession } from "../../application/use-cases/auth/RefreshAuthSession.js";
@@ -205,18 +207,13 @@ export function identityRoutes(deps: IdentityRouteDependencies): ApiRoute[] {
         query: z.object({
           status: z.enum(["invited", "active", "disabled"]).optional(),
           search: z.string().trim().max(100).optional(),
-          before: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(100).default(50),
+          ...pageParams(100, 50),
         }),
       },
       responses: { 200: { description: "Users" } },
       handler: async ({ query }, _req, res) => {
-        const users = await deps.users.list(principalOf(res), query);
-        res.json(
-          envelope(json(users), {
-            nextBefore: users.length === query.limit ? (users.at(-1)?.id ?? null) : null,
-          }),
-        );
+        const page = await deps.users.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(json(page.items)));
       },
     }),
     defineRoute({

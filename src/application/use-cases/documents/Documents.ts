@@ -21,7 +21,7 @@ import {
 import { Template } from "../../../domain/documents/TemplateEngine.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { DocumentNotFoundError } from "../../errors/DocumentErrors.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -42,7 +42,6 @@ import type { ITenantContext } from "../../ports/ITenantContext.js";
 import type { ITenantDirectory } from "../../ports/ITenantDirectory.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { FileService, FileView } from "../files/FileService.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
@@ -351,23 +350,21 @@ export class Documents {
       subject?: Readonly<{ type: string; id: string }>;
       status?: "issued" | "void";
       branchId?: string;
-      cursor?: string;
-      limit: number;
+      page: number;
+      pageSize: number;
     }>,
   ): Promise<Page<DocumentView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 1).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.documents.list({
+      const found = await deps.documents.list({
         branchIds: deps.scope.branchesFor(actor, "documents.list"),
         ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
         ...(query.type === undefined ? {} : { type: query.type }),
         ...(query.subject === undefined ? {} : { subject: query.subject }),
         ...(query.status === undefined ? {} : { status: query.status }),
-        limit: query.limit + 1,
-        ...(after === undefined ? {} : { afterId: String(after[0]) }),
+        ...pageWindow(query),
       });
-      const page = PageCursor.paginate(rows, query.limit, (r) => [r.id]);
+      const page = pageOf(query, found);
       const slug = await this.slug();
       return { ...page, items: page.items.map((d) => this.viewWith(d, slug, false)) };
     });

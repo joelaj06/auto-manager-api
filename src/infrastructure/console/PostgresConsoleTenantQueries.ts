@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   DashboardCounts,
   IConsoleTenantQueries,
@@ -31,9 +33,11 @@ const counts = (rows: readonly { key: string | null; n: string }[]): Record<stri
 export class PostgresConsoleTenantQueries implements IConsoleTenantQueries {
   constructor(private readonly db: PlatformDb) {}
 
-  async list(filter: TenantListFilter): Promise<TenantListItem[]> {
-    const { rows } = await this.db.query<ListRow>(
-      `select t.id, t.slug, t.name, t.status, t.created_at, t.trial_ends_at, t.status_changed_at,
+  async list(filter: TenantListFilter): Promise<Paged<TenantListItem>> {
+    const { rows, total } = await pagedQuery<ListRow>(
+      this.db,
+      {
+        sql: `select t.id, t.slug, t.name, t.status, t.created_at, t.trial_ends_at, t.status_changed_at,
               a.contact_name, a.contact_email::text as contact_email, a.source, t.demo,
               coalesce((select array_agg(tg.tag order by tg.tag) from tenant_tags tg
                          where tg.tenant_id = t.id), '{}') as tags
@@ -48,34 +52,35 @@ export class PostgresConsoleTenantQueries implements IConsoleTenantQueries {
           and ($3::text is null
                or exists (select 1 from tenant_tags tg where tg.tenant_id = t.id and tg.tag = $3))
           and ($4::timestamptz is null or t.created_at >= $4)
-          and ($5::timestamptz is null or t.created_at < $5)
-          and ($6::uuid is null or t.id < $6)
-        order by t.id desc
-        limit $7`,
-      [
-        filter.status === undefined || filter.status.length === 0 ? null : filter.status,
-        filter.q ?? null,
-        filter.tag ?? null,
-        filter.createdFrom ?? null,
-        filter.createdTo ?? null,
-        filter.before ?? null,
-        filter.limit,
-      ],
+          and ($5::timestamptz is null or t.created_at < $5)`,
+        orderBy: "t.id desc",
+        params: [
+          filter.status === undefined || filter.status.length === 0 ? null : filter.status,
+          filter.q ?? null,
+          filter.tag ?? null,
+          filter.createdFrom ?? null,
+          filter.createdTo ?? null,
+        ],
+      },
+      filter,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      slug: r.slug,
-      name: r.name,
-      status: r.status,
-      createdAt: r.created_at,
-      trialEndsAt: r.trial_ends_at,
-      statusChangedAt: r.status_changed_at,
-      ownerName: r.contact_name,
-      ownerEmail: r.contact_email,
-      source: r.source,
-      demo: r.demo,
-      tags: r.tags,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        status: r.status,
+        createdAt: r.created_at,
+        trialEndsAt: r.trial_ends_at,
+        statusChangedAt: r.status_changed_at,
+        ownerName: r.contact_name,
+        ownerEmail: r.contact_email,
+        source: r.source,
+        demo: r.demo,
+        tags: r.tags,
+      })),
+      total,
+    };
   }
 
   async overview(tenantId: string): Promise<TenantOverview | null> {
@@ -224,11 +229,8 @@ export class PostgresConsoleTenantQueries implements IConsoleTenantQueries {
     };
   }
 
-  async timeline(
-    tenantId: string,
-    options: Readonly<{ limit: number; before?: Date }>,
-  ): Promise<TimelineEntry[]> {
-    const { rows } = await this.db.query<{
+  async timeline(tenantId: string, window: PageWindow): Promise<Paged<TimelineEntry>> {
+    const { rows, total } = await pagedQuery<{
       at: Date;
       source: "application" | "audit";
       type: string;
@@ -237,34 +239,39 @@ export class PostgresConsoleTenantQueries implements IConsoleTenantQueries {
       summary: string | null;
       details: unknown;
     }>(
-      `select * from (
-         select e.created_at as at, 'application' as source, e.type, e.actor_type, e.actor_id,
+      this.db,
+      {
+        sql: `select * from (
+         select e.id, e.created_at as at, 'application' as source, e.type, e.actor_type, e.actor_id,
                 e.message as summary, e.details
            from tenant_application_events e
            join tenant_applications a on a.id = e.application_id
           where a.tenant_id = $1
          union all
-         select l.occurred_at, 'audit', l.action, l.actor_type, l.actor_id, l.reason,
+         select l.id, l.occurred_at, 'audit', l.action, l.actor_type, l.actor_id, l.reason,
                 jsonb_strip_nulls(jsonb_build_object('before', l.before, 'after', l.after,
                                                      'entityType', l.entity_type,
                                                      'entityId', l.entity_id))
            from platform_audit_logs l
           where l.target_tenant_id = $1
-       ) entries
-       where ($2::timestamptz is null or at < $2)
-       order by at desc
-       limit $3`,
-      [tenantId, options.before ?? null, options.limit],
+       ) entries`,
+        orderBy: "at desc, id desc",
+        params: [tenantId],
+      },
+      window,
     );
-    return rows.map((r) => ({
-      at: r.at,
-      source: r.source,
-      type: r.type,
-      actorType: r.actor_type,
-      actorId: r.actor_id,
-      summary: r.summary,
-      details: r.details,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        at: r.at,
+        source: r.source,
+        type: r.type,
+        actorType: r.actor_type,
+        actorId: r.actor_id,
+        summary: r.summary,
+        details: r.details,
+      })),
+      total,
+    };
   }
 
   async dashboard(now: Date): Promise<DashboardCounts> {

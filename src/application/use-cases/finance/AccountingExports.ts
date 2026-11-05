@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import {
   summarise,
   type ExportDetail,
@@ -111,8 +112,10 @@ export class AccountingExports {
     });
   }
 
-  history(limit: number): Promise<AccountingExportRecord[]> {
-    return this.deps.unitOfWork.run(() => this.deps.exports.history(limit));
+  history(request: PageRequest): Promise<Page<AccountingExportRecord>> {
+    return this.deps.unitOfWork.run(async () =>
+      pageOf(request, await this.deps.exports.history(pageWindow(request))),
+    );
   }
 
   mappings(target: ExportTarget): Promise<AccountMapping[]> {

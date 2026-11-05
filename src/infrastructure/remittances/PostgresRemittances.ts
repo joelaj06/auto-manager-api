@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   DEFAULT_REMITTANCE_SETTINGS,
   type FleetCounts,
@@ -172,7 +174,7 @@ export class PostgresRemittances implements IRemittanceRepository, IRemittanceRe
     );
   }
 
-  async list(filter: RemittanceListFilter): Promise<RemittanceProps[]> {
+  async list(filter: RemittanceListFilter): Promise<Paged<RemittanceProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -188,17 +190,17 @@ export class PostgresRemittances implements IRemittanceRepository, IRemittanceRe
       where.push(`r.status = any(${param(filter.statuses)}::text[])`);
     if (filter.from !== undefined) where.push(`r.period_end >= ${param(filter.from)}`);
     if (filter.to !== undefined) where.push(`r.period_start <= ${param(filter.to)}`);
-    if (filter.after !== undefined)
-      where.push(
-        `(r.period_start, r.id) < (${param(filter.after.periodStart)}::date, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<RemittanceRow>(
-      `select ${COLUMNS} from remittances r join branches b on b.id = r.branch_id
-        where ${where.join(" and ")}
-        order by r.period_start desc, r.id desc limit ${param(filter.limit)}`,
-      params,
+    const { rows, total } = await pagedQuery<RemittanceRow>(
+      this.tx,
+      {
+        sql: `select ${COLUMNS} from remittances r join branches b on b.id = r.branch_id
+        where ${where.join(" and ")}`,
+        orderBy: "r.period_start desc, r.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toProps);
+    return { rows: rows.map(toProps), total };
   }
 
   async submissions(remittanceId: string): Promise<RemittanceSubmission[]> {

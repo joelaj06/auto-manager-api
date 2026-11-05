@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { ErasureSubject } from "../../domain/console/ColdArchive.js";
 import type { ErasureEntry, IErasureLedger } from "../../application/ports/IErasureLedger.js";
 import type { ErasureReport } from "../../application/ports/IPersonalDataEraser.js";
@@ -81,16 +83,19 @@ export class PostgresErasureLedger implements IErasureLedger {
   }
 
   async list(
-    filter: Readonly<{ tenantId?: string; requestId?: string; limit: number }>,
-  ): Promise<ErasureEntry[]> {
-    const { rows } = await this.db.query<Row>(
-      `select * from erasure_ledger
-        where ($1::uuid is null or tenant_id = $1) and ($2::uuid is null or request_id = $2)
-        order by created_at desc, id desc
-        limit $3`,
-      [filter.tenantId ?? null, filter.requestId ?? null, filter.limit],
+    filter: Readonly<{ tenantId?: string; requestId?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<ErasureEntry>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `select * from erasure_ledger
+        where ($1::uuid is null or tenant_id = $1) and ($2::uuid is null or request_id = $2)`,
+        orderBy: "created_at desc, id desc",
+        params: [filter.tenantId ?? null, filter.requestId ?? null],
+      },
+      filter,
     );
-    return rows.map(toEntry);
+    return { rows: rows.map(toEntry), total };
   }
 
   async applied(id: string, report: ErasureReport, at: Date): Promise<void> {

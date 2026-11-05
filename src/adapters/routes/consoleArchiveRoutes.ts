@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { ColdArchives } from "../../application/use-cases/console/ColdArchives.js";
 import type { PersonalDataErasure } from "../../application/use-cases/console/PersonalDataErasure.js";
@@ -39,12 +41,13 @@ export function consoleArchiveRoutes(deps: ConsoleArchiveRouteDependencies): Api
             .enum(["queued", "archiving", "archived", "failed", "restoring", "restored"])
             .optional(),
           tenantId: z.uuid().optional(),
-          limit: z.coerce.number().int().min(1).max(500).default(100),
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Archives" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await archives.list(query)));
+        const page = await archives.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -129,12 +132,13 @@ export function consoleArchiveRoutes(deps: ConsoleArchiveRouteDependencies): Api
         query: z.object({
           tenantId: z.uuid().optional(),
           requestId: z.uuid().optional(),
-          limit: z.coerce.number().int().min(1).max(500).default(100),
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Erasures" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await erasure.list(query)));
+        const page = await erasure.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
   ];

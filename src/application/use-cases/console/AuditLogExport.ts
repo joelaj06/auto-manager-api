@@ -23,7 +23,7 @@ export class AuditLogExport {
   ) {}
 
   async export(
-    filter: Omit<PlatformAuditQuery, "limit" | "before">,
+    filter: Omit<PlatformAuditQuery, "limit" | "offset">,
     actor: PlatformPrincipal,
   ): Promise<AuditExport> {
     const entries: PlatformAuditRecord[] = [];

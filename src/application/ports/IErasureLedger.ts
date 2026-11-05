@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { ErasureSubject } from "../../domain/console/ColdArchive.js";
 import type { ErasureReport } from "./IPersonalDataEraser.js";
 
@@ -43,8 +44,8 @@ export interface IErasureLedger {
   /** Every entry of a tenant, oldest first. */
   forTenant(tenantId: string): Promise<ErasureEntry[]>;
   list(
-    filter: Readonly<{ tenantId?: string; requestId?: string; limit: number }>,
-  ): Promise<ErasureEntry[]>;
+    filter: Readonly<{ tenantId?: string; requestId?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<ErasureEntry>>;
   applied(id: string, report: ErasureReport, at: Date): Promise<void>;
   failed(id: string, error: string): Promise<void>;
   reapplied(id: string, at: Date): Promise<void>;

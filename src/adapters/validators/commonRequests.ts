@@ -1,10 +1,12 @@
 import { z } from "zod";
 
-/** Query parameters shared by every list endpoint (keyset pagination). */
-export const paginationQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursor: z.string().min(1).max(512).optional(),
+/** The query parameters of a paged list: numbered pages, which the response headers describe. */
+export const pageParams = (maxSize = 100, defaultSize = 20) => ({
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(maxSize).default(defaultSize),
 });
+
+export const paginationQuery = z.object(pageParams());
 
 export type PaginationQuery = z.infer<typeof paginationQuery>;
 

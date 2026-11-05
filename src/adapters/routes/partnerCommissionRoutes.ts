@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import type { Response } from "express";
 import { z } from "zod";
 import type { PartnerCommissions } from "../../application/use-cases/partners/PartnerCommissions.js";
@@ -11,7 +13,6 @@ const BASE = "/api/platform/v1";
 const uuid = z.uuid();
 const idParams = z.object({ id: uuid });
 const reason = z.string().trim().min(5).max(1_000);
-const limit = z.coerce.number().int().min(1).max(100).default(25);
 const percent = z
   .string()
   .trim()
@@ -23,7 +24,7 @@ const entryQuery = z.object({
   type: z.enum(["standard", "enterprise"]).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
-  limit,
+  ...pageParams(100, 25),
 });
 
 const sendCsv = (res: Response, name: string, body: string) =>
@@ -137,7 +138,8 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       request: { params: idParams, query: entryQuery },
       responses: { 200: { description: "Entries" } },
       handler: async ({ params, query }, _req, res) => {
-        res.json(envelope(await commissions.entries({ ...query, partnerId: params.id })));
+        const page = await commissions.entries({ ...query, partnerId: params.id });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -158,10 +160,11 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       summary: "A reseller's payouts (newest first)",
       tags: ["console: partners"],
       access: access.platform("platform.partners.view"),
-      request: { params: idParams, query: z.object({ limit }) },
+      request: { params: idParams, query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Payouts" } },
       handler: async ({ params, query }, _req, res) => {
-        res.json(envelope(await commissions.payouts({ partnerId: params.id, limit: query.limit })));
+        const page = await commissions.payouts({ ...query, partnerId: params.id });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -198,12 +201,13 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
         query: z.object({
           status: z.enum(["awaiting_approval", "paid", "reversed"]).optional(),
           unacknowledged: z.stringbool().optional(),
-          limit,
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Payouts" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await commissions.payouts(query)));
+        const page = await commissions.payouts(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -293,7 +297,8 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       request: { query: entryQuery },
       responses: { 200: { description: "Entries" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await commissions.myEntries(staffOf(res), query)));
+        const page = await commissions.myEntries(staffOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -313,10 +318,11 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       summary: "Payouts made to you",
       tags: ["partner"],
       access: access.partner("platform.partner.commissions.view"),
-      request: { query: z.object({ limit }) },
+      request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Payouts" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await commissions.myPayouts(staffOf(res), query.limit)));
+        const page = await commissions.myPayouts(staffOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   DamageFilter,
   IRentalInspections,
@@ -190,7 +192,7 @@ export class PostgresVehicleDamages implements IVehicleDamages {
     return rows[0] === undefined ? null : toDamage(rows[0]);
   }
 
-  async list(filter: DamageFilter): Promise<VehicleDamage[]> {
+  async list(filter: DamageFilter): Promise<Paged<VehicleDamage>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -201,13 +203,16 @@ export class PostgresVehicleDamages implements IVehicleDamages {
     if (filter.vehicleId !== undefined) add("d.vehicle_id = ?", filter.vehicleId);
     if (filter.bookingId !== undefined) add("d.booking_id = ?", filter.bookingId);
     if (filter.statuses !== undefined) add("d.status = any(?::text[])", filter.statuses);
-    params.push(filter.limit);
-    const { rows } = await this.tx.query<DamageRow>(
-      `${DAMAGES} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-        order by d.id desc limit $${params.length}`,
-      params,
+    const { rows, total } = await pagedQuery<DamageRow>(
+      this.tx,
+      {
+        sql: `${DAMAGES} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: "d.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toDamage);
+    return { rows: rows.map(toDamage), total };
   }
 
   async insert(damage: VehicleDamage): Promise<void> {

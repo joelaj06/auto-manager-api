@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRepository.js";
 import {
   checkOdometerReading,
@@ -45,10 +46,14 @@ export class OdometerLog {
     }>,
   ) {}
 
-  async list(actor: Principal, vehicleId: string, limit: number): Promise<OdometerReadingProps[]> {
+  async list(
+    actor: Principal,
+    vehicleId: string,
+    request: PageRequest,
+  ): Promise<Page<OdometerReadingProps>> {
     return this.deps.unitOfWork.run(async () => {
       await this.deps.access.reach(actor, vehicleId, "vehicles.view");
-      return this.deps.readings.list(vehicleId, limit);
+      return pageOf(request, await this.deps.readings.list(vehicleId, pageWindow(request)));
     });
   }
 

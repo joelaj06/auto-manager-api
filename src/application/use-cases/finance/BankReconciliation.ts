@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import { createHash } from "node:crypto";
 import {
   parseStatement,
@@ -14,7 +15,6 @@ import {
 } from "../../../domain/finance/StatementMatcher.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
 import type {
   IReconciliation,
   LedgerCandidate,
@@ -28,7 +28,6 @@ import type { ILedger, LedgerAccount } from "../../ports/IFinanceRecords.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import type { LedgerPosting } from "./LedgerPosting.js";
@@ -275,8 +274,10 @@ export class BankReconciliation {
     });
   }
 
-  imports(accountId: string | null, limit: number): Promise<StatementImport[]> {
-    return this.deps.unitOfWork.run(() => this.deps.reconciliation.imports(accountId, limit));
+  imports(accountId: string | null, request: PageRequest): Promise<Page<StatementImport>> {
+    return this.deps.unitOfWork.run(async () =>
+      pageOf(request, await this.deps.reconciliation.imports(accountId, pageWindow(request))),
+    );
   }
 
   /** Takes a file back with its matches, unless an entry was posted from one of its lines. */
@@ -305,23 +306,21 @@ export class BankReconciliation {
       status: StatementLineStatus;
       from?: string;
       to?: string;
-      limit: number;
-      cursor?: string;
+      page: number;
+      pageSize: number;
     }>,
   ): Promise<Page<StatementLineView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
       const currency = await deps.posting.baseCurrency();
-      const rows = await deps.reconciliation.lines({
+      const found = await deps.reconciliation.lines({
         accountId: query.accountId,
         status: query.status,
         ...(query.from === undefined ? {} : { from: query.from }),
         ...(query.to === undefined ? {} : { to: query.to }),
-        limit: query.limit + 1,
-        ...(after === undefined ? {} : { after: { date: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
-      const page = PageCursor.paginate(rows, query.limit, (l) => [l.date, l.id]);
+      const page = pageOf(query, found);
       const dates = page.items.map((l) => l.date).sort();
       const candidates =
         query.status === "unmatched" && dates.length > 0

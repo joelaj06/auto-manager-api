@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   Attribution,
   AttributionSource,
@@ -103,8 +105,8 @@ export class PostgresPartnerQueries implements IPartnerQueries {
 
   async list(
     filter: Readonly<{ status?: PartnerStatus; q?: string; limit: number; before?: string }>,
-  ): Promise<PartnerListItem[]> {
-    const { rows } = await this.db.query<{
+  ): Promise<Paged<PartnerListItem>> {
+    const { rows, total } = await pagedQuery<{
       id: string;
       name: string;
       kind: "individual" | "company";
@@ -120,7 +122,9 @@ export class PostgresPartnerQueries implements IPartnerQueries {
       open_applications: string;
       created_at: Date;
     }>(
-      `select p.id, p.name, p.kind, p.contact_name, p.email::text as email, p.phone, p.region,
+      this.db,
+      {
+        sql: `select p.id, p.name, p.kind, p.contact_name, p.email::text as email, p.phone, p.region,
               p.status, p.trusted, p.referral_code, p.created_at,
               (select count(*) from platform_users u where u.partner_id = p.id) as users,
               (select count(*) from partner_tenant_attributions pa where pa.partner_id = p.id) as tenants,
@@ -132,50 +136,53 @@ export class PostgresPartnerQueries implements IPartnerQueries {
           and ($2::text is null
                or strpos(lower(p.name), lower($2)) > 0
                or p.email = $2::citext
-               or p.referral_code = upper($2))
-          and ($3::uuid is null or p.id < $3)
-        order by p.id desc
-        limit $4`,
-      [filter.status ?? null, filter.q ?? null, filter.before ?? null, filter.limit],
+               or p.referral_code = upper($2))`,
+        orderBy: "p.id desc",
+        params: [filter.status ?? null, filter.q ?? null],
+      },
+      filter,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      kind: r.kind,
-      contactName: r.contact_name,
-      email: r.email,
-      phone: r.phone,
-      region: r.region,
-      status: r.status,
-      trusted: r.trusted,
-      referralCode: r.referral_code,
-      users: Number(r.users),
-      tenants: Number(r.tenants),
-      openApplications: Number(r.open_applications),
-      createdAt: r.created_at,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        kind: r.kind,
+        contactName: r.contact_name,
+        email: r.email,
+        phone: r.phone,
+        region: r.region,
+        status: r.status,
+        trusted: r.trusted,
+        referralCode: r.referral_code,
+        users: Number(r.users),
+        tenants: Number(r.tenants),
+        openApplications: Number(r.open_applications),
+        createdAt: r.created_at,
+      })),
+      total,
+    };
   }
 
-  async tenants(partnerId: string, filter: PartnerTenantFilter): Promise<PartnerTenantRow[]> {
-    const { rows } = await this.db.query<TenantRow>(
-      `${TENANTS}
+  async tenants(partnerId: string, filter: PartnerTenantFilter): Promise<Paged<PartnerTenantRow>> {
+    const { rows, total } = await pagedQuery<TenantRow>(
+      this.db,
+      {
+        sql: `${TENANTS}
         where pa.partner_id = $1
           and ($2::text[] is null or t.status = any($2))
           and ($3::text is null
                or strpos(lower(t.name), lower($3)) > 0
-               or strpos(lower(t.slug::text), lower($3)) > 0)
-          and ($4::uuid is null or t.id < $4)
-        order by t.id desc
-        limit $5`,
-      [
-        partnerId,
-        filter.status === undefined || filter.status.length === 0 ? null : filter.status,
-        filter.q ?? null,
-        filter.before ?? null,
-        filter.limit,
-      ],
+               or strpos(lower(t.slug::text), lower($3)) > 0)`,
+        orderBy: "t.id desc",
+        params: [
+          partnerId,
+          filter.status === undefined || filter.status.length === 0 ? null : filter.status,
+          filter.q ?? null,
+        ],
+      },
+      filter,
     );
-    return rows.map(toTenant);
+    return { rows: rows.map(toTenant), total };
   }
 
   async tenant(partnerId: string, tenantId: string): Promise<PartnerTenantRow | null> {
@@ -212,17 +219,19 @@ export class PostgresPartnerQueries implements IPartnerQueries {
   async applications(
     partnerId: string,
     filter: Readonly<{ status?: ApplicationStatus; limit: number; before?: string }>,
-  ): Promise<PartnerApplicationRow[]> {
-    const { rows } = await this.db.query<ApplicationRow>(
-      `${APPLICATIONS}
+  ): Promise<Paged<PartnerApplicationRow>> {
+    const { rows, total } = await pagedQuery<ApplicationRow>(
+      this.db,
+      {
+        sql: `${APPLICATIONS}
         where partner_id = $1
-          and ($2::text is null or status = $2)
-          and ($3::uuid is null or id < $3)
-        order by id desc
-        limit $4`,
-      [partnerId, filter.status ?? null, filter.before ?? null, filter.limit],
+          and ($2::text is null or status = $2)`,
+        orderBy: "id desc",
+        params: [partnerId, filter.status ?? null],
+      },
+      filter,
     );
-    return rows.map(toApplication);
+    return { rows: rows.map(toApplication), total };
   }
 
   async application(

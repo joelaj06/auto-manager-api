@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { DriverLedger } from "../../application/use-cases/remittances/DriverLedger.js";
 import type { OperationsBoard } from "../../application/use-cases/remittances/OperationsBoard.js";
@@ -104,18 +106,17 @@ export function remittanceRoutes(deps: RemittanceRouteDependencies): ApiRoute[] 
           vehicleId: uuid.optional(),
           from: date.optional(),
           to: date.optional(),
-          cursor: z.string().max(300).optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
-      responses: { 200: { description: "Remittances; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Remittances" } },
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await remittances.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.json(envelope(page.items, { nextCursor: page.nextCursor }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

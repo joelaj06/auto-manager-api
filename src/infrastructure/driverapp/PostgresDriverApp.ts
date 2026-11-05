@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { IDriverAppLinks } from "../../application/ports/IDriverAppLinks.js";
 import type {
   IVehicleIssueRepository,
@@ -146,27 +148,27 @@ export class PostgresVehicleIssues implements IVehicleIssueRepository {
     );
   }
 
-  async list(filter: VehicleIssueFilter): Promise<VehicleIssue[]> {
-    const { rows } = await this.tx.query<Row>(
-      `select * from vehicle_issues
+  async list(filter: VehicleIssueFilter): Promise<Paged<VehicleIssue>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx,
+      {
+        sql: `select * from vehicle_issues
         where ($1::uuid[] is null or branch_id = any($1::uuid[]))
           and ($2::uuid is null or branch_id = $2)
           and ($3::uuid is null or vehicle_id = $3)
           and ($4::uuid is null or driver_id = $4)
-          and ($5::text[] is null or status = any($5::text[]))
-          and ($6::uuid is null or id < $6)
-        order by id desc
-        limit $7`,
-      [
-        filter.branchIds === "all" ? null : filter.branchIds,
-        filter.branchId ?? null,
-        filter.vehicleId ?? null,
-        filter.driverId ?? null,
-        filter.statuses ?? null,
-        filter.afterId ?? null,
-        filter.limit,
-      ],
+          and ($5::text[] is null or status = any($5::text[]))`,
+        orderBy: "id desc",
+        params: [
+          filter.branchIds === "all" ? null : filter.branchIds,
+          filter.branchId ?? null,
+          filter.vehicleId ?? null,
+          filter.driverId ?? null,
+          filter.statuses ?? null,
+        ],
+      },
+      filter,
     );
-    return rows.map(toIssue);
+    return { rows: rows.map(toIssue), total };
   }
 }

@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pageTotal } from "../database/postgres/PagedQuery.js";
 import type {
   DriverRef,
   FuelAnomalyRow,
@@ -117,15 +119,13 @@ export class PostgresIncidents implements IIncidents {
     return (await this.loadIncidents("where id = $1 for update", [id]))[0] ?? null;
   }
 
-  list(filter: IncidentFilter): Promise<Incident[]> {
+  async list(filter: IncidentFilter): Promise<Paged<Incident>> {
     const w = new Where().branches("branch_id", filter.branchIds);
     if (filter.vehicleId !== undefined) w.add("vehicle_id = ?", filter.vehicleId);
     if (filter.driverId !== undefined) w.add("driver_id = ?", filter.driverId);
     if (filter.type !== undefined) w.add("type = ?", filter.type);
     if (filter.status !== undefined) w.add("status = ?", filter.status);
-    if (filter.beforeId !== undefined) w.add("id < ?", filter.beforeId);
-    const where = w.sql();
-    return this.loadIncidents(`${where} order by id desc ${w.limit(filter.limit)}`, w.params);
+    return this.paged(w, "incidents", (tail, params) => this.loadIncidents(tail, params), filter);
   }
 
   async costs(incidentId: string): Promise<IncidentCosts> {
@@ -245,14 +245,15 @@ export class PostgresIncidents implements IIncidents {
     return this.loadClaims("where incident_id = $1 order by created_at", [incidentId]);
   }
 
-  claims(
+  async claims(
     filter: Readonly<{
       branchIds: "all" | readonly string[];
       statuses?: readonly ClaimStatus[];
       insurerId?: string;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<InsuranceClaim[]> {
+  ): Promise<Paged<InsuranceClaim>> {
     const w = new Where();
     if (filter.branchIds !== "all")
       w.add(
@@ -261,8 +262,12 @@ export class PostgresIncidents implements IIncidents {
       );
     if (filter.statuses !== undefined) w.add("status = any(?::text[])", filter.statuses);
     if (filter.insurerId !== undefined) w.add("insurer_id = ?", filter.insurerId);
-    const where = w.sql();
-    return this.loadClaims(`${where} order by id desc ${w.limit(filter.limit)}`, w.params);
+    return this.paged(
+      w,
+      "insurance_claims",
+      (tail, params) => this.loadClaims(tail, params),
+      filter,
+    );
   }
 
   // --- offences ---
@@ -317,14 +322,17 @@ export class PostgresIncidents implements IIncidents {
     return (await this.loadOffences("where id = $1 for update", [id]))[0] ?? null;
   }
 
-  offences(filter: OffenceFilter): Promise<TrafficOffence[]> {
+  async offences(filter: OffenceFilter): Promise<Paged<TrafficOffence>> {
     const w = new Where().branches("branch_id", filter.branchIds);
     if (filter.vehicleId !== undefined) w.add("vehicle_id = ?", filter.vehicleId);
     if (filter.driverId !== undefined) w.add("driver_id = ?", filter.driverId);
     if (filter.statuses !== undefined) w.add("status = any(?::text[])", filter.statuses);
-    if (filter.beforeId !== undefined) w.add("id < ?", filter.beforeId);
-    const where = w.sql();
-    return this.loadOffences(`${where} order by id desc ${w.limit(filter.limit)}`, w.params);
+    return this.paged(
+      w,
+      "traffic_offences",
+      (tail, params) => this.loadOffences(tail, params),
+      filter,
+    );
   }
 
   async noticeTaken(
@@ -393,17 +401,24 @@ export class PostgresIncidents implements IIncidents {
       vehicleId?: string;
       status?: FuelAnomalyRow["status"];
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<FuelAnomalyRow[]> {
+  ): Promise<Paged<FuelAnomalyRow>> {
     const w = new Where().branches("branch_id", filter.branchIds);
     if (filter.vehicleId !== undefined) w.add("vehicle_id = ?", filter.vehicleId);
     if (filter.status !== undefined) w.add("status = ?", filter.status);
-    const where = w.sql();
-    const { rows } = await this.tx.query<Row>(
-      `select ${ANOMALY_COLUMNS} from fuel_anomalies ${where} order by id desc ${w.limit(filter.limit)}`,
-      w.params,
+    return this.paged(
+      w,
+      "fuel_anomalies",
+      async (tail, params) => {
+        const { rows } = await this.tx.query<Row>(
+          `select ${ANOMALY_COLUMNS} from fuel_anomalies ${tail}`,
+          params,
+        );
+        return rows.map(anomaly);
+      },
+      filter,
     );
-    return rows.map(anomaly);
   }
 
   // --- people ---
@@ -442,6 +457,27 @@ export class PostgresIncidents implements IIncidents {
   }
 
   // --- helpers ---
+
+  /** Newest first by id, one window of the table's filtered rows. */
+  private async paged<T>(
+    where: Where,
+    table: string,
+    load: (tail: string, params: unknown[]) => Promise<T[]>,
+    window: PageWindow,
+  ): Promise<Paged<T>> {
+    const { limit, offset = 0 } = window;
+    const n = where.params.length;
+    const rows = await load(`${where.sql()} order by id desc limit $${n + 1} offset $${n + 2}`, [
+      ...where.params,
+      limit,
+      offset,
+    ]);
+    const total = await pageTotal(this.tx, rows.length, window, {
+      sql: `select count(*) as total from ${table} ${where.sql()}`,
+      params: where.params,
+    });
+    return { rows, total };
+  }
 
   private async loadIncidents(tail: string, params: unknown[]): Promise<Incident[]> {
     const { rows } = await this.tx.query<Row>(

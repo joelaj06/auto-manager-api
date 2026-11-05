@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { PermissionKey } from "../../application/authorization/permissionCatalog.js";
 import { PARTY_DOCUMENT_TYPES } from "../../application/ports/IPartyRecords.js";
@@ -32,10 +34,7 @@ const reason = z.string().trim().min(3).max(500);
 const amount = z.string().regex(/^\d{1,13}(\.\d{1,4})?$/, 'Send amounts as text, e.g. "5000.00"');
 const tags = z.array(z.string().trim().min(1).max(40)).max(20).optional();
 const idParams = z.object({ id: uuid });
-const page = {
-  cursor: z.string().max(200).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-};
+const paging = pageParams(100, 50);
 
 const payout = z
   .object({
@@ -374,17 +373,17 @@ export function partyRoutes(deps: PartyRouteDependencies): ApiRoute[] {
           branchId: uuid.optional(),
           employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
           search: z.string().trim().min(1).max(60).optional(),
-          ...page,
+          ...paging,
         }),
       },
-      responses: { 200: { description: "Drivers; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Drivers" } },
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const result = await drivers.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({
@@ -564,13 +563,13 @@ export function partyRoutes(deps: PartyRouteDependencies): ApiRoute[] {
           type: z.enum(CUSTOMER_TYPES).optional(),
           riskStatus: z.enum(RISK_STATUSES).optional(),
           search: z.string().trim().min(1).max(60).optional(),
-          ...page,
+          ...paging,
         }),
       },
-      responses: { 200: { description: "Customers; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Customers" } },
       handler: async ({ query }, _req, res) => {
         const result = await customers.list(principalOf(res), query);
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({

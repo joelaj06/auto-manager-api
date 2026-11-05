@@ -18,7 +18,7 @@ import {
   SmsProviderError,
   WhatsAppNotConfiguredError,
 } from "../../errors/NotificationErrors.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
 import {
@@ -42,7 +42,6 @@ import type {
   WhatsAppCredentials,
   WhatsAppMessage,
 } from "../../ports/IWhatsApp.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import { recordUserAction } from "../reference/userAudit.js";
 
 export type RuleView = RuleConfig &
@@ -372,21 +371,19 @@ export class NotificationSettingsService {
       channel?: DeliveryChannel;
       status?: DeliveryStatus;
       recipientId?: string;
-      cursor?: string;
-      limit: number;
+      page: number;
+      pageSize: number;
     }>,
   ): Promise<Page<Delivery>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 1).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.deliveries.list({
+      const found = await deps.deliveries.list({
         ...(query.channel === undefined ? {} : { channel: query.channel }),
         ...(query.status === undefined ? {} : { status: query.status }),
         ...(query.recipientId === undefined ? {} : { recipientId: query.recipientId }),
-        limit: query.limit + 1,
-        ...(after === undefined ? {} : { afterId: String(after[0]) }),
+        ...pageWindow(query),
       });
-      return PageCursor.paginate(rows, query.limit, (r) => [r.id]);
+      return pageOf(query, found);
     });
   }
 }

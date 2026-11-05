@@ -151,8 +151,12 @@ export class RentalInspections {
       const inspections = await deps.inspections.ofBooking(b.id);
       const checkOut = inspections.find((i) => i.stage === "check_out") ?? null;
       const checkIn = inspections.find((i) => i.stage === "check_in") ?? null;
-      const damages = await deps.damages.list({ branchIds: "all", bookingId: b.id, limit: 100 });
-      const open = await deps.damages.list({
+      const { rows: damages } = await deps.damages.list({
+        branchIds: "all",
+        bookingId: b.id,
+        limit: 100,
+      });
+      const { rows: open } = await deps.damages.list({
         branchIds: "all",
         vehicleId: b.vehicleId,
         statuses: ["open"],

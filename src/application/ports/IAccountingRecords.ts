@@ -1,3 +1,4 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
 import type {
   ExportDetail,
   ExportFormat,
@@ -43,7 +44,7 @@ export interface IAccountingExports {
   record(
     entry: Omit<AccountingExportRecord, "postedSince" | "exportedBy"> & { exportedBy: string },
   ): Promise<void>;
-  history(limit: number): Promise<AccountingExportRecord[]>;
+  history(window: PageWindow): Promise<Paged<AccountingExportRecord>>;
 }
 
 export type StatementLineStatus = "unmatched" | "matched" | "ignored";
@@ -111,7 +112,7 @@ export type StatementLineFilter = Readonly<{
   from?: string;
   to?: string;
   limit: number;
-  after?: Readonly<{ date: string; id: string }>;
+  offset?: number;
 }>;
 
 export type ReconciliationFigures = Readonly<{
@@ -140,13 +141,13 @@ export interface IReconciliation {
   ): Promise<void>;
   addLines(lines: readonly NewStatementLine[]): Promise<void>;
   setAutoMatched(importId: string, count: number): Promise<void>;
-  imports(accountId: string | null, limit: number): Promise<StatementImport[]>;
+  imports(accountId: string | null, window: PageWindow): Promise<Paged<StatementImport>>;
   importById(id: string): Promise<StatementImport | null>;
   countPostedLines(importId: string): Promise<number>;
   /** Removes the file's lines and their matches, so that it can be imported again. */
   voidImport(id: string, by: string, at: Date): Promise<void>;
   line(id: string, lock?: boolean): Promise<StatementLineRecord | null>;
-  lines(filter: StatementLineFilter): Promise<StatementLineRecord[]>;
+  lines(filter: StatementLineFilter): Promise<Paged<StatementLineRecord>>;
   /** Unmatched statement lines of the account, oldest first. */
   unmatched(accountId: string): Promise<StatementLineRecord[]>;
   /** Unmatched ledger lines of the account between the dates. */

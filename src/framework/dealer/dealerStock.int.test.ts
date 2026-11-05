@@ -365,7 +365,7 @@ describe("dealer stock", () => {
     const alerts = container.get<StockAlerts>(TYPES.StockAlerts);
     await t.tenant.run(() => alerts.run(day(0)));
     await t.tenant.run(() => alerts.run(day(0)));
-    const inbox = await api().get("/api/v1/notifications?limit=100").set(owner());
+    const inbox = await api().get("/api/v1/notifications?pageSize=100").set(owner());
     expect(
       (inbox.body.data as { title: string }[]).filter((n) => n.title.startsWith("Nissan Almera")),
     ).toHaveLength(1);

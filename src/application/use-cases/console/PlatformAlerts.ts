@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import type {
   AlertInput,
   AlertSeverity,
@@ -77,15 +78,15 @@ export class PlatformAlerts implements IAlerts {
     }
   }
 
-  list(
+  async list(
     filter: Readonly<{
       status?: AlertStatus;
       severity?: AlertSeverity;
       source?: string;
-      limit: number;
-    }>,
-  ): Promise<PlatformAlert[]> {
-    return this.deps.alerts.list(filter);
+    }> &
+      PageRequest,
+  ): Promise<Page<PlatformAlert>> {
+    return pageOf(filter, await this.deps.alerts.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async get(id: string): Promise<PlatformAlert> {

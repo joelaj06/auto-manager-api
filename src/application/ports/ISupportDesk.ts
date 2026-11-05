@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type {
   SlaTarget,
   SlaTargets,
@@ -44,6 +45,7 @@ export type TicketFilter = Readonly<{
   /** Number, subject or requester. */
   q?: string;
   limit: number;
+  offset?: number;
 }>;
 
 export type SupportSummary = Readonly<{
@@ -93,7 +95,7 @@ export interface ISupportDesk {
   lock(id: string): Promise<SupportTicket | null>;
   save(ticket: SupportTicket): Promise<void>;
   find(id: string): Promise<TicketView | null>;
-  list(filter: TicketFilter): Promise<TicketView[]>;
+  list(filter: TicketFilter): Promise<Paged<TicketView>>;
   addMessage(message: NewTicketMessage): Promise<TicketMessage>;
   messages(ticketId: string, includeInternal: boolean): Promise<TicketMessage[]>;
   /** Tickets the sweep may have to act on: a target passed, or quiet for a week. */

@@ -13,7 +13,7 @@ import type { Driver } from "../../../domain/parties/Driver.js";
 import type { IAssignmentRepository } from "../../../domain/repositories/IAssignmentRepository.js";
 import type { Vehicle } from "../../../domain/vehicles/Vehicle.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   AssignmentConflictError,
   AssignmentNotFoundError,
@@ -32,7 +32,6 @@ import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import { localDateTime } from "../../services/TenantLocalTime.js";
 import type { DriverAdministration } from "../parties/DriverAdministration.js";
 import { recordUserAction } from "../reference/userAudit.js";
@@ -98,7 +97,7 @@ export type StartResult = Readonly<{
 }>;
 
 export type AssignmentQuery = Omit<AssignmentListFilter, "branchIds" | "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 /**
  * Vehicle ↔ driver assignments (docs/06 §6, decision 9): one driver per vehicle and one vehicle
@@ -290,22 +289,18 @@ export class VehicleAssignments {
   /** Assignments in the caller's branches (current board or history), newest first. */
   async list(actor: Principal, query: AssignmentQuery): Promise<Page<AssignmentView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
       if (query.vehicleId !== undefined)
         await deps.vehicles.reach(actor, query.vehicleId, "vehicles.view");
       if (query.driverId !== undefined)
         await deps.drivers.reach(actor, query.driverId, "drivers.view");
-      const rows = await deps.queries.list({
+      const found = await deps.queries.list({
         ...query,
         branchIds: deps.vehicles.branchesFor(actor, "vehicles.view"),
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { startedAt: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
       const currency = await this.currency();
-      const page = PageCursor.paginate(rows, query.limit, (a) => [a.startedAt.toISOString(), a.id]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map((a) => this.present(a, currency)) };
     });
   }

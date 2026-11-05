@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { DriverListFilter, IDriverQueries } from "../../application/ports/IPartyRecords.js";
 import { Driver, type DriverProps } from "../../domain/parties/Driver.js";
 import type { IDriverRepository } from "../../domain/repositories/IPartyRepositories.js";
@@ -190,7 +192,7 @@ export class PostgresDriverRepository implements IDriverRepository, IDriverQueri
     return rows.length > 0;
   }
 
-  async list(filter: DriverListFilter): Promise<DriverProps[]> {
+  async list(filter: DriverListFilter): Promise<Paged<DriverProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -213,18 +215,17 @@ export class PostgresDriverRepository implements IDriverRepository, IDriverQueri
           ${phone === null ? "" : `or strpos(d.phone, ${param(phone)}) > 0`})`,
       );
     }
-    if (filter.after !== undefined)
-      where.push(
-        `(d.created_at, d.id) < (${param(filter.after.createdAt)}::timestamptz, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<DriverRow>(
-      `select ${COLUMNS} from drivers d join branches b on b.id = d.branch_id
-        where ${where.join(" and ")}
-        order by d.created_at desc, d.id desc
-        limit ${param(filter.limit)}`,
-      params,
+    const { rows, total } = await pagedQuery<DriverRow>(
+      this.tx,
+      {
+        sql: `select ${COLUMNS} from drivers d join branches b on b.id = d.branch_id
+        where ${where.join(" and ")}`,
+        orderBy: "d.created_at desc, d.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toProps);
+    return { rows: rows.map(toProps), total };
   }
 
   async countInBranch(branchId: string): Promise<number> {

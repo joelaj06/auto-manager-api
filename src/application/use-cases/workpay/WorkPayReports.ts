@@ -1,3 +1,4 @@
+import { slicePage, type Page, type PageRequest } from "../../dto/Page.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { IDriverRepository } from "../../../domain/repositories/IPartyRepositories.js";
 import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRepository.js";
@@ -227,13 +228,13 @@ export class WorkPayReports {
   /** Agreements in arrears, longest first. */
   async arrears(
     actor: Principal,
-    query: Readonly<{ branchId?: string; limit: number }>,
-  ): Promise<ArrearsRow[]> {
+    query: Readonly<{ branchId?: string }> & PageRequest,
+  ): Promise<Page<ArrearsRow>> {
     return this.within(actor, "dashboards.workpay.view", query, async ({ filter, today, m }) => {
       const rows = (await this.deps.reporting.portfolio(filter, today)).filter(
         (r) => r.arrearsSince !== null && r.status !== "completed",
       );
-      return rows
+      const arrears = rows
         .map((r) => ({
           agreementId: r.agreementId,
           number: r.number,
@@ -249,9 +250,11 @@ export class WorkPayReports {
         }))
         .sort(
           (x, y) =>
-            y.daysInArrears - x.daysInArrears || y.overdue.amountMinor - x.overdue.amountMinor,
-        )
-        .slice(0, query.limit);
+            y.daysInArrears - x.daysInArrears ||
+            y.overdue.amountMinor - x.overdue.amountMinor ||
+            x.agreementId.localeCompare(y.agreementId),
+        );
+      return slicePage(query, arrears);
     });
   }
 

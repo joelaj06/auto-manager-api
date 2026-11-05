@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import type { Request } from "express";
 import { z } from "zod";
 import { ApplicationNotFoundError } from "../../application/errors/ApplicationErrors.js";
@@ -187,18 +189,13 @@ export function applicationRoutes({ signup, review }: ApplicationRouteDependenci
             .optional(),
           search: z.string().trim().max(100).optional(),
           assignedTo: uuid.optional(),
-          before: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Application summaries" } },
       handler: async ({ query }, _req, res) => {
         const items = await review.list(query);
-        res.json(
-          envelope(items, {
-            nextBefore: items.length === query.limit ? (items.at(-1)?.id ?? null) : null,
-          }),
-        );
+        res.set(pageHeaders(items)).json(envelope(items.items));
       },
     }),
     defineRoute({

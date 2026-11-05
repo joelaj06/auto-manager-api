@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import type { IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
 import { Money } from "../../../domain/money/Money.js";
 import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRepository.js";
@@ -16,7 +17,6 @@ import {
 import { InvalidVehicleError } from "../../../domain/vehicles/VehicleIdentifiers.js";
 import { VehicleStatusError, type VehicleStatus } from "../../../domain/vehicles/VehicleStatus.js";
 import { PermissionDeniedError } from "../../errors/AuthErrors.js";
-import type { Page } from "../../dto/Page.js";
 import type { Principal } from "../../authorization/Principal.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -34,7 +34,6 @@ import type {
   VehicleListFilter,
 } from "../../ports/IVehicleRecords.js";
 import { localDateTime } from "../../services/TenantLocalTime.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import { MakeModelMatcher } from "./MakeModelMatcher.js";
@@ -73,7 +72,7 @@ export type NewVehicleInput = VehicleChanges &
   }>;
 
 export type VehicleQuery = Omit<VehicleListFilter, "branchIds" | "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 /** A new vehicle checked and ready to save (shared with the CSV import). */
 export type PreparedVehicle = Readonly<{
@@ -149,18 +148,14 @@ export class VehicleRegistry {
 
   async list(actor: Principal, query: VehicleQuery): Promise<Page<VehicleView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.queries.list({
+      const found = await deps.queries.list({
         ...query,
         branchIds: deps.access.branchesFor(actor, "vehicles.list"),
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { createdAt: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
       const options = await this.viewContext();
-      const page = PageCursor.paginate(rows, query.limit, (v) => [v.createdAt.toISOString(), v.id]);
+      const page = pageOf(query, found);
       return {
         ...page,
         items: page.items.map((v) =>
@@ -434,10 +429,14 @@ export class VehicleRegistry {
     await deps.vehicles.recordStatusChange(vehicle.id, change, params.userId, now);
   }
 
-  async statusHistory(actor: Principal, id: string, limit: number): Promise<StatusHistoryEntry[]> {
+  async statusHistory(
+    actor: Principal,
+    id: string,
+    request: PageRequest,
+  ): Promise<Page<StatusHistoryEntry>> {
     return this.deps.unitOfWork.run(async () => {
       await this.deps.access.reach(actor, id, "vehicles.view");
-      return this.deps.queries.statusHistory(id, limit);
+      return pageOf(request, await this.deps.queries.statusHistory(id, pageWindow(request)));
     });
   }
 

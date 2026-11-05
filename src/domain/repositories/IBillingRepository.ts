@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 import type { BillingSettings } from "../billing/BillingSettings.js";
 import type { Invoice, InvoiceStatus } from "../billing/Invoice.js";
 import type { Proration } from "../billing/Proration.js";
@@ -81,8 +82,9 @@ export type InvoiceFilter = Readonly<{
   tenantId?: string;
   status?: InvoiceStatus;
   limit: number;
-  /** Keyset cursor: invoices issued before this invoice id (ids are time-ordered). */
-  before?: string;
+  offset?: number;
+  /** Leaves out void invoices. */
+  excludeVoid?: boolean;
 }>;
 
 export type BillingSummary = Readonly<{
@@ -113,7 +115,7 @@ export interface IBillingRepository {
   nextInvoiceCode(year: number): Promise<string>;
   invoice(id: string, lock?: boolean): Promise<Invoice | null>;
   saveInvoice(invoice: Invoice): Promise<void>;
-  invoices(filter: InvoiceFilter): Promise<Invoice[]>;
+  invoices(filter: InvoiceFilter): Promise<Paged<Invoice>>;
 
   insertPayment(payment: Omit<PaymentRecord, "createdAt">): Promise<void>;
   payments(filter: Readonly<{ tenantId?: string; invoiceId?: string }>): Promise<PaymentRecord[]>;

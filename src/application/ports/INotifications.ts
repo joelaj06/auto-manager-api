@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type {
   Channel,
   QuietHours,
@@ -107,10 +108,9 @@ export interface INotificationInbox {
     filter: Readonly<{
       unreadOnly: boolean;
       limit: number;
-      /** Keyset: the last id of the previous page (ids are time-ordered). */
-      afterId?: string;
+      offset?: number;
     }>,
-  ): Promise<InboxItem[]>;
+  ): Promise<Paged<InboxItem>>;
   unreadCount(userId: string): Promise<number>;
   /** Marks the user's notifications read (all of them when `ids` is null); returns how many. */
   markRead(userId: string, ids: readonly string[] | null, now: Date): Promise<number>;
@@ -183,9 +183,9 @@ export interface INotificationDeliveries {
       status?: DeliveryStatus;
       recipientId?: string;
       limit: number;
-      afterId?: string;
+      offset?: number;
     }>,
-  ): Promise<Delivery[]>;
+  ): Promise<Paged<Delivery>>;
 }
 
 // --- who to tell and what about (rule scans) ---

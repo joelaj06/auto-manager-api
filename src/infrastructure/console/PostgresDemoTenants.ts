@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import { createHash, randomBytes } from "node:crypto";
 import type { DemoPurpose, SampleDataStatus } from "../../domain/console/DemoTenants.js";
 import type {
@@ -131,13 +133,19 @@ export class PostgresDemoTenants implements IDemoTenants {
     return rows[0] === undefined ? null : toDemo(rows[0]);
   }
 
-  async list(filter: Readonly<{ live?: boolean; limit: number }>): Promise<DemoTenant[]> {
-    const { rows } = await this.db.query<Row>(
-      `${DEMOS} ${filter.live === true ? "where d.purged_at is null" : ""}
-        order by d.created_at desc limit $1`,
-      [filter.limit],
+  async list(
+    filter: Readonly<{ live?: boolean; limit: number; offset?: number }>,
+  ): Promise<Paged<DemoTenant>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `${DEMOS} ${filter.live === true ? "where d.purged_at is null" : ""}`,
+        orderBy: "d.created_at desc, d.tenant_id desc",
+        params: [],
+      },
+      filter,
     );
-    return rows.map(toDemo);
+    return { rows: rows.map(toDemo), total };
   }
 
   async update(tenantId: string, changes: DemoChanges): Promise<void> {

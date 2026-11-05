@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type {
   PriceChange,
   StockSource,
@@ -23,7 +24,8 @@ export type StockFilter = Readonly<{
   stockedOnOrBefore?: string;
   consignorId?: string;
   limit: number;
-  /** Oldest stock first: rows after this vehicle. */
+  offset?: number;
+  /** Oldest stock first: rows after this vehicle (only `list`). */
   afterVehicleId?: string;
 }>;
 
@@ -91,6 +93,7 @@ export interface IDealerStock {
   lock(vehicleId: string): Promise<StockUnit | null>;
   record(vehicleId: string): Promise<StockRecord | null>;
   list(filter: StockFilter): Promise<StockRecord[]>;
+  page(filter: StockFilter): Promise<Paged<StockRecord>>;
   /** Expenses on the vehicles (their lines) dated on or after each one's stock date. */
   spend(vehicleIds: readonly string[]): Promise<Map<string, StockSpend>>;
   addPriceChange(change: PriceChangeRecord): Promise<void>;

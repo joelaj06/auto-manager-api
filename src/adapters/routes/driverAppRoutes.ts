@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { PrintedDocuments } from "../../application/use-cases/documents/PrintedDocuments.js";
 import type { DriverApp } from "../../application/use-cases/driverapp/DriverApp.js";
@@ -19,10 +21,7 @@ const photoParams = z.object({ id: uuid, fileId: uuid });
 const amount = z.string().regex(/^\d{1,13}(\.\d{1,4})?$/, 'Send amounts as text, e.g. "250.00"');
 const text = (max: number) => z.string().trim().max(max).nullable().optional();
 const period = z.object({ from: date.optional(), to: date.optional() });
-const page = z.object({
-  cursor: z.string().max(300).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(30),
-});
+const paging = z.object(pageParams(100, 30));
 const declaration = z.object({
   amount,
   method: z.enum(PAYMENT_METHODS),
@@ -48,7 +47,7 @@ const photo = z.object({
   contentType: z.string().trim().min(3).max(100),
   sizeBytes: z.number().int().min(1).max(FILE_KINDS.vehicle_issue_photo.maxBytes),
 });
-const issueQuery = page.extend({
+const issueQuery = paging.extend({
   status: z
     .string()
     .optional()
@@ -157,10 +156,10 @@ export function driverAppRoutes(deps: DriverAppRouteDependencies): ApiRoute[] {
           driverId: uuid.optional(),
         }),
       },
-      responses: { 200: { description: "Issues; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Issues" } },
       handler: async ({ query }, _req, res) => {
         const result = await issues.list(principalOf(res), query);
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({
@@ -364,11 +363,11 @@ export function driverAppRoutes(deps: DriverAppRouteDependencies): ApiRoute[] {
       summary: "My remittance periods, latest first",
       tags: ["driver-app"],
       access: DRIVER,
-      request: { query: page },
-      responses: { 200: { description: "Remittances; `meta.nextCursor` for the next page" } },
+      request: { query: paging },
+      responses: { 200: { description: "Remittances" } },
       handler: async ({ query }, _req, res) => {
         const result = await app.remittances(principalOf(res), query);
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({
@@ -460,7 +459,7 @@ export function driverAppRoutes(deps: DriverAppRouteDependencies): ApiRoute[] {
       responses: { 200: { description: "Issues" } },
       handler: async ({ query }, _req, res) => {
         const result = await app.issues(principalOf(res), query);
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({

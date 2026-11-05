@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { CashSessionProps } from "../../domain/finance/CashSession.js";
 import type { InvoiceProps, InvoiceStatus } from "../../domain/finance/Invoice.js";
 import type {
@@ -52,8 +53,7 @@ export type LedgerLineFilter = Readonly<{
   from?: string;
   to?: string;
   limit: number;
-  /** Keyset cursor: entry date, created-at and line id of the last line of the previous page. */
-  after?: Readonly<{ date: string; createdAt: string; id: string }>;
+  offset?: number;
 }>;
 
 /** The ledger (tenant unit of work): accounts, posting, balances, period lock. */
@@ -71,7 +71,7 @@ export interface ILedger {
    * rolled up.
    */
   rollUp(settleSeconds: number): Promise<number>;
-  lines(filter: LedgerLineFilter): Promise<LedgerLineView[]>;
+  lines(filter: LedgerLineFilter): Promise<Paged<LedgerLineView>>;
   /** Σ(debit − credit) for a party on an account, in base minor units. */
   partyBalance(
     accountId: string,
@@ -99,7 +99,7 @@ export type InvoiceListFilter = Readonly<{
   /** Issued and not fully paid with a due date before this day. */
   overdueOn?: string;
   limit: number;
-  after?: Readonly<{ createdAt: string; id: string }>;
+  offset?: number;
 }>;
 
 export type PaymentListFilter = Readonly<{
@@ -113,7 +113,7 @@ export type PaymentListFilter = Readonly<{
   /** Recorded money in with an unallocated remainder. */
   withCredit?: boolean;
   limit: number;
-  after?: Readonly<{ recordedAt: string; id: string }>;
+  offset?: number;
 }>;
 
 export type CashSessionListFilter = Readonly<{
@@ -122,13 +122,14 @@ export type CashSessionListFilter = Readonly<{
   cashierId?: string;
   status?: "open" | "closed";
   limit: number;
+  offset?: number;
 }>;
 
 /** Reads over financial documents (tenant unit of work). */
 export interface IFinanceQueries {
-  invoices(filter: InvoiceListFilter): Promise<InvoiceProps[]>;
-  payments(filter: PaymentListFilter): Promise<PaymentProps[]>;
-  cashSessions(filter: CashSessionListFilter): Promise<CashSessionProps[]>;
+  invoices(filter: InvoiceListFilter): Promise<Paged<InvoiceProps>>;
+  payments(filter: PaymentListFilter): Promise<Paged<PaymentProps>>;
+  cashSessions(filter: CashSessionListFilter): Promise<Paged<CashSessionProps>>;
 }
 
 /** Who a document is for: the party's display name and branch (drivers), if it exists. */

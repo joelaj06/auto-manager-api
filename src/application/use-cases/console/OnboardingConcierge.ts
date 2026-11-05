@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
 import {
   CONCIERGE_WINDOW_DAYS,
   checkTemplate,
@@ -57,13 +58,13 @@ export class OnboardingConcierge {
     return this.templates();
   }
 
-  list(filter: TaskFilter): Promise<OnboardingTask[]> {
-    return this.deps.tasks.list(filter);
+  async list(filter: Paging<TaskFilter>): Promise<Page<OnboardingTask>> {
+    return pageOf(filter, await this.deps.tasks.list({ ...filter, ...pageWindow(filter) }));
   }
 
   /** The tasks of the tenant, open first. */
   async tenantTasks(tenantId: string): Promise<OnboardingTask[]> {
-    return this.deps.tasks.list({ tenantId, limit: 200 });
+    return (await this.deps.tasks.list({ tenantId, limit: 200 })).rows;
   }
 
   /** Creates a new tenant's tasks from the templates (once; none for a demo). */

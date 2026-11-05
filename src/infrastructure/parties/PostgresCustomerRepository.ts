@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   CustomerListFilter,
   ICustomerQueries,
@@ -196,7 +198,7 @@ export class PostgresCustomerRepository implements ICustomerRepository, ICustome
     return rows.length > 0;
   }
 
-  async list(filter: CustomerListFilter): Promise<CustomerProps[]> {
+  async list(filter: CustomerListFilter): Promise<Paged<CustomerProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -214,15 +216,15 @@ export class PostgresCustomerRepository implements ICustomerRepository, ICustome
           ${phone === null ? "" : `or strpos(phone, ${param(phone)}) > 0`})`,
       );
     }
-    if (filter.after !== undefined)
-      where.push(
-        `(created_at, id) < (${param(filter.after.createdAt)}::timestamptz, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<CustomerRow>(
-      `select ${COLUMNS} from customers where ${where.join(" and ")}
-        order by created_at desc, id desc limit ${param(filter.limit)}`,
-      params,
+    const { rows, total } = await pagedQuery<CustomerRow>(
+      this.tx,
+      {
+        sql: `select ${COLUMNS} from customers where ${where.join(" and ")}`,
+        orderBy: "created_at desc, id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toProps);
+    return { rows: rows.map(toProps), total };
   }
 }

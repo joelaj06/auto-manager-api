@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { DemoPurpose, SampleDataStatus } from "../../domain/console/DemoTenants.js";
 
 export type BusinessType = "fleet" | "rental" | "dealer" | "mixed";
@@ -63,7 +64,9 @@ export interface IDemoTenants {
   createApplication(demo: NewDemo): Promise<string>;
   markDemo(demo: NewDemo): Promise<void>;
   find(tenantId: string): Promise<DemoTenant | null>;
-  list(filter: Readonly<{ live?: boolean; limit: number }>): Promise<DemoTenant[]>;
+  list(
+    filter: Readonly<{ live?: boolean; limit: number; offset?: number }>,
+  ): Promise<Paged<DemoTenant>>;
   update(tenantId: string, changes: DemoChanges): Promise<void>;
   /**
    * Demos past their end not expired yet, expired ones due their purge, and provisioned ones

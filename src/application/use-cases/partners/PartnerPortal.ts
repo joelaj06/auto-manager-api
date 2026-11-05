@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest, type Paging } from "../../dto/Page.js";
 import type { CommissionTerms } from "../../../domain/partners/Commissions.js";
 import type {
   ApplicationCorrections,
@@ -107,10 +108,13 @@ export class PartnerPortal {
 
   async tenants(
     user: PlatformPrincipal,
-    filter: PartnerTenantFilter,
-  ): Promise<PartnerTenantView[]> {
-    const rows = await this.deps.queries.tenants(partnerOf(user), filter);
-    return rows.map((row) => this.tenantView(user, row));
+    filter: Paging<PartnerTenantFilter>,
+  ): Promise<Page<PartnerTenantView>> {
+    const found = await this.deps.queries.tenants(partnerOf(user), {
+      ...filter,
+      ...pageWindow(filter),
+    });
+    return pageOf(filter, found, (row) => this.tenantView(user, row));
   }
 
   async tenant(
@@ -130,11 +134,14 @@ export class PartnerPortal {
     };
   }
 
-  applications(
+  async applications(
     user: PlatformPrincipal,
-    filter: Readonly<{ status?: ApplicationStatus; limit: number; before?: string }>,
-  ): Promise<PartnerApplicationRow[]> {
-    return this.deps.queries.applications(partnerOf(user), filter);
+    filter: Readonly<{ status?: ApplicationStatus }> & PageRequest,
+  ): Promise<Page<PartnerApplicationRow>> {
+    return pageOf(
+      filter,
+      await this.deps.queries.applications(partnerOf(user), { ...filter, ...pageWindow(filter) }),
+    );
   }
 
   async application(

@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type PageRequest } from "../../dto/Page.js";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import {
   checkWebhookEvents,
@@ -173,10 +174,10 @@ export class Webhooks {
     return { secret };
   }
 
-  deliveries(id: string, limit: number) {
+  deliveries(id: string, request: PageRequest) {
     return this.deps.unitOfWork.run(async () => {
       await this.require(id);
-      return this.deps.webhooks.deliveries(id, limit);
+      return pageOf(request, await this.deps.webhooks.deliveries(id, pageWindow(request)));
     });
   }
 

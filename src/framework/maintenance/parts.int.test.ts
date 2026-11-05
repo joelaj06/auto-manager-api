@@ -257,7 +257,7 @@ describe("parts inventory", () => {
     expect(await balance("5010")).toBe(9_200);
     const same = await at(filterId, hq, "counts", { counted: 3, reason: "Recount" });
     expect(same.body.error.message).toBe("Oil filter (OF-1): the count matches the stock");
-    const inbox = await api().get("/api/v1/notifications?limit=50").set(owner());
+    const inbox = await api().get("/api/v1/notifications?pageSize=50").set(owner());
     expect(
       (inbox.body.data as { title: string }[]).filter(
         (n) => n.title === "Oil filter is low: 3 left",

@@ -52,7 +52,7 @@ const act = (id: string, path: string, body: Record<string, unknown> = {}) =>
   api().post(`/api/v1/work-orders/${id}/${path}`).set(owner()).send(body);
 
 async function titles(): Promise<string[]> {
-  const inbox = await api().get("/api/v1/notifications?limit=100").set(owner());
+  const inbox = await api().get("/api/v1/notifications?pageSize=100").set(owner());
   return (inbox.body.data as { title: string }[]).map((n) => n.title);
 }
 

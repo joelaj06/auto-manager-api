@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   DataProtectionRequest,
   DrillKind,
@@ -104,17 +106,20 @@ export class PostgresDataProtectionRequestRepository implements IDataProtectionR
   }
 
   async list(
-    f: Readonly<{ status?: DprStatus; openOnly?: boolean; limit: number }>,
-  ): Promise<DataProtectionRequest[]> {
-    const { rows } = await this.db.query<DprRow>(
-      `select * from data_protection_requests
+    f: Readonly<{ status?: DprStatus; openOnly?: boolean; limit: number; offset?: number }>,
+  ): Promise<Paged<DataProtectionRequest>> {
+    const { rows, total } = await pagedQuery<DprRow>(
+      this.db,
+      {
+        sql: `select * from data_protection_requests
         where ($1::text is null or status = $1)
-          and (not $2 or status in ('open', 'in_progress'))
-        order by case when status in ('open', 'in_progress') then 0 else 1 end, due_at
-        limit $3`,
-      [f.status ?? null, f.openOnly === true, f.limit],
+          and (not $2 or status in ('open', 'in_progress'))`,
+        orderBy: "case when status in ('open', 'in_progress') then 0 else 1 end, due_at, id",
+        params: [f.status ?? null, f.openOnly === true],
+      },
+      f,
     );
-    return rows.map(toDpr);
+    return { rows: rows.map(toDpr), total };
   }
 
   async dueBefore(before: Date): Promise<DataProtectionRequest[]> {
@@ -276,11 +281,16 @@ export class PostgresRestoreDrillRepository implements IRestoreDrillRepository {
     return rows[0] === undefined ? null : toDrill(rows[0]);
   }
 
-  async list(limit: number): Promise<RestoreDrill[]> {
-    const { rows } = await this.db.query<DrillRow>(
-      `select ${DRILL_COLUMNS} from restore_drills order by due_on desc limit $1`,
-      [limit],
+  async list(window: PageWindow): Promise<Paged<RestoreDrill>> {
+    const { rows, total } = await pagedQuery<DrillRow>(
+      this.db,
+      {
+        sql: `select ${DRILL_COLUMNS} from restore_drills`,
+        orderBy: "due_on desc, id",
+        params: [],
+      },
+      window,
     );
-    return rows.map(toDrill);
+    return { rows: rows.map(toDrill), total };
   }
 }

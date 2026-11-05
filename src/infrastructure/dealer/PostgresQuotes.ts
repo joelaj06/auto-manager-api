@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pageTotal } from "../database/postgres/PagedQuery.js";
 import type { IQuotes, QuoteFilter } from "../../application/ports/IDealerSales.js";
 import { Quote, type AddOn, type QuoteProps } from "../../domain/dealer/Quote.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
@@ -144,7 +146,7 @@ export class PostgresQuotes implements IQuotes {
     return this.one(id, "for update");
   }
 
-  async list(filter: QuoteFilter): Promise<Quote[]> {
+  async list(filter: QuoteFilter): Promise<Paged<Quote>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -156,14 +158,16 @@ export class PostgresQuotes implements IQuotes {
     if (filter.vehicleId !== undefined) add("q.vehicle_id = ?", filter.vehicleId);
     if (filter.customerId !== undefined) add("q.customer_id = ?", filter.customerId);
     if (filter.statuses !== undefined) add("q.status = any(?::text[])", filter.statuses);
-    if (filter.beforeId !== undefined && UUID.test(filter.beforeId))
-      add("q.id < ?", filter.beforeId);
-    params.push(filter.limit);
-    return this.load(
-      `${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-       order by q.id desc limit $${params.length}`,
-      params,
+    const tail = where.length === 0 ? "" : `where ${where.join(" and ")}`;
+    const rows = await this.load(
+      `${tail} order by q.id desc limit $${params.length + 1} offset $${params.length + 2}`,
+      [...params, filter.limit, filter.offset ?? 0],
     );
+    const total = await pageTotal(this.tx, rows.length, filter, {
+      sql: `select count(*) as total from dealer_quotes q ${tail}`,
+      params,
+    });
+    return { rows, total };
   }
 
   async lapsed(today: string): Promise<string[]> {

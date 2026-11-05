@@ -17,7 +17,7 @@ import { TaxCode } from "../../../domain/tax/TaxCode.js";
 import type { AuthorizationPolicy } from "../../authorization/AuthorizationPolicy.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -34,7 +34,6 @@ import type { ITenantReferenceData } from "../../ports/IReferenceData.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { FileView, UploadStarted } from "../files/FileService.js";
 import type { DocumentUploadInput, OwnedDocuments } from "../files/OwnedDocuments.js";
@@ -131,7 +130,7 @@ export type ExpenseResult = Readonly<{
 }>;
 
 export type ExpenseQuery = Omit<ExpenseListFilter, "branchIds" | "createdBy" | "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 export type PayExpenseInput = Readonly<{
   method: PaymentMethod;
@@ -182,20 +181,16 @@ export class Expenses {
 
   async list(actor: Principal, query: ExpenseQuery): Promise<Page<ExpenseView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
       const own = actor.grantFor("expenses.list")?.scope === "own";
-      const rows = await deps.queries.list({
+      const found = await deps.queries.list({
         ...query,
         branchIds: own ? "all" : deps.scope.branchesFor(actor, "expenses.list"),
         ...(own ? { createdBy: actor.userId } : {}),
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { createdAt: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = PageCursor.paginate(rows, query.limit, (e) => [e.createdAt.toISOString(), e.id]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map((e) => expenseView(e, base)) };
     });
   }

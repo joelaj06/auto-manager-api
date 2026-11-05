@@ -1,7 +1,10 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   IPlatformAuditTrail,
   PlatformAuditEntry,
   PlatformAuditQuery,
+  PlatformAuditScan,
   PlatformAuditRecord,
 } from "../../application/ports/IPlatformAuditTrail.js";
 import type { PlatformDb } from "./PlatformDb.js";
@@ -27,6 +30,49 @@ type Row = {
 };
 
 /** platform_audit_logs: append-only (grants and trigger), written in the caller's transaction. */
+function filtered(query: PlatformAuditQuery) {
+  return {
+    sql: `select id, occurred_at, actor_type, actor_id, action, entity_type, entity_id,
+              target_tenant_id, before, after, reason, request_id, ip::text as ip, user_agent, metadata
+         from platform_audit_logs
+        where ($1::uuid is null or actor_id = $1)
+          and ($2::text is null or action = $2 or starts_with(action, $2 || '.'))
+          and ($3::uuid is null or target_tenant_id = $3)
+          and ($4::timestamptz is null or occurred_at >= $4)
+          and ($5::timestamptz is null or occurred_at < $5)
+          and ($6::text is null or entity_type = $6)
+        and ($7::text is null or entity_id = $7)`,
+    orderBy: "id desc",
+    params: [
+      query.actorId ?? null,
+      query.action ?? null,
+      query.targetTenantId ?? null,
+      query.from ?? null,
+      query.to ?? null,
+      query.entityType ?? null,
+      query.entityId ?? null,
+    ],
+  };
+}
+
+const toRecord = (r: Row): PlatformAuditRecord => ({
+  id: r.id,
+  occurredAt: r.occurred_at,
+  actorType: r.actor_type,
+  actorId: r.actor_id,
+  action: r.action,
+  entityType: r.entity_type,
+  entityId: r.entity_id,
+  targetTenantId: r.target_tenant_id,
+  before: r.before,
+  after: r.after,
+  reason: r.reason,
+  requestId: r.request_id,
+  ip: r.ip,
+  userAgent: r.user_agent,
+  metadata: r.metadata,
+});
+
 export class PostgresPlatformAuditTrail implements IPlatformAuditTrail {
   constructor(private readonly db: PlatformDb) {}
 
@@ -57,49 +103,17 @@ export class PostgresPlatformAuditTrail implements IPlatformAuditTrail {
     return rows[0]!.id;
   }
 
-  async search(query: PlatformAuditQuery): Promise<PlatformAuditRecord[]> {
+  async page(query: PlatformAuditQuery): Promise<Paged<PlatformAuditRecord>> {
+    const { rows, total } = await pagedQuery<Row>(this.db, filtered(query), query);
+    return { rows: rows.map(toRecord), total };
+  }
+
+  async search(query: PlatformAuditScan): Promise<PlatformAuditRecord[]> {
+    const { sql, orderBy, params } = filtered(query);
     const { rows } = await this.db.query<Row>(
-      `select id, occurred_at, actor_type, actor_id, action, entity_type, entity_id,
-              target_tenant_id, before, after, reason, request_id, ip::text as ip, user_agent, metadata
-         from platform_audit_logs
-        where ($1::uuid is null or actor_id = $1)
-          and ($2::text is null or action = $2 or starts_with(action, $2 || '.'))
-          and ($3::uuid is null or target_tenant_id = $3)
-          and ($4::timestamptz is null or occurred_at >= $4)
-          and ($5::timestamptz is null or occurred_at < $5)
-          and ($6::uuid is null or id < $6)
-          and ($8::text is null or entity_type = $8)
-          and ($9::text is null or entity_id = $9)
-        order by id desc
-        limit $7`,
-      [
-        query.actorId ?? null,
-        query.action ?? null,
-        query.targetTenantId ?? null,
-        query.from ?? null,
-        query.to ?? null,
-        query.before ?? null,
-        query.limit,
-        query.entityType ?? null,
-        query.entityId ?? null,
-      ],
+      `${sql} and ($8::uuid is null or id < $8) order by ${orderBy} limit $9`,
+      [...params, query.before ?? null, query.limit],
     );
-    return rows.map((r) => ({
-      id: r.id,
-      occurredAt: r.occurred_at,
-      actorType: r.actor_type,
-      actorId: r.actor_id,
-      action: r.action,
-      entityType: r.entity_type,
-      entityId: r.entity_id,
-      targetTenantId: r.target_tenant_id,
-      before: r.before,
-      after: r.after,
-      reason: r.reason,
-      requestId: r.request_id,
-      ip: r.ip,
-      userAgent: r.user_agent,
-      metadata: r.metadata,
-    }));
+    return rows.map(toRecord);
   }
 }

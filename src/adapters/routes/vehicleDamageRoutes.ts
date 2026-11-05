@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { VehicleDamages } from "../../application/use-cases/rentals/VehicleDamages.js";
 import { FILE_KINDS } from "../../domain/files/FileKinds.js";
@@ -36,12 +38,13 @@ export function vehicleDamageRoutes(deps: VehicleDamageRouteDependencies): ApiRo
           vehicleId: uuid.optional(),
           bookingId: uuid.optional(),
           status: z.enum(DAMAGE_STATUSES).optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(100),
+          ...pageParams(200, 100),
         }),
       },
       responses: { 200: { description: "Damages" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await damages.list(principalOf(res), query)));
+        const page = await damages.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { CashSessions } from "../../application/use-cases/finance/CashSessions.js";
 import type { FinanceSettingsService } from "../../application/use-cases/finance/FinanceSettingsService.js";
@@ -21,10 +23,7 @@ const rate = z.string().regex(/^\d{1,10}(\.\d{1,10})?$/, 'An exchange rate, e.g.
 const currency = z.enum(CURRENCY_CODES as [CurrencyCode, ...CurrencyCode[]]);
 const reason = z.string().trim().min(3).max(500);
 const partyType = z.enum(["customer", "driver", "supplier"]);
-const page = {
-  cursor: z.string().max(300).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-};
+const paging = pageParams(100, 50);
 
 const invoiceBody = z.object({
   partyType: z.enum(["customer", "driver"]),
@@ -121,10 +120,10 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
           from: date.optional(),
           to: date.optional(),
           overdueOn: date.optional(),
-          ...page,
+          ...paging,
         }),
       },
-      responses: { 200: { description: "Invoices; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Invoices" } },
       handler: async ({ query }, _req, res) => {
         const { status, partyType: type, partyId, ...rest } = query;
         const result = await invoices.list(principalOf(res), {
@@ -132,7 +131,7 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
           ...(status === undefined ? {} : { statuses: status }),
           ...(type === undefined || partyId === undefined ? {} : { party: { type, id: partyId } }),
         });
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({
@@ -229,17 +228,17 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
             .enum(["true", "false"])
             .optional()
             .transform((v) => v === "true"),
-          ...page,
+          ...paging,
         }),
       },
-      responses: { 200: { description: "Payments; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Payments" } },
       handler: async ({ query }, _req, res) => {
         const { partyType: type, partyId, ...rest } = query;
         const result = await payments.list(principalOf(res), {
           ...rest,
           ...(type === undefined || partyId === undefined ? {} : { party: { type, id: partyId } }),
         });
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({
@@ -379,12 +378,13 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
           branchId: uuid.optional(),
           cashierId: uuid.optional(),
           status: z.enum(["open", "closed"]).optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Cash sessions" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await cashSessions.list(principalOf(res), query)));
+        const page = await cashSessions.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -487,17 +487,17 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
           branchId: uuid.optional(),
           from: date.optional(),
           to: date.optional(),
-          ...page,
+          ...paging,
         }),
       },
-      responses: { 200: { description: "Lines; `meta.nextCursor` for the next page" } },
+      responses: { 200: { description: "Lines" } },
       handler: async ({ query }, _req, res) => {
         const { partyType: type, partyId, ...rest } = query;
         const result = await ledger.lines({
           ...rest,
           ...(type === undefined || partyId === undefined ? {} : { party: { type, id: partyId } }),
         });
-        res.json(envelope(result.items, { nextCursor: result.nextCursor }));
+        res.set(pageHeaders(result)).json(envelope(result.items));
       },
     }),
     defineRoute({

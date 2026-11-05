@@ -1,3 +1,4 @@
+import type { Paged } from "../value-objects/Paged.js";
 import type { SupportMode, SupportSession, SupportStatus } from "../console/SupportSession.js";
 
 /** What authenticating a support token needs: who is behind it, while it is live. */
@@ -34,8 +35,9 @@ export interface ISupportSessionRepository {
       status?: SupportStatus;
       from?: Date;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<SupportSessionRow[]>;
+  ): Promise<Paged<SupportSessionRow>>;
   /** Appends to the trail and counts the request. */
   recordRequest(sessionId: string, request: SupportRequestRecord): Promise<void>;
   requests(sessionId: string, limit: number): Promise<SupportRequestRecord[]>;

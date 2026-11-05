@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { PartsInventory } from "../../application/use-cases/maintenance/PartsInventory.js";
 import { PART_UNITS } from "../../domain/maintenance/Part.js";
@@ -77,12 +79,13 @@ export function partRoutes(deps: PartRouteDependencies): ApiRoute[] {
             .enum(["true", "false"])
             .transform((v) => v === "true")
             .optional(),
-          limit: z.coerce.number().int().min(1).max(500).default(100),
+          ...pageParams(500, 100),
         }),
       },
       responses: { 200: { description: "Parts" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await parts.list(principalOf(res), query)));
+        const page = await parts.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -229,13 +232,13 @@ export function partRoutes(deps: PartRouteDependencies): ApiRoute[] {
           partId: uuid.optional(),
           branchId: uuid.optional(),
           workOrderId: uuid.optional(),
-          before: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Moves" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await parts.moves(principalOf(res), query)));
+        const page = await parts.moves(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
   ];

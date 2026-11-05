@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import type { Request } from "express";
 import { z } from "zod";
 import type { TenantStatus } from "../../application/ports/ITenantDirectory.js";
@@ -16,7 +18,6 @@ const PARTNER_TAGS = ["partner portal"];
 const uuid = z.uuid();
 const idParams = z.object({ id: uuid });
 const reason = z.string().trim().min(5, "Give a reason of at least 5 characters").max(1_000);
-const limit = z.coerce.number().int().min(1).max(100).default(25);
 const optionalText = (max: number) => z.string().trim().max(max).nullish();
 const TENANT_STATUSES: readonly TenantStatus[] = [
   "provisioning",
@@ -41,8 +42,7 @@ const tenantFilter = z.object({
     .pipe(z.array(z.enum(TENANT_STATUSES as [TenantStatus, ...TenantStatus[]])))
     .optional(),
   q: z.string().trim().min(2).max(120).optional(),
-  before: uuid.optional(),
-  limit,
+  ...pageParams(100, 25),
 });
 const applicationStatus = z.enum([
   "pending_verification",
@@ -67,8 +67,6 @@ const context = (req: Request) => ({
   ip: req.ip ?? null,
   userAgent: req.get("user-agent")?.slice(0, 512) ?? null,
 });
-const nextBefore = (items: readonly { id: string }[], pageSize: number) =>
-  items.length === pageSize ? (items.at(-1)?.id ?? null) : null;
 
 export type PartnerRouteDependencies = Readonly<{
   administration: PartnerAdministration;
@@ -92,14 +90,13 @@ export function partnerRoutes({ administration, portal }: PartnerRouteDependenci
         query: z.object({
           status: z.enum(["active", "paused", "terminated"]).optional(),
           q: z.string().trim().min(2).max(120).optional(),
-          before: uuid.optional(),
-          limit,
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Partners with user, tenant and application counts" } },
       handler: async ({ query }, _req, res) => {
         const partners = await administration.list(query);
-        res.json(envelope(partners, { nextBefore: nextBefore(partners, query.limit) }));
+        res.set(pageHeaders(partners)).json(envelope(partners.items));
       },
     }),
     defineRoute({
@@ -248,11 +245,7 @@ export function partnerRoutes({ administration, portal }: PartnerRouteDependenci
       responses: { 200: { description: "Tenants" } },
       handler: async ({ params, query }, _req, res) => {
         const tenants = await administration.tenants(params.id, query);
-        res.json(
-          envelope(tenants, {
-            nextBefore: tenants.length === query.limit ? (tenants.at(-1)?.tenantId ?? null) : null,
-          }),
-        );
+        res.set(pageHeaders(tenants)).json(envelope(tenants.items));
       },
     }),
     defineRoute({
@@ -302,7 +295,7 @@ export function partnerRoutes({ administration, portal }: PartnerRouteDependenci
       responses: { 200: { description: "Tenants; owner contact and billing state if granted" } },
       handler: async ({ query }, _req, res) => {
         const tenants = await portal.tenants(staffOf(res), query);
-        res.json(envelope(tenants, { nextBefore: nextBefore(tenants, query.limit) }));
+        res.set(pageHeaders(tenants)).json(envelope(tenants.items));
       },
     }),
     defineRoute({
@@ -324,12 +317,12 @@ export function partnerRoutes({ administration, portal }: PartnerRouteDependenci
       tags: PARTNER_TAGS,
       access: access.partner("platform.partner.tenants.view"),
       request: {
-        query: z.object({ status: applicationStatus.optional(), before: uuid.optional(), limit }),
+        query: z.object({ status: applicationStatus.optional(), ...pageParams(100, 25) }),
       },
       responses: { 200: { description: "Applications" } },
       handler: async ({ query }, _req, res) => {
         const items = await portal.applications(staffOf(res), query);
-        res.json(envelope(items, { nextBefore: nextBefore(items, query.limit) }));
+        res.set(pageHeaders(items)).json(envelope(items.items));
       },
     }),
     defineRoute({

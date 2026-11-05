@@ -211,11 +211,11 @@ export class VehicleImportExport {
 
   async export(
     actor: Principal,
-    filter: Omit<VehicleListFilter, "branchIds" | "limit" | "after">,
+    filter: Omit<VehicleListFilter, "branchIds" | "limit" | "offset">,
   ): Promise<CsvTable> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
-      const vehicles = await deps.queries.list({
+      const { rows: vehicles } = await deps.queries.list({
         ...filter,
         branchIds: deps.access.branchesFor(actor, "vehicles.export"),
         limit: MAX_EXPORT_ROWS + 1,

@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { SubscriptionAdministration } from "../../application/use-cases/billing/SubscriptionAdministration.js";
 import type { Communications } from "../../application/use-cases/console/Communications.js";
@@ -16,7 +18,6 @@ const BASE = "/api/platform/v1";
 const uuid = z.uuid();
 const idParams = z.object({ id: uuid });
 const reason = z.string().trim().min(5).max(1_000);
-const limit = z.coerce.number().int().min(1).max(200).default(50);
 const severity = z.enum(["info", "warning", "critical"]);
 const flagKey = z.string().regex(/^[a-z][a-z0-9_.]{1,60}$/);
 const licenceTypes = z.array(z.enum(["standard", "enterprise"])).max(2);
@@ -67,12 +68,13 @@ export function consoleOperationsRoutes(deps: ConsoleOperationsRouteDependencies
           status: z.enum(["open", "acknowledged", "resolved"]).optional(),
           severity: severity.optional(),
           source: z.string().max(40).optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Alerts" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await alerts.list(query), { open: await alerts.openCounts() }));
+        const page = await alerts.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items, { open: await alerts.openCounts() }));
       },
     }),
     defineRoute({
@@ -201,12 +203,13 @@ export function consoleOperationsRoutes(deps: ConsoleOperationsRouteDependencies
           status: z
             .enum(["awaiting_approval", "approved", "active", "ended", "rejected"])
             .optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Sessions" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await support.list(query)));
+        const page = await support.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -336,12 +339,13 @@ export function consoleOperationsRoutes(deps: ConsoleOperationsRouteDependencies
       request: {
         query: z.object({
           status: z.enum(["draft", "awaiting_approval", "published", "withdrawn"]).optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Announcements" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await communications.list(query)));
+        const page = await communications.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -410,10 +414,11 @@ export function consoleOperationsRoutes(deps: ConsoleOperationsRouteDependencies
       summary: "Maintenance windows",
       tags: ["console: communications"],
       access: access.platform("platform.health.view"),
-      request: { query: z.object({ limit }) },
+      request: { query: z.object(pageParams(200, 50)) },
       responses: { 200: { description: "Windows" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await communications.windows(query.limit)));
+        const page = await communications.windows(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({

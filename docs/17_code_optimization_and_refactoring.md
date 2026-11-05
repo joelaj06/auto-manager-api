@@ -53,7 +53,7 @@ abstract class TenantRepository<TDoc, TEntity> {
 
 - `QueryBuilder` from validated query DTOs: equality filters, date ranges on the module's business date, `in` lists, sort whitelist.
 - Escape regex input; prefer anchored prefix regex on indexed fields or Atlas Search.
-- Cursor-based pagination option for mobile infinite scroll (`?after=<id>`).
+- Numbered pages with a total in the headers (decision 537).
 
 ## 5. Validation & DTO separation
 

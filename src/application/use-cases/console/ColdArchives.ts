@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type PageRequest } from "../../dto/Page.js";
 import {
   ArchiveRuleError,
   checkArchive,
@@ -32,8 +33,8 @@ export class ColdArchives {
     }>,
   ) {}
 
-  list(filter: Readonly<{ status?: ArchiveStatus; tenantId?: string; limit: number }>) {
-    return this.deps.archives.list(filter);
+  async list(filter: Readonly<{ status?: ArchiveStatus; tenantId?: string }> & PageRequest) {
+    return pageOf(filter, await this.deps.archives.list({ ...filter, ...pageWindow(filter) }));
   }
 
   async archive(id: string): Promise<TenantArchive> {

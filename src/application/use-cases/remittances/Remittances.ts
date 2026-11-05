@@ -9,7 +9,7 @@ import {
 import type { IRemittanceRepository } from "../../../domain/repositories/IRemittanceRepository.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
@@ -25,7 +25,6 @@ import type {
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
 import type { LedgerPosting } from "../finance/LedgerPosting.js";
 import type { PaymentRecording } from "../finance/PaymentRecording.js";
@@ -71,7 +70,7 @@ export type RemittanceView = Omit<
   }>;
 
 export type RemittanceQuery = Omit<RemittanceListFilter, "branchIds" | "after" | "limit"> &
-  Readonly<{ limit: number; cursor?: string }>;
+  Readonly<{ page: number; pageSize: number }>;
 
 /**
  * Remittances (docs/09 §2): expected rows come from the daily job for fixed targets; a variable
@@ -102,18 +101,14 @@ export class Remittances {
 
   async list(actor: Principal, query: RemittanceQuery): Promise<Page<RemittanceView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.records.list({
+      const found = await deps.records.list({
         ...query,
         branchIds: deps.scope.branchesFor(actor, "remittances.list"),
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { periodStart: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = PageCursor.paginate(rows, query.limit, (r) => [r.periodStart, r.id]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map((r) => remittanceView(r, base)) };
     });
   }
@@ -154,21 +149,17 @@ export class Remittances {
   /** A driver's own periods, latest first (driver app). */
   async listOwn(
     driverId: string,
-    query: Readonly<{ limit: number; cursor?: string }>,
+    query: Readonly<{ page: number; pageSize: number }>,
   ): Promise<Page<RemittanceView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
-      const rows = await deps.records.list({
+      const found = await deps.records.list({
         branchIds: "all",
         driverId,
-        limit: query.limit + 1,
-        ...(after === undefined
-          ? {}
-          : { after: { periodStart: String(after[0]), id: String(after[1]) } }),
+        ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = PageCursor.paginate(rows, query.limit, (r) => [r.periodStart, r.id]);
+      const page = pageOf(query, found);
       return { ...page, items: page.items.map((r) => remittanceView(r, base)) };
     });
   }

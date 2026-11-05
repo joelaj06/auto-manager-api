@@ -21,7 +21,7 @@ import type { Principal } from "../../authorization/Principal.js";
 import { PermissionDeniedError } from "../../errors/AuthErrors.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import { VehicleUnavailableError } from "../../errors/RentalErrors.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
@@ -35,7 +35,6 @@ import type { IRentalRates } from "../../ports/IRentalRates.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { FleetVehicle, IVehicleBlocks } from "../../ports/IVehicleBlocks.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import { localDateTime } from "../../services/TenantLocalTime.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
@@ -108,8 +107,8 @@ export type BookingQuery = Readonly<{
   vehicleId?: string;
   from?: Date;
   to?: Date;
-  cursor?: string;
-  limit: number;
+  page: number;
+  pageSize: number;
 }>;
 
 export type ChargeView = Readonly<{
@@ -208,7 +207,6 @@ export class RentalBookings {
 
   async list(actor: Principal, query: BookingQuery): Promise<Page<BookingView>> {
     const { deps } = this;
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 2).values;
     return deps.unitOfWork.run(async () => {
       const now = deps.clock.now();
       const branchIds =
@@ -218,7 +216,7 @@ export class RentalBookings {
       const shown = query.status;
       const statuses: readonly BookingStatus[] | undefined =
         shown === undefined ? undefined : shown === "expired" ? ["reserved"] : [shown];
-      const rows = await deps.bookings.list({
+      const found = await deps.bookings.list({
         branchIds,
         ...(statuses === undefined ? {} : { statuses }),
         ...(shown === "expired" || shown === "reserved"
@@ -228,15 +226,9 @@ export class RentalBookings {
         ...(query.vehicleId === undefined ? {} : { vehicleId: query.vehicleId }),
         ...(query.from === undefined ? {} : { from: query.from }),
         ...(query.to === undefined ? {} : { to: query.to }),
-        ...(after === undefined
-          ? {}
-          : { after: { pickupAt: String(after[0]), id: String(after[1]) } }),
-        limit: query.limit + 1,
+        ...pageWindow(query),
       });
-      const page = PageCursor.paginate(rows, query.limit, (b) => [
-        b.snapshot().pickupAt.toISOString(),
-        b.id,
-      ]);
+      const page = pageOf(query, found);
       return {
         ...page,
         items: await Promise.all(page.items.map((b) => this.view(b))),

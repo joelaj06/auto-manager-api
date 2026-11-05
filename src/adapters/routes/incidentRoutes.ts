@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { FuelAnomalies } from "../../application/use-cases/incidents/FuelAnomalies.js";
 import type { Incidents } from "../../application/use-cases/incidents/Incidents.js";
@@ -25,7 +27,6 @@ const flag = z
   .enum(["true", "false"])
   .transform((v) => v === "true")
   .optional();
-const limit = z.coerce.number().int().min(1).max(200).default(50);
 
 const incidentFields = {
   type: z.enum(INCIDENT_TYPES),
@@ -111,13 +112,13 @@ export function incidentRoutes(deps: IncidentRouteDependencies): ApiRoute[] {
           driverId: uuid.optional(),
           type: z.enum(INCIDENT_TYPES).optional(),
           status: z.enum(["open", "closed"]).optional(),
-          before: uuid.optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Incidents" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await incidents.list(principalOf(res), query)));
+        const page = await incidents.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -196,12 +197,13 @@ export function incidentRoutes(deps: IncidentRouteDependencies): ApiRoute[] {
         query: z.object({
           status: z.enum(CLAIM_STATUSES).optional(),
           insurerId: uuid.optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Claims" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await incidents.claims(principalOf(res), query)));
+        const page = await incidents.claims(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     post(
@@ -259,13 +261,13 @@ export function incidentRoutes(deps: IncidentRouteDependencies): ApiRoute[] {
           driverId: uuid.optional(),
           status: z.enum(["unpaid", "contested", "paid", "waived"]).optional(),
           outstanding: flag,
-          before: uuid.optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Offences" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await offences.list(principalOf(res), query)));
+        const page = await offences.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -335,12 +337,13 @@ export function incidentRoutes(deps: IncidentRouteDependencies): ApiRoute[] {
         query: z.object({
           vehicleId: uuid.optional(),
           status: z.enum(["open", "confirmed", "dismissed"]).optional(),
-          limit,
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Anomalies" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await anomalies.list(principalOf(res), query)));
+        const page = await anomalies.list(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     post(

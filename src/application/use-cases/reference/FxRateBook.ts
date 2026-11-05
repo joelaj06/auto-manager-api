@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
 import { currencyInfo } from "../../../domain/money/Currency.js";
 import { InvalidDecimalError, parseDecimal } from "../../../domain/money/Decimal.js";
 import type { Principal } from "../../authorization/Principal.js";
@@ -36,8 +37,10 @@ export class FxRateBook {
     }>,
   ) {}
 
-  list(filter: Readonly<{ quote?: string; limit: number }>): Promise<FxRate[]> {
-    return this.deps.unitOfWork.run(() => this.deps.reference.fxRates(filter));
+  list(filter: Readonly<{ quote?: string }> & PageRequest): Promise<Page<FxRate>> {
+    return this.deps.unitOfWork.run(async () =>
+      pageOf(filter, await this.deps.reference.fxRates({ ...filter, ...pageWindow(filter) })),
+    );
   }
 
   /** The rate to suggest on a form, or null (the user then types one). */

@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type {
   WorkOrder,
   WorkOrderStatus,
@@ -13,7 +14,7 @@ export type WorkOrderFilter = Readonly<{
   types?: readonly WorkOrderType[];
   limit: number;
   /** Newest first: rows with a smaller id. */
-  beforeId?: string;
+  offset?: number;
 }>;
 
 /** How a vendor has done on completed work orders. */
@@ -35,7 +36,7 @@ export interface IWorkOrders {
   update(order: WorkOrder): Promise<void>;
   get(id: string): Promise<WorkOrder | null>;
   lock(id: string): Promise<WorkOrder | null>;
-  list(filter: WorkOrderFilter): Promise<WorkOrder[]>;
+  list(filter: WorkOrderFilter): Promise<Paged<WorkOrder>>;
   vendorRecord(vendorId: string): Promise<VendorRecord>;
   /** An active supplier, a user, a driver of the business. */
   exists(kind: "supplier" | "user" | "driver", id: string): Promise<boolean>;

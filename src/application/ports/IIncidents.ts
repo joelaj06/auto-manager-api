@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type {
   ClaimStatus,
   Incident,
@@ -14,7 +15,7 @@ export type IncidentFilter = Readonly<{
   type?: IncidentType;
   status?: "open" | "closed";
   limit: number;
-  beforeId?: string;
+  offset?: number;
 }>;
 
 /** What an incident cost (minor units, base currency), from its work orders, expenses and claims. */
@@ -44,7 +45,7 @@ export type OffenceFilter = Readonly<{
   driverId?: string;
   statuses?: readonly OffenceStatus[];
   limit: number;
-  beforeId?: string;
+  offset?: number;
 }>;
 
 export type FuelAnomalyRow = Readonly<{
@@ -74,7 +75,7 @@ export interface IIncidents {
   update(incident: Incident): Promise<void>;
   get(id: string): Promise<Incident | null>;
   lock(id: string): Promise<Incident | null>;
-  list(filter: IncidentFilter): Promise<Incident[]>;
+  list(filter: IncidentFilter): Promise<Paged<Incident>>;
   costs(incidentId: string): Promise<IncidentCosts>;
   /** Links an expense of the same vehicle (or none) to the incident; false: not found. */
   linkExpense(incidentId: string, expenseId: string, vehicleId: string): Promise<boolean>;
@@ -91,14 +92,15 @@ export interface IIncidents {
       statuses?: readonly ClaimStatus[];
       insurerId?: string;
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<InsuranceClaim[]>;
+  ): Promise<Paged<InsuranceClaim>>;
 
   insertOffence(offence: TrafficOffence): Promise<void>;
   updateOffence(offence: TrafficOffence): Promise<void>;
   getOffence(id: string): Promise<TrafficOffence | null>;
   lockOffence(id: string): Promise<TrafficOffence | null>;
-  offences(filter: OffenceFilter): Promise<TrafficOffence[]>;
+  offences(filter: OffenceFilter): Promise<Paged<TrafficOffence>>;
   noticeTaken(authority: string, noticeRef: string, exceptId: string | null): Promise<boolean>;
 
   addAnomaly(row: FuelAnomalyRow): Promise<void>;
@@ -110,8 +112,9 @@ export interface IIncidents {
       vehicleId?: string;
       status?: FuelAnomalyRow["status"];
       limit: number;
+      offset?: number;
     }>,
-  ): Promise<FuelAnomalyRow[]>;
+  ): Promise<Paged<FuelAnomalyRow>>;
 
   /** The driver who had the vehicle at that time (an assignment then), if any. */
   driverAt(vehicleId: string, at: Date): Promise<DriverRef | null>;

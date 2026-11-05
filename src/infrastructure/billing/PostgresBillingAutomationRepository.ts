@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type { DunningPolicy, NoticeChannel } from "../../domain/billing/Dunning.js";
 import type {
   AutomationRun,
@@ -263,8 +265,8 @@ export class PostgresBillingAutomationRepository implements IBillingAutomationRe
     ]);
   }
 
-  async notices(tenantId: string, limit: number): Promise<NoticeRecord[]> {
-    const { rows } = await this.db.query<{
+  async notices(tenantId: string, window: PageWindow): Promise<Paged<NoticeRecord>> {
+    const { rows, total } = await pagedQuery<{
       id: string;
       tenant_id: string;
       invoice_id: string | null;
@@ -275,20 +277,28 @@ export class PostgresBillingAutomationRepository implements IBillingAutomationRe
       error: string | null;
       sent_at: Date;
     }>(
-      `select * from billing_notices where tenant_id = $1 order by sent_at desc, id desc limit $2`,
-      [tenantId, limit],
+      this.db,
+      {
+        sql: `select * from billing_notices where tenant_id = $1`,
+        orderBy: "sent_at desc, id desc",
+        params: [tenantId],
+      },
+      window,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      tenantId: r.tenant_id,
-      invoiceId: r.invoice_id,
-      step: r.step,
-      channel: r.channel,
-      recipient: r.recipient,
-      status: r.status,
-      error: r.error,
-      sentAt: r.sent_at,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        tenantId: r.tenant_id,
+        invoiceId: r.invoice_id,
+        step: r.step,
+        channel: r.channel,
+        recipient: r.recipient,
+        status: r.status,
+        error: r.error,
+        sentAt: r.sent_at,
+      })),
+      total,
+    };
   }
 
   async setDisputeHold(tenantId: string, reason: string | null): Promise<boolean> {
@@ -340,15 +350,24 @@ export class PostgresBillingAutomationRepository implements IBillingAutomationRe
   }
 
   async extensions(
-    filter: Readonly<{ tenantId?: string; status?: ExtensionStatus; limit: number }>,
-  ): Promise<ExtensionRecord[]> {
-    const { rows } = await this.db.query<ExtensionRow>(
-      `select ${EXTENSION_COLUMNS} from billing_extensions
-        where ($1::uuid is null or tenant_id = $1) and ($2::text is null or status = $2)
-        order by created_at desc limit $3`,
-      [filter.tenantId ?? null, filter.status ?? null, filter.limit],
+    filter: Readonly<{
+      tenantId?: string;
+      status?: ExtensionStatus;
+      limit: number;
+      offset?: number;
+    }>,
+  ): Promise<Paged<ExtensionRecord>> {
+    const { rows, total } = await pagedQuery<ExtensionRow>(
+      this.db,
+      {
+        sql: `select ${EXTENSION_COLUMNS} from billing_extensions
+        where ($1::uuid is null or tenant_id = $1) and ($2::text is null or status = $2)`,
+        orderBy: "created_at desc, id desc",
+        params: [filter.tenantId ?? null, filter.status ?? null],
+      },
+      filter,
     );
-    return rows.map(toExtension);
+    return { rows: rows.map(toExtension), total };
   }
 
   async approvedSince(tenantId: string, since: Date): Promise<number> {
@@ -406,11 +425,16 @@ export class PostgresBillingAutomationRepository implements IBillingAutomationRe
     );
   }
 
-  async runs(limit: number): Promise<AutomationRun[]> {
-    const { rows } = await this.db.query<RunRow>(
-      `select ${RUN_COLUMNS} from billing_automation_runs order by started_at desc limit $1`,
-      [limit],
+  async runs(window: PageWindow): Promise<Paged<AutomationRun>> {
+    const { rows, total } = await pagedQuery<RunRow>(
+      this.db,
+      {
+        sql: `select ${RUN_COLUMNS} from billing_automation_runs`,
+        orderBy: "started_at desc, id desc",
+        params: [],
+      },
+      window,
     );
-    return rows.map(toRun);
+    return { rows: rows.map(toRun), total };
   }
 }

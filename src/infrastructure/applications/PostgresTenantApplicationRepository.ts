@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   TenantApplication,
   type ApplicationStatus,
@@ -118,28 +120,28 @@ export class PostgresTenantApplicationRepository implements ITenantApplicationRe
     );
   }
 
-  async list(query: ApplicationListQuery): Promise<TenantApplication[]> {
+  async list(query: ApplicationListQuery): Promise<Paged<TenantApplication>> {
     const search = query.search?.trim();
-    const { rows } = await this.db.query<Row>(
-      `select ${COLUMNS} from tenant_applications
+    const { rows, total } = await pagedQuery<Row>(
+      this.db,
+      {
+        sql: `select ${COLUMNS} from tenant_applications
         where ($1::text is null or status = $1)
           and ($2::uuid is null or assigned_to = $2)
-          and ($3::uuid is null or id < $3)
-          and ($4::text is null
-               or business_name ilike '%' || $4 || '%' or desired_slug ilike '%' || $4 || '%'
-               or contact_email ilike '%' || $4 || '%' or contact_phone like '%' || $4 || '%')
-        order by id desc
-        limit $5`,
-      [
-        query.status ?? null,
-        query.assignedTo ?? null,
-        query.before ?? null,
-        // ILIKE wildcards in the search text are matched literally.
-        search === undefined || search === "" ? null : search.replace(/[\\%_]/g, (c) => `\\${c}`),
-        query.limit,
-      ],
+          and ($3::text is null
+               or business_name ilike '%' || $3 || '%' or desired_slug ilike '%' || $3 || '%'
+               or contact_email ilike '%' || $3 || '%' or contact_phone like '%' || $3 || '%')`,
+        orderBy: "id desc",
+        params: [
+          query.status ?? null,
+          query.assignedTo ?? null,
+          // ILIKE wildcards in the search text are matched literally.
+          search === undefined || search === "" ? null : search.replace(/[\\%_]/g, (c) => `\\${c}`),
+        ],
+      },
+      query,
     );
-    return rows.map(toEntity);
+    return { rows: rows.map(toEntity), total };
   }
 
   async save(application: TenantApplication): Promise<void> {

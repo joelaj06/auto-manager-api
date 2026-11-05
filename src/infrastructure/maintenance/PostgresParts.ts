@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   IParts,
   MoveFilter,
@@ -126,7 +128,7 @@ export class PostgresParts implements IParts {
     return rows.length > 0;
   }
 
-  async list(filter: PartFilter): Promise<Part[]> {
+  async list(filter: PartFilter): Promise<Paged<Part>> {
     const where: string[] = [];
     const params: unknown[] = [];
     if (!filter.includeInactive) where.push("active");
@@ -138,14 +140,17 @@ export class PostgresParts implements IParts {
       params.push(filter.category);
       where.push(`lower(category) = lower($${params.length})`);
     }
-    params.push(filter.limit);
-    const { rows } = await this.tx.query<PartRow>(
-      `select ${PART_COLUMNS} from parts
-        ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-        order by lower(name), sku limit $${params.length}`,
-      params,
+    const { rows, total } = await pagedQuery<PartRow>(
+      this.tx,
+      {
+        sql: `select ${PART_COLUMNS} from parts
+        ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: "lower(name), sku",
+        params,
+      },
+      filter,
     );
-    return rows.map(part);
+    return { rows: rows.map(part), total };
   }
 
   async lockStock(partId: string, branchId: string): Promise<Stock> {
@@ -244,7 +249,7 @@ export class PostgresParts implements IParts {
     return rows.length > 0;
   }
 
-  async moves(filter: MoveFilter): Promise<PartMove[]> {
+  async moves(filter: MoveFilter): Promise<Paged<PartMove>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -255,37 +260,42 @@ export class PostgresParts implements IParts {
     if (filter.partId !== undefined) add("part_id = ?", filter.partId);
     if (filter.branchId !== undefined) add("branch_id = ?", filter.branchId);
     if (filter.workOrderId !== undefined) add("work_order_id = ?", filter.workOrderId);
-    if (filter.beforeId !== undefined) add("id < ?", filter.beforeId);
-    params.push(filter.limit);
-    const { rows } = await this.tx.query<MoveRow>(
-      `select id, part_id, branch_id, kind, quantity::text as quantity,
+    const { rows, total } = await pagedQuery<MoveRow>(
+      this.tx,
+      {
+        sql: `select id, part_id, branch_id, kind, quantity::text as quantity,
               unit_cost_minor::text as unit_cost_minor, value_minor::text as value_minor,
               on_hand_after::text as on_hand_after, avg_cost_after::text as avg_cost_after,
               work_order_id, supplier_id, expense_id, transfer_id, reference, reason, created_by,
               created_at
-         from part_moves ${where.length === 0 ? "" : `where ${where.join(" and ")}`}
-        order by id desc limit $${params.length}`,
-      params,
+         from part_moves ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
+        orderBy: "id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      partId: r.part_id,
-      branchId: r.branch_id,
-      kind: r.kind,
-      quantity: Number(r.quantity),
-      unitCostMinor: Number(r.unit_cost_minor),
-      valueMinor: Number(r.value_minor),
-      onHandAfter: Number(r.on_hand_after),
-      avgCostAfter: Number(r.avg_cost_after),
-      workOrderId: r.work_order_id,
-      supplierId: r.supplier_id,
-      expenseId: r.expense_id,
-      transferId: r.transfer_id,
-      reference: r.reference,
-      reason: r.reason,
-      createdBy: r.created_by,
-      createdAt: r.created_at,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        partId: r.part_id,
+        branchId: r.branch_id,
+        kind: r.kind,
+        quantity: Number(r.quantity),
+        unitCostMinor: Number(r.unit_cost_minor),
+        valueMinor: Number(r.value_minor),
+        onHandAfter: Number(r.on_hand_after),
+        avgCostAfter: Number(r.avg_cost_after),
+        workOrderId: r.work_order_id,
+        supplierId: r.supplier_id,
+        expenseId: r.expense_id,
+        transferId: r.transfer_id,
+        reference: r.reference,
+        reason: r.reason,
+        createdBy: r.created_by,
+        createdAt: r.created_at,
+      })),
+      total,
+    };
   }
 
   private async stockRows(

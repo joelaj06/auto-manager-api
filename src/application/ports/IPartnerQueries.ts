@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { PartnerStatus } from "../../domain/entities/Partner.js";
 import type { ApplicationStatus } from "../../domain/entities/TenantApplication.js";
 import type { TenantStatus } from "./ITenantDirectory.js";
@@ -76,7 +77,7 @@ export type PartnerTenantFilter = Readonly<{
   status?: readonly TenantStatus[];
   q?: string;
   limit: number;
-  before?: string;
+  offset?: number;
 }>;
 
 /**
@@ -89,16 +90,16 @@ export interface IPartnerQueries {
       status?: PartnerStatus;
       q?: string;
       limit: number;
-      before?: string;
+      offset?: number;
     }>,
-  ): Promise<PartnerListItem[]>;
-  tenants(partnerId: string, filter: PartnerTenantFilter): Promise<PartnerTenantRow[]>;
+  ): Promise<Paged<PartnerListItem>>;
+  tenants(partnerId: string, filter: PartnerTenantFilter): Promise<Paged<PartnerTenantRow>>;
   tenant(partnerId: string, tenantId: string): Promise<PartnerTenantRow | null>;
   statusHistory(partnerId: string, tenantId: string): Promise<PartnerTenantStatusChange[]>;
   applications(
     partnerId: string,
-    filter: Readonly<{ status?: ApplicationStatus; limit: number; before?: string }>,
-  ): Promise<PartnerApplicationRow[]>;
+    filter: Readonly<{ status?: ApplicationStatus; limit: number; offset?: number }>,
+  ): Promise<Paged<PartnerApplicationRow>>;
   application(partnerId: string, applicationId: string): Promise<PartnerApplicationRow | null>;
   /** Messages the applicant can see (not internal staff notes). */
   applicationMessages(applicationId: string): Promise<PartnerApplicationMessage[]>;

@@ -163,19 +163,19 @@ describe("HTTP pipeline", () => {
   describe("validation", () => {
     it("passes parsed, coerced input to the handler", async () => {
       const res = await request(buildApp().app)
-        .post("/api/v1/echo/0199e1c2-7a3b-7f1e-9a4c-8d2e5f6a7b8c?limit=5")
+        .post("/api/v1/echo/0199e1c2-7a3b-7f1e-9a4c-8d2e5f6a7b8c?pageSize=5")
         .send({ name: "Ama", password: "x" });
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({
         params: { id: "0199e1c2-7a3b-7f1e-9a4c-8d2e5f6a7b8c" },
-        query: { limit: 5 },
+        query: { page: 1, pageSize: 5 },
         body: { name: "Ama", password: "x" },
       });
     });
 
     it("reports every invalid field at once, without echoing values", async () => {
       const res = await request(buildApp().app)
-        .post("/api/v1/echo/not-a-uuid?limit=0")
+        .post("/api/v1/echo/not-a-uuid?pageSize=0")
         .send({ name: "A", password: 42 });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("VALIDATION_FAILED");
@@ -183,7 +183,7 @@ describe("HTTP pipeline", () => {
         "body.name",
         "body.password",
         "params.id",
-        "query.limit",
+        "query.pageSize",
       ]);
       expect(JSON.stringify(res.body)).not.toContain("not-a-uuid");
     });
@@ -268,6 +268,14 @@ describe("HTTP pipeline", () => {
         .set("origin", "https://evil.example.com");
       expect(blocked.headers["access-control-allow-origin"]).toBeUndefined();
     });
+  });
+
+  it("lets browsers read the page headers", async () => {
+    const { app } = buildApp();
+    const res = await request(app).get("/api/v1/nope").set("Origin", "https://acme.autoforce.app");
+    expect(res.headers["access-control-expose-headers"]).toContain("X-Total-Count");
+    expect(res.headers["access-control-expose-headers"]).toContain("X-Page");
+    expect(res.headers["access-control-expose-headers"]).toContain("X-Page-Size");
   });
 
   describe("rate limiting", () => {

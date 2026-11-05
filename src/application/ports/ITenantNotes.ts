@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { TenantNote } from "../../domain/entities/TenantNote.js";
 
 export type TenantNoteView = Readonly<{
@@ -9,11 +10,11 @@ export type TenantNoteView = Readonly<{
   updatedAt: Date;
 }>;
 
-export type NoteListOptions = Readonly<{ limit: number; before?: string; pinned?: boolean }>;
+export type NoteListOptions = Readonly<{ limit: number; offset?: number; pinned?: boolean }>;
 
 /** Staff notes on a tenant, newest first; deleted notes are hidden. */
 export interface ITenantNotes {
-  list(tenantId: string, options: NoteListOptions): Promise<TenantNoteView[]>;
+  list(tenantId: string, options: NoteListOptions): Promise<Paged<TenantNoteView>>;
   view(noteId: string): Promise<TenantNoteView | null>;
   find(tenantId: string, noteId: string): Promise<TenantNote | null>;
   insert(note: TenantNote): Promise<void>;

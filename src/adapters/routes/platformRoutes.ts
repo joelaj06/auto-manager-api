@@ -1,3 +1,6 @@
+import { pageOf, pageWindow } from "../../application/dto/Page.js";
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import type { Request } from "express";
 import { z } from "zod";
 import { isPlatformPermissionKey } from "../../application/authorization/platformPermissionCatalog.js";
@@ -382,18 +385,13 @@ export function platformRoutes(deps: PlatformRouteDependencies): ApiRoute[] {
           entityId: z.string().min(1).max(100).optional(),
           from: z.coerce.date().optional(),
           to: z.coerce.date().optional(),
-          before: uuid.optional(),
-          limit: z.coerce.number().int().min(1).max(200).default(50),
+          ...pageParams(200, 50),
         }),
       },
       responses: { 200: { description: "Audit entries" } },
       handler: async ({ query }, _req, res) => {
-        const entries = await audit.search(query);
-        res.json(
-          envelope(entries, {
-            nextBefore: entries.length === query.limit ? (entries.at(-1)?.id ?? null) : null,
-          }),
-        );
+        const page = pageOf(query, await audit.page({ ...query, ...pageWindow(query) }));
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
   ];

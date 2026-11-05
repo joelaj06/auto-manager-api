@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { BillingAutomation } from "../../application/use-cases/billing/BillingAutomation.js";
 import type { BillingExtensions } from "../../application/use-cases/billing/BillingExtensions.js";
@@ -10,7 +12,6 @@ const CONSOLE = "/api/platform/v1";
 const uuid = z.uuid();
 const reason = z.string().trim().min(5).max(1_000);
 const idParams = z.object({ id: uuid });
-const limit = z.coerce.number().int().min(1).max(100).default(25);
 const days = z.array(z.number().int()).max(10);
 const extensionStatus = z.enum(["requested", "approved", "denied", "expired", "closed"]);
 
@@ -45,10 +46,11 @@ export function billingAutomationRoutes(deps: BillingAutomationRouteDependencies
       summary: "Billing notices sent to your business (newest first)",
       tags: ["billing"],
       access: access.permission("billing.view"),
-      request: { query: z.object({ limit }) },
+      request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Notices" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await automation.notices(tenantOf(res).id, query.limit)));
+        const page = await automation.notices(tenantOf(res).id, query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -57,9 +59,11 @@ export function billingAutomationRoutes(deps: BillingAutomationRouteDependencies
       summary: "Your extension requests and their decisions",
       tags: ["billing"],
       access: access.permission("billing.view"),
+      request: { query: z.object(pageParams(100, 50)) },
       responses: { 200: { description: "Extensions" } },
-      handler: async (_input, _req, res) => {
-        res.json(envelope(await extensions.list({ tenantId: tenantOf(res).id, limit: 50 })));
+      handler: async ({ query }, _req, res) => {
+        const page = await extensions.list({ ...query, tenantId: tenantOf(res).id });
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -159,10 +163,11 @@ export function billingAutomationRoutes(deps: BillingAutomationRouteDependencies
       summary: "Runs of the billing automation: what it did, would have done, held back",
       tags: ["console: billing"],
       access: access.platform("platform.billing.view"),
-      request: { query: z.object({ limit }) },
+      request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Runs" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await automation.runs(query.limit)));
+        const page = await automation.runs(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -183,11 +188,16 @@ export function billingAutomationRoutes(deps: BillingAutomationRouteDependencies
       tags: ["console: billing"],
       access: access.platform("platform.billing.view"),
       request: {
-        query: z.object({ status: extensionStatus.optional(), tenantId: uuid.optional(), limit }),
+        query: z.object({
+          status: extensionStatus.optional(),
+          tenantId: uuid.optional(),
+          ...pageParams(100, 25),
+        }),
       },
       responses: { 200: { description: "Extensions" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await extensions.list(query)));
+        const page = await extensions.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -236,10 +246,11 @@ export function billingAutomationRoutes(deps: BillingAutomationRouteDependencies
       summary: "Billing notices sent to a tenant (timeline)",
       tags: ["console: billing"],
       access: access.platform("platform.billing.view"),
-      request: { params: idParams, query: z.object({ limit }) },
+      request: { params: idParams, query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Notices" } },
       handler: async ({ params, query }, _req, res) => {
-        res.json(envelope(await automation.notices(params.id, query.limit)));
+        const page = await automation.notices(params.id, query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
   ];

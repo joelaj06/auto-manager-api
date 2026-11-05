@@ -1,10 +1,10 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 export type BackupListFilter = Readonly<{
   kind?: "tenant" | "platform";
   tenantId?: string;
   status?: "running" | "succeeded" | "failed";
   limit: number;
-  /** Keyset cursor: backups started before this backup id (ids are time-ordered). */
-  before?: string;
+  offset?: number;
 }>;
 
 /** A backup catalogue entry without storage location details. */
@@ -50,7 +50,7 @@ export type SchemaFailure = Readonly<{
 
 /** Backup catalogue and tenant schema status for the console (docs/27 §3.14). */
 export interface IDataOperationsQueries {
-  backups(filter: BackupListFilter): Promise<BackupView[]>;
+  backups(filter: BackupListFilter): Promise<Paged<BackupView>>;
   backupOverview(now: Date, since: Date): Promise<BackupOverview>;
   schemaVersions(): Promise<SchemaVersionCount[]>;
   schemaFailures(limit: number): Promise<SchemaFailure[]>;

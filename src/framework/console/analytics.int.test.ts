@@ -161,9 +161,9 @@ describe("platform analytics", () => {
       health.onboarding.steps.find((s: Body) => s.key === "vehicle_added").doneOn,
     ).not.toBeNull();
 
-    const fresh = await get("/health?flag=new&limit=1000");
+    const fresh = await get("/health?flag=new&pageSize=1000");
     expect((fresh as { tenantId: string }[]).map((h) => h.tenantId)).toContain(t.tenantId);
-    const atRisk = await get("/health?flag=at_risk&limit=1000");
+    const atRisk = await get("/health?flag=at_risk&pageSize=1000");
     expect((atRisk as { tenantId: string }[]).map((h) => h.tenantId)).not.toContain(t.tenantId);
     expect((await api().get(`${BASE}/tenants/${randomUUID()}`).set(as(admin))).status).toBe(404);
   });

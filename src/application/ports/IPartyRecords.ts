@@ -1,3 +1,4 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
 import type { CustomerProps, CustomerType, RiskStatus } from "../../domain/parties/Customer.js";
 import type {
   DriverOnboardingRules,
@@ -7,7 +8,6 @@ import type {
 } from "../../domain/parties/Driver.js";
 import type { SupplierProps, SupplierType } from "../../domain/parties/Supplier.js";
 
-/** Keyset cursor: created-at and id of the last record of the previous page. */
 export type CreatedCursor = Readonly<{ createdAt: string; id: string }>;
 
 export type DriverListFilter = Readonly<{
@@ -19,11 +19,11 @@ export type DriverListFilter = Readonly<{
   /** Name, code, phone (any format) or licence number. */
   search?: string;
   limit: number;
-  after?: CreatedCursor;
+  offset?: number;
 }>;
 
 export interface IDriverQueries {
-  list(filter: DriverListFilter): Promise<DriverProps[]>;
+  list(filter: DriverListFilter): Promise<Paged<DriverProps>>;
   /** Drivers not terminated (nor removed) in a branch. */
   countInBranch(branchId: string): Promise<number>;
   /** Drivers (not terminated) whose licence expires on or before `until`, soonest first. */
@@ -36,11 +36,11 @@ export type CustomerListFilter = Readonly<{
   /** Name, code, phone (any format), email or Ghana Card number. */
   search?: string;
   limit: number;
-  after?: CreatedCursor;
+  offset?: number;
 }>;
 
 export interface ICustomerQueries {
-  list(filter: CustomerListFilter): Promise<CustomerProps[]>;
+  list(filter: CustomerListFilter): Promise<Paged<CustomerProps>>;
 }
 
 export type SupplierListFilter = Readonly<{

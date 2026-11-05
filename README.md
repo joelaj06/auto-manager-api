@@ -82,7 +82,7 @@ database, the template and every tenant database.
 
 Conventions for every endpoint:
 
-- **Responses:** `{ "data": … }` (plus `"meta"` for pages); errors are
+- **Responses:** `{ "data": … }` (sometimes with `"meta"`); errors are
   `{ "error": { "code", "message", "details"?, "requestId" } }` with a stable `code`.
 - **Request ids:** every response carries `X-Request-Id` (a well-formed incoming one is kept);
   it appears in every log line written during the request.
@@ -101,6 +101,14 @@ Conventions for every endpoint:
   authorization headers and connection-string credentials are redacted automatically.
 - **Shutdown:** on SIGTERM/SIGINT the server stops accepting requests, finishes in-flight ones
   and closes database pools, within `SHUTDOWN_TIMEOUT_MS`.
+
+### Lists
+
+Lists take `page` (from 1) and `pageSize`; each route has its own largest and default size. The
+response body is the rows, and the headers `X-Total-Count`, `X-Page` and `X-Page-Size` describe
+the page, so a client can show page numbers and jump to any of them. CORS exposes these headers.
+A page past the end is an empty list with the true total. The fuel report is the one exception:
+`GET /api/v1/vehicles/:id/fuel` takes `limit`, being a report over the latest logs.
 
 ## Background jobs, events and email
 

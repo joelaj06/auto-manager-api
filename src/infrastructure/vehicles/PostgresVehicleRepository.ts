@@ -1,3 +1,5 @@
+import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   IVehicleQueries,
   StatusHistoryEntry,
@@ -284,7 +286,7 @@ export class PostgresVehicleRepository implements IVehicleRepository, IVehicleQu
     );
   }
 
-  async list(filter: VehicleListFilter): Promise<VehicleProps[]> {
+  async list(filter: VehicleListFilter): Promise<Paged<VehicleProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -314,22 +316,21 @@ export class PostgresVehicleRepository implements IVehicleRepository, IVehicleQu
           or strpos(lower(v.make || ' ' || v.model), ${text}) > 0)`,
       );
     }
-    if (filter.after !== undefined)
-      where.push(
-        `(v.created_at, v.id) < (${param(filter.after.createdAt)}::timestamptz, ${param(filter.after.id)}::uuid)`,
-      );
-    const { rows } = await this.tx.query<VehicleRow>(
-      `select ${COLUMNS} from vehicles v join branches b on b.id = v.branch_id
-        where ${where.join(" and ")}
-        order by v.created_at desc, v.id desc
-        limit ${param(filter.limit)}`,
-      params,
+    const { rows, total } = await pagedQuery<VehicleRow>(
+      this.tx,
+      {
+        sql: `select ${COLUMNS} from vehicles v join branches b on b.id = v.branch_id
+        where ${where.join(" and ")}`,
+        orderBy: "v.created_at desc, v.id desc",
+        params,
+      },
+      filter,
     );
-    return rows.map(toVehicleProps);
+    return { rows: rows.map(toVehicleProps), total };
   }
 
-  async statusHistory(vehicleId: string, limit: number): Promise<StatusHistoryEntry[]> {
-    const { rows } = await this.tx.query<{
+  async statusHistory(vehicleId: string, window: PageWindow): Promise<Paged<StatusHistoryEntry>> {
+    const { rows, total } = await pagedQuery<{
       id: string;
       from_status: VehicleStatus | null;
       to_status: VehicleStatus;
@@ -339,31 +340,40 @@ export class PostgresVehicleRepository implements IVehicleRepository, IVehicleQu
       changed_by: string | null;
       changed_at: Date;
     }>(
-      `select id, from_status, to_status, reason, ref_type, ref_id, changed_by, changed_at
-         from vehicle_status_history where vehicle_id = $1
-        order by changed_at desc, id desc limit $2`,
-      [vehicleId, limit],
+      this.tx,
+      {
+        sql: `select id, from_status, to_status, reason, ref_type, ref_id, changed_by, changed_at
+         from vehicle_status_history where vehicle_id = $1`,
+        orderBy: "changed_at desc, id desc",
+        params: [vehicleId],
+      },
+      window,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      from: r.from_status,
-      to: r.to_status,
-      reason: r.reason,
-      ref: r.ref_type === null || r.ref_id === null ? null : { type: r.ref_type, id: r.ref_id },
-      changedBy: r.changed_by,
-      changedAt: r.changed_at,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        from: r.from_status,
+        to: r.to_status,
+        reason: r.reason,
+        ref: r.ref_type === null || r.ref_id === null ? null : { type: r.ref_type, id: r.ref_id },
+        changedBy: r.changed_by,
+        changedAt: r.changed_at,
+      })),
+      total,
+    };
   }
 
-  async timeline(vehicleId: string, before: Date | null, limit: number): Promise<TimelineEntry[]> {
-    const { rows } = await this.tx.query<{
+  async timeline(vehicleId: string, window: PageWindow): Promise<Paged<TimelineEntry>> {
+    const { rows, total } = await pagedQuery<{
       id: string;
       at: Date;
       kind: TimelineEntry["kind"];
       actor_id: string | null;
       data: Record<string, unknown>;
     }>(
-      `select * from (
+      this.tx,
+      {
+        sql: `select * from (
          select id, changed_at as at, 'status' as kind, changed_by as actor_id,
                 jsonb_build_object('from', from_status, 'to', to_status, 'reason', reason,
                                    'refType', ref_type, 'refId', ref_id) as data
@@ -378,19 +388,22 @@ export class PostgresVehicleRepository implements IVehicleRepository, IVehicleQu
                 jsonb_build_object('value', value, 'source', source, 'replacement', replacement,
                                    'note', note)
            from odometer_readings where vehicle_id = $1
-       ) t
-       where ($2::timestamptz is null or at < $2)
-       order by at desc, id desc
-       limit $3`,
-      [vehicleId, before, limit],
+       ) t`,
+        orderBy: "at desc, id desc",
+        params: [vehicleId],
+      },
+      window,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      at: r.at,
-      kind: r.kind,
-      actorId: r.actor_id,
-      data: r.data,
-    }));
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        at: r.at,
+        kind: r.kind,
+        actorId: r.actor_id,
+        data: r.data,
+      })),
+      total,
+    };
   }
 
   async countInBranch(branchId: string): Promise<number> {

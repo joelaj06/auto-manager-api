@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   ExpenseCategory,
   FxRate,
@@ -119,15 +121,20 @@ export class PostgresTenantReferenceData implements ITenantReferenceData {
     );
   }
 
-  async fxRates(filter: Readonly<{ quote?: string; limit: number }>): Promise<FxRate[]> {
-    const { rows } = await this.tx.query<FxRow>(
-      `select ${FX_COLUMNS} from fx_rates
-        where ($1::text is null or quote = $1)
-        order by rate_date desc, quote
-        limit $2`,
-      [filter.quote ?? null, filter.limit],
+  async fxRates(
+    filter: Readonly<{ quote?: string; limit: number; offset?: number }>,
+  ): Promise<Paged<FxRate>> {
+    const { rows, total } = await pagedQuery<FxRow>(
+      this.tx,
+      {
+        sql: `select ${FX_COLUMNS} from fx_rates
+        where ($1::text is null or quote = $1)`,
+        orderBy: "rate_date desc, quote, base",
+        params: [filter.quote ?? null],
+      },
+      filter,
     );
-    return rows.map(toFx);
+    return { rows: rows.map(toFx), total };
   }
 
   async latestFxRate(base: string, quote: string, date: string): Promise<FxRate | null> {

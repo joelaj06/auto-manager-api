@@ -9,7 +9,7 @@ import {
 } from "../../../domain/vehicles/VehicleIssue.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import type { Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import { VehicleIssueNotFoundError } from "../../errors/PartyErrors.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -18,7 +18,6 @@ import type { INotificationSettingsStore } from "../../ports/INotifications.js";
 import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
-import { PageCursor } from "../../services/PageCursor.js";
 import type { FileView, UploadStarted } from "../files/FileService.js";
 import type { DocumentUploadInput, OwnedDocuments } from "../files/OwnedDocuments.js";
 import type { Notifier } from "../notifications/Notifier.js";
@@ -33,8 +32,8 @@ export type IssueQuery = Readonly<{
   branchId?: string;
   vehicleId?: string;
   driverId?: string;
-  limit: number;
-  cursor?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 const LABELS: Readonly<Record<string, string>> = {
@@ -247,17 +246,15 @@ export class VehicleIssues {
     query: IssueQuery,
     branchIds: "all" | readonly string[],
   ): Promise<Page<VehicleIssueView>> {
-    const after = query.cursor === undefined ? undefined : PageCursor.parse(query.cursor, 1).values;
-    const rows = await this.deps.issues.list({
+    const found = await this.deps.issues.list({
       branchIds,
       ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
       ...(query.vehicleId === undefined ? {} : { vehicleId: query.vehicleId }),
       ...(query.driverId === undefined ? {} : { driverId: query.driverId }),
       ...(query.status === undefined ? {} : { statuses: query.status }),
-      limit: query.limit + 1,
-      ...(after === undefined ? {} : { afterId: String(after[0]) }),
+      ...pageWindow(query),
     });
-    const page = PageCursor.paginate(rows, query.limit, (r) => [r.id]);
+    const page = pageOf(query, found);
     return { ...page, items: page.items.map((i) => i.snapshot()) };
   }
 

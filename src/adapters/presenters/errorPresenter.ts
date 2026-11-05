@@ -43,7 +43,6 @@ type Rule = Readonly<{
 const RULES: Readonly<Record<string, Rule>> = {
   VALIDATION_FAILED: { status: 400 },
   INVALID_JSON: { status: 400 },
-  INVALID_CURSOR: { status: 400 },
   INVALID_TENANT_ID: { status: 400 },
   ROUTE_NOT_FOUND: { status: 404, publicMessage: "Not found" },
   PAYLOAD_TOO_LARGE: { status: 413 },

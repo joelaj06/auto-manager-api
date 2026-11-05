@@ -1,3 +1,5 @@
+import { pageHeaders } from "../presenters/pageHeaders.js";
+import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
 import type { GatewayBilling } from "../../application/use-cases/billing/GatewayBilling.js";
 import type { GatewayReconciliation } from "../../application/use-cases/billing/GatewayReconciliation.js";
@@ -14,11 +16,8 @@ import { access } from "./RouteAccess.js";
 const CONSOLE = "/api/platform/v1";
 const uuid = z.uuid();
 const reason = z.string().trim().min(5).max(1_000);
-const limit = z.coerce.number().int().min(1).max(100).default(25);
 const tenantParams = z.object({ id: uuid });
 const minor = z.number().int();
-const nextBefore = (items: readonly { id: string }[], pageSize: number) =>
-  items.length === pageSize ? (items.at(-1)?.id ?? null) : null;
 
 export type BillingRouteDependencies = Readonly<{
   tenantBilling: TenantBilling;
@@ -58,11 +57,11 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
       summary: "Your invoices (newest first)",
       tags: ["billing"],
       access: access.permission("billing.view"),
-      request: { query: z.object({ before: uuid.optional(), limit }) },
+      request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Invoices" } },
       handler: async ({ query }, _req, res) => {
         const invoices = await tenantBilling.invoices(query);
-        res.json(envelope(invoices, { nextBefore: nextBefore(invoices, query.limit) }));
+        res.set(pageHeaders(invoices)).json(envelope(invoices.items));
       },
     }),
     defineRoute({
@@ -384,12 +383,13 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
         query: z.object({
           status: z.enum(["pending", "succeeded", "failed", "abandoned", "review"]).optional(),
           tenantId: uuid.optional(),
-          limit,
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Attempts" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await gateway.attempts(query)));
+        const page = await gateway.attempts(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -401,14 +401,13 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
       request: {
         query: z.object({
           outcome: z.enum(["applied", "ignored", "failed", "rejected"]).optional(),
-          before: uuid.optional(),
-          limit,
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Webhook events" } },
       handler: async ({ query }, _req, res) => {
         const events = await gateway.webhooks(query);
-        res.json(envelope(events, { nextBefore: nextBefore(events, query.limit) }));
+        res.set(pageHeaders(events)).json(envelope(events.items));
       },
     }),
     defineRoute({
@@ -473,10 +472,11 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
       summary: "Daily reconciliations with the payment provider (newest first)",
       tags: ["console: billing"],
       access: access.platform("platform.billing.view"),
-      request: { query: z.object({ limit }) },
+      request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Reconciliations" } },
       handler: async ({ query }, _req, res) => {
-        res.json(envelope(await reconciliation.list(query.limit)));
+        const page = await reconciliation.list(query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -715,14 +715,13 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
         query: z.object({
           tenantId: uuid.optional(),
           status: z.enum(["open", "paid", "void"]).optional(),
-          before: uuid.optional(),
-          limit,
+          ...pageParams(100, 25),
         }),
       },
       responses: { 200: { description: "Invoices" } },
       handler: async ({ query }, _req, res) => {
         const invoices = await billing.invoices(query);
-        res.json(envelope(invoices, { nextBefore: nextBefore(invoices, query.limit) }));
+        res.set(pageHeaders(invoices)).json(envelope(invoices.items));
       },
     }),
     defineRoute({

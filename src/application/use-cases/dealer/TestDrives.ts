@@ -1,3 +1,4 @@
+import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
 import {
   TestDrive,
   TestDriveRuleError,
@@ -56,8 +57,8 @@ export type TestDriveQuery = Readonly<{
   statuses?: readonly TestDriveStatus[];
   from?: Date;
   until?: Date;
-  limit: number;
-  beforeId?: string;
+  page: number;
+  pageSize: number;
 }>;
 
 /**
@@ -87,16 +88,16 @@ export class TestDrives {
     }>,
   ) {}
 
-  list(actor: Principal, query: TestDriveQuery): Promise<TestDriveProps[]> {
+  list(actor: Principal, query: TestDriveQuery): Promise<Page<TestDriveProps>> {
     const { deps } = this;
-    return deps.unitOfWork.run(async () =>
-      (
-        await deps.drives.list({
-          ...query,
-          branchIds: deps.scope.branchesFor(actor, "dealer.testdrives.manage"),
-        })
-      ).map((d) => d.snapshot()),
-    );
+    return deps.unitOfWork.run(async () => {
+      const found = await deps.drives.list({
+        ...query,
+        ...pageWindow(query),
+        branchIds: deps.scope.branchesFor(actor, "dealer.testdrives.manage"),
+      });
+      return pageOf(query, found, (d) => d.snapshot());
+    });
   }
 
   get(actor: Principal, id: string): Promise<TestDriveProps> {

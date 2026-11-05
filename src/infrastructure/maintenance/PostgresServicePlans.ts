@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pageTotal } from "../database/postgres/PagedQuery.js";
 import type {
   DueFilter,
   IServicePlans,
@@ -301,7 +303,7 @@ export class PostgresServicePlans implements IServicePlans {
     await this.tx.query("delete from service_due where id = any($1::uuid[])", [ids]);
   }
 
-  async due(filter: DueFilter): Promise<ServiceDueView[]> {
+  async due(filter: DueFilter): Promise<Paged<ServiceDueView>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -312,14 +314,20 @@ export class PostgresServicePlans implements IServicePlans {
     if (filter.branchId !== undefined) add("d.branch_id = ?", filter.branchId);
     if (filter.vehicleId !== undefined) add("d.vehicle_id = ?", filter.vehicleId);
     if (filter.statuses !== undefined) add("d.status = any(?::text[])", filter.statuses);
-    params.push(filter.limit);
-    return this.views(
-      `${where.length === 0 ? "" : `where ${where.join(" and ")}`}
+    const tail = where.length === 0 ? "" : `where ${where.join(" and ")}`;
+    const rows = await this.views(
+      `${tail}
        order by array_position(array['overdue','due','upcoming','scheduled'], d.status),
                 d.due_on nulls last, d.due_km - coalesce(v.current_odometer, 0) nulls last, d.id
-       limit $${params.length}`,
-      params,
+       limit $${params.length + 1} offset $${params.length + 2}`,
+      [...params, filter.limit, filter.offset ?? 0],
     );
+    const total = await pageTotal(this.tx, rows.length, filter, {
+      sql: `select count(*) as total from service_due d
+              join vehicles v on v.id = d.vehicle_id ${tail}`,
+      params,
+    });
+    return { rows, total };
   }
 
   dueView(ids: readonly string[]): Promise<ServiceDueView[]> {

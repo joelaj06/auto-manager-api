@@ -1,3 +1,5 @@
+import type { Paged } from "../../domain/value-objects/Paged.js";
+import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   DEFAULT_WORKPAY_SETTINGS,
   type AgreementListFilter,
@@ -330,28 +332,28 @@ export class PostgresWorkPayAgreements implements IWorkPayAgreementRepository {
     return rows.map((r) => r.id);
   }
 
-  async list(filter: AgreementListFilter): Promise<WorkPayAgreement[]> {
-    const { rows } = await this.tx.query<Row>(
-      `${SELECT}
+  async list(filter: AgreementListFilter): Promise<Paged<WorkPayAgreement>> {
+    const { rows, total } = await pagedQuery<Row>(
+      this.tx,
+      {
+        sql: `${SELECT}
         where ($1::uuid[] is null or a.branch_id = any($1::uuid[]))
           and ($2::uuid is null or a.branch_id = $2)
           and ($3::text[] is null or a.status = any($3::text[]))
           and ($4::uuid is null or a.driver_id = $4)
-          and ($5::uuid is null or a.vehicle_id = $5)
-          and ($6::uuid is null or a.id < $6)
-        order by a.id desc
-        limit $7`,
-      [
-        filter.branchIds === "all" ? null : filter.branchIds,
-        filter.branchId ?? null,
-        filter.statuses ?? null,
-        filter.driverId ?? null,
-        filter.vehicleId ?? null,
-        filter.afterId ?? null,
-        filter.limit,
-      ],
+          and ($5::uuid is null or a.vehicle_id = $5)`,
+        orderBy: "a.id desc",
+        params: [
+          filter.branchIds === "all" ? null : filter.branchIds,
+          filter.branchId ?? null,
+          filter.statuses ?? null,
+          filter.driverId ?? null,
+          filter.vehicleId ?? null,
+        ],
+      },
+      filter,
     );
-    return rows.map(toAgreement);
+    return { rows: rows.map(toAgreement), total };
   }
 }
 
