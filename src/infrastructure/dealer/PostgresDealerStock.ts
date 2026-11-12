@@ -2,12 +2,15 @@ import type { Paged } from "../../domain/value-objects/Paged.js";
 import { pagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AgedStock,
+  BatchVehicle,
   IDealerStock,
   PriceChangeRecord,
   StockFilter,
   StockRecord,
   StockSpend,
   StockTransfer,
+  StockTransferBatchFilter,
+  StockTransferBatchRecord,
   StockVehicle,
 } from "../../application/ports/IDealerStock.js";
 import { StockUnit, type Consignment, type StockUnitProps } from "../../domain/dealer/StockUnit.js";
@@ -158,6 +161,34 @@ const toRecord = (r: Row & VehicleRow): StockRecord => ({
 });
 
 const STOCK_ORDER = "s.stocked_on, s.vehicle_id";
+
+type BatchRow = {
+  id: string;
+  reference: string;
+  from_branch_id: string;
+  to_branch_id: string;
+  transferred_on: string;
+  reason: string;
+  vehicle_count: number;
+  transferred_by: string | null;
+  created_at: Date;
+};
+
+const BATCH_SELECT = `select id, reference, from_branch_id, to_branch_id,
+  transferred_on::text as transferred_on, reason, vehicle_count, transferred_by, created_at
+  from dealer_stock_transfer_batches`;
+
+const toBatch = (r: BatchRow): StockTransferBatchRecord => ({
+  id: r.id,
+  reference: r.reference,
+  fromBranchId: r.from_branch_id,
+  toBranchId: r.to_branch_id,
+  transferredOn: r.transferred_on,
+  reason: r.reason,
+  vehicleCount: r.vehicle_count,
+  transferredBy: r.transferred_by,
+  createdAt: r.created_at,
+});
 
 export class PostgresDealerStock implements IDealerStock {
   constructor(private readonly transactions: PostgresTransactionContext) {}
@@ -337,8 +368,8 @@ export class PostgresDealerStock implements IDealerStock {
   async addTransfer(t: StockTransfer): Promise<void> {
     await this.tx.query(
       `insert into dealer_stock_transfers (id, vehicle_id, from_branch_id, to_branch_id,
-         transferred_on, reason, transferred_by, created_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         transferred_on, reason, transferred_by, created_at, batch_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         t.id,
         t.vehicleId,
@@ -348,6 +379,7 @@ export class PostgresDealerStock implements IDealerStock {
         t.reason,
         t.transferredBy,
         t.createdAt,
+        t.batchId,
       ],
     );
   }
@@ -363,9 +395,10 @@ export class PostgresDealerStock implements IDealerStock {
       reason: string;
       transferred_by: string | null;
       created_at: Date;
+      batch_id: string | null;
     }>(
       `select id, vehicle_id, from_branch_id, to_branch_id, transferred_on::text as transferred_on,
-              reason, transferred_by, created_at
+              reason, transferred_by, created_at, batch_id
          from dealer_stock_transfers where vehicle_id = $1 order by created_at, id`,
       [vehicleId],
     );
@@ -378,6 +411,90 @@ export class PostgresDealerStock implements IDealerStock {
       reason: r.reason,
       transferredBy: r.transferred_by,
       createdAt: r.created_at,
+      batchId: r.batch_id,
+    }));
+  }
+
+  async addTransferBatch(b: StockTransferBatchRecord): Promise<void> {
+    await this.tx.query(
+      `insert into dealer_stock_transfer_batches (id, reference, from_branch_id, to_branch_id,
+         transferred_on, reason, vehicle_count, transferred_by, created_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        b.id,
+        b.reference,
+        b.fromBranchId,
+        b.toBranchId,
+        b.transferredOn,
+        b.reason,
+        b.vehicleCount,
+        b.transferredBy,
+        b.createdAt,
+      ],
+    );
+  }
+
+  async transferBatch(id: string): Promise<StockTransferBatchRecord | null> {
+    if (!UUID.test(id)) return null;
+    const { rows } = await this.tx.query<BatchRow>(`${BATCH_SELECT} where id = $1`, [id]);
+    return rows[0] === undefined ? null : toBatch(rows[0]);
+  }
+
+  async transferBatches(
+    filter: StockTransferBatchFilter,
+  ): Promise<Paged<StockTransferBatchRecord>> {
+    const where: string[] = ["true"];
+    const params: unknown[] = [];
+    const add = (sql: string, value: unknown) => {
+      params.push(value);
+      where.push(sql.replaceAll("?", `$${params.length}`));
+    };
+    if (filter.branchIds !== "all")
+      add("(from_branch_id = any(?::uuid[]) or to_branch_id = any(?::uuid[]))", filter.branchIds);
+    if (filter.branchId !== undefined)
+      add("(from_branch_id = ? or to_branch_id = ?)", filter.branchId);
+    if (filter.dateFrom !== undefined) add("transferred_on >= ?::date", filter.dateFrom);
+    if (filter.dateTo !== undefined) add("transferred_on <= ?::date", filter.dateTo);
+    const { rows, total } = await pagedQuery<BatchRow>(
+      this.tx,
+      {
+        sql: `${BATCH_SELECT} where ${where.join(" and ")}`,
+        orderBy: "created_at desc, id desc",
+        params,
+      },
+      filter,
+    );
+    return { rows: rows.map(toBatch), total };
+  }
+
+  async batchVehicles(batchId: string): Promise<BatchVehicle[]> {
+    if (!UUID.test(batchId)) return [];
+    const { rows } = await this.tx.query<{
+      vehicle_id: string;
+      code: string;
+      plate_number: string | null;
+      vin: string | null;
+      make: string;
+      model: string;
+      year: number | null;
+      colour: string | null;
+    }>(
+      `select t.vehicle_id, v.code, v.plate_number, v.vin, v.make, v.model, v.year, v.colour
+         from dealer_stock_transfers t
+         join vehicles v on v.id = t.vehicle_id
+        where t.batch_id = $1
+        order by t.created_at, t.id`,
+      [batchId],
+    );
+    return rows.map((r) => ({
+      vehicleId: r.vehicle_id,
+      code: r.code,
+      plateNumber: r.plate_number,
+      vin: r.vin,
+      make: r.make,
+      model: r.model,
+      year: r.year,
+      colour: r.colour,
     }));
   }
 

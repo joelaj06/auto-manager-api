@@ -3239,6 +3239,7 @@ All payments are records of money received or paid. The system does not move a b
 |---|---|---|---|---|
 | GET | `/api/v1/dealer/stock` | `dealer.stock.list` | Dealer stock in your branches, oldest stock first | [GetDealerStockItem](39_api_response_shapes.md#getdealerstockitem)[] |
 | GET | `/api/v1/dealer/stock/ageing` | `dealer.stock.list` | Stock on the lot valued at asking price and cost: by days in stock (0–30, 31–60, 61–90, over 90), status, source, make and branch | [GetDealerStockAgeing](39_api_response_shapes.md#getdealerstockageing) |
+| GET | `/api/v1/dealer/stock/summary` | `dealer.stock.list` | Stock on the lot by make and model (or make, or make, model and year): units, asking value and, with dealer.stock.cost.view, cost, profit and margin | [GetDealerStockSummary](39_api_response_shapes.md#getdealerstocksummary) |
 | GET | `/api/v1/dealer/stock/:vehicleId` | `dealer.stock.view` | A stock vehicle (cost, minimum price and margin with dealer.stock.cost.view) | [GetDealerStockItem](39_api_response_shapes.md#getdealerstockitem) |
 | GET | `/api/v1/dealer/stock/:vehicleId/transfers` | `dealer.stock.view` | The vehicle's branch transfers while in stock | [GetDealerStockVehicleIdTransfersItem](39_api_response_shapes.md#getdealerstockvehicleidtransfersitem)[] |
 
@@ -3293,17 +3294,23 @@ All payments are records of money received or paid. The system does not move a b
 
 ### B-STK-06 · Transfer stock
 
-**As a** Branch Manager or Fleet Officer, **I want to** move a car between branches **so that** it sits where it will sell.
+**As a** Branch Manager or Fleet Officer, **I want to** move a car, or several, between branches **so that** they sit where they will sell.
 
 *Surface: Web*
 
 **Acceptance criteria**
 
 - Needs the permission at both branches.
+- Several vehicles go under one reference, all or none: named, or `pick` a number of a make and model (and year) at the sending branch, oldest stock first.
+- Reserved vehicles and vehicles no longer on the lot stay; the error names the vehicle by its code.
+- Each vehicle's own transfers show the batch it went with (`batchId`).
 
 | Method | Path | Access | Does | Returns |
 |---|---|---|---|---|
 | POST | `/api/v1/dealer/stock/:vehicleId/transfer` | `dealer.stock.transfer` | Transfer the vehicle to another branch with a transfer record | [GetDealerStockItem](39_api_response_shapes.md#getdealerstockitem) |
+| POST | `/api/v1/dealer/stock/transfers` | `dealer.stock.transfer` | Transfer several stock vehicles to another branch under one reference: the vehicles named, or a number of a make and model, oldest stock first | [TransferBatchView](39_api_response_shapes.md#transferbatchview) |
+| GET | `/api/v1/dealer/stock/transfers` | `dealer.stock.list` | Transfers of several vehicles leaving or reaching your branches, newest first | [GetDealerStockTransfersItem](39_api_response_shapes.md#getdealerstocktransfersitem)[] |
+| GET | `/api/v1/dealer/stock/transfers/:id` | `dealer.stock.view` | A transfer of several vehicles with the vehicles it sent | [TransferBatchView](39_api_response_shapes.md#transferbatchview) |
 
 ## Leads, test drives and quotes
 

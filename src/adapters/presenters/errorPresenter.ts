@@ -270,6 +270,7 @@ const RULES: Readonly<Record<string, Rule>> = {
   PURCHASE_COST_NOT_FOUND: { status: 404 },
   STOCK_RULE: { status: 422 },
   STOCK_NOT_FOUND: { status: 404 },
+  STOCK_TRANSFER_NOT_FOUND: { status: 404 },
   LEAD_RULE: { status: 422 },
   LEAD_NOT_FOUND: { status: 404 },
   TEST_DRIVE_RULE: { status: 422 },

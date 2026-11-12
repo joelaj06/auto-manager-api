@@ -275,6 +275,10 @@
 | POST | `/api/v1/dealer/quotes/:id/decision` | [QuoteView](#quoteview) |
 | GET | `/api/v1/dealer/stock` | [GetDealerStockItem](#getdealerstockitem)[] |
 | GET | `/api/v1/dealer/stock/ageing` | [GetDealerStockAgeing](#getdealerstockageing) |
+| GET | `/api/v1/dealer/stock/summary` | [GetDealerStockSummary](#getdealerstocksummary) |
+| POST | `/api/v1/dealer/stock/transfers` | [TransferBatchView](#transferbatchview) |
+| GET | `/api/v1/dealer/stock/transfers` | [GetDealerStockTransfersItem](#getdealerstocktransfersitem)[] |
+| GET | `/api/v1/dealer/stock/transfers/:id` | [TransferBatchView](#transferbatchview) |
 | POST | `/api/v1/dealer/stock` | [GetDealerStockItem](#getdealerstockitem) |
 | GET | `/api/v1/dealer/stock/:vehicleId` | [GetDealerStockItem](#getdealerstockitem) |
 | PATCH | `/api/v1/dealer/stock/:vehicleId` | [GetDealerStockItem](#getdealerstockitem) |
@@ -4115,6 +4119,54 @@
 | `margin.amount.formatted` | string | Yes |
 | `margin.percent` | string / null | Yes |
 
+### GetDealerStockSummary
+
+| Field | Type | Required |
+|---|---|---|
+| `asOf` | string | Yes |
+| `groupBy` | "make" / "model" / "year" | Yes |
+| `lines` | [StockSummaryLine](#stocksummaryline)[] | Yes |
+| `total` | object | Yes |
+| `total.units` | number | Yes |
+| `total.priced` | number | Yes |
+| `total.unpriced` | number | Yes |
+| `total.asking` | object | Yes |
+| `total.asking.amountMinor` | number | Yes |
+| `total.asking.currency` | string | Yes |
+| `total.asking.formatted` | string | Yes |
+| `total.averageAsking` | object / null | Yes |
+| `total.averageAsking.amountMinor` | number | Yes |
+| `total.averageAsking.currency` | string | Yes |
+| `total.averageAsking.formatted` | string | Yes |
+| `total.costed` | number |  |
+| `total.cost` | object |  |
+| `total.cost.amountMinor` | number | Yes |
+| `total.cost.currency` | string | Yes |
+| `total.cost.formatted` | string | Yes |
+| `total.averageCost` | object / null |  |
+| `total.averageCost.amountMinor` | number | Yes |
+| `total.averageCost.currency` | string | Yes |
+| `total.averageCost.formatted` | string | Yes |
+| `total.profit` | object |  |
+| `total.profit.amountMinor` | number | Yes |
+| `total.profit.currency` | string | Yes |
+| `total.profit.formatted` | string | Yes |
+| `total.marginPercent` | string / null |  |
+
+### GetDealerStockTransfersItem
+
+| Field | Type | Required |
+|---|---|---|
+| `id` | string | Yes |
+| `reference` | string | Yes |
+| `fromBranchId` | string | Yes |
+| `toBranchId` | string | Yes |
+| `transferredOn` | string | Yes |
+| `reason` | string | Yes |
+| `vehicleCount` | number | Yes |
+| `transferredBy` | string / null | Yes |
+| `createdAt` | date-time | Yes |
+
 ### GetDealerStockVehicleIdPriceHistoryItem
 
 | Field | Type | Required |
@@ -4152,6 +4204,7 @@
 | `reason` | string | Yes |
 | `transferredBy` | string / null | Yes |
 | `createdAt` | date-time | Yes |
+| `batchId` | string / null | Yes |
 
 ### GetDocumentTemplatesItem
 
@@ -10962,6 +11015,39 @@
 | `balance.formatted` | string | Yes |
 | `suggestions` | [LedgerLineView](#ledgerlineview)[] | Yes |
 
+### StockSummaryLine
+
+| Field | Type | Required |
+|---|---|---|
+| `units` | number | Yes |
+| `priced` | number | Yes |
+| `unpriced` | number | Yes |
+| `asking` | object | Yes |
+| `asking.amountMinor` | number | Yes |
+| `asking.currency` | string | Yes |
+| `asking.formatted` | string | Yes |
+| `averageAsking` | object / null | Yes |
+| `averageAsking.amountMinor` | number | Yes |
+| `averageAsking.currency` | string | Yes |
+| `averageAsking.formatted` | string | Yes |
+| `costed` | number |  |
+| `cost` | object |  |
+| `cost.amountMinor` | number | Yes |
+| `cost.currency` | string | Yes |
+| `cost.formatted` | string | Yes |
+| `averageCost` | object / null |  |
+| `averageCost.amountMinor` | number | Yes |
+| `averageCost.currency` | string | Yes |
+| `averageCost.formatted` | string | Yes |
+| `profit` | object |  |
+| `profit.amountMinor` | number | Yes |
+| `profit.currency` | string | Yes |
+| `profit.formatted` | string | Yes |
+| `marginPercent` | string / null |  |
+| `make` | string | Yes |
+| `model` | string |  |
+| `year` | number / null |  |
+
 ### StockView
 
 | Field | Type | Required |
@@ -11274,6 +11360,29 @@
 | `tenantName` | string / null | Yes |
 | `assigneeName` | string / null | Yes |
 | `updatedAt` | date-time | Yes |
+
+### TransferBatchView
+
+| Field | Type | Required |
+|---|---|---|
+| `id` | string | Yes |
+| `reference` | string | Yes |
+| `fromBranchId` | string | Yes |
+| `toBranchId` | string | Yes |
+| `transferredOn` | string | Yes |
+| `reason` | string | Yes |
+| `vehicleCount` | number | Yes |
+| `transferredBy` | string / null | Yes |
+| `createdAt` | date-time | Yes |
+| `vehicles` | object[] | Yes |
+| `vehicles[].vehicleId` | string | Yes |
+| `vehicles[].code` | string | Yes |
+| `vehicles[].plateNumber` | string / null | Yes |
+| `vehicles[].vin` | string / null | Yes |
+| `vehicles[].make` | string | Yes |
+| `vehicles[].model` | string | Yes |
+| `vehicles[].year` | number / null | Yes |
+| `vehicles[].colour` | string / null | Yes |
 
 ### TransferView
 

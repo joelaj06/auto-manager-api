@@ -72,6 +72,45 @@ export type StockTransfer = Readonly<{
   reason: string;
   transferredBy: string | null;
   createdAt: Date;
+  /** The batch the vehicle went with; null for a transfer of the vehicle alone. */
+  batchId: string | null;
+}>;
+
+/** A transfer of several vehicles (decision 542). */
+export type StockTransferBatchRecord = Readonly<{
+  id: string;
+  reference: string;
+  fromBranchId: string;
+  toBranchId: string;
+  transferredOn: string;
+  reason: string;
+  vehicleCount: number;
+  transferredBy: string | null;
+  createdAt: Date;
+}>;
+
+export type StockTransferBatchFilter = Readonly<{
+  /** Batches leaving or reaching one of these branches. */
+  branchIds: "all" | readonly string[];
+  /** Batches leaving or reaching this branch. */
+  branchId?: string;
+  /** Transferred on or after / on or before (YYYY-MM-DD). */
+  dateFrom?: string;
+  dateTo?: string;
+  limit: number;
+  offset?: number;
+}>;
+
+/** A vehicle in a batch, as it was when it moved. */
+export type BatchVehicle = Readonly<{
+  vehicleId: string;
+  code: string;
+  plateNumber: string | null;
+  vin: string | null;
+  make: string;
+  model: string;
+  year: number | null;
+  colour: string | null;
 }>;
 
 /** A unit on the lot since a given day: what the aged-stock alert looks at. */
@@ -100,6 +139,11 @@ export interface IDealerStock {
   priceChanges(vehicleId: string): Promise<PriceChangeRecord[]>;
   addTransfer(transfer: StockTransfer): Promise<void>;
   transfers(vehicleId: string): Promise<StockTransfer[]>;
+  addTransferBatch(batch: StockTransferBatchRecord): Promise<void>;
+  transferBatch(id: string): Promise<StockTransferBatchRecord | null>;
+  transferBatches(filter: StockTransferBatchFilter): Promise<Paged<StockTransferBatchRecord>>;
+  /** The vehicles of a batch in the order they were sent. */
+  batchVehicles(batchId: string): Promise<BatchVehicle[]>;
   /** Units still on the lot that entered stock on or before the day. */
   agedStock(stockedOnOrBefore: string): Promise<AgedStock[]>;
   consignorExists(customerId: string): Promise<boolean>;

@@ -31,6 +31,7 @@ export const DEFAULT_NUMBERING: Readonly<Record<string, NumberingFormat>> = Obje
   sales_agreement_document: { prefix: "SAG", padding: 6, yearly: true },
   delivery_note_document: { prefix: "DNT", padding: 6, yearly: true },
   commission_payout: { prefix: "CPO", padding: 6, yearly: true },
+  stock_transfer: { prefix: "STR", padding: 6, yearly: true },
   vehicle: { prefix: "VEH", padding: 5, yearly: false },
   driver: { prefix: "DRV", padding: 5, yearly: false },
   customer: { prefix: "CUS", padding: 5, yearly: false },

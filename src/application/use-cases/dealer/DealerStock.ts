@@ -14,6 +14,8 @@ import {
   type StockStatus,
   type StockTerms,
 } from "../../../domain/dealer/StockUnit.js";
+import { StockTally, type TalliedUnit } from "../../../domain/dealer/StockTally.js";
+import { StockTransferBatch } from "../../../domain/dealer/StockTransferBatch.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRepository.js";
 import type { Vehicle, VehicleUsage } from "../../../domain/vehicles/Vehicle.js";
@@ -24,11 +26,13 @@ import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
 import type {
+  BatchVehicle,
   IDealerStock,
   PriceChangeRecord,
   StockRecord,
   StockSpend,
   StockTransfer,
+  StockTransferBatchRecord,
   StockVehicle,
 } from "../../ports/IDealerStock.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
@@ -37,6 +41,7 @@ import type { IRequestContext } from "../../ports/IRequestContext.js";
 import type { IUnitOfWork } from "../../ports/IUnitOfWork.js";
 import type { BranchScope } from "../../services/BranchScope.js";
 import type { TenantCalendar } from "../../services/TenantCalendar.js";
+import type { DocumentNumbering } from "../reference/DocumentNumbering.js";
 import { recordUserAction } from "../reference/userAudit.js";
 import { VehicleNotFoundError } from "../vehicles/VehicleAccess.js";
 import type { VehicleRegistry } from "../vehicles/VehicleRegistry.js";
@@ -47,6 +52,17 @@ export class StockNotFoundError extends ApplicationError {
     super("That vehicle is not in dealer stock");
   }
 }
+
+export class StockTransferNotFoundError extends ApplicationError {
+  readonly code = "STOCK_TRANSFER_NOT_FOUND";
+  constructor() {
+    super("No such stock transfer");
+  }
+}
+
+/** On the lot and not held by a deal: what a transfer may pick. */
+const TRANSFERABLE: readonly StockStatus[] = ["incoming", "reconditioning", "ready", "listed"];
+const ON_THE_LOT: readonly StockStatus[] = [...TRANSFERABLE, "reserved"];
 
 /** The vehicle states a vehicle can be in when it enters stock. */
 const ENTERS_FROM: readonly VehicleStatus[] = [
@@ -169,6 +185,81 @@ export type AgeingSummary = Readonly<{
   byBranch: readonly (BucketSummary & Readonly<{ branchId: string }>)[];
 }>;
 
+export const SUMMARY_GROUPS = ["make", "model", "year"] as const;
+export type SummaryGroup = (typeof SUMMARY_GROUPS)[number];
+
+export type StockSummaryQuery = Readonly<{
+  branchId?: string;
+  /** `model` (the default): make and model; `year`: make, model and year. */
+  groupBy?: SummaryGroup;
+  /** Statuses on the lot to count; all of them when omitted. */
+  statuses?: readonly StockStatus[];
+  make?: string;
+  model?: string;
+}>;
+
+/** Figures of a line or the total, each over the units that have it (decision 541). */
+export type StockFigures = Readonly<{
+  units: number;
+  priced: number;
+  unpriced: number;
+  /** Asking value of the priced units. */
+  asking: MoneyJson;
+  averageAsking: MoneyJson | null;
+  /** The rest only with `dealer.stock.cost.view`: units whose cost is counted, … */
+  costed?: number;
+  /** … acquisition, reconditioning, holding and consignor payout … */
+  cost?: MoneyJson;
+  averageCost?: MoneyJson | null;
+  /** … asking less cost over the units with both, and that as a percentage of their asking. */
+  profit?: MoneyJson;
+  marginPercent?: string | null;
+}>;
+
+export type StockSummaryLine = StockFigures &
+  Readonly<{
+    make: string;
+    /** Absent when grouped by make. */
+    model?: string;
+    /** Only when grouped by year. */
+    year?: number | null;
+  }>;
+
+export type StockSummary = Readonly<{
+  asOf: string;
+  groupBy: SummaryGroup;
+  lines: readonly StockSummaryLine[];
+  total: StockFigures;
+}>;
+
+/** Which vehicles a transfer sends: named, or so many of a model, oldest stock first. */
+export type TransferPick = Readonly<{
+  fromBranchId: string;
+  make: string;
+  model: string;
+  year?: number;
+  quantity: number;
+}>;
+
+export type BatchTransferInput = Readonly<{
+  branchId: string;
+  reason: string;
+  transferredOn?: string;
+  vehicleIds?: readonly string[];
+  pick?: TransferPick;
+}>;
+
+export type TransferBatchView = StockTransferBatchRecord &
+  Readonly<{ vehicles: readonly BatchVehicle[] }>;
+
+export type TransferBatchQuery = Readonly<{
+  branchId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page: number;
+  pageSize: number;
+}>;
+
 type Context = Readonly<{
   base: string;
   today: string;
@@ -193,6 +284,7 @@ export class DealerStock {
       organisation: IOrganisationSettings;
       scope: BranchScope;
       calendar: TenantCalendar;
+      numbering: DocumentNumbering;
       auditTrail: IAuditTrail;
       requestContext: IRequestContext;
       ids: IIdGenerator;
@@ -422,32 +514,225 @@ export class DealerStock {
       const { unit, vehicle } = await this.reach(actor, vehicleId, "dealer.stock.transfer", true);
       await deps.scope.branch(actor, "dealer.stock.transfer", input.branchId);
       unit.assertTransferable();
-      const from = vehicle.branchId;
-      if (from === input.branchId) throw new StockRuleError("The vehicle is already there");
+      if (vehicle.branchId === input.branchId)
+        throw new StockRuleError("The vehicle is already there");
       if (input.reason.trim().length < 3) throw new StockRuleError("Give a reason");
-      const now = deps.clock.now();
-      vehicle.moveToBranch(input.branchId, now);
-      await deps.vehicles.save(vehicle);
-      const transfer: StockTransfer = {
-        id: deps.ids.next(),
-        vehicleId,
-        fromBranchId: from,
+      await this.send(actor, vehicle, {
         toBranchId: input.branchId,
         transferredOn: input.transferredOn ?? (await deps.calendar.today()),
         reason: input.reason.trim(),
-        transferredBy: actor.userId,
-        createdAt: now,
-      };
-      await deps.stock.addTransfer(transfer);
-      await recordUserAction(deps, actor.userId, {
-        action: "stock.transferred",
-        entityType: "vehicle",
-        entityId: vehicleId,
-        before: { branchId: from },
-        after: { branchId: input.branchId },
-        metadata: { reason: transfer.reason, transferId: transfer.id },
+        batch: null,
+        now: deps.clock.now(),
       });
       return this.present(actor, vehicleId);
+    });
+  }
+
+  /**
+   * Sends several stock vehicles from one branch to another under one reference (decision 542):
+   * the vehicles named, or `pick.quantity` of a make and model (and year) at the sending branch,
+   * oldest stock first. All of them go or none does; each keeps its own transfer record.
+   */
+  transferMany(actor: Principal, input: BatchTransferInput): Promise<TransferBatchView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      if ((input.vehicleIds === undefined) === (input.pick === undefined))
+        throw new StockRuleError("Name the vehicles or say how many of a model to send");
+      await deps.scope.branch(actor, "dealer.stock.transfer", input.branchId);
+      const ids =
+        input.pick === undefined ? [...input.vehicleIds!] : await this.pick(actor, input.pick);
+      StockTransferBatch.assertCount(ids.length);
+      // Locked in one order, so two transfers sharing vehicles cannot deadlock.
+      const locked = new Map<string, Vehicle>();
+      for (const id of [...new Set(ids)].sort()) {
+        const { unit, vehicle } = await this.reach(actor, id, "dealer.stock.transfer", true);
+        try {
+          unit.assertTransferable();
+        } catch (error) {
+          if (error instanceof StockRuleError)
+            throw new StockRuleError(`${vehicle.snapshot().code}: ${error.message}`);
+          throw error;
+        }
+        locked.set(id, vehicle);
+      }
+      const from = locked.get(ids[0]!)!.branchId;
+      if ([...locked.values()].some((v) => v.branchId !== from))
+        throw new StockRuleError(
+          "The vehicles are in different branches: send one branch at a time",
+        );
+      if (input.pick !== undefined && from !== input.pick.fromBranchId)
+        throw new StockRuleError("A vehicle picked has just left that branch: try again");
+      const now = deps.clock.now();
+      const transferredOn = input.transferredOn ?? (await deps.calendar.today());
+      if (from === input.branchId) throw new StockRuleError("The vehicles are already there");
+      const batch = StockTransferBatch.create({
+        id: deps.ids.next(),
+        reference: await deps.numbering.next("stock_transfer", now),
+        fromBranchId: from,
+        toBranchId: input.branchId,
+        transferredOn,
+        reason: input.reason,
+        vehicleIds: ids,
+        transferredBy: actor.userId,
+        createdAt: now,
+      });
+      const b = batch.snapshot();
+      const record: StockTransferBatchRecord = {
+        id: b.id,
+        reference: b.reference,
+        fromBranchId: b.fromBranchId,
+        toBranchId: b.toBranchId,
+        transferredOn: b.transferredOn,
+        reason: b.reason,
+        vehicleCount: b.vehicleIds.length,
+        transferredBy: b.transferredBy,
+        createdAt: b.createdAt,
+      };
+      await deps.stock.addTransferBatch(record);
+      for (const id of batch.vehicleIds)
+        await this.send(actor, locked.get(id)!, {
+          toBranchId: b.toBranchId,
+          transferredOn,
+          reason: b.reason,
+          batch: record,
+          now,
+        });
+      await recordUserAction(deps, actor.userId, {
+        action: "stock.transfer_batch.created",
+        entityType: "dealer_stock_transfer_batch",
+        entityId: record.id,
+        after: {
+          reference: record.reference,
+          fromBranchId: record.fromBranchId,
+          toBranchId: record.toBranchId,
+          vehicleCount: record.vehicleCount,
+        },
+        metadata: { reason: record.reason, vehicleIds: batch.vehicleIds },
+      });
+      return { ...record, vehicles: await deps.stock.batchVehicles(record.id) };
+    });
+  }
+
+  /** Transfers of several vehicles leaving or reaching your branches, newest first. */
+  transferBatches(
+    actor: Principal,
+    query: TransferBatchQuery,
+  ): Promise<Page<StockTransferBatchRecord>> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      if (query.branchId !== undefined)
+        await deps.scope.branch(actor, "dealer.stock.list", query.branchId);
+      const records = await deps.stock.transferBatches({
+        branchIds: deps.scope.branchesFor(actor, "dealer.stock.list"),
+        ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
+        ...(query.dateFrom === undefined ? {} : { dateFrom: query.dateFrom }),
+        ...(query.dateTo === undefined ? {} : { dateTo: query.dateTo }),
+        ...pageWindow(query),
+      });
+      return pageOf(query, records);
+    });
+  }
+
+  /** A transfer of several vehicles, seen from either end. */
+  transferBatch(actor: Principal, id: string): Promise<TransferBatchView> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const record = await deps.stock.transferBatch(id);
+      if (
+        record === null ||
+        !(
+          deps.scope.can(actor, "dealer.stock.view", record.fromBranchId) ||
+          deps.scope.can(actor, "dealer.stock.view", record.toBranchId)
+        )
+      )
+        throw new StockTransferNotFoundError();
+      return { ...record, vehicles: await deps.stock.batchVehicles(record.id) };
+    });
+  }
+
+  /**
+   * Units on the lot added up by make and model (or make alone, or make, model and year): how
+   * many, their asking value and, with `dealer.stock.cost.view`, their cost, profit and margin.
+   */
+  summary(actor: Principal, query: StockSummaryQuery): Promise<StockSummary> {
+    const { deps } = this;
+    return deps.unitOfWork.run(async () => {
+      const groupBy = query.groupBy ?? "model";
+      const statuses = query.statuses?.filter((s) => ON_THE_LOT.includes(s)) ?? ON_THE_LOT;
+      if (statuses.length === 0)
+        throw new StockRuleError("Count statuses on the lot: incoming to reserved");
+      const { records, context } = await this.onTheLot(actor, {
+        ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
+        ...(query.make === undefined ? {} : { make: query.make }),
+        ...(query.model === undefined ? {} : { model: query.model }),
+        statuses,
+      });
+      const spend = await this.spend(records, context);
+      const withCost = context.costReach === "all" || context.costReach.length > 0;
+      const total = new StockTally();
+      const lines = new Map<
+        string,
+        { make: string; model: string; year: number | null; tally: StockTally }
+      >();
+      for (const r of records) {
+        const view = this.view(r, context, spend.get(r.unit.vehicleId));
+        const unit: TalliedUnit = {
+          askingMinor: view.askingPrice?.amountMinor ?? null,
+          costMinor: view.cost?.total.amountMinor ?? null,
+        };
+        const { make, model, year } = r.vehicle;
+        const key = [
+          make.trim().toLowerCase(),
+          groupBy === "make" ? "" : model.trim().toLowerCase(),
+          groupBy === "year" ? String(year) : "",
+        ].join("\u0000");
+        let line = lines.get(key);
+        if (line === undefined)
+          lines.set(
+            key,
+            (line = { make: make.trim(), model: model.trim(), year, tally: new StockTally() }),
+          );
+        line.tally.add(unit);
+        total.add(unit);
+      }
+      const figures = (tally: StockTally): StockFigures => {
+        const t = tally.totals();
+        const m = (minor: number) => Money.ofMinor(minor, context.base).toJSON();
+        const avg = (minor: number | null) => (minor === null ? null : m(minor));
+        return {
+          units: t.units,
+          priced: t.priced,
+          unpriced: t.unpriced,
+          asking: m(t.askingMinor),
+          averageAsking: avg(t.averageAskingMinor),
+          ...(withCost
+            ? {
+                costed: t.costed,
+                cost: m(t.costMinor),
+                averageCost: avg(t.averageCostMinor),
+                profit: m(t.profitMinor),
+                marginPercent: t.marginPercent,
+              }
+            : {}),
+        };
+      };
+      const sorted = [...lines.values()].sort(
+        (a, b) =>
+          a.make.localeCompare(b.make) ||
+          (groupBy === "make" ? 0 : a.model.localeCompare(b.model)) ||
+          (groupBy === "year" ? (b.year ?? -1) - (a.year ?? -1) : 0),
+      );
+      return {
+        asOf: context.today,
+        groupBy,
+        lines: sorted.map((l) => ({
+          make: l.make,
+          ...(groupBy === "make" ? {} : { model: l.model }),
+          ...(groupBy === "year" ? { year: l.year } : {}),
+          ...figures(l.tally),
+        })),
+        total: figures(total),
+      };
     });
   }
 
@@ -488,22 +773,10 @@ export class DealerStock {
   ageing(actor: Principal, query: Readonly<{ branchId?: string }>): Promise<AgeingSummary> {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
-      if (query.branchId !== undefined)
-        await deps.scope.branch(actor, "dealer.stock.list", query.branchId);
-      const context = await this.context(actor);
-      const records: StockRecord[] = [];
-      for (let after: string | undefined; ;) {
-        const page = await deps.stock.list({
-          branchIds: deps.scope.branchesFor(actor, "dealer.stock.list"),
-          ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
-          statuses: ["incoming", "reconditioning", "ready", "listed", "reserved"],
-          limit: 500,
-          ...(after === undefined ? {} : { afterVehicleId: after }),
-        });
-        records.push(...page);
-        if (page.length < 500) break;
-        after = page[page.length - 1]!.unit.vehicleId;
-      }
+      const { records, context } = await this.onTheLot(actor, {
+        ...(query.branchId === undefined ? {} : { branchId: query.branchId }),
+        statuses: ON_THE_LOT,
+      });
       const spend = await this.spend(records, context);
       type Sum = { count: number; asking: number; cost: number };
       const sums = new Map<string, Sum>(
@@ -565,6 +838,104 @@ export class DealerStock {
           .map((make) => ({ make, ...summary(`make:${make}`) })),
         byBranch: groups.branch.map((branchId) => ({ branchId, ...summary(`branch:${branchId}`) })),
       };
+    });
+  }
+
+  /** Every unit on the lot in the caller's branches that the filter keeps, oldest first. */
+  private async onTheLot(
+    actor: Principal,
+    filter: Readonly<{
+      branchId?: string;
+      make?: string;
+      model?: string;
+      statuses: readonly StockStatus[];
+    }>,
+  ): Promise<Readonly<{ records: StockRecord[]; context: Context }>> {
+    const { deps } = this;
+    if (filter.branchId !== undefined)
+      await deps.scope.branch(actor, "dealer.stock.list", filter.branchId);
+    const context = await this.context(actor);
+    const records: StockRecord[] = [];
+    for (let after: string | undefined; ;) {
+      const page = await deps.stock.list({
+        branchIds: deps.scope.branchesFor(actor, "dealer.stock.list"),
+        ...filter,
+        limit: 500,
+        ...(after === undefined ? {} : { afterVehicleId: after }),
+      });
+      records.push(...page);
+      if (page.length < 500) break;
+      after = page[page.length - 1]!.unit.vehicleId;
+    }
+    return { records, context };
+  }
+
+  /** The oldest `quantity` transferable units of a model at the sending branch. */
+  private async pick(actor: Principal, pick: TransferPick): Promise<string[]> {
+    const { deps } = this;
+    await deps.scope.branch(actor, "dealer.stock.transfer", pick.fromBranchId);
+    StockTransferBatch.assertCount(pick.quantity);
+    const records = await deps.stock.list({
+      branchIds: deps.scope.branchesFor(actor, "dealer.stock.transfer"),
+      branchId: pick.fromBranchId,
+      statuses: TRANSFERABLE,
+      make: pick.make,
+      model: pick.model,
+      ...(pick.year === undefined ? {} : { yearFrom: pick.year, yearTo: pick.year }),
+      limit: pick.quantity,
+    });
+    if (records.length < pick.quantity) {
+      const what = [pick.year, pick.make, pick.model].filter((p) => p !== undefined).join(" ");
+      throw new StockRuleError(
+        records.length === 0
+          ? `No ${what} at that branch can be transferred`
+          : `Only ${records.length} ${what} at that branch can be transferred`,
+      );
+    }
+    return records.map((r) => r.unit.vehicleId);
+  }
+
+  /** Moves one vehicle with its transfer record and audit entry. */
+  private async send(
+    actor: Principal,
+    vehicle: Vehicle,
+    move: Readonly<{
+      toBranchId: string;
+      transferredOn: string;
+      reason: string;
+      batch: StockTransferBatchRecord | null;
+      now: Date;
+    }>,
+  ): Promise<void> {
+    const { deps } = this;
+    const from = vehicle.branchId;
+    vehicle.moveToBranch(move.toBranchId, move.now);
+    await deps.vehicles.save(vehicle);
+    const transfer: StockTransfer = {
+      id: deps.ids.next(),
+      vehicleId: vehicle.id,
+      fromBranchId: from,
+      toBranchId: move.toBranchId,
+      transferredOn: move.transferredOn,
+      reason: move.reason,
+      transferredBy: actor.userId,
+      createdAt: move.now,
+      batchId: move.batch?.id ?? null,
+    };
+    await deps.stock.addTransfer(transfer);
+    await recordUserAction(deps, actor.userId, {
+      action: "stock.transferred",
+      entityType: "vehicle",
+      entityId: vehicle.id,
+      before: { branchId: from },
+      after: { branchId: move.toBranchId },
+      metadata: {
+        reason: transfer.reason,
+        transferId: transfer.id,
+        ...(move.batch === null
+          ? {}
+          : { batchId: move.batch.id, batchReference: move.batch.reference }),
+      },
     });
   }
 

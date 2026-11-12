@@ -71,6 +71,7 @@ Report definitions live in code (`modules/reports/definitions/*.ts`): `{ id, tit
 | Report | Content |
 |---|---|
 | Stock valuation & ageing | Cost, asking, days in stock |
+| Stock by model | Units, average and total asking and cost, profit and margin per make and model |
 | Sales & gross profit | Per unit, per exec, per make, per source |
 | Lead funnel | Conversion by stage/source/exec |
 | Commissions | Per exec |

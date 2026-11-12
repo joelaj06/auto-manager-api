@@ -28,7 +28,8 @@ Gross profit = sale price − discounts + fees charged
 - **Days in stock / ageing buckets** (0–30, 31–60, 61–90, 90+) — key dealer KPI; holding cost accrual (e.g. GHS x/day).
 - Pricing: cost, asking price, minimum price (hidden from junior sales), margin %, price history (reductions logged).
 - Consignment stock: owned by a third party; dealer earns commission or margin; payout to consignor on sale.
-- Multi-branch stock transfers with transfer records.
+- **Stock by make and model** (decision 541): units, asking value and, with cost access, cost, profit and margin per model and in total (`GET /dealer/stock/summary`, report `dealer_stock_by_model`). Each car stays its own record; quantities are counted.
+- Multi-branch stock transfers with transfer records, one vehicle at a time or **several under one reference**, named or picked as so many of a model, oldest first (decisions 542–543).
 - Vehicle spec sheet + photo gallery + condition report → shareable listing page / PDF.
 
 ## 3. Listings & marketing (V2–V3)
@@ -83,7 +84,7 @@ Gross profit = sale price − discounts + fees charged
 
 ## 10. Dealer reports
 
-- Stock value at cost, ageing report, units sold, revenue, gross profit per unit / per make / per exec / per source.
+- Stock value at cost, stock by make and model with profit and margin, ageing report, units sold, revenue, gross profit per unit / per make / per exec / per source.
 - Lead funnel & conversion rates.
 - Price reductions report, aged stock alert.
 - Cash collected vs outstanding on deals.
@@ -94,6 +95,8 @@ Gross profit = sale price − discounts + fees charged
 GET/POST   /dealer/stock                      (vehicles where usage=stock, with pricing)
 PATCH      /dealer/stock/:vehicleId/pricing
 POST       /dealer/stock/:vehicleId/list | /withdraw | /transfer
+GET        /dealer/stock/summary?groupBy=make|model|year
+POST/GET   /dealer/stock/transfers, GET /dealer/stock/transfers/:id
 CRUD       /dealer/leads, /dealer/leads/:id/activities
 POST       /dealer/test-drives
 CRUD       /dealer/quotes  + GET /dealer/quotes/:id.pdf

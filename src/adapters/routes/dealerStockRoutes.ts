@@ -1,10 +1,12 @@
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
-import type {
-  ConsignmentInput,
-  DealerStock,
+import {
+  SUMMARY_GROUPS,
+  type ConsignmentInput,
+  type DealerStock,
 } from "../../application/use-cases/dealer/DealerStock.js";
+import { MAX_BATCH_TRANSFER } from "../../domain/dealer/StockTransferBatch.js";
 import { ENTRY_STATUSES, STOCK_SOURCES, STOCK_STATUSES } from "../../domain/dealer/StockUnit.js";
 import { principalOf } from "../middleware/AccessGuard.js";
 import { envelope } from "../presenters/responseEnvelope.js";
@@ -58,7 +60,8 @@ export type DealerStockRouteDependencies = Readonly<{ stock: DealerStock }>;
 
 /**
  * Dealer stock (docs/10 §2): the stock list and ageing, taking vehicles into stock, pricing,
- * listing, withdrawing and transferring them (decisions 429–436).
+ * listing, withdrawing and transferring them (decisions 429–436), the stock by make and model
+ * with its value and margin and transfers of several vehicles at once (decisions 541–543).
  */
 export function dealerStockRoutes(deps: DealerStockRouteDependencies): ApiRoute[] {
   const { stock } = deps;
@@ -128,6 +131,99 @@ export function dealerStockRoutes(deps: DealerStockRouteDependencies): ApiRoute[
       responses: { 200: { description: "Ageing" } },
       handler: async ({ query }, _req, res) => {
         res.json(envelope(await stock.ageing(principalOf(res), query)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/dealer/stock/summary",
+      summary:
+        "Stock on the lot by make and model (or make, or make, model and year): units, asking value and, with dealer.stock.cost.view, cost, profit and margin",
+      tags,
+      access: access.permission("dealer.stock.list"),
+      request: {
+        query: z.object({
+          branchId: uuid.optional(),
+          groupBy: z.enum(SUMMARY_GROUPS).optional(),
+          status: list(["incoming", "reconditioning", "ready", "listed", "reserved"] as const),
+          make: z.string().trim().min(1).max(80).optional(),
+          model: z.string().trim().min(1).max(80).optional(),
+        }),
+      },
+      responses: { 200: { description: "Stock summary" } },
+      handler: async ({ query }, _req, res) => {
+        const { status, ...rest } = query;
+        res.json(
+          envelope(
+            await stock.summary(principalOf(res), {
+              ...rest,
+              ...(status === undefined ? {} : { statuses: status }),
+            }),
+          ),
+        );
+      },
+    }),
+    defineRoute({
+      method: "post",
+      path: "/api/v1/dealer/stock/transfers",
+      summary:
+        "Transfer several stock vehicles to another branch under one reference: the vehicles named, or a number of a make and model, oldest stock first",
+      tags,
+      access: access.permission("dealer.stock.transfer"),
+      request: {
+        body: reasonBody
+          .extend({
+            branchId: uuid,
+            transferredOn: date.optional(),
+            vehicleIds: z.array(uuid).min(1).max(MAX_BATCH_TRANSFER).optional(),
+            pick: z
+              .object({
+                fromBranchId: uuid,
+                make: z.string().trim().min(1).max(80),
+                model: z.string().trim().min(1).max(80),
+                year: z.number().int().min(1950).max(2100).optional(),
+                quantity: z.number().int().min(1).max(MAX_BATCH_TRANSFER),
+              })
+              .optional(),
+          })
+          .refine((b) => (b.vehicleIds === undefined) !== (b.pick === undefined), {
+            message: "Send vehicleIds or pick, not both",
+          }),
+      },
+      responses: { 201: { description: "The transfer with its vehicles" } },
+      handler: async ({ body }, _req, res) => {
+        res.status(201).json(envelope(await stock.transferMany(principalOf(res), body)));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/dealer/stock/transfers",
+      summary: "Transfers of several vehicles leaving or reaching your branches, newest first",
+      tags,
+      access: access.permission("dealer.stock.list"),
+      request: {
+        query: z.object({
+          branchId: uuid.optional(),
+          dateFrom: date.optional(),
+          dateTo: date.optional(),
+          ...pageParams(100, 50),
+        }),
+      },
+      responses: { 200: { description: "Transfers" } },
+      handler: async ({ query }, _req, res) => {
+        const page = await stock.transferBatches(principalOf(res), query);
+        res.set(pageHeaders(page)).json(envelope(page.items));
+      },
+    }),
+    defineRoute({
+      method: "get",
+      path: "/api/v1/dealer/stock/transfers/:id",
+      summary: "A transfer of several vehicles with the vehicles it sent",
+      tags,
+      access: access.permission("dealer.stock.view"),
+      request: { params: z.object({ id: uuid }) },
+      responses: { 200: { description: "The transfer with its vehicles" } },
+      handler: async ({ params: p }, _req, res) => {
+        res.json(envelope(await stock.transferBatch(principalOf(res), p.id)));
       },
     }),
     defineRoute({

@@ -1165,6 +1165,17 @@ export const TENANT_TABLE_FIXTURES: Readonly<Record<string, TableFixture>> = {
     }),
     find: "select 1 from dealer_stock_transfers where reason = $1",
   },
+  dealer_stock_transfer_batches: {
+    insert: (marker) => ({
+      sql: `with b as (insert into branches (code, name) values ($2, $1) returning id),
+                 t as (insert into branches (code, name) values ($2 || 'T', $1) returning id)
+            insert into dealer_stock_transfer_batches (reference, from_branch_id, to_branch_id,
+              transferred_on, reason, vehicle_count)
+            select $1, b.id, t.id, current_date, 'Isolation', 1 from b, t`,
+      params: [marker, `DB${letters(marker).toUpperCase().slice(0, 12)}`],
+    }),
+    find: "select 1 from dealer_stock_transfer_batches where reference = $1",
+  },
   dealer_leads: {
     insert: (marker) => ({
       sql: `with b as (insert into branches (code, name) values ($2, $1) returning id)

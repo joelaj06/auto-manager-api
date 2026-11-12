@@ -6,7 +6,7 @@ import type { DealerCommissions } from "../../dealer/DealerCommissions.js";
 import type { DealerGrossProfit, GroupProfit } from "../../dealer/DealerGrossProfit.js";
 import type { DealerLeads } from "../../dealer/DealerLeads.js";
 import type { DealerReports } from "../../dealer/DealerReports.js";
-import type { DealerStock } from "../../dealer/DealerStock.js";
+import { SUMMARY_GROUPS, type DealerStock, type StockFigures } from "../../dealer/DealerStock.js";
 import type { SupplierPayables } from "../../payables/SupplierPayables.js";
 import type { Purchases } from "../../purchases/Purchases.js";
 import { PERIOD_PARAMS, periodOf, type ReportDefinition } from "../ReportDefinition.js";
@@ -225,6 +225,88 @@ export class DealerStockValuationReport implements ReportDefinition {
           label: "Average days in stock",
           value: a.averageDays === null ? "–" : String(a.averageDays),
         },
+      ],
+    };
+  }
+}
+
+/**
+ * Stock on the lot by make and model: units, average and total asking and cost, profit and
+ * margin (docs/10 §10, decision 541). Cost columns only with `dealer.stock.cost.view`.
+ */
+export class DealerStockByModelReport implements ReportDefinition {
+  readonly id = "dealer_stock_by_model";
+  readonly title = "Dealer stock by model";
+  readonly description =
+    "Vehicles on the lot by make and model (or make, or make, model and year): units, asking value and, with cost access, cost, profit and margin";
+  readonly category = "dealer" as const;
+  readonly permission = "dealer.stock.list" as const;
+  readonly params = [
+    { key: "branchId", label: "Branch", type: "uuid", required: false },
+    { key: "groupBy", label: "Group by", type: "enum", required: false, options: SUMMARY_GROUPS },
+  ] as const;
+  readonly landscape = true;
+
+  constructor(private readonly stock: DealerStock) {}
+
+  async run(actor: Principal, params: ParamValues): Promise<ReportTable> {
+    const groupBy = (params.groupBy ?? "model") as (typeof SUMMARY_GROUPS)[number];
+    const s = await this.stock.summary(actor, {
+      groupBy,
+      ...(params.branchId === undefined ? {} : { branchId: params.branchId }),
+    });
+    const withCost = s.total.cost !== undefined;
+    const money = (m: MoneyJson | null | undefined) =>
+      m === null || m === undefined ? null : minor(m);
+    const figures = (f: StockFigures) => ({
+      units: f.units,
+      unpriced: f.unpriced,
+      averageAsking: money(f.averageAsking),
+      asking: minor(f.asking),
+      ...(withCost
+        ? {
+            averageCost: money(f.averageCost),
+            cost: money(f.cost),
+            profit: money(f.profit),
+            margin: percent(f.marginPercent ?? null),
+          }
+        : {}),
+    });
+    const name = (l: (typeof s.lines)[number]) =>
+      [l.make, l.model, l.year === undefined ? undefined : (l.year ?? "no year")]
+        .filter((p) => p !== undefined)
+        .join(" ");
+    return {
+      title: this.title,
+      subtitle: `As of ${s.asOf}`,
+      currency: s.total.asking.currency,
+      columns: [
+        { key: "name", header: groupBy === "make" ? "Make" : "Model", type: "text", width: 1.6 },
+        { key: "units", header: "Units", type: "number", width: 0.6 },
+        { key: "unpriced", header: "Unpriced", type: "number", width: 0.7 },
+        { key: "averageAsking", header: "Avg asking", type: "money" },
+        { key: "asking", header: "Asking value", type: "money", width: 1.2 },
+        ...(withCost
+          ? [
+              { key: "averageCost", header: "Avg cost", type: "money" as const },
+              { key: "cost", header: "Cost", type: "money" as const, width: 1.2 },
+              { key: "profit", header: "Profit", type: "money" as const, width: 1.2 },
+              { key: "margin", header: "Margin", type: "percent" as const, width: 0.7 },
+            ]
+          : []),
+      ],
+      rows: s.lines.map((l) => ({ name: name(l), ...figures(l) })),
+      totals: { name: "Total", ...figures(s.total) },
+      summary: [
+        { label: "Vehicles on the lot", value: String(s.total.units) },
+        { label: "Asking value", value: s.total.asking.formatted },
+        ...(s.total.cost === undefined ? [] : [{ label: "Cost", value: s.total.cost.formatted }]),
+        ...(s.total.profit === undefined
+          ? []
+          : [{ label: "Profit at asking", value: s.total.profit.formatted }]),
+        ...(s.total.unpriced === 0
+          ? []
+          : [{ label: "Not priced yet", value: String(s.total.unpriced) }]),
       ],
     };
   }
