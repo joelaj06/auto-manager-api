@@ -1,3 +1,4 @@
+import { QUOTE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -413,13 +414,14 @@ export function dealerSalesRoutes(deps: DealerSalesRouteDependencies): ApiRoute[
         }),
       },
       responses: { 200: { description: "Quotes" } },
+      totals: QUOTE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await quotes.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, QUOTE_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

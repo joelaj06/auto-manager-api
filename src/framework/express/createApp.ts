@@ -3,6 +3,7 @@ import helmet from "helmet";
 import type { RawBodyRequest } from "../../adapters/middleware/rawBody.js";
 import type { AccessGuard } from "../../adapters/middleware/AccessGuard.js";
 import { corsPolicy } from "../../adapters/middleware/cors.js";
+import { totalsHeaderNames } from "../../adapters/presenters/pageHeaders.js";
 import { errorHandler, notFoundHandler } from "../../adapters/middleware/errorHandler.js";
 import { rateLimiter } from "../../adapters/middleware/rateLimiter.js";
 import { requestContext } from "../../adapters/middleware/requestContext.js";
@@ -36,7 +37,14 @@ export function createApp(deps: AppDependencies): Express {
   app.use(requestContext(deps.requestContext));
   app.use(requestLogger(deps.logger));
   app.use(helmet());
-  app.use(corsPolicy(deps.http.corsAllowedOrigins));
+  app.use(
+    corsPolicy(
+      deps.http.corsAllowedOrigins,
+      deps.routes.flatMap((route) =>
+        route.totals === undefined ? [] : totalsHeaderNames(route.totals),
+      ),
+    ),
+  );
   app.use(
     express.json({
       limit: `${deps.http.bodyLimitKb}kb`,

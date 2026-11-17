@@ -1,3 +1,4 @@
+import { PURCHASE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -88,6 +89,7 @@ export function purchaseRoutes(deps: PurchaseRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Purchases" } },
+      totals: PURCHASE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, type, ...rest } = query;
         const page = await purchases.list(principalOf(res), {
@@ -95,7 +97,7 @@ export function purchaseRoutes(deps: PurchaseRouteDependencies): ApiRoute[] {
           ...(status === undefined ? {} : { statuses: status }),
           ...(type === undefined ? {} : { types: type }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, PURCHASE_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

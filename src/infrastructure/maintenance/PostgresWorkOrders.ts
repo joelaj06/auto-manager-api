@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pageTotal } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { listSums } from "../database/postgres/PagedQuery.js";
 import type {
   IWorkOrders,
   VendorRecord,
@@ -163,7 +163,7 @@ export class PostgresWorkOrders implements IWorkOrders {
     return (await this.load("where id = $1 for update", [id]))[0] ?? null;
   }
 
-  async list(filter: WorkOrderFilter): Promise<Paged<WorkOrder>> {
+  async list(filter: WorkOrderFilter): Promise<Summed<WorkOrder>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -181,11 +181,17 @@ export class PostgresWorkOrders implements IWorkOrders {
       `${tail} order by id desc limit $${params.length + 1} offset $${params.length + 2}`,
       [...params, filter.limit, filter.offset ?? 0],
     );
-    const total = await pageTotal(this.tx, rows.length, filter, {
-      sql: `select count(*) as total from work_orders ${tail}`,
-      params,
-    });
-    return { rows, total };
+    const { count, ...sums } = await listSums(
+      this.tx,
+      {
+        sql: `select status, (select coalesce(sum(l.amount_minor), 0) from work_order_lines l
+                               where l.work_order_id = work_orders.id) as total_minor
+                from work_orders ${tail}`,
+        params,
+      },
+      { amount: "total_minor", status: "status" },
+    );
+    return { rows, total: count, sums };
   }
 
   async vendorRecord(vendorId: string): Promise<VendorRecord> {

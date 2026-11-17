@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type { CashSessionProps } from "../../domain/finance/CashSession.js";
 import type { InvoiceProps, InvoiceStatus } from "../../domain/finance/Invoice.js";
 import type {
@@ -71,7 +71,7 @@ export interface ILedger {
    * rolled up.
    */
   rollUp(settleSeconds: number): Promise<number>;
-  lines(filter: LedgerLineFilter): Promise<Paged<LedgerLineView>>;
+  lines(filter: LedgerLineFilter): Promise<Summed<LedgerLineView>>;
   /** Σ(debit − credit) for a party on an account, in base minor units. */
   partyBalance(
     accountId: string,
@@ -127,9 +127,11 @@ export type CashSessionListFilter = Readonly<{
 
 /** Reads over financial documents (tenant unit of work). */
 export interface IFinanceQueries {
-  invoices(filter: InvoiceListFilter): Promise<Paged<InvoiceProps>>;
-  payments(filter: PaymentListFilter): Promise<Paged<PaymentProps>>;
-  cashSessions(filter: CashSessionListFilter): Promise<Paged<CashSessionProps>>;
+  /** In base minor units: totals by status, paid and outstanding. */
+  invoices(filter: InvoiceListFilter): Promise<Summed<InvoiceProps>>;
+  /** In base minor units: totals by status, recorded in and out, and unallocated. */
+  payments(filter: PaymentListFilter): Promise<Summed<PaymentProps>>;
+  cashSessions(filter: CashSessionListFilter): Promise<Summed<CashSessionProps>>;
 }
 
 /** Who a document is for: the party's display name and branch (drivers), if it exists. */

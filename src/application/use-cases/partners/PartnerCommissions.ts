@@ -1,4 +1,10 @@
-import { pageOf, pageWindow, type Page, type PageRequest, type Paging } from "../../dto/Page.js";
+import {
+  pageWindow,
+  type Page,
+  type PageRequest,
+  type Paging,
+  summedPageOf,
+} from "../../dto/Page.js";
 import { Money } from "../../../domain/money/Money.js";
 import {
   commissionTerms,
@@ -212,10 +218,8 @@ export class PartnerCommissions {
 
   async entries(filter: Paging<EntryFilter>): Promise<Page<CommissionEntry>> {
     await this.deps.commissions.releaseDue(this.deps.clock.now());
-    return pageOf(
-      filter,
-      await this.deps.commissions.entries({ ...filter, ...pageWindow(filter) }),
-    );
+    const found = await this.deps.commissions.entries({ ...filter, ...pageWindow(filter) });
+    return summedPageOf(filter, found, found.currency);
   }
 
   async adjust(
@@ -412,10 +416,8 @@ export class PartnerCommissions {
     }> &
       PageRequest,
   ): Promise<Page<PayoutRecord>> {
-    return pageOf(
-      filter,
-      await this.deps.commissions.payouts({ ...filter, ...pageWindow(filter) }),
-    );
+    const found = await this.deps.commissions.payouts({ ...filter, ...pageWindow(filter) });
+    return summedPageOf(filter, found, found.currency);
   }
 
   async payout(id: string, partnerId?: string): Promise<PayoutView> {

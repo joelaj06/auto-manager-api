@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type { PaymentMethod } from "../../domain/finance/Payment.js";
 import type { RemittanceProps, RemittanceStatus } from "../../domain/remittances/Remittance.js";
 
@@ -59,7 +59,8 @@ export type TargetAssignment = Readonly<{
 }>;
 
 export interface IRemittanceRecords {
-  list(filter: RemittanceListFilter): Promise<Paged<RemittanceProps>>;
+  /** In base minor units: what the periods are worth by status, received, waived and owed. */
+  list(filter: RemittanceListFilter): Promise<Summed<RemittanceProps>>;
   submissions(remittanceId: string): Promise<RemittanceSubmission[]>;
   lockOpenSubmission(remittanceId: string): Promise<RemittanceSubmission | null>;
   saveSubmission(submission: RemittanceSubmission): Promise<void>;

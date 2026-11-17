@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type { AgreementStatus, WorkPayAgreement } from "../../domain/workpay/WorkPayAgreement.js";
 import type {
   ChargeState,
@@ -24,7 +24,8 @@ export interface IWorkPayAgreementRepository {
   lockById(id: string): Promise<WorkPayAgreement | null>;
   /** Saves the agreement and replaces its guarantors. */
   save(agreement: WorkPayAgreement): Promise<void>;
-  list(filter: AgreementListFilter): Promise<Paged<WorkPayAgreement>>;
+  /** In base minor units: total prices by status, financed, deposits paid and owed. */
+  list(filter: AgreementListFilter): Promise<Summed<WorkPayAgreement>>;
   /** The live agreement (out for signature or running) of a vehicle or a driver, if any. */
   liveFor(
     party: Readonly<{ vehicleId?: string; driverId?: string }>,

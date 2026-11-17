@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pageTotal } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { listSums } from "../database/postgres/PagedQuery.js";
 import type { IQuotes, QuoteFilter } from "../../application/ports/IDealerSales.js";
 import { Quote, type AddOn, type QuoteProps } from "../../domain/dealer/Quote.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
@@ -146,7 +146,7 @@ export class PostgresQuotes implements IQuotes {
     return this.one(id, "for update");
   }
 
-  async list(filter: QuoteFilter): Promise<Paged<Quote>> {
+  async list(filter: QuoteFilter): Promise<Summed<Quote>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -163,11 +163,20 @@ export class PostgresQuotes implements IQuotes {
       `${tail} order by q.id desc limit $${params.length + 1} offset $${params.length + 2}`,
       [...params, filter.limit, filter.offset ?? 0],
     );
-    const total = await pageTotal(this.tx, rows.length, filter, {
-      sql: `select count(*) as total from dealer_quotes q ${tail}`,
-      params,
-    });
-    return { rows, total };
+    const { count, ...sums } = await listSums(
+      this.tx,
+      { sql: `select q.* from dealer_quotes q ${tail}`, params },
+      {
+        amount: "price_minor - discount_minor",
+        status: "status",
+        measures: {
+          discount: "discount_minor",
+          trade_in: "trade_in_minor",
+          deposit: "coalesce(deposit_minor, 0)",
+        },
+      },
+    );
+    return { rows, total: count, sums };
   }
 
   async lapsed(today: string): Promise<string[]> {

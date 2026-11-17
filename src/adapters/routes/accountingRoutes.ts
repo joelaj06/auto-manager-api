@@ -1,3 +1,4 @@
+import { STATEMENT_LINE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -220,9 +221,10 @@ export function accountingRoutes(deps: AccountingRouteDependencies): ApiRoute[] 
         }),
       },
       responses: { 200: { description: "Page of statement lines" } },
+      totals: STATEMENT_LINE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await reconciliation.lines(query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, STATEMENT_LINE_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type { ChargeAmount } from "../../domain/rentals/RentalBooking.js";
 import type { RentalInspection } from "../../domain/rentals/RentalInspection.js";
 import type { DamageStatus, VehicleDamage } from "../../domain/rentals/VehicleDamage.js";
@@ -27,7 +27,8 @@ export interface IVehicleDamages {
   /** Locks the damage row until the unit of work ends. */
   lock(id: string): Promise<VehicleDamage | null>;
   /** Newest first. */
-  list(filter: DamageFilter): Promise<Paged<VehicleDamage>>;
+  /** In base minor units: the cost (final, else estimate) by status, and the customer's part. */
+  list(filter: DamageFilter): Promise<Summed<VehicleDamage>>;
   insert(damage: VehicleDamage): Promise<void>;
   /** Saves the damage and its photos. */
   update(damage: VehicleDamage): Promise<void>;

@@ -1,5 +1,7 @@
+import express from "express";
+import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { isOriginAllowed } from "./cors.js";
+import { corsPolicy, isOriginAllowed } from "./cors.js";
 
 const allowList = [
   "https://admin.autoforce.app",
@@ -32,5 +34,21 @@ describe("isOriginAllowed", () => {
 
   it("allows nothing with an empty list", () => {
     expect(isOriginAllowed("https://admin.autoforce.app", [])).toBe(false);
+  });
+});
+
+describe("corsPolicy", () => {
+  it("lets browsers read the page headers and any others it is given, such as money totals", async () => {
+    const app = express();
+    app.use(
+      corsPolicy(["https://acme.example.com"], ["X-Currency", "X-Total-Amount", "X-Currency"]),
+    );
+    app.get("/", (_req, res) => res.end());
+    const res = await request(app).get("/").set("Origin", "https://acme.example.com");
+    const exposed = String(res.headers["access-control-expose-headers"]).split(",");
+    expect(exposed).toEqual(
+      expect.arrayContaining(["X-Total-Count", "X-Currency", "X-Total-Amount"]),
+    );
+    expect(exposed.filter((h) => h === "X-Currency")).toHaveLength(1);
   });
 });

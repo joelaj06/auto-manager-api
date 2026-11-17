@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type { Appraisal, AppraisalStatus } from "../../domain/dealer/Appraisal.js";
 import type { Deal, DealStatus, ScheduledInstalment } from "../../domain/dealer/Deal.js";
 import type { PaymentMethod } from "../../domain/finance/Payment.js";
@@ -46,7 +46,8 @@ export interface IDeals {
   update(deal: Deal): Promise<void>;
   get(id: string): Promise<Deal | null>;
   lock(id: string): Promise<Deal | null>;
-  list(filter: DealFilter): Promise<Paged<Deal>>;
+  /** In base minor units: agreed prices by status, discounts and trade-ins. */
+  list(filter: DealFilter): Promise<Summed<Deal>>;
   /** The open deal (draft, reserved or sold) on the vehicle, if any. */
   liveForVehicle(vehicleId: string): Promise<string | null>;
   /** Payments for the deal not yet used on its invoices, oldest first. */
@@ -77,5 +78,6 @@ export interface IAppraisals {
   update(appraisal: Appraisal): Promise<void>;
   get(id: string): Promise<Appraisal | null>;
   lock(id: string): Promise<Appraisal | null>;
-  list(filter: AppraisalFilter): Promise<Paged<Appraisal>>;
+  /** In base minor units: appraised values by status. */
+  list(filter: AppraisalFilter): Promise<Summed<Appraisal>>;
 }

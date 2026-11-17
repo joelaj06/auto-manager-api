@@ -1,3 +1,4 @@
+import { WORK_ORDER_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -131,9 +132,10 @@ export function workOrderRoutes(deps: WorkOrderRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Work orders" } },
+      totals: WORK_ORDER_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await orders.list(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, WORK_ORDER_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

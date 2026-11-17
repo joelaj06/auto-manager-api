@@ -1,3 +1,4 @@
+import { CLAIM_TOTALS, OFFENCE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -201,9 +202,10 @@ export function incidentRoutes(deps: IncidentRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Claims" } },
+      totals: CLAIM_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await incidents.claims(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, CLAIM_TOTALS)).json(envelope(page.items));
       },
     }),
     post(
@@ -265,9 +267,10 @@ export function incidentRoutes(deps: IncidentRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Offences" } },
+      totals: OFFENCE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await offences.list(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, OFFENCE_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

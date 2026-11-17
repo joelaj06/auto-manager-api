@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import type { z } from "zod";
+import type { ListTotalsSpec } from "../presenters/pageHeaders.js";
 import type { RouteAccess } from "./RouteAccess.js";
 
 export type HttpMethod = "get" | "post" | "put" | "patch" | "delete";
@@ -31,6 +32,8 @@ export type ApiRoute<R extends RouteRequest = RouteRequest> = Readonly<{
   access: RouteAccess;
   request?: R;
   responses: Readonly<Record<number, RouteResponse>>;
+  /** For a paged list of money: the totals its headers give (documented and exposed by CORS). */
+  totals?: ListTotalsSpec;
   handler: (input: ValidatedInput<R>, req: Request, res: Response) => Promise<void> | void;
 }>;
 

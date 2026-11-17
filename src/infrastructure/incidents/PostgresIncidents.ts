@@ -1,5 +1,5 @@
-import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
-import { pageTotal } from "../database/postgres/PagedQuery.js";
+import type { PageWindow, Paged, Summed } from "../../domain/value-objects/Paged.js";
+import { type SumsQuery, listSums, pageTotal } from "../database/postgres/PagedQuery.js";
 import type {
   DriverRef,
   FuelAnomalyRow,
@@ -253,7 +253,7 @@ export class PostgresIncidents implements IIncidents {
       limit: number;
       offset?: number;
     }>,
-  ): Promise<Paged<InsuranceClaim>> {
+  ): Promise<Summed<InsuranceClaim>> {
     const w = new Where();
     if (filter.branchIds !== "all")
       w.add(
@@ -262,11 +262,22 @@ export class PostgresIncidents implements IIncidents {
       );
     if (filter.statuses !== undefined) w.add("status = any(?::text[])", filter.statuses);
     if (filter.insurerId !== undefined) w.add("insurer_id = ?", filter.insurerId);
-    return this.paged(
+    return this.summed(
       w,
       "insurance_claims",
       (tail, params) => this.loadClaims(tail, params),
       filter,
+      {
+        amount: "claimed_minor",
+        status: "status",
+        measures: {
+          excess: "excess_minor",
+          approved: "coalesce(approved_minor, 0)",
+          settled: "coalesce(settled_minor, 0)",
+          expected:
+            "case when status in ('submitted', 'approved') then coalesce(approved_minor, claimed_minor - excess_minor) else 0 end",
+        },
+      },
     );
   }
 
@@ -322,16 +333,21 @@ export class PostgresIncidents implements IIncidents {
     return (await this.loadOffences("where id = $1 for update", [id]))[0] ?? null;
   }
 
-  async offences(filter: OffenceFilter): Promise<Paged<TrafficOffence>> {
+  async offences(filter: OffenceFilter): Promise<Summed<TrafficOffence>> {
     const w = new Where().branches("branch_id", filter.branchIds);
     if (filter.vehicleId !== undefined) w.add("vehicle_id = ?", filter.vehicleId);
     if (filter.driverId !== undefined) w.add("driver_id = ?", filter.driverId);
     if (filter.statuses !== undefined) w.add("status = any(?::text[])", filter.statuses);
-    return this.paged(
+    return this.summed(
       w,
       "traffic_offences",
       (tail, params) => this.loadOffences(tail, params),
       filter,
+      {
+        amount: "fine_minor",
+        status: "status",
+        measures: { driver: "case when driver_pays then fine_minor else 0 end" },
+      },
     );
   }
 
@@ -477,6 +493,28 @@ export class PostgresIncidents implements IIncidents {
       params: where.params,
     });
     return { rows, total };
+  }
+
+  private async summed<T>(
+    where: Where,
+    table: string,
+    load: (tail: string, params: unknown[]) => Promise<T[]>,
+    window: PageWindow,
+    sums: SumsQuery,
+  ): Promise<Summed<T>> {
+    const { limit, offset = 0 } = window;
+    const n = where.params.length;
+    const rows = await load(`${where.sql()} order by id desc limit $${n + 1} offset $${n + 2}`, [
+      ...where.params,
+      limit,
+      offset,
+    ]);
+    const { count, ...totals } = await listSums(
+      this.tx,
+      { sql: `select * from ${table} ${where.sql()}`, params: where.params },
+      sums,
+    );
+    return { rows, total: count, sums: totals };
   }
 
   private async loadIncidents(tail: string, params: unknown[]): Promise<Incident[]> {

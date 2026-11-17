@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Paged, Summed } from "../../domain/value-objects/Paged.js";
 import type {
   ClaimStatus,
   Incident,
@@ -94,13 +94,14 @@ export interface IIncidents {
       limit: number;
       offset?: number;
     }>,
-  ): Promise<Paged<InsuranceClaim>>;
+  ): Promise<Summed<InsuranceClaim>>;
 
   insertOffence(offence: TrafficOffence): Promise<void>;
   updateOffence(offence: TrafficOffence): Promise<void>;
   getOffence(id: string): Promise<TrafficOffence | null>;
   lockOffence(id: string): Promise<TrafficOffence | null>;
-  offences(filter: OffenceFilter): Promise<Paged<TrafficOffence>>;
+  /** In base minor units: fines by status, and those the driver pays. */
+  offences(filter: OffenceFilter): Promise<Summed<TrafficOffence>>;
   noticeTaken(authority: string, noticeRef: string, exceptId: string | null): Promise<boolean>;
 
   addAnomaly(row: FuelAnomalyRow): Promise<void>;

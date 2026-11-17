@@ -26,7 +26,11 @@ export function isOriginAllowed(origin: string, allowList: readonly string[]): b
  * CORS for browser clients (web portal, admin console). Requests without an Origin header
  * (mobile apps, servers) are unaffected. Disallowed origins simply get no CORS headers.
  */
-export function corsPolicy(allowList: readonly string[]): RequestHandler {
+export function corsPolicy(
+  allowList: readonly string[],
+  /** More response headers browsers may read, such as the money totals of lists. */
+  exposed: readonly string[] = [],
+): RequestHandler {
   return cors({
     origin: (origin, callback) => {
       callback(null, origin !== undefined && isOriginAllowed(origin, allowList));
@@ -46,6 +50,7 @@ export function corsPolicy(allowList: readonly string[]): RequestHandler {
       "Retry-After",
       "WWW-Authenticate",
       ...PAGE_HEADERS,
+      ...new Set(exposed),
     ],
     maxAge: 600,
   });

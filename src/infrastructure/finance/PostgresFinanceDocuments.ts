@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   CashSessionListFilter,
   FinanceSettings,
@@ -559,7 +559,7 @@ export class PostgresFinanceQueries implements IFinanceQueries {
     return this.transactions.current();
   }
 
-  async invoices(filter: InvoiceListFilter): Promise<Paged<InvoiceProps>> {
+  async invoices(filter: InvoiceListFilter): Promise<Summed<InvoiceProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -581,7 +581,7 @@ export class PostgresFinanceQueries implements IFinanceQueries {
       where.push(
         `status in ('issued', 'partially_paid') and due_date < ${param(filter.overdueOn)}`,
       );
-    const { rows, total } = await pagedQuery<InvoiceRow>(
+    const { rows, total, sums } = await summedPagedQuery<InvoiceRow>(
       this.tx,
       {
         sql: `select ${INVOICE_COLUMNS} from invoices where ${where.join(" and ")}`,
@@ -589,11 +589,20 @@ export class PostgresFinanceQueries implements IFinanceQueries {
         params,
       },
       filter,
+      {
+        amount: "round(total_minor * fx_rate::numeric)",
+        status: "status",
+        measures: {
+          paid: "round(paid_minor * fx_rate::numeric)",
+          outstanding:
+            "case when status in ('issued', 'partially_paid') then round((total_minor - paid_minor) * fx_rate::numeric) else 0 end",
+        },
+      },
     );
-    return { rows: await withLines(this.tx, rows), total };
+    return { rows: await withLines(this.tx, rows), total, sums };
   }
 
-  async payments(filter: PaymentListFilter): Promise<Paged<PaymentProps>> {
+  async payments(filter: PaymentListFilter): Promise<Summed<PaymentProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -614,7 +623,7 @@ export class PostgresFinanceQueries implements IFinanceQueries {
     if (filter.to !== undefined) where.push(`paid_on <= ${param(filter.to)}`);
     if (filter.withCredit === true)
       where.push("direction = 'in' and status = 'recorded' and allocated_minor < amount_minor");
-    const { rows, total } = await pagedQuery<PaymentRow>(
+    const { rows, total, sums } = await summedPagedQuery<PaymentRow>(
       this.tx,
       {
         sql: `select ${PAYMENT_COLUMNS} from payments where ${where.join(" and ")}`,
@@ -622,12 +631,22 @@ export class PostgresFinanceQueries implements IFinanceQueries {
         params,
       },
       filter,
+      {
+        amount: "amount_base_minor",
+        status: "status",
+        measures: {
+          in: "case when status = 'recorded' and direction = 'in' then amount_base_minor else 0 end",
+          out: "case when status = 'recorded' and direction = 'out' then amount_base_minor else 0 end",
+          unallocated:
+            "case when status = 'recorded' then round((amount_minor - allocated_minor) * fx_rate::numeric) else 0 end",
+        },
+      },
     );
-    return { rows: rows.map(toPayment), total };
+    return { rows: rows.map(toPayment), total, sums };
   }
 
-  async cashSessions(filter: CashSessionListFilter): Promise<Paged<CashSessionProps>> {
-    const { rows, total } = await pagedQuery<SessionRow>(
+  async cashSessions(filter: CashSessionListFilter): Promise<Summed<CashSessionProps>> {
+    const { rows, total, sums } = await summedPagedQuery<SessionRow>(
       this.tx,
       {
         sql: `select * from cash_sessions
@@ -644,8 +663,16 @@ export class PostgresFinanceQueries implements IFinanceQueries {
         ],
       },
       filter,
+      {
+        measures: {
+          opening_float: "opening_float_minor",
+          cash_in: "cash_in_minor",
+          cash_out: "cash_out_minor",
+          variance: "coalesce(variance_minor, 0)",
+        },
+      },
     );
-    return { rows: rows.map(toSession), total };
+    return { rows: rows.map(toSession), total, sums };
   }
 }
 

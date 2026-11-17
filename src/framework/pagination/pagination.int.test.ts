@@ -3,6 +3,7 @@ import type { Express } from "express";
 import type { Container } from "inversify";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { totalsHeaderNames } from "../../adapters/presenters/pageHeaders.js";
 import type { ApiRoute } from "../../adapters/routes/ApiRoute.js";
 import type { IPartnerQueries } from "../../application/ports/IPartnerQueries.js";
 import {
@@ -107,6 +108,7 @@ describe("every list that takes a page", () => {
 
   it("answers with the headers and a list, counting without an error", async () => {
     const answered: string[] = [];
+    let moneyLists = 0;
     for (const route of paged()) {
       const res = await ask(route);
       const where = `${route.path}: ${res.status} ${JSON.stringify(res.body)}`;
@@ -117,10 +119,17 @@ describe("every list that takes a page", () => {
       expect(res.headers["x-page-size"], where).toBe("1");
       expect(Number(res.headers["x-total-count"]), where).toBeGreaterThanOrEqual(0);
       expect(Array.isArray(res.body.data), where).toBe(true);
+      if (route.totals !== undefined) {
+        moneyLists += 1;
+        expect(res.headers["x-currency"], where).toMatch(/^[A-Z]{3}$/);
+        for (const name of totalsHeaderNames(route.totals).slice(1))
+          expect(res.headers[name.toLowerCase()], `${where} ${name}`).toMatch(/^-?\d+$/);
+      }
     }
     // Lists of someone else (a driver, a partner) or of one record are covered below.
     expect(paged().length).toBeGreaterThanOrEqual(88);
     expect(answered.length).toBeGreaterThanOrEqual(75);
+    expect(moneyLists).toBeGreaterThanOrEqual(25);
   });
 
   it.each(["timeline", "status-history", "odometer"])("counts a vehicle's %s", async (list) => {
@@ -170,5 +179,89 @@ describe("every list that takes a page", () => {
       rows: [],
       total: 0,
     });
+  });
+});
+
+describe("money totals", () => {
+  const expenses = (query: string) => request(app).get(`/api/v1/expenses?${query}`).set(owner());
+
+  it("adds up the whole filtered list in the base currency, by status", async () => {
+    const tree = await request(app).get("/api/v1/expense-categories").set(owner());
+    const categoryId = (tree.body.data as { code: string; id: string }[]).find(
+      (c) => c.code === "insurance",
+    )!.id;
+    const supplier = await request(app)
+      .post("/api/v1/suppliers")
+      .set(owner())
+      .send({ name: "Totals Motors", type: "parts" });
+    await request(app)
+      .patch("/api/v1/settings/currency")
+      .set(owner())
+      .send({ enabledCurrencies: ["USD"] })
+      .expect(200);
+    await request(app)
+      .post("/api/v1/fx-rates")
+      .set(owner())
+      .send({ quote: "USD", rate: "15", rateDate: new Date().toISOString().slice(0, 10) })
+      .expect(201);
+    const create = async (amount: string, currency?: string) => {
+      const res = await request(app)
+        .post("/api/v1/expenses")
+        .set(owner())
+        .send({
+          categoryId,
+          description: "Cover",
+          payeeType: "supplier",
+          payeeId: supplier.body.data.id,
+          amount,
+          ...(currency === undefined ? {} : { currency }),
+        });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      return res.body.data.expense.id as string;
+    };
+    await create("100.00");
+    await create("10.00", "USD");
+    const submitted = await create("50.00");
+    await request(app).post(`/api/v1/expenses/${submitted}/submit`).set(owner()).expect(200);
+
+    const all = await expenses("pageSize=1");
+    expect(all.status, JSON.stringify(all.body)).toBe(200);
+    expect(all.body.data).toHaveLength(1);
+    expect(all.headers).toMatchObject({
+      "x-total-count": "3",
+      "x-currency": "GHS",
+      // 100.00 + 50.00 cedis and 10.00 dollars at 15
+      "x-total-amount": "30000",
+      "x-total-draft": "25000",
+      "x-total-submitted": "5000",
+      "x-total-approved": "0",
+      "x-total-paid": "0",
+      "x-total-void": "0",
+      "x-total-amount-net": "30000",
+      "x-total-amount-tax": "0",
+    });
+
+    const some = await expenses("status=submitted&page=5");
+    expect(some.body.data).toEqual([]);
+    expect(some.headers).toMatchObject({
+      "x-total-count": "1",
+      "x-total-amount": "5000",
+      "x-total-draft": "0",
+      "x-total-submitted": "5000",
+    });
+  });
+
+  it("documents each list's totals", async () => {
+    const doc = await request(app).get("/api/v1/openapi.json");
+    expect(doc.status).toBe(200);
+    const headers = doc.body.paths["/api/v1/expenses"].get.responses["200"].headers;
+    expect(Object.keys(headers)).toEqual(
+      expect.arrayContaining([
+        "X-Total-Count",
+        "X-Currency",
+        "X-Total-Amount",
+        "X-Total-Submitted",
+      ]),
+    );
   });
 });

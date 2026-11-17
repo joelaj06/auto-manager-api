@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import { Money } from "../../../domain/money/Money.js";
 import {
   VehicleDamage,
@@ -96,7 +96,8 @@ export class VehicleDamages {
         ...(query.status === undefined ? {} : { statuses: [query.status] }),
         ...pageWindow(query),
       });
-      return pageOf(query, damages, damageView);
+      const base = (await deps.organisation.get()).baseCurrency;
+      return summedPageOf(query, damages, base, damageView);
     });
   }
 

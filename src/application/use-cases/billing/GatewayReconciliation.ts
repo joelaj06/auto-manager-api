@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
+import { pageWindow, type Page, type PageRequest, summedPageOf } from "../../dto/Page.js";
 import type {
   IGatewayRepository,
   ReconciliationRecord,
@@ -62,7 +62,8 @@ export class GatewayReconciliation implements IJobHandler<"billing.reconcile"> {
   }
 
   async list(request: PageRequest): Promise<Page<ReconciliationRecord>> {
-    return pageOf(request, await this.deps.gateway.reconciliations(pageWindow(request)));
+    const found = await this.deps.gateway.reconciliations(pageWindow(request));
+    return summedPageOf(request, found, found.currency);
   }
 
   async run(day: string): Promise<ReconciliationRecord> {

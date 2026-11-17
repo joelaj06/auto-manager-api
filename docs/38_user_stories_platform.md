@@ -34,7 +34,7 @@ This document was checked against the route declarations in `src/adapters/routes
 | **Four-eyes** | The action creates an approval request | Show "waiting for approval", not success. Link to the approvals queue |
 | **Support session** | A time-boxed tenant token, read-only by default | Show a persistent banner. Writes need a second approver |
 
-Envelope, field errors and money format match the business side: see [conventions](37_user_stories_business.md#conventions-for-every-screen).
+Envelope, field errors and money format match the business side: see [conventions](37_user_stories_business.md#conventions-for-every-screen). So do page headers: billing invoices, gateway transactions and reconciliations, reseller commissions and payouts also give their totals over the whole filtered list (`X-Currency`, `X-Total-Amount`, `X-Total-<Status>`, `X-Total-Amount-<Measure>`), in the currency we bill in.
 
 **Least data:** list and search screens show operational data only. Tenant business data is visible only inside a support session, and every request in that session is recorded. Do not design a console screen that assumes otherwise.
 

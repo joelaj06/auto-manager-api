@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ApiRoute } from "../routes/ApiRoute.js";
+import { measureTotalHeader, statusTotalHeader, type ListTotalsSpec } from "./pageHeaders.js";
 import type { RouteAccess } from "../routes/RouteAccess.js";
 import { errorEnvelopeSchema } from "./responseEnvelope.js";
 
@@ -32,6 +33,33 @@ const PAGE_RESPONSE_HEADERS = Object.fromEntries(
     ] as const
   ).map(([name, description]) => [name, { description, schema: { type: "integer" } }]),
 );
+
+/** The money totals of a list, documented header by header. */
+function totalsResponseHeaders(totals: ListTotalsSpec) {
+  const minor = (description: string) => ({
+    description: `${description}, in minor units of X-Currency, over the whole filtered list`,
+    schema: { type: "integer" },
+  });
+  return {
+    "X-Currency": {
+      description: "The business's base currency, which the totals are in",
+      schema: { type: "string" },
+    },
+    ...(totals.amount === undefined ? {} : { "X-Total-Amount": minor(`Total ${totals.amount}`) }),
+    ...Object.fromEntries(
+      totals.statuses.map((status) => [
+        statusTotalHeader(status),
+        minor(`Total ${totals.amount ?? "amount"} of the ${status} rows`),
+      ]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(totals.measures).map(([measure, description]) => [
+        measureTotalHeader(measure),
+        minor(`Total ${description}`),
+      ]),
+    ),
+  };
+}
 
 const takesPage = (route: ApiRoute) => {
   const query = route.request?.query?.shape;
@@ -99,7 +127,14 @@ export function buildOpenApiDocument(routes: readonly ApiRoute[], info: OpenApiI
     for (const [status, response] of Object.entries(route.responses)) {
       responses[status] = {
         description: response.description,
-        ...(status === "200" && takesPage(route) ? { headers: PAGE_RESPONSE_HEADERS } : {}),
+        ...(status === "200" && takesPage(route)
+          ? {
+              headers: {
+                ...PAGE_RESPONSE_HEADERS,
+                ...(route.totals === undefined ? {} : totalsResponseHeaders(route.totals)),
+              },
+            }
+          : {}),
         ...(response.schema === undefined ? {} : { content: jsonContent(response.schema) }),
       };
     }

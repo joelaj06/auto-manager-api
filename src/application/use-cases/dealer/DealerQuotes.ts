@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import {
   Quote,
   QuoteRuleError,
@@ -135,7 +135,7 @@ export class DealerQuotes {
         ...pageWindow(query),
         branchIds: deps.scope.branchesFor(actor, "dealer.quotes.manage"),
       });
-      return pageOf(query, found, (q) => view(q, base));
+      return summedPageOf(query, found, base, (q) => view(q, base));
     });
   }
 

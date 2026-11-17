@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import {
   IncidentRuleError,
   TrafficOffence,
@@ -104,7 +104,11 @@ export class TrafficOffences {
             : {}),
         ...pageWindow(query),
       });
-      return pageOf(query, { rows: await this.views(found.rows), total: found.total });
+      return summedPageOf(
+        query,
+        { ...found, rows: await this.views(found.rows) },
+        await this.currency(),
+      );
     });
   }
 

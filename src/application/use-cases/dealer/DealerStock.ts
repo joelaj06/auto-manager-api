@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import {
   AGEING_BUCKETS,
   StockRuleError,
@@ -320,7 +320,9 @@ export class DealerStock {
         ...pageWindow(query),
       });
       const spend = await this.spend(records.rows, context);
-      return pageOf(query, records, (r) => this.view(r, context, spend.get(r.unit.vehicleId)));
+      return summedPageOf(query, records, context.base, (r) =>
+        this.view(r, context, spend.get(r.unit.vehicleId)),
+      );
     });
   }
 

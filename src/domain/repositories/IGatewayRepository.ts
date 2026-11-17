@@ -1,4 +1,4 @@
-import type { Paged, PageWindow } from "../value-objects/Paged.js";
+import type { PageWindow, Paged, SummedIn } from "../value-objects/Paged.js";
 import type { AttemptStatus, PaymentAttempt } from "../billing/PaymentAttempt.js";
 
 export type WebhookRecord = Readonly<{
@@ -60,7 +60,7 @@ export interface IGatewayRepository {
       limit: number;
       offset?: number;
     }>,
-  ): Promise<Paged<PaymentAttempt>>;
+  ): Promise<SummedIn<PaymentAttempt>>;
   /** Succeeded attempts completed in [from, to) (reconciliation). */
   succeededBetween(provider: string, from: Date, to: Date): Promise<PaymentAttempt[]>;
 
@@ -95,5 +95,5 @@ export interface IGatewayRepository {
   saveReconciliation(
     record: Omit<ReconciliationRecord, "id" | "ranAt">,
   ): Promise<ReconciliationRecord>;
-  reconciliations(window: PageWindow): Promise<Paged<ReconciliationRecord>>;
+  reconciliations(window: PageWindow): Promise<SummedIn<ReconciliationRecord>>;
 }

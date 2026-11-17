@@ -1,3 +1,4 @@
+import { AGREEMENT_TOTALS, ARREARS_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -188,13 +189,14 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Agreements" } },
+      totals: AGREEMENT_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await agreements.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, AGREEMENT_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -711,9 +713,10 @@ export function workpayRoutes(deps: WorkPayRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Arrears" } },
+      totals: ARREARS_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await reports.arrears(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, ARREARS_TOTALS)).json(envelope(page.items));
       },
     }),
   ];

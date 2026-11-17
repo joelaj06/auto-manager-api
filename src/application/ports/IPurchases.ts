@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type { Allocation, CostKind } from "../../domain/purchases/LandedCost.js";
 import type {
   ImportStage,
@@ -75,7 +75,8 @@ export interface IPurchases {
   update(purchase: Purchase): Promise<void>;
   get(id: string): Promise<Purchase | null>;
   lock(id: string): Promise<Purchase | null>;
-  list(filter: PurchaseFilter): Promise<Paged<Purchase>>;
+  /** In base minor units: what the purchases have cost so far, by status. */
+  list(filter: PurchaseFilter): Promise<Summed<Purchase>>;
   addCost(cost: NewPurchaseCost): Promise<void>;
   costs(purchaseId: string): Promise<PurchaseCostRecord[]>;
   /** The purchase a cost (by its id, the expense's source) belongs to. */

@@ -1,3 +1,8 @@
+import {
+  BILLING_INVOICE_TOTALS,
+  GATEWAY_RECONCILIATION_TOTALS,
+  GATEWAY_TRANSACTION_TOTALS,
+} from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -59,9 +64,10 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
       access: access.permission("billing.view"),
       request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Invoices" } },
+      totals: BILLING_INVOICE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const invoices = await tenantBilling.invoices(query);
-        res.set(pageHeaders(invoices)).json(envelope(invoices.items));
+        res.set(pageHeaders(invoices, BILLING_INVOICE_TOTALS)).json(envelope(invoices.items));
       },
     }),
     defineRoute({
@@ -387,9 +393,10 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Attempts" } },
+      totals: GATEWAY_TRANSACTION_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await gateway.attempts(query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, GATEWAY_TRANSACTION_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -474,9 +481,10 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
       access: access.platform("platform.billing.view"),
       request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Reconciliations" } },
+      totals: GATEWAY_RECONCILIATION_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await reconciliation.list(query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, GATEWAY_RECONCILIATION_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -719,9 +727,10 @@ export function billingRoutes(deps: BillingRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Invoices" } },
+      totals: BILLING_INVOICE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const invoices = await billing.invoices(query);
-        res.set(pageHeaders(invoices)).json(envelope(invoices.items));
+        res.set(pageHeaders(invoices, BILLING_INVOICE_TOTALS)).json(envelope(invoices.items));
       },
     }),
     defineRoute({

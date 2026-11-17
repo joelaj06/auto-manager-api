@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page, type PageRequest, summedPageOf } from "../../dto/Page.js";
 import { createHash } from "node:crypto";
 import {
   parseStatement,
@@ -320,7 +320,7 @@ export class BankReconciliation {
         ...(query.to === undefined ? {} : { to: query.to }),
         ...pageWindow(query),
       });
-      const page = pageOf(query, found);
+      const page = summedPageOf(query, found, currency);
       const dates = page.items.map((l) => l.date).sort();
       const candidates =
         query.status === "unmatched" && dates.length > 0

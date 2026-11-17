@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
+import { pageWindow, type Page, type Paging, summedPageOf } from "../../dto/Page.js";
 import { billingTax, sellerParty } from "../../../domain/billing/BillingSettings.js";
 import {
   Invoice,
@@ -336,7 +336,7 @@ export class ManualBilling {
   async invoices(filter: Paging<InvoiceFilter>): Promise<Page<InvoiceView>> {
     const invoices = await this.deps.billing.invoices({ ...filter, ...pageWindow(filter) });
     const items = await Promise.all(invoices.rows.map((i) => this.view(i)));
-    return pageOf(filter, { rows: items, total: invoices.total });
+    return summedPageOf(filter, { ...invoices, rows: items }, invoices.currency);
   }
 
   async invoice(invoiceId: string, tenantId?: string): Promise<InvoiceView> {

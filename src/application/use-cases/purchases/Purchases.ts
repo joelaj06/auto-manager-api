@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import { StockUnit } from "../../../domain/dealer/StockUnit.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import {
@@ -196,7 +196,7 @@ export class Purchases {
         ...query,
         ...pageWindow(query),
       });
-      return pageOf(query, purchases, (purchase) => {
+      return summedPageOf(query, purchases, await deps.posting.baseCurrency(), (purchase) => {
         const { lines, ...p } = purchase.snapshot();
         return {
           ...p,

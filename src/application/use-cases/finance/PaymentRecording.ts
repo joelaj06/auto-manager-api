@@ -15,7 +15,7 @@ import type {
 } from "../../../domain/repositories/IFinanceRepositories.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import {
   CashSessionRequiredError,
   InvoiceNotFoundError,
@@ -152,8 +152,7 @@ export class PaymentRecording {
         ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = pageOf(query, found);
-      return { ...page, items: page.items.map((p) => paymentView(p, base)) };
+      return summedPageOf(query, found, base, (p) => paymentView(p, base));
     });
   }
 

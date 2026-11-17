@@ -1,3 +1,4 @@
+import { REMITTANCE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -365,9 +366,10 @@ export function driverAppRoutes(deps: DriverAppRouteDependencies): ApiRoute[] {
       access: DRIVER,
       request: { query: paging },
       responses: { 200: { description: "Remittances" } },
+      totals: REMITTANCE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const result = await app.remittances(principalOf(res), query);
-        res.set(pageHeaders(result)).json(envelope(result.items));
+        res.set(pageHeaders(result, REMITTANCE_TOTALS)).json(envelope(result.items));
       },
     }),
     defineRoute({

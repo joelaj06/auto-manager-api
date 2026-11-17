@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Paged, Summed } from "../../domain/value-objects/Paged.js";
+import { pagedQuery, summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   IParts,
   MoveFilter,
@@ -249,7 +249,7 @@ export class PostgresParts implements IParts {
     return rows.length > 0;
   }
 
-  async moves(filter: MoveFilter): Promise<Paged<PartMove>> {
+  async moves(filter: MoveFilter): Promise<Summed<PartMove>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -260,7 +260,7 @@ export class PostgresParts implements IParts {
     if (filter.partId !== undefined) add("part_id = ?", filter.partId);
     if (filter.branchId !== undefined) add("branch_id = ?", filter.branchId);
     if (filter.workOrderId !== undefined) add("work_order_id = ?", filter.workOrderId);
-    const { rows, total } = await pagedQuery<MoveRow>(
+    const { rows, total, sums } = await summedPagedQuery<MoveRow>(
       this.tx,
       {
         sql: `select id, part_id, branch_id, kind, quantity::text as quantity,
@@ -273,8 +273,10 @@ export class PostgresParts implements IParts {
         params,
       },
       filter,
+      { amount: "value_minor::bigint", status: "kind" },
     );
     return {
+      sums,
       rows: rows.map((r) => ({
         id: r.id,
         partId: r.part_id,

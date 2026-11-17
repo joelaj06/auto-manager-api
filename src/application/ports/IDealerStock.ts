@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Paged, Summed } from "../../domain/value-objects/Paged.js";
 import type {
   PriceChange,
   StockSource,
@@ -132,7 +132,8 @@ export interface IDealerStock {
   lock(vehicleId: string): Promise<StockUnit | null>;
   record(vehicleId: string): Promise<StockRecord | null>;
   list(filter: StockFilter): Promise<StockRecord[]>;
-  page(filter: StockFilter): Promise<Paged<StockRecord>>;
+  /** In base minor units: the asking value by status (cost is left to the stock summary). */
+  page(filter: StockFilter): Promise<Summed<StockRecord>>;
   /** Expenses on the vehicles (their lines) dated on or after each one's stock date. */
   spend(vehicleIds: readonly string[]): Promise<Map<string, StockSpend>>;
   addPriceChange(change: PriceChangeRecord): Promise<void>;

@@ -1,3 +1,4 @@
+import { DAMAGE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -42,9 +43,10 @@ export function vehicleDamageRoutes(deps: VehicleDamageRouteDependencies): ApiRo
         }),
       },
       responses: { 200: { description: "Damages" } },
+      totals: DAMAGE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await damages.list(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, DAMAGE_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

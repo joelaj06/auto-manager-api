@@ -1,3 +1,4 @@
+import { REMITTANCE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -110,13 +111,14 @@ export function remittanceRoutes(deps: RemittanceRouteDependencies): ApiRoute[] 
         }),
       },
       responses: { 200: { description: "Remittances" } },
+      totals: REMITTANCE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await remittances.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, REMITTANCE_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

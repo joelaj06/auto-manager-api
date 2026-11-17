@@ -1,3 +1,4 @@
+import { COMMISSION_ENTRY_TOTALS, PAYOUT_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import type { Response } from "express";
@@ -137,9 +138,10 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       access: access.platform("platform.partners.view"),
       request: { params: idParams, query: entryQuery },
       responses: { 200: { description: "Entries" } },
+      totals: COMMISSION_ENTRY_TOTALS,
       handler: async ({ params, query }, _req, res) => {
         const page = await commissions.entries({ ...query, partnerId: params.id });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, COMMISSION_ENTRY_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -162,9 +164,10 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       access: access.platform("platform.partners.view"),
       request: { params: idParams, query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Payouts" } },
+      totals: PAYOUT_TOTALS,
       handler: async ({ params, query }, _req, res) => {
         const page = await commissions.payouts({ ...query, partnerId: params.id });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, PAYOUT_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -205,9 +208,10 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
         }),
       },
       responses: { 200: { description: "Payouts" } },
+      totals: PAYOUT_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await commissions.payouts(query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, PAYOUT_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -296,9 +300,10 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       access: access.partner("platform.partner.commissions.view"),
       request: { query: entryQuery },
       responses: { 200: { description: "Entries" } },
+      totals: COMMISSION_ENTRY_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await commissions.myEntries(staffOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, COMMISSION_ENTRY_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -320,9 +325,10 @@ export function partnerCommissionRoutes(deps: PartnerCommissionRouteDependencies
       access: access.partner("platform.partner.commissions.view"),
       request: { query: z.object(pageParams(100, 25)) },
       responses: { 200: { description: "Payouts" } },
+      totals: PAYOUT_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await commissions.myPayouts(staffOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, PAYOUT_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

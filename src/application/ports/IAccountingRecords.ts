@@ -1,4 +1,4 @@
-import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import type { PageWindow, Paged, Summed } from "../../domain/value-objects/Paged.js";
 import type {
   ExportDetail,
   ExportFormat,
@@ -147,7 +147,8 @@ export interface IReconciliation {
   /** Removes the file's lines and their matches, so that it can be imported again. */
   voidImport(id: string, by: string, at: Date): Promise<void>;
   line(id: string, lock?: boolean): Promise<StatementLineRecord | null>;
-  lines(filter: StatementLineFilter): Promise<Paged<StatementLineRecord>>;
+  /** Net amount, money in and money out, in minor units of the base currency. */
+  lines(filter: StatementLineFilter): Promise<Summed<StatementLineRecord>>;
   /** Unmatched statement lines of the account, oldest first. */
   unmatched(accountId: string): Promise<StatementLineRecord[]>;
   /** Unmatched ledger lines of the account between the dates. */

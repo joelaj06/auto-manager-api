@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type { AppraisalFilter, IAppraisals } from "../../application/ports/IDealerDeals.js";
 import { Appraisal, type AppraisalProps } from "../../domain/dealer/Appraisal.js";
 import type { PostgresTransactionContext } from "../database/postgres/PostgresTransactionContext.js";
@@ -129,7 +129,7 @@ export class PostgresAppraisals implements IAppraisals {
     return this.one(id, "for update");
   }
 
-  async list(filter: AppraisalFilter): Promise<Paged<Appraisal>> {
+  async list(filter: AppraisalFilter): Promise<Summed<Appraisal>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -140,7 +140,7 @@ export class PostgresAppraisals implements IAppraisals {
     if (filter.statuses !== undefined) add("a.status = any(?::text[])", filter.statuses);
     if (filter.leadId !== undefined) add("a.lead_id = ?", filter.leadId);
     if (filter.customerId !== undefined) add("a.customer_id = ?", filter.customerId);
-    const { rows, total } = await pagedQuery<Row>(
+    const { rows, total, sums } = await summedPagedQuery<Row>(
       this.tx,
       {
         sql: `select ${SELECT} from dealer_appraisals a
@@ -149,8 +149,9 @@ export class PostgresAppraisals implements IAppraisals {
         params,
       },
       filter,
+      { amount: "value_minor", status: "status" },
     );
-    return { rows: rows.map(toAppraisal), total };
+    return { rows: rows.map(toAppraisal), total, sums };
   }
 
   private async one(id: string, lock: string): Promise<Appraisal | null> {

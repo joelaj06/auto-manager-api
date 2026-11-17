@@ -1,3 +1,4 @@
+import { STOCK_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -110,6 +111,7 @@ export function dealerStockRoutes(deps: DealerStockRouteDependencies): ApiRoute[
         }),
       },
       responses: { 200: { description: "Stock" } },
+      totals: STOCK_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, source, ...rest } = query;
         const page = await stock.list(principalOf(res), {
@@ -117,7 +119,7 @@ export function dealerStockRoutes(deps: DealerStockRouteDependencies): ApiRoute[
           ...(status === undefined ? {} : { statuses: status }),
           ...(source === undefined ? {} : { sources: source }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, STOCK_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

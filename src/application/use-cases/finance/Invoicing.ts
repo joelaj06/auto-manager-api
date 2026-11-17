@@ -11,7 +11,7 @@ import type { IVehicleRepository } from "../../../domain/repositories/IVehicleRe
 import { TaxCode } from "../../../domain/tax/TaxCode.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import { InvoiceNotFoundError } from "../../errors/FinanceErrors.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -140,8 +140,7 @@ export class Invoicing {
         branchIds: deps.scope.branchesFor(actor, "finance.invoices.view"),
         ...pageWindow(query),
       });
-      const page = pageOf(query, found);
-      return { ...page, items: page.items.map(invoiceView) };
+      return summedPageOf(query, found, await deps.posting.baseCurrency(), invoiceView);
     });
   }
 

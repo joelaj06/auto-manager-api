@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Paged, Summed } from "../../domain/value-objects/Paged.js";
 import type { Lead, LeadSource, LeadStage } from "../../domain/dealer/Lead.js";
 import type { Quote, QuoteStatus } from "../../domain/dealer/Quote.js";
 import type { TestDrive, TestDriveStatus } from "../../domain/dealer/TestDrive.js";
@@ -151,7 +151,8 @@ export interface IQuotes {
   update(quote: Quote): Promise<void>;
   get(id: string): Promise<Quote | null>;
   lock(id: string): Promise<Quote | null>;
-  list(filter: QuoteFilter): Promise<Paged<Quote>>;
+  /** In base minor units: quoted prices by status, discounts, trade-ins and deposits. */
+  list(filter: QuoteFilter): Promise<Summed<Quote>>;
   /** Sent quotes valid until before the day. */
   lapsed(today: string): Promise<string[]>;
 }

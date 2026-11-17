@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import {
   Appraisal,
   AppraisalRuleError,
@@ -96,7 +96,7 @@ export class Appraisals {
         ...pageWindow(query),
         branchIds: deps.scope.branchesFor(actor, PERMISSION),
       });
-      return pageOf(query, found, (a) => view(a, base));
+      return summedPageOf(query, found, base, (a) => view(a, base));
     });
   }
 

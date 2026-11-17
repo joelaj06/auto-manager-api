@@ -1,5 +1,7 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import { billingCurrency, inBillingCurrency } from "./billingCurrency.js";
+import type { SummedIn } from "../../domain/value-objects/Paged.js";
+
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type { BillingSettings } from "../../domain/billing/BillingSettings.js";
 import {
   Invoice,
@@ -417,8 +419,8 @@ export class PostgresBillingRepository implements IBillingRepository {
     );
   }
 
-  async invoices(filter: InvoiceFilter): Promise<Paged<Invoice>> {
-    const { rows, total } = await pagedQuery<InvoiceRow>(
+  async invoices(filter: InvoiceFilter): Promise<SummedIn<Invoice>> {
+    const { rows, total, sums } = await summedPagedQuery<InvoiceRow>(
       this.db,
       {
         sql: `select ${INVOICE_COLUMNS} from billing_invoices
@@ -429,8 +431,23 @@ export class PostgresBillingRepository implements IBillingRepository {
         params: [filter.tenantId ?? null, filter.status ?? null, filter.excludeVoid === true],
       },
       filter,
+      {
+        amount: inBillingCurrency("total_minor"),
+        status: "status",
+        measures: {
+          paid: inBillingCurrency("paid_minor"),
+          outstanding: inBillingCurrency(
+            "case when status = 'open' then total_minor - paid_minor else 0 end",
+          ),
+        },
+      },
     );
-    return { rows: rows.map(toInvoice), total };
+    return {
+      rows: rows.map(toInvoice),
+      total,
+      sums,
+      currency: await billingCurrency(this.db),
+    };
   }
 
   async insertPayment(payment: Omit<PaymentRecord, "createdAt">): Promise<void> {

@@ -1,5 +1,6 @@
-import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import { billingCurrency, inBillingCurrency } from "./billingCurrency.js";
+import type { PageWindow, Paged, SummedIn } from "../../domain/value-objects/Paged.js";
+import { pagedQuery, summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   PaymentAttempt,
   type AttemptStatus,
@@ -223,8 +224,8 @@ export class PostgresGatewayRepository implements IGatewayRepository {
       limit: number;
       offset?: number;
     }>,
-  ): Promise<Paged<PaymentAttempt>> {
-    const { rows, total } = await pagedQuery<AttemptRow>(
+  ): Promise<SummedIn<PaymentAttempt>> {
+    const { rows, total, sums } = await summedPagedQuery<AttemptRow>(
       this.db,
       {
         sql: `select * from gateway_transactions
@@ -234,8 +235,13 @@ export class PostgresGatewayRepository implements IGatewayRepository {
         params: [filter.status ?? null, filter.tenantId ?? null, filter.invoiceId ?? null],
       },
       filter,
+      {
+        amount: inBillingCurrency("amount_minor"),
+        status: "status",
+        measures: { fees: inBillingCurrency("coalesce(fees_minor, 0)") },
+      },
     );
-    return { rows: rows.map(toAttempt), total };
+    return { rows: rows.map(toAttempt), total, sums, currency: await billingCurrency(this.db) };
   }
 
   async succeededBetween(provider: string, from: Date, to: Date): Promise<PaymentAttempt[]> {
@@ -402,8 +408,8 @@ export class PostgresGatewayRepository implements IGatewayRepository {
     return toReconciliation(rows[0]!);
   }
 
-  async reconciliations(window: PageWindow): Promise<Paged<ReconciliationRecord>> {
-    const { rows, total } = await pagedQuery<ReconciliationRow>(
+  async reconciliations(window: PageWindow): Promise<SummedIn<ReconciliationRecord>> {
+    const { rows, total, sums } = await summedPagedQuery<ReconciliationRow>(
       this.db,
       {
         sql: `select *, day::text as day from gateway_reconciliations`,
@@ -411,7 +417,13 @@ export class PostgresGatewayRepository implements IGatewayRepository {
         params: [],
       },
       window,
+      { measures: { ours: "our_minor", provider: "provider_minor", fees: "fees_minor" } },
     );
-    return { rows: rows.map(toReconciliation), total };
+    return {
+      rows: rows.map(toReconciliation),
+      total,
+      sums,
+      currency: await billingCurrency(this.db),
+    };
   }
 }

@@ -1,3 +1,4 @@
+import { PART_MOVE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -236,9 +237,10 @@ export function partRoutes(deps: PartRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Moves" } },
+      totals: PART_MOVE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await parts.moves(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, PART_MOVE_TOTALS)).json(envelope(page.items));
       },
     }),
   ];

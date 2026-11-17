@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   DamageFilter,
   IRentalInspections,
@@ -192,7 +192,7 @@ export class PostgresVehicleDamages implements IVehicleDamages {
     return rows[0] === undefined ? null : toDamage(rows[0]);
   }
 
-  async list(filter: DamageFilter): Promise<Paged<VehicleDamage>> {
+  async list(filter: DamageFilter): Promise<Summed<VehicleDamage>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -203,7 +203,7 @@ export class PostgresVehicleDamages implements IVehicleDamages {
     if (filter.vehicleId !== undefined) add("d.vehicle_id = ?", filter.vehicleId);
     if (filter.bookingId !== undefined) add("d.booking_id = ?", filter.bookingId);
     if (filter.statuses !== undefined) add("d.status = any(?::text[])", filter.statuses);
-    const { rows, total } = await pagedQuery<DamageRow>(
+    const { rows, total, sums } = await summedPagedQuery<DamageRow>(
       this.tx,
       {
         sql: `${DAMAGES} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
@@ -211,8 +211,18 @@ export class PostgresVehicleDamages implements IVehicleDamages {
         params,
       },
       filter,
+      {
+        amount: "coalesce(final_minor, estimate_minor, 0)",
+        status: "status",
+        measures: {
+          estimate: "coalesce(estimate_minor, 0)",
+          final: "coalesce(final_minor, 0)",
+          customer:
+            "case when liability = 'customer' then coalesce(final_minor, estimate_minor, 0) else 0 end",
+        },
+      },
     );
-    return { rows: rows.map(toDamage), total };
+    return { rows: rows.map(toDamage), total, sums };
   }
 
   async insert(damage: VehicleDamage): Promise<void> {

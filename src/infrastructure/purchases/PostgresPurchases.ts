@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pageTotal } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { listSums } from "../database/postgres/PagedQuery.js";
 import type {
   ImportWatch,
   IPurchases,
@@ -192,7 +192,7 @@ export class PostgresPurchases implements IPurchases {
     return this.one(id, "for update");
   }
 
-  async list(filter: PurchaseFilter): Promise<Paged<Purchase>> {
+  async list(filter: PurchaseFilter): Promise<Summed<Purchase>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -209,11 +209,20 @@ export class PostgresPurchases implements IPurchases {
       `${tail} order by id desc limit $${params.length + 1} offset $${params.length + 2}`,
       [...params, filter.limit, filter.offset ?? 0],
     );
-    const total = await pageTotal(this.tx, rows.length, filter, {
-      sql: `select count(*) as total from purchases ${tail}`,
-      params,
-    });
-    return { rows, total };
+    // What a purchase has cost so far: the base amounts its costs posted, as on the purchase.
+    const { count, ...sums } = await listSums(
+      this.tx,
+      {
+        sql: `select status, (select coalesce(sum(e.amount_base_minor), 0)
+                                from purchase_costs c join expenses e on e.id = c.expense_id
+                               where c.purchase_id = purchases.id
+                                 and e.status not in ('rejected', 'void')) as cost_base_minor
+                from purchases ${tail}`,
+        params,
+      },
+      { amount: "cost_base_minor", status: "status" },
+    );
+    return { rows, total: count, sums };
   }
 
   async addCost(c: NewPurchaseCost): Promise<void> {

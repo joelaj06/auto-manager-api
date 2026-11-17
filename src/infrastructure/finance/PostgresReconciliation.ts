@@ -1,5 +1,5 @@
-import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { PageWindow, Paged, Summed } from "../../domain/value-objects/Paged.js";
+import { pagedQuery, summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   IReconciliation,
   LedgerCandidate,
@@ -251,7 +251,7 @@ export class PostgresReconciliation implements IReconciliation {
     return rows[0] === undefined ? null : toLine(rows[0]);
   }
 
-  async lines(filter: StatementLineFilter): Promise<Paged<StatementLineRecord>> {
+  async lines(filter: StatementLineFilter): Promise<Summed<StatementLineRecord>> {
     const params: unknown[] = [filter.accountId, filter.status];
     const where = ["account_id = $1", "status = $2"];
     const add = (sql: (n: number) => string, value: unknown) => {
@@ -260,7 +260,7 @@ export class PostgresReconciliation implements IReconciliation {
     };
     if (filter.from !== undefined) add((n) => `value_date >= $${n}`, filter.from);
     if (filter.to !== undefined) add((n) => `value_date <= $${n}`, filter.to);
-    const { rows, total } = await pagedQuery<LineRow>(
+    const { rows, total, sums } = await summedPagedQuery<LineRow>(
       this.tx.current(),
       {
         sql: `select ${LINE_COLUMNS} from statement_lines where ${where.join(" and ")}`,
@@ -268,8 +268,15 @@ export class PostgresReconciliation implements IReconciliation {
         params,
       },
       filter,
+      {
+        amount: "amount_minor",
+        measures: {
+          in: "greatest(amount_minor, 0)",
+          out: "greatest(-amount_minor, 0)",
+        },
+      },
     );
-    return { rows: rows.map(toLine), total };
+    return { rows: rows.map(toLine), total, sums };
   }
 
   async unmatched(accountId: string): Promise<StatementLineRecord[]> {

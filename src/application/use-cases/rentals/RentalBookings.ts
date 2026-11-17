@@ -21,7 +21,7 @@ import type { Principal } from "../../authorization/Principal.js";
 import { PermissionDeniedError } from "../../errors/AuthErrors.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import { VehicleUnavailableError } from "../../errors/RentalErrors.js";
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IIdGenerator } from "../../ports/IIdGenerator.js";
 import type { IOrganisationSettings } from "../../ports/IOrganisationSettings.js";
@@ -218,6 +218,7 @@ export class RentalBookings {
         shown === undefined ? undefined : shown === "expired" ? ["reserved"] : [shown];
       const found = await deps.bookings.list({
         branchIds,
+        shownAt: now,
         ...(statuses === undefined ? {} : { statuses }),
         ...(shown === "expired" || shown === "reserved"
           ? { lapsedAt: { now, lapsed: shown === "expired" } }
@@ -228,7 +229,7 @@ export class RentalBookings {
         ...(query.to === undefined ? {} : { to: query.to }),
         ...pageWindow(query),
       });
-      const page = pageOf(query, found);
+      const page = summedPageOf(query, found, (await deps.organisation.get()).baseCurrency);
       return {
         ...page,
         items: await Promise.all(page.items.map((b) => this.view(b))),

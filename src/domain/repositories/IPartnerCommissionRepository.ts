@@ -1,4 +1,4 @@
-import type { Paged } from "../value-objects/Paged.js";
+import type { SummedIn } from "../value-objects/Paged.js";
 import type {
   CommissionTerms,
   CommissionTermsInput,
@@ -117,7 +117,8 @@ export interface IPartnerCommissionRepository {
   forPayment(paymentId: string): Promise<CommissionEntry[]>;
   /** Net commission already earned from a tenant (for the cap). */
   tenantTotal(tenantId: string): Promise<number>;
-  entries(filter: EntryFilter): Promise<Paged<CommissionEntry>>;
+  /** Totals in the billing currency: commission by status and what it was earned on. */
+  entries(filter: EntryFilter): Promise<SummedIn<CommissionEntry>>;
   /** Accrued entries whose hold ended become payable; returns how many. */
   releaseDue(now: Date): Promise<number>;
   /** Payable entries of a partner not in a payout (locked). */
@@ -138,7 +139,7 @@ export interface IPartnerCommissionRepository {
       limit: number;
       offset?: number;
     }>,
-  ): Promise<Paged<PayoutRecord>>;
+  ): Promise<SummedIn<PayoutRecord>>;
   payoutEntries(payoutId: string): Promise<CommissionEntry[]>;
   /** Paid out: the payout's entries are paid. */
   markEntriesPaid(payoutId: string): Promise<void>;

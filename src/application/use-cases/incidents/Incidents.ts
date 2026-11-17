@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page, type PageRequest, summedPageOf } from "../../dto/Page.js";
 import { credit, debit, journal } from "../../../domain/finance/Journal.js";
 import { METHOD_ACCOUNT } from "../../../domain/finance/Payment.js";
 import {
@@ -309,7 +309,7 @@ export class Incidents {
         ...pageWindow(query),
       });
       const currency = await this.currency();
-      return pageOf(query, claims, (c) => claimView(c, currency));
+      return summedPageOf(query, claims, currency, (c) => claimView(c, currency));
     });
   }
 

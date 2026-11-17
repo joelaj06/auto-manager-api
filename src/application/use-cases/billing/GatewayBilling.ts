@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page, type PageRequest } from "../../dto/Page.js";
+import { pageOf, pageWindow, type Page, type PageRequest, summedPageOf } from "../../dto/Page.js";
 import type { Invoice } from "../../../domain/billing/Invoice.js";
 import {
   PaymentAttempt,
@@ -288,7 +288,7 @@ export class GatewayBilling {
     filter: Readonly<{ status?: PaymentAttempt["status"]; tenantId?: string }> & PageRequest,
   ): Promise<Page<AttemptView>> {
     const found = await this.deps.gateway.attempts({ ...filter, ...pageWindow(filter) });
-    return pageOf(filter, found, (a) => this.view(a));
+    return summedPageOf(filter, found, found.currency, (a) => this.view(a));
   }
 
   /** The attempts of one of the tenant's invoices (Billing tab). */

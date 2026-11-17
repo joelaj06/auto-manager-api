@@ -1,3 +1,4 @@
+import { RENTAL_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -119,9 +120,10 @@ export function rentalBookingRoutes(deps: RentalBookingRouteDependencies): ApiRo
       access: access.permission("rentals.view"),
       request: { query: listQuery },
       responses: { 200: { description: "Bookings" } },
+      totals: RENTAL_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await bookings.list(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, RENTAL_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

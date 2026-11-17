@@ -1,3 +1,4 @@
+import { sumRows } from "../../../domain/value-objects/Paged.js";
 import { slicePage, type Page, type PageRequest } from "../../dto/Page.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { IDriverRepository } from "../../../domain/repositories/IPartyRepositories.js";
@@ -254,7 +255,15 @@ export class WorkPayReports {
             y.overdue.amountMinor - x.overdue.amountMinor ||
             x.agreementId.localeCompare(y.agreementId),
         );
-      return slicePage(query, arrears);
+      const sums = sumRows(arrears, {
+        amount: (r) => r.outstanding.amountMinor,
+        status: (r) => r.status,
+        measures: {
+          overdue: (r) => r.overdue.amountMinor,
+          penalties_outstanding: (r) => r.penaltiesOutstanding.amountMinor,
+        },
+      });
+      return { ...slicePage(query, arrears), totals: { ...sums, currency: m(0).currency } };
     });
   }
 

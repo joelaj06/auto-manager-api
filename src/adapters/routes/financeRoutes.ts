@@ -1,3 +1,9 @@
+import {
+  CASH_SESSION_TOTALS,
+  INVOICE_TOTALS,
+  LEDGER_LINE_TOTALS,
+  PAYMENT_TOTALS,
+} from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -124,6 +130,7 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Invoices" } },
+      totals: INVOICE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, partyType: type, partyId, ...rest } = query;
         const result = await invoices.list(principalOf(res), {
@@ -131,7 +138,7 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
           ...(status === undefined ? {} : { statuses: status }),
           ...(type === undefined || partyId === undefined ? {} : { party: { type, id: partyId } }),
         });
-        res.set(pageHeaders(result)).json(envelope(result.items));
+        res.set(pageHeaders(result, INVOICE_TOTALS)).json(envelope(result.items));
       },
     }),
     defineRoute({
@@ -232,13 +239,14 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Payments" } },
+      totals: PAYMENT_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { partyType: type, partyId, ...rest } = query;
         const result = await payments.list(principalOf(res), {
           ...rest,
           ...(type === undefined || partyId === undefined ? {} : { party: { type, id: partyId } }),
         });
-        res.set(pageHeaders(result)).json(envelope(result.items));
+        res.set(pageHeaders(result, PAYMENT_TOTALS)).json(envelope(result.items));
       },
     }),
     defineRoute({
@@ -382,9 +390,10 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Cash sessions" } },
+      totals: CASH_SESSION_TOTALS,
       handler: async ({ query }, _req, res) => {
         const page = await cashSessions.list(principalOf(res), query);
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, CASH_SESSION_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -491,13 +500,14 @@ export function financeRoutes(deps: FinanceRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Lines" } },
+      totals: LEDGER_LINE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { partyType: type, partyId, ...rest } = query;
         const result = await ledger.lines({
           ...rest,
           ...(type === undefined || partyId === undefined ? {} : { party: { type, id: partyId } }),
         });
-        res.set(pageHeaders(result)).json(envelope(result.items));
+        res.set(pageHeaders(result, LEDGER_LINE_TOTALS)).json(envelope(result.items));
       },
     }),
     defineRoute({

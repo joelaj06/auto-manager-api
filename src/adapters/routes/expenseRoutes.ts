@@ -1,3 +1,4 @@
+import { EXPENSE_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -388,13 +389,14 @@ export function expenseRoutes(deps: ExpenseRouteDependencies): ApiRoute[] {
         }),
       },
       responses: { 200: { description: "Expenses" } },
+      totals: EXPENSE_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await expenses.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, EXPENSE_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

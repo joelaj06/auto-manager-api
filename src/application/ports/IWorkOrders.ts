@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type {
   WorkOrder,
   WorkOrderStatus,
@@ -36,7 +36,8 @@ export interface IWorkOrders {
   update(order: WorkOrder): Promise<void>;
   get(id: string): Promise<WorkOrder | null>;
   lock(id: string): Promise<WorkOrder | null>;
-  list(filter: WorkOrderFilter): Promise<Paged<WorkOrder>>;
+  /** In base minor units: the orders' totals by status. */
+  list(filter: WorkOrderFilter): Promise<Summed<WorkOrder>>;
   vendorRecord(vendorId: string): Promise<VendorRecord>;
   /** An active supplier, a user, a driver of the business. */
   exists(kind: "supplier" | "user" | "driver", id: string): Promise<boolean>;

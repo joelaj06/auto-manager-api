@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   DEFAULT_EXPENSE_SETTINGS,
   type Budget,
@@ -304,7 +304,7 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
     await this.tx.query("delete from expenses where id = $1 and status = 'draft'", [id]);
   }
 
-  async list(filter: ExpenseListFilter): Promise<Paged<ExpenseProps>> {
+  async list(filter: ExpenseListFilter): Promise<Summed<ExpenseProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -334,7 +334,7 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
       );
     if (filter.from !== undefined) where.push(`e.expense_date >= ${param(filter.from)}`);
     if (filter.to !== undefined) where.push(`e.expense_date <= ${param(filter.to)}`);
-    const { rows, total } = await pagedQuery<ExpenseRow>(
+    const { rows, total, sums } = await summedPagedQuery<ExpenseRow>(
       this.tx,
       {
         sql: `select ${COLUMNS} from expenses e where ${where.join(" and ")}`,
@@ -342,8 +342,13 @@ export class PostgresExpenseRepository implements IExpenseRepository, IExpenseQu
         params,
       },
       filter,
+      {
+        amount: "amount_base_minor",
+        status: "status",
+        measures: { net: "net_base_minor", tax: "tax_base_minor" },
+      },
     );
-    return { rows: await withLines(this.tx, rows), total };
+    return { rows: await withLines(this.tx, rows), total, sums };
   }
 
   async similar(

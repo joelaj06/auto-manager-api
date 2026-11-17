@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, slicePage, type Page } from "../../dto/Page.js";
+import { pageOf, pageWindow, slicePage, type Page, summedPageOf } from "../../dto/Page.js";
 import { credit, debit, journal, type JournalLine } from "../../../domain/finance/Journal.js";
 import {
   Part,
@@ -439,12 +439,17 @@ export class PartsInventory {
       });
       const currency = await this.currency();
       const m = (minor: number) => Money.ofMinor(minor, currency).toJSON();
-      return pageOf(query, moves, ({ unitCostMinor, valueMinor, avgCostAfter, ...rest }) => ({
-        ...rest,
-        unitCost: m(unitCostMinor),
-        value: m(valueMinor),
-        avgCostAfter: m(avgCostAfter),
-      }));
+      return summedPageOf(
+        query,
+        moves,
+        currency,
+        ({ unitCostMinor, valueMinor, avgCostAfter, ...rest }) => ({
+          ...rest,
+          unitCost: m(unitCostMinor),
+          value: m(valueMinor),
+          avgCostAfter: m(avgCostAfter),
+        }),
+      );
     });
   }
 

@@ -19,7 +19,7 @@ import {
 } from "../../../domain/workpay/WorkPayTerms.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -522,7 +522,7 @@ export class WorkPayAgreements {
         ...(query.vehicleId === undefined ? {} : { vehicleId: query.vehicleId }),
         ...pageWindow(query),
       });
-      const page = pageOf(query, found);
+      const page = summedPageOf(query, found, await deps.posting.baseCurrency());
       return { ...page, items: await Promise.all(page.items.map((a) => this.view(a, false))) };
     });
   }

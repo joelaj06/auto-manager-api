@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Paged, Summed } from "../../domain/value-objects/Paged.js";
+import { pagedQuery, summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AgedStock,
   BatchVehicle,
@@ -252,13 +252,14 @@ export class PostgresDealerStock implements IDealerStock {
     return rows.map(toRecord);
   }
 
-  async page(filter: StockFilter): Promise<Paged<StockRecord>> {
-    const { rows, total } = await pagedQuery<Row & VehicleRow>(
+  async page(filter: StockFilter): Promise<Summed<StockRecord>> {
+    const { rows, total, sums } = await summedPagedQuery<Row & VehicleRow>(
       this.tx,
       { ...this.filtered(filter), orderBy: STOCK_ORDER },
       filter,
+      { amount: "coalesce(asking_price_minor, 0)", status: "status" },
     );
-    return { rows: rows.map(toRecord), total };
+    return { rows: rows.map(toRecord), total, sums };
   }
 
   private filtered(filter: StockFilter) {

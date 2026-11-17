@@ -1,3 +1,4 @@
+import { APPRAISAL_TOTALS, DEAL_TOTALS } from "../presenters/listTotals.js";
 import { pageHeaders } from "../presenters/pageHeaders.js";
 import { pageParams } from "../validators/commonRequests.js";
 import { z } from "zod";
@@ -116,13 +117,14 @@ export function dealerDealRoutes(deps: DealerDealRouteDependencies): ApiRoute[] 
         }),
       },
       responses: { 200: { description: "Appraisals" } },
+      totals: APPRAISAL_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await appraisals.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, APPRAISAL_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({
@@ -226,13 +228,14 @@ export function dealerDealRoutes(deps: DealerDealRouteDependencies): ApiRoute[] 
         }),
       },
       responses: { 200: { description: "Deals" } },
+      totals: DEAL_TOTALS,
       handler: async ({ query }, _req, res) => {
         const { status, ...rest } = query;
         const page = await deals.list(principalOf(res), {
           ...rest,
           ...(status === undefined ? {} : { statuses: status }),
         });
-        res.set(pageHeaders(page)).json(envelope(page.items));
+        res.set(pageHeaders(page, DEAL_TOTALS)).json(envelope(page.items));
       },
     }),
     defineRoute({

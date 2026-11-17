@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   DEFAULT_WORKPAY_SETTINGS,
   type AgreementListFilter,
@@ -332,8 +332,8 @@ export class PostgresWorkPayAgreements implements IWorkPayAgreementRepository {
     return rows.map((r) => r.id);
   }
 
-  async list(filter: AgreementListFilter): Promise<Paged<WorkPayAgreement>> {
-    const { rows, total } = await pagedQuery<Row>(
+  async list(filter: AgreementListFilter): Promise<Summed<WorkPayAgreement>> {
+    const { rows, total, sums } = await summedPagedQuery<Row>(
       this.tx,
       {
         sql: `${SELECT}
@@ -352,8 +352,17 @@ export class PostgresWorkPayAgreements implements IWorkPayAgreementRepository {
         ],
       },
       filter,
+      {
+        amount: "total_price_minor",
+        status: "status",
+        measures: {
+          financed: "financed_minor",
+          deposit_paid: "deposit_paid_minor",
+          deposit_outstanding: "greatest(0, deposit_minor - deposit_paid_minor)",
+        },
+      },
     );
-    return { rows: rows.map(toAgreement), total };
+    return { rows: rows.map(toAgreement), total, sums };
   }
 }
 

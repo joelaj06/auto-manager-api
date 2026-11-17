@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import type { Appraisal } from "../../../domain/dealer/Appraisal.js";
 import {
   addMonths,
@@ -246,7 +246,7 @@ export class DealerDeals {
     const { deps } = this;
     return deps.unitOfWork.run(async () => {
       const own = actor.grantFor("dealer.deals.view")?.scope === "own";
-      const { rows: deals, total } = await deps.deals.list({
+      const found = await deps.deals.list({
         ...query,
         ...pageWindow(query),
         branchIds: own ? "all" : deps.scope.branchesFor(actor, "dealer.deals.view"),
@@ -254,8 +254,8 @@ export class DealerDeals {
       });
       const base = await this.base();
       const views: DealView[] = [];
-      for (const deal of deals) views.push(await this.summary(deal, base));
-      return pageOf(query, { rows: views, total });
+      for (const deal of found.rows) views.push(await this.summary(deal, base));
+      return summedPageOf(query, { ...found, rows: views }, base);
     });
   }
 

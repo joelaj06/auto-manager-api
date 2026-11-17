@@ -8008,6 +8008,7 @@
 | `timeline.total` | number | Yes |
 | `timeline.page` | number | Yes |
 | `timeline.pageSize` | number | Yes |
+| `timeline.totals` | [ListTotals](#listtotals) |  |
 
 ### GetVehiclesIdProfit
 
@@ -8765,6 +8766,15 @@
 | `amount.amountMinor` | number | Yes |
 | `amount.currency` | string | Yes |
 | `amount.formatted` | string | Yes |
+
+### ListTotals
+
+| Field | Type | Required |
+|---|---|---|
+| `amount` | number | Yes |
+| `byStatus` | map | Yes |
+| `measures` | map | Yes |
+| `currency` | string | Yes |
 
 ### LiveVehicle
 

@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page, type Paging } from "../../dto/Page.js";
+import { pageWindow, type Page, type Paging, summedPageOf } from "../../dto/Page.js";
 import { CashSession, type CashSessionProps } from "../../../domain/finance/CashSession.js";
 import { FinanceRuleError } from "../../../domain/finance/Journal.js";
 import { Postings } from "../../../domain/finance/Postings.js";
@@ -103,7 +103,7 @@ export class CashSessions {
         ...(own ? { cashierId: actor.userId } : {}),
       });
       const base = await deps.posting.baseCurrency();
-      return pageOf(filter, found, (s) => view(s, base));
+      return summedPageOf(filter, found, base, (s) => view(s, base));
     });
   }
 

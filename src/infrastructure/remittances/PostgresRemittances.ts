@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import {
   DEFAULT_REMITTANCE_SETTINGS,
   type FleetCounts,
@@ -174,7 +174,7 @@ export class PostgresRemittances implements IRemittanceRepository, IRemittanceRe
     );
   }
 
-  async list(filter: RemittanceListFilter): Promise<Paged<RemittanceProps>> {
+  async list(filter: RemittanceListFilter): Promise<Summed<RemittanceProps>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -190,7 +190,7 @@ export class PostgresRemittances implements IRemittanceRepository, IRemittanceRe
       where.push(`r.status = any(${param(filter.statuses)}::text[])`);
     if (filter.from !== undefined) where.push(`r.period_end >= ${param(filter.from)}`);
     if (filter.to !== undefined) where.push(`r.period_start <= ${param(filter.to)}`);
-    const { rows, total } = await pagedQuery<RemittanceRow>(
+    const { rows, total, sums } = await summedPagedQuery<RemittanceRow>(
       this.tx,
       {
         sql: `select ${COLUMNS} from remittances r join branches b on b.id = r.branch_id
@@ -199,8 +199,18 @@ export class PostgresRemittances implements IRemittanceRepository, IRemittanceRe
         params,
       },
       filter,
+      {
+        amount: "coalesce(expected_minor, received_minor)",
+        status: "status",
+        measures: {
+          received: "received_minor",
+          waived: "waived_minor",
+          outstanding:
+            "case when expected_minor is null then 0 else greatest(0, expected_minor - received_minor - waived_minor) end",
+        },
+      },
     );
-    return { rows: rows.map(toProps), total };
+    return { rows: rows.map(toProps), total, sums };
   }
 
   async submissions(remittanceId: string): Promise<RemittanceSubmission[]> {

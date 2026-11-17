@@ -1,4 +1,4 @@
-import type { Paged } from "../value-objects/Paged.js";
+import type { SummedIn } from "../value-objects/Paged.js";
 import type { BillingSettings } from "../billing/BillingSettings.js";
 import type { Invoice, InvoiceStatus } from "../billing/Invoice.js";
 import type { Proration } from "../billing/Proration.js";
@@ -115,7 +115,8 @@ export interface IBillingRepository {
   nextInvoiceCode(year: number): Promise<string>;
   invoice(id: string, lock?: boolean): Promise<Invoice | null>;
   saveInvoice(invoice: Invoice): Promise<void>;
-  invoices(filter: InvoiceFilter): Promise<Paged<Invoice>>;
+  /** Totals in the billing currency: by status, paid and outstanding. */
+  invoices(filter: InvoiceFilter): Promise<SummedIn<Invoice>>;
 
   insertPayment(payment: Omit<PaymentRecord, "createdAt">): Promise<void>;
   payments(filter: Readonly<{ tenantId?: string; invoiceId?: string }>): Promise<PaymentRecord[]>;

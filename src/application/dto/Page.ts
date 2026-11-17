@@ -1,10 +1,22 @@
-import type { Paged, PageWindow } from "../../domain/value-objects/Paged.js";
+import type { ListSums, Paged, PageWindow, Summed } from "../../domain/value-objects/Paged.js";
 
 /** The page a client asked for, numbered from 1. */
 export type PageRequest = Readonly<{ page: number; pageSize: number }>;
 
-/** A page of a list, with the whole list's size so a client can jump to any page. */
-export type Page<T> = Readonly<{ items: T[]; total: number; page: number; pageSize: number }>;
+/** The money of a whole list, in minor units of `currency` (the business's base currency). */
+export type ListTotals = ListSums & Readonly<{ currency: string }>;
+
+/**
+ * A page of a list, with the whole list's size so a client can jump to any page, and for a list
+ * of money its totals.
+ */
+export type Page<T> = Readonly<{
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totals?: ListTotals;
+}>;
 
 /** A list's filter as a client gives it: a page instead of a window. */
 export type Paging<F> = Omit<F, "limit" | "offset"> & PageRequest;
@@ -27,4 +39,22 @@ export function pageOf<T, U>(
 export function slicePage<T>(request: PageRequest, rows: readonly T[]): Page<T> {
   const { limit, offset } = pageWindow(request);
   return pageOf(request, { rows: rows.slice(offset, offset + limit), total: rows.length });
+}
+
+/** A page of a list of money, with the whole list's totals in `currency`. */
+export function summedPageOf<T>(request: PageRequest, summed: Summed<T>, currency: string): Page<T>;
+export function summedPageOf<T, U>(
+  request: PageRequest,
+  summed: Summed<T>,
+  currency: string,
+  view: (row: T) => U,
+): Page<U>;
+export function summedPageOf<T, U>(
+  request: PageRequest,
+  summed: Summed<T>,
+  currency: string,
+  view?: (row: T) => U,
+): Page<T | U> {
+  const page = view === undefined ? pageOf(request, summed) : pageOf(request, summed, view);
+  return { ...page, totals: { ...summed.sums, currency } };
 }

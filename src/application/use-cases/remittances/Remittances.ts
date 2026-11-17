@@ -9,7 +9,7 @@ import {
 import type { IRemittanceRepository } from "../../../domain/repositories/IRemittanceRepository.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAssignmentQueries } from "../../ports/IAssignmentRecords.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
@@ -108,8 +108,7 @@ export class Remittances {
         ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = pageOf(query, found);
-      return { ...page, items: page.items.map((r) => remittanceView(r, base)) };
+      return summedPageOf(query, found, base, (r) => remittanceView(r, base));
     });
   }
 
@@ -159,8 +158,7 @@ export class Remittances {
         ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = pageOf(query, found);
-      return { ...page, items: page.items.map((r) => remittanceView(r, base)) };
+      return summedPageOf(query, found, base, (r) => remittanceView(r, base));
     });
   }
 

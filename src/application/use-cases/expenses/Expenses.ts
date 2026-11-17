@@ -17,7 +17,7 @@ import { TaxCode } from "../../../domain/tax/TaxCode.js";
 import type { AuthorizationPolicy } from "../../authorization/AuthorizationPolicy.js";
 import type { PermissionKey } from "../../authorization/permissionCatalog.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import { ApplicationError } from "../../errors/ApplicationError.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type { IClock } from "../../ports/IClock.js";
@@ -190,8 +190,7 @@ export class Expenses {
         ...pageWindow(query),
       });
       const base = await deps.posting.baseCurrency();
-      const page = pageOf(query, found);
-      return { ...page, items: page.items.map((e) => expenseView(e, base)) };
+      return summedPageOf(query, found, base, (e) => expenseView(e, base));
     });
   }
 

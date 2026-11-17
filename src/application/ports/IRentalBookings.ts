@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
 import type { RentalDeposit } from "../../domain/rentals/RentalDeposit.js";
 import type {
   BookingStatus,
@@ -66,6 +66,8 @@ export type BookingFilter = Readonly<{
   to?: Date;
   /** Reservations past their expiry only (or none of them, with false). */
   lapsedAt?: Readonly<{ now: Date; lapsed: boolean }>;
+  /** When the list is shown: its totals count reservations past their expiry as expired. */
+  shownAt: Date;
   offset?: number;
   limit: number;
 }>;
@@ -119,7 +121,8 @@ export interface IRentalBookings {
   insert(booking: RentalBooking): Promise<void>;
   update(booking: RentalBooking): Promise<void>;
   /** Newest pickup first. */
-  list(filter: BookingFilter): Promise<Paged<RentalBooking>>;
+  /** In base minor units: what was charged, by status as shown. */
+  list(filter: BookingFilter): Promise<Summed<RentalBooking>>;
   /** Stored at the database's clock, so the events of one unit of work keep their order. */
   addEvent(event: BookingEvent): Promise<void>;
   events(bookingId: string): Promise<BookingEvent[]>;

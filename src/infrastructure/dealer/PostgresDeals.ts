@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pageTotal } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { listSums } from "../database/postgres/PagedQuery.js";
 import {
   DEAL_SOURCE,
   type DealCustomer,
@@ -242,7 +242,7 @@ export class PostgresDeals implements IDeals {
     return this.one(id, "for update");
   }
 
-  async list(filter: DealFilter): Promise<Paged<Deal>> {
+  async list(filter: DealFilter): Promise<Summed<Deal>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (sql: string, value: unknown) => {
@@ -263,11 +263,16 @@ export class PostgresDeals implements IDeals {
       `${tail} order by d.id desc limit $${params.length + 1} offset $${params.length + 2}`,
       [...params, filter.limit, filter.offset ?? 0],
     );
-    const total = await pageTotal(this.tx, rows.length, filter, {
-      sql: `select count(*) as total from dealer_deals d ${tail}`,
-      params,
-    });
-    return { rows, total };
+    const { count, ...sums } = await listSums(
+      this.tx,
+      { sql: `select d.* from dealer_deals d ${tail}`, params },
+      {
+        amount: "price_minor - discount_minor",
+        status: "status",
+        measures: { discount: "discount_minor", trade_in: "trade_in_minor" },
+      },
+    );
+    return { rows, total: count, sums };
   }
 
   async liveForVehicle(vehicleId: string): Promise<string | null> {

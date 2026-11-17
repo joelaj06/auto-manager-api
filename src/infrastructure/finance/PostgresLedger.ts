@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type {
   AccountBalance,
   ILedger,
@@ -228,7 +228,7 @@ export class PostgresLedger implements ILedger {
     return Number(rolled.rows[0]?.lines ?? 0);
   }
 
-  async lines(filter: LedgerLineFilter): Promise<Paged<LedgerLineView>> {
+  async lines(filter: LedgerLineFilter): Promise<Summed<LedgerLineView>> {
     const params: unknown[] = [];
     const param = (value: unknown) => {
       params.push(value);
@@ -246,7 +246,7 @@ export class PostgresLedger implements ILedger {
     if (filter.branchId !== undefined) where.push(`l.branch_id = ${param(filter.branchId)}`);
     if (filter.from !== undefined) where.push(`e.entry_date >= ${param(filter.from)}`);
     if (filter.to !== undefined) where.push(`e.entry_date <= ${param(filter.to)}`);
-    const { rows, total } = await pagedQuery<LineRow>(
+    const { rows, total, sums } = await summedPagedQuery<LineRow>(
       this.tx,
       {
         sql: `select l.id, l.entry_id, e.number, e.entry_date::text as entry_date, e.description,
@@ -258,6 +258,7 @@ export class PostgresLedger implements ILedger {
         params,
       },
       filter,
+      { measures: { debit: "debit_minor", credit: "credit_minor" } },
     );
     return {
       rows: rows.map((r) => ({
@@ -279,6 +280,7 @@ export class PostgresLedger implements ILedger {
         createdAt: r.created_at,
       })),
       total,
+      sums,
     };
   }
 

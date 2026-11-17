@@ -1137,6 +1137,30 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total net amount, money in less money out, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-In": {
+                "description": "Total money in, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Out": {
+                "description": "Total money out, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -8304,6 +8328,48 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total invoice total, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Open": {
+                "description": "Total invoice total of the open rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total invoice total of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Void": {
+                "description": "Total invoice total of the void rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Paid": {
+                "description": "Total paid, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Outstanding": {
+                "description": "Total left to pay on open invoices, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -10922,6 +10988,54 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total amount charged, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Pending": {
+                "description": "Total amount charged of the pending rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Succeeded": {
+                "description": "Total amount charged of the succeeded rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Failed": {
+                "description": "Total amount charged of the failed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Abandoned": {
+                "description": "Total amount charged of the abandoned rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Review": {
+                "description": "Total amount charged of the review rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Fees": {
+                "description": "Total gateway fees, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -11905,6 +12019,30 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount-Ours": {
+                "description": "Total what we recorded, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Provider": {
+                "description": "Total what the provider reported, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Fees": {
+                "description": "Total fees, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -13544,6 +13682,48 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total invoice total, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Open": {
+                "description": "Total invoice total of the open rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total invoice total of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Void": {
+                "description": "Total invoice total of the void rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Paid": {
+                "description": "Total paid, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Outstanding": {
+                "description": "Total left to pay on open invoices, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -28466,6 +28646,36 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total appraised value, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Open": {
+                "description": "Total appraised value of the open rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Used": {
+                "description": "Total appraised value of the used rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Declined": {
+                "description": "Total appraised value of the declined rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -29653,6 +29863,60 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total agreed price (price less discount), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Draft": {
+                "description": "Total agreed price (price less discount) of the draft rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reserved": {
+                "description": "Total agreed price (price less discount) of the reserved rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Sold": {
+                "description": "Total agreed price (price less discount) of the sold rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Delivered": {
+                "description": "Total agreed price (price less discount) of the delivered rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Cancelled": {
+                "description": "Total agreed price (price less discount) of the cancelled rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Discount": {
+                "description": "Total discounts, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Trade-In": {
+                "description": "Total trade-ins taken, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -35338,6 +35602,72 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total quoted price (price less discount), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Draft": {
+                "description": "Total quoted price (price less discount) of the draft rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Sent": {
+                "description": "Total quoted price (price less discount) of the sent rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Accepted": {
+                "description": "Total quoted price (price less discount) of the accepted rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Rejected": {
+                "description": "Total quoted price (price less discount) of the rejected rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Expired": {
+                "description": "Total quoted price (price less discount) of the expired rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Withdrawn": {
+                "description": "Total quoted price (price less discount) of the withdrawn rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Discount": {
+                "description": "Total discounts, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Trade-In": {
+                "description": "Total trade-ins offered, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Deposit": {
+                "description": "Total deposits asked, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -36667,6 +36997,72 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total asking value, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Incoming": {
+                "description": "Total asking value of the incoming rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reconditioning": {
+                "description": "Total asking value of the reconditioning rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Ready": {
+                "description": "Total asking value of the ready rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Listed": {
+                "description": "Total asking value of the listed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reserved": {
+                "description": "Total asking value of the reserved rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Sold": {
+                "description": "Total asking value of the sold rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Delivered": {
+                "description": "Total asking value of the delivered rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Withdrawn": {
+                "description": "Total asking value of the withdrawn rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Returned": {
+                "description": "Total asking value of the returned rows, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -44043,6 +44439,72 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total worth of the periods (the target, or what a variable period received), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Pending": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the pending rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Submitted": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the submitted rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Partially-Paid": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the partially_paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Overdue": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the overdue rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Waived": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the waived rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Received": {
+                "description": "Total received, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Waived": {
+                "description": "Total waived, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Outstanding": {
+                "description": "Total still owed on targets, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -49805,6 +50267,66 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total expense amount, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Draft": {
+                "description": "Total expense amount of the draft rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Submitted": {
+                "description": "Total expense amount of the submitted rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Approved": {
+                "description": "Total expense amount of the approved rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Rejected": {
+                "description": "Total expense amount of the rejected rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total expense amount of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Void": {
+                "description": "Total expense amount of the void rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Net": {
+                "description": "Total net of tax, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Tax": {
+                "description": "Total tax, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -55236,6 +55758,60 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total invoice total, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Draft": {
+                "description": "Total invoice total of the draft rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Issued": {
+                "description": "Total invoice total of the issued rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Partially-Paid": {
+                "description": "Total invoice total of the partially_paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total invoice total of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Void": {
+                "description": "Total invoice total of the void rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Paid": {
+                "description": "Total paid, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Outstanding": {
+                "description": "Total left to pay on issued invoices, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -56455,6 +57031,48 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total payment amount, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Recorded": {
+                "description": "Total payment amount of the recorded rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reversed": {
+                "description": "Total payment amount of the reversed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-In": {
+                "description": "Total money in, not reversed, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Out": {
+                "description": "Total money out, not reversed, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Unallocated": {
+                "description": "Total not yet allocated, not reversed, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -57714,6 +58332,36 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount-Opening-Float": {
+                "description": "Total opening float, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Cash-In": {
+                "description": "Total cash in, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Cash-Out": {
+                "description": "Total cash out, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Variance": {
+                "description": "Total variance on closing, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -58767,6 +59415,24 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount-Debit": {
+                "description": "Total debits, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Credit": {
+                "description": "Total credits, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -64847,6 +65513,72 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total claimed, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Submitted": {
+                "description": "Total claimed of the submitted rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Approved": {
+                "description": "Total claimed of the approved rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Rejected": {
+                "description": "Total claimed of the rejected rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Settled": {
+                "description": "Total claimed of the settled rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Withdrawn": {
+                "description": "Total claimed of the withdrawn rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Excess": {
+                "description": "Total excess, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Approved": {
+                "description": "Total approved by insurers, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Settled": {
+                "description": "Total settled, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Expected": {
+                "description": "Total still expected on submitted and approved claims, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -65795,6 +66527,48 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total fines, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Unpaid": {
+                "description": "Total fines of the unpaid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Contested": {
+                "description": "Total fines of the contested rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total fines of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Waived": {
+                "description": "Total fines of the waived rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Driver": {
+                "description": "Total fines the driver pays, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -81947,6 +82721,54 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total stock value moved (issues, transfers out and write-downs negative), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Opening": {
+                "description": "Total stock value moved (issues, transfers out and write-downs negative) of the opening rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Receipt": {
+                "description": "Total stock value moved (issues, transfers out and write-downs negative) of the receipt rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Issue": {
+                "description": "Total stock value moved (issues, transfers out and write-downs negative) of the issue rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Adjustment": {
+                "description": "Total stock value moved (issues, transfers out and write-downs negative) of the adjustment rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Transfer-Out": {
+                "description": "Total stock value moved (issues, transfers out and write-downs negative) of the transfer_out rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Transfer-In": {
+                "description": "Total stock value moved (issues, transfers out and write-downs negative) of the transfer_in rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -82739,6 +83561,42 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total commission (adjustments and clawbacks negative), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Accrued": {
+                "description": "Total commission (adjustments and clawbacks negative) of the accrued rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Payable": {
+                "description": "Total commission (adjustments and clawbacks negative) of the payable rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total commission (adjustments and clawbacks negative) of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Base": {
+                "description": "Total payments the commission was earned on, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -83020,6 +83878,36 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total paid out, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Awaiting-Approval": {
+                "description": "Total paid out of the awaiting_approval rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total paid out of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reversed": {
+                "description": "Total paid out of the reversed rows, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -83358,6 +84246,36 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total paid out, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Awaiting-Approval": {
+                "description": "Total paid out of the awaiting_approval rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total paid out of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reversed": {
+                "description": "Total paid out of the reversed rows, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -84203,6 +85121,42 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total commission (adjustments and clawbacks negative), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Accrued": {
+                "description": "Total commission (adjustments and clawbacks negative) of the accrued rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Payable": {
+                "description": "Total commission (adjustments and clawbacks negative) of the payable rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total commission (adjustments and clawbacks negative) of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Base": {
+                "description": "Total payments the commission was earned on, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -84492,6 +85446,36 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total paid out, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Awaiting-Approval": {
+                "description": "Total paid out of the awaiting_approval rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total paid out of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reversed": {
+                "description": "Total paid out of the reversed rows, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -100880,6 +101864,42 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total cost so far (the base amounts of the costs raised, rejected and void ones left out), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Draft": {
+                "description": "Total cost so far (the base amounts of the costs raised, rejected and void ones left out) of the draft rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Ordered": {
+                "description": "Total cost so far (the base amounts of the costs raised, rejected and void ones left out) of the ordered rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Received": {
+                "description": "Total cost so far (the base amounts of the costs raised, rejected and void ones left out) of the received rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Cancelled": {
+                "description": "Total cost so far (the base amounts of the costs raised, rejected and void ones left out) of the cancelled rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -108548,6 +109568,72 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total worth of the periods (the target, or what a variable period received), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Pending": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the pending rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Submitted": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the submitted rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Partially-Paid": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the partially_paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Paid": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the paid rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Overdue": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the overdue rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Waived": {
+                "description": "Total worth of the periods (the target, or what a variable period received) of the waived rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Received": {
+                "description": "Total received, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Waived": {
+                "description": "Total waived, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Outstanding": {
+                "description": "Total still owed on targets, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -111460,6 +112546,66 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total charged, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Reserved": {
+                "description": "Total charged of the reserved rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Confirmed": {
+                "description": "Total charged of the confirmed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Checked-Out": {
+                "description": "Total charged of the checked_out rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Returned": {
+                "description": "Total charged of the returned rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Closed": {
+                "description": "Total charged of the closed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Cancelled": {
+                "description": "Total charged of the cancelled rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-No-Show": {
+                "description": "Total charged of the no_show rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Expired": {
+                "description": "Total charged of the expired rows, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -131891,6 +133037,48 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total cost (the final cost, else the estimate), in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Open": {
+                "description": "Total cost (the final cost, else the estimate) of the open rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Repaired": {
+                "description": "Total cost (the final cost, else the estimate) of the repaired rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Estimate": {
+                "description": "Total estimates, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Final": {
+                "description": "Total final costs, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Customer": {
+                "description": "Total cost the customer is liable for, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -139002,6 +140190,48 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total work order total, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Open": {
+                "description": "Total work order total of the open rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-In-Progress": {
+                "description": "Total work order total of the in_progress rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Awaiting-Parts": {
+                "description": "Total work order total of the awaiting_parts rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Completed": {
+                "description": "Total work order total of the completed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Cancelled": {
+                "description": "Total work order total of the cancelled rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -141518,6 +142748,96 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total total price, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Draft": {
+                "description": "Total total price of the draft rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Awaiting-Signatures": {
+                "description": "Total total price of the awaiting_signatures rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Active": {
+                "description": "Total total price of the active rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-In-Arrears": {
+                "description": "Total total price of the in_arrears rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Defaulted": {
+                "description": "Total total price of the defaulted rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Restructured": {
+                "description": "Total total price of the restructured rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Completed": {
+                "description": "Total total price of the completed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Terminated": {
+                "description": "Total total price of the terminated rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Repossessed": {
+                "description": "Total total price of the repossessed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Cancelled": {
+                "description": "Total total price of the cancelled rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Financed": {
+                "description": "Total financed, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Deposit-Paid": {
+                "description": "Total deposits paid, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Deposit-Outstanding": {
+                "description": "Total deposits still owed, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -146789,6 +148109,90 @@
               },
               "X-Page-Size": {
                 "description": "Rows asked for on a page",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Currency": {
+                "description": "The business's base currency, which the totals are in",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Total-Amount": {
+                "description": "Total outstanding, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Draft": {
+                "description": "Total outstanding of the draft rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Awaiting-Signatures": {
+                "description": "Total outstanding of the awaiting_signatures rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Active": {
+                "description": "Total outstanding of the active rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-In-Arrears": {
+                "description": "Total outstanding of the in_arrears rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Defaulted": {
+                "description": "Total outstanding of the defaulted rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Restructured": {
+                "description": "Total outstanding of the restructured rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Completed": {
+                "description": "Total outstanding of the completed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Terminated": {
+                "description": "Total outstanding of the terminated rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Repossessed": {
+                "description": "Total outstanding of the repossessed rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Cancelled": {
+                "description": "Total outstanding of the cancelled rows, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Overdue": {
+                "description": "Total overdue, in minor units of X-Currency, over the whole filtered list",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Total-Amount-Penalties-Outstanding": {
+                "description": "Total late fees outstanding, in minor units of X-Currency, over the whole filtered list",
                 "schema": {
                   "type": "integer"
                 }
@@ -204255,6 +205659,35 @@
           "vehicles"
         ]
       },
+      "ListTotals": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "byStatus": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "measures": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "byStatus",
+          "measures",
+          "currency"
+        ]
+      },
       "GetVehiclesIdOverview": {
         "type": "object",
         "properties": {
@@ -205122,6 +206555,9 @@
               },
               "pageSize": {
                 "type": "number"
+              },
+              "totals": {
+                "$ref": "#/components/schemas/ListTotals"
               }
             },
             "required": [

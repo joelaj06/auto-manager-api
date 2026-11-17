@@ -1,4 +1,4 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
+import type { Paged, Summed } from "../../domain/value-objects/Paged.js";
 import type { MoveKind, Part, Stock } from "../../domain/maintenance/Part.js";
 
 export type PartFilter = Readonly<{
@@ -67,5 +67,6 @@ export interface IParts {
   addMove(move: PartMove): Promise<void>;
   /** An active supplier of the business. */
   supplierExists(id: string): Promise<boolean>;
-  moves(filter: MoveFilter): Promise<Paged<PartMove>>;
+  /** In base minor units: the stock value moved, by kind (issues and transfers out negative). */
+  moves(filter: MoveFilter): Promise<Summed<PartMove>>;
 }

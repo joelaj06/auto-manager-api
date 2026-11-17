@@ -1,4 +1,4 @@
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import {
   WorkOrder,
@@ -196,7 +196,8 @@ export class WorkOrders {
             : {}),
         ...pageWindow(query),
       });
-      return pageOf(query, orders, (o) => this.view(o));
+      const base = (await deps.organisation.get()).baseCurrency;
+      return summedPageOf(query, orders, base, (o) => this.view(o));
     });
   }
 

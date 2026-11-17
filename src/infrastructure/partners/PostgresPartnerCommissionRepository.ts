@@ -1,5 +1,7 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import { billingCurrency, inBillingCurrency } from "../billing/billingCurrency.js";
+import type { SummedIn } from "../../domain/value-objects/Paged.js";
+
+import { summedPagedQuery } from "../database/postgres/PagedQuery.js";
 import type { CommissionTerms, CommissionTermsInput } from "../../domain/partners/Commissions.js";
 import type {
   CommissionAttribution,
@@ -308,8 +310,8 @@ export class PostgresPartnerCommissionRepository implements IPartnerCommissionRe
     return Number(rows[0]!.total);
   }
 
-  async entries(f: EntryFilter): Promise<Paged<CommissionEntry>> {
-    const { rows, total } = await pagedQuery<EntryRow>(
+  async entries(f: EntryFilter): Promise<SummedIn<CommissionEntry>> {
+    const { rows, total, sums } = await summedPagedQuery<EntryRow>(
       this.db,
       {
         sql: `select ${ENTRY_COLUMNS} from partner_commission_entries
@@ -328,8 +330,13 @@ export class PostgresPartnerCommissionRepository implements IPartnerCommissionRe
         ],
       },
       f,
+      {
+        amount: inBillingCurrency("amount_minor"),
+        status: "status",
+        measures: { base: inBillingCurrency("coalesce(base_minor, 0)") },
+      },
     );
-    return { rows: rows.map(toEntry), total };
+    return { rows: rows.map(toEntry), total, sums, currency: await billingCurrency(this.db) };
   }
 
   async releaseDue(now: Date): Promise<number> {
@@ -479,8 +486,8 @@ export class PostgresPartnerCommissionRepository implements IPartnerCommissionRe
       limit: number;
       offset?: number;
     }>,
-  ): Promise<Paged<PayoutRecord>> {
-    const { rows, total } = await pagedQuery<PayoutRow>(
+  ): Promise<SummedIn<PayoutRecord>> {
+    const { rows, total, sums } = await summedPagedQuery<PayoutRow>(
       this.db,
       {
         sql: `select * from partner_payouts
@@ -490,8 +497,9 @@ export class PostgresPartnerCommissionRepository implements IPartnerCommissionRe
         params: [f.partnerId ?? null, f.status ?? null, f.unacknowledged === true],
       },
       f,
+      { amount: inBillingCurrency("total_minor"), status: "status" },
     );
-    return { rows: rows.map(toPayout), total };
+    return { rows: rows.map(toPayout), total, sums, currency: await billingCurrency(this.db) };
   }
 
   async payoutEntries(payoutId: string): Promise<CommissionEntry[]> {

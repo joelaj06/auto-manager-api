@@ -1,5 +1,5 @@
-import type { Paged } from "../../domain/value-objects/Paged.js";
-import { pagedQuery } from "../database/postgres/PagedQuery.js";
+import type { Summed } from "../../domain/value-objects/Paged.js";
+import { listSums } from "../database/postgres/PagedQuery.js";
 import type {
   BookingCharge,
   BookingEvent,
@@ -207,7 +207,7 @@ export class PostgresRentalBookings implements IRentalBookings {
     );
   }
 
-  async list(filter: BookingFilter): Promise<Paged<RentalBooking>> {
+  async list(filter: BookingFilter): Promise<Summed<RentalBooking>> {
     const where: string[] = [];
     const params: unknown[] = [];
     const add = (clause: string, ...values: unknown[]) => {
@@ -231,16 +231,26 @@ export class PostgresRentalBookings implements IRentalBookings {
           : "not (r.status = 'reserved' and r.expires_at <= ?)",
         filter.lapsedAt.now,
       );
-    const { rows, total } = await pagedQuery<BookingRow>(
+    const tail = where.length === 0 ? "" : `where ${where.join(" and ")}`;
+    const { rows } = await this.tx.query<BookingRow>(
+      `${SELECT} ${tail} order by r.pickup_at desc, r.id desc
+        limit $${params.length + 1} offset $${params.length + 2}`,
+      [...params, filter.limit, filter.offset ?? 0],
+    );
+    const shownAt = `$${params.length + 1}::timestamptz`;
+    const { count, ...sums } = await listSums(
       this.tx,
       {
-        sql: `${SELECT} ${where.length === 0 ? "" : `where ${where.join(" and ")}`}`,
-        orderBy: "r.pickup_at desc, r.id desc",
-        params,
+        sql: `select case when r.status = 'reserved' and r.expires_at <= ${shownAt} then 'expired'
+                          else r.status end as shown_status,
+                     (select coalesce(sum(c.total_minor), 0) from rental_booking_charges c
+                       where c.booking_id = r.id) as charged_minor
+                from rental_bookings r join vehicle_blocks b on b.id = r.block_id ${tail}`,
+        params: [...params, filter.shownAt],
       },
-      filter,
+      { amount: "charged_minor", status: "shown_status" },
     );
-    return { rows: rows.map(toBooking), total };
+    return { rows: rows.map(toBooking), total: count, sums };
   }
 
   async addEvent(e: BookingEvent): Promise<void> {

@@ -6,7 +6,7 @@ import {
 } from "../../../domain/finance/Journal.js";
 import { Money, type MoneyJson } from "../../../domain/money/Money.js";
 import type { Principal } from "../../authorization/Principal.js";
-import { pageOf, pageWindow, type Page } from "../../dto/Page.js";
+import { pageWindow, type Page, summedPageOf } from "../../dto/Page.js";
 import type { IAuditTrail } from "../../ports/IAuditTrail.js";
 import type {
   ILedger,
@@ -137,7 +137,7 @@ export class LedgerViews {
         ...query,
         ...pageWindow(query),
       });
-      return pageOf(query, found);
+      return summedPageOf(query, found, await deps.posting.baseCurrency());
     });
   }
 
